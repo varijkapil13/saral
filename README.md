@@ -102,6 +102,7 @@ and carries no compatibility promise.
 
 | Document | What's in it |
 |---|---|
+| [`docs/BOOTSTRAP.md`](docs/BOOTSTRAP.md) | **Start here** — verify your token, capture fixtures, begin P0.1 |
 | [`docs/SCOPE.md`](docs/SCOPE.md) | What's in, what's out, and the non-negotiables |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, the port, registries, caching, rendering |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Batches and packets, in value order |

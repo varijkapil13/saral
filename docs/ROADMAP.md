@@ -5,7 +5,8 @@
 > [milestones](https://github.com/varijkapil13/saral/milestones) by batch. Each packet below links to
 > its issue. Tick the checkbox here in the same PR that closes the issue.
 >
-> **Picking this up cold:** read `docs/ARCHITECTURE.md`, then open the lowest-numbered open
+> **Picking this up cold:** start with [`docs/BOOTSTRAP.md`](BOOTSTRAP.md) — it takes a fresh clone to
+> the first line of code. Then open the lowest-numbered open
 > milestone and take any unassigned packet with no unchecked dependency —
 > `gh issue list --milestone "Batch 0 — Foundations"`. Claim it by commenting on the issue.
 > `AGENTS.md` is the working agreement; `docs/PARALLEL.md` is the definition of done.

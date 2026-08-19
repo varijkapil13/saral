@@ -171,6 +171,23 @@ Three registries, all with the same conflict-free property:
 Because every registration lives in a file that exactly one packet owns, two agents adding two views
 never touch the same line. This is the single most important structural decision for parallel work.
 
+The one file that does grow per view is `internal/ui/views.go`, a list of blank imports that pulls each
+view package in so its `init()` runs:
+
+```go
+package ui
+
+import (
+	_ "github.com/varijkapil13/saral/internal/ui/board"
+	_ "github.com/varijkapil13/saral/internal/ui/issue"
+)
+```
+
+**Ownership policy:** `internal/ui/views.go` is created by P0.1 and is the *only* shared file a view
+packet may edit, restricted to adding its own single import line in alphabetical order. One line each
+means git resolves concurrent additions cleanly; a conflict here is a one-second fix rather than a
+semantic merge.
+
 ## Message flow
 
 Standard Elm/MVU with Bubble Tea v2. The kernel routes messages; views never talk to each other

@@ -45,6 +45,10 @@ needlessly.
   that outlive their view.
 - The optional poller is off by default, scoped to the focused view, and backs off on the first 429.
 
+The `--bench-first-paint` flag used above is built in P0.1: it starts the program, renders the first
+frame from cache, prints elapsed microseconds and exits. Without it the two start-up budgets are
+unmeasurable, so it is part of the kernel rather than a later addition.
+
 ## Benchmark harness
 
 Every packet touching a render path or a list adds benchmarks next to its code:

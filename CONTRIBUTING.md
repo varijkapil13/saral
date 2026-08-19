@@ -37,4 +37,4 @@ Style is the linter's job. See `docs/PARALLEL.md` for the full definition of don
 ## Reporting a bug
 
 Include your terminal and its version, `saral version`, whether the site is Cloud or Data Center, and
-the redacted output of `saral doctor` once that exists. Never paste a token or a real account ID.
+the redacted output of `saral doctor` (the capability probe, printed — built in P1.3). Never paste a token or a real account ID.

@@ -60,3 +60,9 @@ asks for a narrow `fields` set and coalesces duplicate in-flight requests. Budge
 Prefer asking on the issue over guessing, and prefer a smaller correct packet over a larger
 speculative one. If you discover something about the Jira API that isn't in `docs/API-NOTES.md`, add
 it there in your PR — that file is how the next agent avoids your afternoon.
+
+## If this is the first work in the repo
+
+Read [`docs/BOOTSTRAP.md`](docs/BOOTSTRAP.md). It covers verifying what a token can reach, capturing
+the fixtures every later packet depends on, and the reading order for P0.1. There is no feature code
+yet, so nothing you find in the tree contradicts the docs — the docs are the specification.
