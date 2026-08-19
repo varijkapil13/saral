@@ -7,7 +7,11 @@ when every team bolts another field onto it. That is the whole idea: Jira's data
 app.
 
 > **Status: planning.** The architecture and the work plan are complete and reviewed; no features are
-> implemented yet. Start at [`docs/ROADMAP.md`](docs/ROADMAP.md).
+> implemented yet.
+>
+> Work is tracked as [31 packet issues](https://github.com/varijkapil13/saral/issues) across
+> [10 milestones](https://github.com/varijkapil13/saral/milestones), one milestone per batch.
+> Start at [`docs/ROADMAP.md`](docs/ROADMAP.md) — every packet links to its issue.
 
 ```
 ┌─ saral ─ example.atlassian.net ─────────────────────────────────────────────┐
