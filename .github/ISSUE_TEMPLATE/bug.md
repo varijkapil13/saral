@@ -5,7 +5,7 @@ labels: bug
 ---
 
 **Terminal and version:**
-**`kanso version`:**
+**`saral version`:**
 **Jira Cloud or Data Center:**
 
 ## What happened

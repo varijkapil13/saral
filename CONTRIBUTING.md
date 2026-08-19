@@ -1,13 +1,13 @@
 # Contributing
 
-Thanks for looking. Kanso is built in small, independent packets so that several people can work at
+Thanks for looking. Saral is built in small, independent packets so that several people can work at
 once — please follow the flow rather than opening a large PR.
 
 ## Setup
 
 ```sh
-git clone https://github.com/varijkapil13/kanso
-cd kanso
+git clone https://github.com/varijkapil13/saral
+cd saral
 make check        # tidy, lint, race — should be green on a fresh clone
 ```
 
@@ -36,5 +36,5 @@ Style is the linter's job. See `docs/PARALLEL.md` for the full definition of don
 
 ## Reporting a bug
 
-Include your terminal and its version, `kanso version`, whether the site is Cloud or Data Center, and
-the redacted output of `kanso doctor` once that exists. Never paste a token or a real account ID.
+Include your terminal and its version, `saral version`, whether the site is Cloud or Data Center, and
+the redacted output of `saral doctor` once that exists. Never paste a token or a real account ID.

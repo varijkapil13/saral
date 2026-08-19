@@ -1,14 +1,14 @@
 version: 2
-project_name: kanso
+project_name: saral
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: kanso
-    main: ./cmd/kanso
-    binary: kanso
+  - id: saral
+    main: ./cmd/saral
+    binary: saral
     env: [CGO_ENABLED=0]
     goos: [darwin, linux]
     goarch: [amd64, arm64]
@@ -45,15 +45,15 @@ changelog:
     exclude: ['^docs', '^test', '^chore', '^ci']
 
 brews:
-  - name: kanso
+  - name: saral
     repository:
       owner: varijkapil13
       name: homebrew-tap
-    homepage: https://github.com/varijkapil13/kanso
-    description: Jira in your terminal, without the clutter
+    homepage: https://github.com/varijkapil13/saral
+    description: Jira in your terminal, made simple
     license: MIT
     test: |
-      system "#{bin}/kanso", "version"
+      system "#{bin}/saral", "version"
 
 release:
   prerelease: auto

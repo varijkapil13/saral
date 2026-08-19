@@ -1,6 +1,6 @@
 # Working in parallel
 
-Several agents (or people) work on Kanso at once. This document is the contract that keeps that from
+Several agents (or people) work on Saral at once. This document is the contract that keeps that from
 turning into merge hell. It is short on purpose — read all of it before opening a branch.
 
 ## The five rules

@@ -1,3 +1,3 @@
-module github.com/varijkapil13/kanso
+module github.com/varijkapil13/saral
 
 go 1.26

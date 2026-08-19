@@ -1,13 +1,13 @@
 # Performance
 
-Kanso should feel instant on a 10,000-issue project and start faster than a browser tab can paint.
+Saral should feel instant on a 10,000-issue project and start faster than a browser tab can paint.
 These are budgets, not aspirations: CI enforces the ones it can, and benchmarks guard the rest.
 
 ## Budgets
 
 | Metric | Budget | How it is measured |
 |---|---|---|
-| Cold start → first paint (warm cache) | **< 60 ms** | `hyperfine` on `kanso --bench-first-paint` |
+| Cold start → first paint (warm cache) | **< 60 ms** | `hyperfine` on `saral --bench-first-paint` |
 | Cold start → first paint (no cache) | < 250 ms | same, cache purged; network excluded |
 | Keystroke → frame, steady state | **p99 < 16 ms** | benchmark over `Update`+`View` at 10k rows |
 | Scroll a 10k-row list | 0 allocations per frame | `-benchmem`, `allocs/op` asserted in the test |
@@ -62,7 +62,7 @@ path by more than 10%.
 ```sh
 make bench                        # allocations and ns/op
 go test -run TestX -cpuprofile cpu.out ./internal/ui/board && go tool pprof -http=: cpu.out
-hyperfine './kanso --bench-first-paint'
+hyperfine './saral --bench-first-paint'
 ```
 
 Profile before optimising. The budgets above exist so that "it feels fine on my machine" is never the

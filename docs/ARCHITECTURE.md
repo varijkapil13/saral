@@ -1,6 +1,6 @@
 # Architecture
 
-Kanso is a terminal client for Jira Cloud. It is built to be modular, testable without a Jira
+Saral is a terminal client for Jira Cloud. It is built to be modular, testable without a Jira
 instance, fast on large datasets, and safe for several people (or agents) to work on at once.
 
 Three constraints drive every decision below:
@@ -15,7 +15,7 @@ Three constraints drive every decision below:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  cmd/kanso            entrypoint, flags, subcommands        │
+│  cmd/saral            entrypoint, flags, subcommands        │
 ├─────────────────────────────────────────────────────────────┤
 │  internal/ui          Bubble Tea models — one per view      │
 │    kernel/            root model, view stack, registries    │
@@ -164,7 +164,7 @@ Three registries, all with the same conflict-free property:
 
 | Registry | Registered by | Consumed by |
 |---|---|---|
-| `RegisterView` | each view package's `register.go` | footer, view stack, `kanso <view>` |
+| `RegisterView` | each view package's `register.go` | footer, view stack, `saral <view>` |
 | `RegisterCommand` | any package | command palette (`ctrl+k`) |
 | `RegisterKeys` | each view, scoped to itself | help overlay, footer hints |
 
@@ -264,13 +264,13 @@ A typed taxonomy in `pkg/jira`, because the UI needs to render different things:
 XDG paths, profiles, and **no secrets in the config file** — it must stay safe to share or commit.
 
 ```toml
-# ~/.config/kanso/config.toml
+# ~/.config/saral/config.toml
 active = "work"
 
 [profiles.work]
 site  = "example.atlassian.net"
 email = "you@example.com"
-token = { keychain = "kanso:work" }   # or { env = "JIRA_TOKEN" } / { command = "pass jira" }
+token = { keychain = "saral:work" }   # or { env = "JIRA_TOKEN" } / { command = "pass jira" }
 
 [profiles.work.timeline]
 start = ["Target start", "Start date"]   # resolved by name to field IDs at runtime

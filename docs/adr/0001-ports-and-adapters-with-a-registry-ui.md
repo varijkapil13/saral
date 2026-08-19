@@ -5,7 +5,7 @@
 
 ## Context
 
-Kanso must run against any Jira Cloud site, be testable without a Jira instance, and be worked on by
+Saral must run against any Jira Cloud site, be testable without a Jira instance, and be worked on by
 several agents in parallel without constant merge conflicts. It should also be able to grow a Jira
 Data Center backend and a Confluence surface later without a rewrite.
 

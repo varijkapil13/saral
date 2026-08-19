@@ -1,7 +1,7 @@
 # Roadmap
 
 Work is organised into **batches** (waves) containing **packets** (single-PR units of work). Batches
-are ordered by *when the value arrives*, not by architectural tidiness: the aim is that Kanso is
+are ordered by *when the value arrives*, not by architectural tidiness: the aim is that Saral is
 worth opening every day as early as possible, and that everything after that is additive.
 
 Within a batch, packets are independent and can run in parallel. A batch closes when all its packets

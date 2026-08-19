@@ -1,11 +1,11 @@
-BIN := kanso
+BIN := saral
 PKG := ./...
 LDFLAGS := -s -w
 
 .PHONY: build test race lint tidy bench cover run size clean check
 
 build:
-	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/kanso
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/saral
 
 test:
 	go test -count=1 $(PKG)

@@ -1,5 +1,5 @@
 /dist/
-/kanso
+/saral
 *.test
 *.out
 *.prof

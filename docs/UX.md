@@ -33,7 +33,7 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 | Ongoing | JQL history with fuzzy recall; saved queries bound to `1`–`9`. |
 | | Local fuzzy index — typing a key or a few words of a summary finds it with no round trip. |
 | | Session resume: reopening lands exactly where you left, including scroll and filter. |
-| Fluent | `kanso PROJ-142`, `kanso board PROJ`, piping a JQL query in, scriptable subcommands for the rest. |
+| Fluent | `saral PROJ-142`, `saral board PROJ`, piping a JQL query in, scriptable subcommands for the rest. |
 
 Frecency is a plain local table of `(item, count, lastUsed)` scored `count * decay(lastUsed)`. No
 telemetry leaves the machine, ever.

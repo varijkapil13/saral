@@ -30,10 +30,10 @@ jobs:
       - name: test with race detector
         run: go test -race -count=1 ./...
       - name: build
-        run: go build -trimpath -ldflags "-s -w" -o kanso ./cmd/kanso
+        run: go build -trimpath -ldflags "-s -w" -o saral ./cmd/saral
       - name: binary size budget
         run: |
-          size=$(stat -c%s kanso)
+          size=$(stat -c%s saral)
           echo "binary: $size bytes"
           limit=$((15 * 1024 * 1024))
           if [ "$size" -gt "$limit" ]; then

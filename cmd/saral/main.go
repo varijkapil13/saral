@@ -13,9 +13,9 @@ var (
 
 func main() {
 	if len(os.Args) > 1 && (os.Args[1] == "version" || os.Args[1] == "--version") {
-		fmt.Printf("kanso %s (%s, %s)\n", version, commit, date)
+		fmt.Printf("saral %s (%s, %s)\n", version, commit, date)
 		return
 	}
-	fmt.Fprintln(os.Stderr, "kanso: not implemented yet — see docs/ROADMAP.md")
+	fmt.Fprintln(os.Stderr, "saral: not implemented yet — see docs/ROADMAP.md")
 	os.Exit(1)
 }

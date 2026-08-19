@@ -1,15 +1,16 @@
-# Kanso
+# Saral
 
-**Jira in your terminal, without the clutter.**
+**Jira in your terminal, made simple.**
 
-*Kanso* (簡素) is the Zen principle of simplicity through elimination — removing what isn't needed so
-what remains can do its job. That is the whole idea: Jira's data, none of Jira's web app.
+*Saral* (सरल) is Hindi for simple, straightforward, plain — the opposite of what happens to a tool
+when every team bolts another field onto it. That is the whole idea: Jira's data, none of Jira's web
+app.
 
 > **Status: planning.** The architecture and the work plan are complete and reviewed; no features are
 > implemented yet. Start at [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ```
-┌─ kanso ─ example.atlassian.net ─────────────────────────────────────────────┐
+┌─ saral ─ example.atlassian.net ─────────────────────────────────────────────┐
 │ PROJ ▾  board: Team Board ▾   Sprint 42 · 4d left            28 issues  ⟳   │
 ├──────────────────────────────────┬──────────────────────────────────────────┤
 │  KEY       SUM               PTS │  PROJ-142  Search returns stale rows     │
@@ -51,7 +52,7 @@ what remains can do its job. That is the whole idea: Jira's data, none of Jira's
 baked in. Field IDs are resolved by name, board columns come from board configuration, and required
 fields come from `createmeta`.
 
-**Capabilities are probed, not guessed.** On first connect Kanso works out what your token can
+**Capabilities are probed, not guessed.** On first connect Saral works out what your token can
 actually do and caches it. Features you lack are hidden or disabled *with the reason shown* — a 403
 is an answer, never a crash and never a silent empty list. Plans need Administer Jira; if you don't
 have it, you get locally defined plans instead of an error.
@@ -76,8 +77,8 @@ credentials, no network, no shared sandbox.
 Not yet released. Once `v0.1.0` ships:
 
 ```sh
-brew install varijkapil13/tap/kanso
-go install github.com/varijkapil13/kanso/cmd/kanso@latest
+brew install varijkapil13/tap/saral
+go install github.com/varijkapil13/saral/cmd/saral@latest
 ```
 
 ## Use as a library
@@ -86,7 +87,7 @@ The Jira client is a standalone, documented package with a semver promise — us
 want a TUI:
 
 ```go
-import "github.com/varijkapil13/kanso/pkg/jira"
+import "github.com/varijkapil13/saral/pkg/jira"
 ```
 
 `pkg/jira` is the port plus a Cloud adapter; `pkg/adf` converts Atlassian Document Format to and from
