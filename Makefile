@@ -17,7 +17,7 @@ lint:
 	golangci-lint run
 
 tidy:
-	go mod tidy && git diff --exit-code go.mod go.sum
+	go mod tidy && git diff --exit-code
 
 bench:
 	go test -run '^$$' -bench . -benchmem $(PKG)
