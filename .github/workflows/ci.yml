@@ -1,0 +1,67 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: tidy is clean
+        run: go mod tidy && git diff --exit-code go.mod go.sum
+      - name: vet
+        run: go vet ./...
+      - name: test with race detector
+        run: go test -race -count=1 ./...
+      - name: build
+        run: go build -trimpath -ldflags "-s -w" -o kanso ./cmd/kanso
+      - name: binary size budget
+        run: |
+          size=$(stat -c%s kanso)
+          echo "binary: $size bytes"
+          limit=$((15 * 1024 * 1024))
+          if [ "$size" -gt "$limit" ]; then
+            echo "::error::binary exceeds 15 MiB budget (see docs/PERFORMANCE.md)"
+            exit 1
+          fi
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  crossbuild:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goos: darwin, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build ./...

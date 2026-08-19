@@ -1,0 +1,59 @@
+version: 2
+project_name: kanso
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: kanso
+    main: ./cmd/kanso
+    binary: kanso
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .CommitDate }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [README.md, LICENSE, docs/*]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat'
+      order: 0
+    - title: Fixes
+      regexp: '^fix'
+      order: 1
+    - title: Performance
+      regexp: '^perf'
+      order: 2
+  filters:
+    exclude: ['^docs', '^test', '^chore', '^ci']
+
+brews:
+  - name: kanso
+    repository:
+      owner: varijkapil13
+      name: homebrew-tap
+    homepage: https://github.com/varijkapil13/kanso
+    description: Jira in your terminal, without the clutter
+    license: MIT
+    test: |
+      system "#{bin}/kanso", "version"
+
+release:
+  prerelease: auto

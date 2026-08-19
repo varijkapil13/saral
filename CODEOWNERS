@@ -1,0 +1,11 @@
+# Ownership is per packet and lives in docs/ROADMAP.md; this file guards the shared files
+# that need a deliberate review because changing them affects every open branch.
+
+/pkg/jira/port.go            @varijkapil13
+/pkg/jira/types.go           @varijkapil13
+/pkg/jira/errors.go          @varijkapil13
+/internal/ui/kernel/         @varijkapil13
+/go.mod                      @varijkapil13
+/go.sum                      @varijkapil13
+/docs/adr/                   @varijkapil13
+/.github/                    @varijkapil13
