@@ -502,3 +502,34 @@ func collect(cmd tea.Cmd) []tea.Msg {
 	}
 	return out
 }
+
+// The filter is typed through the kernel, which binds q, r, R, ? and the digits
+// for itself. A filter that only works for the characters the kernel does not
+// want is one that quietly answers a different question from the one asked —
+// and q would quit the program out from under the typing.
+func TestFilter_ReceivesEveryCharacterIncludingTheKernelsOwnBindings(t *testing.T) {
+	t.Parallel()
+
+	d := testDeps(jiratest.New(jiratest.WithProject("PROJ", jiratest.Scrum),
+		jiratest.WithIssues(jiratest.Gen(40))))
+	m := startAll(t, d, 120, 30)
+
+	m = send(t, m, keyPress("/"))
+	for _, r := range "q2rR?" {
+		m = send(t, m, keyPress(string(r)))
+	}
+
+	shown := frame(m)
+	if !strings.Contains(shown, "q2rR?") {
+		t.Errorf("the filter reads something other than what was typed:\n%s", shown)
+	}
+	if strings.Contains(shown, "nothing is bound to 2") {
+		t.Errorf("a digit reached the kernel's slot binding:\n%s", shown)
+	}
+
+	// And esc, which the kernel would otherwise have taken for itself, clears it.
+	m = send(t, m, keyPress("esc"))
+	if got := frame(m); strings.Contains(got, "q2rR?") {
+		t.Errorf("esc did not clear the filter:\n%s", got)
+	}
+}

@@ -32,7 +32,7 @@ func defaultKeys() keyMap {
 		Open:     kernel.Bind([]string{"enter"}, "enter", "open"),
 		Filter:   kernel.Bind([]string{"/"}, "/", "filter"),
 		Accept:   kernel.Bind([]string{"enter"}, "enter", "keep filter"),
-		Clear:    kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter"),
+		Clear:    kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "clear filter"),
 	}
 }
 

@@ -38,6 +38,8 @@ const rowCacheLimit = 1024
 
 var _ kernel.View = (*Model)(nil)
 
+var _ kernel.KeyCapturer = (*Model)(nil)
+
 // Model is the issue list.
 type Model struct {
 	deps     kernel.Deps
@@ -86,6 +88,11 @@ type Model struct {
 
 	zonePrefix string
 }
+
+// WantsRawKeys is true while the filter is open. Without it the kernel matches
+// its own bindings first, so a query loses every digit, r triggers a refetch,
+// esc cannot cancel, and q quits the program out from under the typing.
+func (m *Model) WantsRawKeys() bool { return m.filtering }
 
 // New builds the issue list. The query it opens on is the user's own work,
 // narrowed to the session's project when there is one; both halves are resolved
