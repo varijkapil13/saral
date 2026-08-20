@@ -1,0 +1,29 @@
+The basket total is **recalculated** before the line items are read, so an empty basket divides by zero. See [**the checkout runbook**](https://example.atlassian.net/wiki/spaces/EX/pages/98304) and the `basketTotal()` helper.
+
+## Steps to reproduce
+
+- Sign in as a customer with no saved basket.
+- Open <https://example.atlassian.net/browse/EX-2> and follow the linked route.
+- Ask @user to confirm the account state.
+
+> ⚠ WARNING
+> Do not retry the request: each attempt writes an orphaned order row.
+
+```go
+func basketTotal(items []Item) Money {
+	var sum Money
+	for _, it := range items {
+		sum = sum.Add(it.Price)
+	}
+	return sum.Div(len(items))
+}
+```
+
+| Environment | Reproduced |
+| ----------- | ---------- |
+| staging     | twice      |
+
+![media](media:3f6b1c72-9d0e-4a55-b1b7-6c6b0a9f2e41)
+
+> [unsupported: futureBlock]
+> This node type is not in any published ADF schema. It must survive the round trip untouched.
