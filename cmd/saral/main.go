@@ -122,6 +122,12 @@ func build(opt options) (kernel.Deps, []kernel.Option, error) {
 	deps.Site = profile.Site
 	deps.Project = opt.project
 
+	// Nothing configured means the first thing to show is the thing that
+	// configures it. Without this the kernel opens whichever view claimed the
+	// first footer slot, and setup is reachable only by someone who already
+	// knows its name — which is nobody on their first run.
+	firstRun := perr != nil || profile.Site == ""
+
 	theme := opt.theme
 	if theme == "" {
 		theme = profile.Theme
@@ -134,8 +140,11 @@ func build(opt options) (kernel.Deps, []kernel.Option, error) {
 		mouse = opt.mouse
 	}
 	kopts := []kernel.Option{kernel.WithMouse(mouse)}
-	if opt.view != "" {
+	switch {
+	case opt.view != "":
 		kopts = append(kopts, kernel.WithInitialView(opt.view))
+	case firstRun:
+		kopts = append(kopts, kernel.WithInitialView(kernel.SetupViewID))
 	}
 	return deps, kopts, nil
 }

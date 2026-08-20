@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -70,3 +72,55 @@ func TestBuild_NoColorEnvironmentWinsOverTheFlag(t *testing.T) {
 		t.Error("NO_COLOR was ignored")
 	}
 }
+
+func TestBuild_AFirstRunStartsAtSetup(t *testing.T) {
+	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+
+	// Nothing configured. The kernel would otherwise open whichever view claimed
+	// the first footer slot, leaving setup reachable only by someone who already
+	// knows its name — which is nobody on their first run.
+	_, opts, err := build(options{})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if got := initialView(opts); got != kernel.SetupViewID {
+		t.Errorf("a first run opens %q, want %q", got, kernel.SetupViewID)
+	}
+}
+
+func TestBuild_AnExplicitViewStillWinsOnAFirstRun(t *testing.T) {
+	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+
+	_, opts, err := build(options{view: "board"})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if got := initialView(opts); got != "board" {
+		t.Errorf("saral board opened %q, want board", got)
+	}
+}
+
+func TestBuild_AConfiguredProfileDoesNotStartAtSetup(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SARAL_CONFIG_DIR", dir)
+	const cfg = `active = "work"
+
+[profiles.work]
+site  = "example.atlassian.net"
+email = "you@example.com"
+token = { env = "JIRA_TOKEN" }
+`
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, opts, err := build(options{})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if got := initialView(opts); got != "" {
+		t.Errorf("a configured profile opened %q, want the registered default", got)
+	}
+}
+
+func initialView(opts []kernel.Option) string { return kernel.InitialViewOf(opts...) }

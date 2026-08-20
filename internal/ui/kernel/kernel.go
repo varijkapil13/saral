@@ -29,6 +29,11 @@ const (
 // binds ctrl+k to opening it and says so when nothing has registered it.
 const PaletteViewID = "palette"
 
+// SetupViewID is the view that collects a profile. A caller that finds nothing
+// configured opens it with WithInitialView; naming it here rather than importing
+// the package keeps the composition root free of any view.
+const SetupViewID = "onboarding"
+
 // KeyCapturer is the optional interface a view implements while it is taking
 // typing — a filter, a form field, the command palette. While it says yes, every
 // key except ctrl+c goes to it untouched, because a view that cannot receive the
@@ -126,6 +131,16 @@ func WithInitialView(id string) Option {
 // terminal text selection asks for.
 func WithMouse(enabled bool) Option {
 	return func(m *Model) { m.mouse = enabled }
+}
+
+// InitialViewOf reports which view a set of options would open, which is how a
+// composition root tests its own routing without building a program.
+func InitialViewOf(opts ...Option) string {
+	var m Model
+	for _, opt := range opts {
+		opt(&m)
+	}
+	return m.initialView
 }
 
 // WithGlobalKeys replaces the global keymap.
