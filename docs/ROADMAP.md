@@ -48,7 +48,7 @@ instance from day one.
 
 - [x] **P1.1 — Transport and auth** · [#2](https://github.com/varijkapil13/saral/issues/2) · **owns** `pkg/jira/cloud/{client,auth,retry,paginate}.go`
   Basic auth, `Retry-After` backoff, both paginators, repeated-cursor guard, request coalescing.
-- [ ] **P1.2 — Search and JQL** · [#3](https://github.com/varijkapil13/saral/issues/3) · **owns** `pkg/jira/cloud/search.go`, `internal/app/search.go`
+- [x] **P1.2 — Search and JQL** · [#3](https://github.com/varijkapil13/saral/issues/3) · **owns** `pkg/jira/cloud/search.go`, `internal/app/search.go`
   `POST /search/jql` with explicit field sets, `approximate-count`, saved queries.
 - [ ] **P1.3 — Capability probe** · [#4](https://github.com/varijkapil13/saral/issues/4) · **owns** `pkg/jira/cloud/caps.go`
   `/mypermissions`, `/configuration`, `/myself`, `/plans` probe, board presence, terminal graphics

@@ -44,6 +44,12 @@ var importRules = []importRule{
 		why:    "the concrete adapter is wired once, at the composition root",
 	},
 	{
+		name:   "app-must-not-import-the-ui",
+		from:   "internal/app",
+		forbid: "internal/ui",
+		why:    "use cases are driven by the views and never reach back up into them",
+	},
+	{
 		name:   "adf-must-not-import-jira",
 		from:   "pkg/adf",
 		forbid: "pkg/jira",
@@ -213,6 +219,30 @@ func TestBrokenRules_MatchTheOffendingPackagesAndNothingElse(t *testing.T) {
 			name:    "jira depending on adf",
 			pkgDir:  "pkg/jira",
 			imports: "pkg/adf",
+			want:    nil,
+		},
+		{
+			name:    "a use case reaching up into the views",
+			pkgDir:  "internal/app",
+			imports: "internal/ui/kernel",
+			want:    []string{"app-must-not-import-the-ui"},
+		},
+		{
+			name:    "a use case taking the port",
+			pkgDir:  "internal/app",
+			imports: "pkg/jira",
+			want:    nil,
+		},
+		{
+			name:    "a use case constructing the cloud adapter",
+			pkgDir:  "internal/app",
+			imports: "pkg/jira/cloud",
+			want:    []string{"only-cmd-and-config-construct-the-cloud-adapter"},
+		},
+		{
+			name:    "a view driving a use case",
+			pkgDir:  "internal/ui/list",
+			imports: "internal/app",
 			want:    nil,
 		},
 		{
