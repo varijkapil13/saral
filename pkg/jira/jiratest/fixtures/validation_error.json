@@ -1,0 +1,10 @@
+{
+  "errorMessages": [
+    "Field 'customfield_10019' cannot be set. It is not on the appropriate screen, or unknown."
+  ],
+  "errors": {
+    "summary": "You must specify a summary of the issue.",
+    "duedate": "Error parsing date/time string.",
+    "customfield_10032": "Story Points must be a number."
+  }
+}

@@ -1,0 +1,232 @@
+[
+  {
+    "id": "summary",
+    "key": "summary",
+    "name": "Summary",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["summary"],
+    "schema": { "type": "string", "system": "summary" }
+  },
+  {
+    "id": "description",
+    "key": "description",
+    "name": "Description",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["description"],
+    "schema": { "type": "string", "system": "description" }
+  },
+  {
+    "id": "issuetype",
+    "key": "issuetype",
+    "name": "Issue Type",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["issuetype", "type"],
+    "schema": { "type": "issuetype", "system": "issuetype" }
+  },
+  {
+    "id": "project",
+    "key": "project",
+    "name": "Project",
+    "custom": false,
+    "orderable": false,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["project"],
+    "schema": { "type": "project", "system": "project" }
+  },
+  {
+    "id": "status",
+    "key": "status",
+    "name": "Status",
+    "custom": false,
+    "orderable": false,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["status"],
+    "schema": { "type": "status", "system": "status" }
+  },
+  {
+    "id": "priority",
+    "key": "priority",
+    "name": "Priority",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["priority"],
+    "schema": { "type": "priority", "system": "priority" }
+  },
+  {
+    "id": "resolution",
+    "key": "resolution",
+    "name": "Resolution",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["resolution"],
+    "schema": { "type": "resolution", "system": "resolution" }
+  },
+  {
+    "id": "resolutiondate",
+    "key": "resolutiondate",
+    "name": "Resolved",
+    "custom": false,
+    "orderable": false,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["resolutiondate", "resolved"],
+    "schema": { "type": "datetime", "system": "resolutiondate" }
+  },
+  {
+    "id": "assignee",
+    "key": "assignee",
+    "name": "Assignee",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["assignee"],
+    "schema": { "type": "user", "system": "assignee" }
+  },
+  {
+    "id": "reporter",
+    "key": "reporter",
+    "name": "Reporter",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["reporter"],
+    "schema": { "type": "user", "system": "reporter" }
+  },
+  {
+    "id": "labels",
+    "key": "labels",
+    "name": "Labels",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["labels"],
+    "schema": { "type": "array", "items": "string", "system": "labels" }
+  },
+  {
+    "id": "duedate",
+    "key": "duedate",
+    "name": "Due date",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["due", "duedate"],
+    "schema": { "type": "date", "system": "duedate" }
+  },
+  {
+    "id": "created",
+    "key": "created",
+    "name": "Created",
+    "custom": false,
+    "orderable": false,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["created", "createdDate"],
+    "schema": { "type": "datetime", "system": "created" }
+  },
+  {
+    "id": "updated",
+    "key": "updated",
+    "name": "Updated",
+    "custom": false,
+    "orderable": false,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["updated", "updatedDate"],
+    "schema": { "type": "datetime", "system": "updated" }
+  },
+  {
+    "id": "parent",
+    "key": "parent",
+    "name": "Parent",
+    "custom": false,
+    "orderable": false,
+    "navigable": true,
+    "searchable": false,
+    "clauseNames": ["parent"],
+    "schema": { "type": "issuelink", "system": "parent" }
+  },
+  {
+    "id": "fixVersions",
+    "key": "fixVersions",
+    "name": "Fix versions",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["fixVersion"],
+    "schema": { "type": "array", "items": "version", "system": "fixVersions" }
+  },
+  {
+    "id": "attachment",
+    "key": "attachment",
+    "name": "Attachment",
+    "custom": false,
+    "orderable": true,
+    "navigable": false,
+    "searchable": true,
+    "clauseNames": ["attachments"],
+    "schema": { "type": "array", "items": "attachment", "system": "attachment" }
+  },
+  {
+    "id": "timetracking",
+    "key": "timetracking",
+    "name": "Time tracking",
+    "custom": false,
+    "orderable": true,
+    "navigable": false,
+    "searchable": true,
+    "clauseNames": [],
+    "schema": { "type": "timetracking", "system": "timetracking" }
+  },
+  {
+    "id": "customfield_10032",
+    "key": "customfield_10032",
+    "name": "Story Points",
+    "untranslatedName": "Story Points",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10032]", "Story Points"],
+    "schema": {
+      "type": "number",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+      "customId": 10032
+    }
+  },
+  {
+    "id": "customfield_10041",
+    "key": "customfield_10041",
+    "name": "Target start",
+    "untranslatedName": "Target start",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10041]", "Target start"],
+    "schema": {
+      "type": "date",
+      "custom": "com.atlassian.jpo:jpo-custom-field-baseline-start",
+      "customId": 10041
+    }
+  }
+]

@@ -1,0 +1,115 @@
+{
+  "expand": "transitions",
+  "transitions": [
+    {
+      "id": "21",
+      "name": "Start review",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/10001",
+        "description": "Waiting for a reviewer.",
+        "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+        "name": "In Review",
+        "id": "10001",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+          "id": 4,
+          "key": "indeterminate",
+          "colorName": "yellow",
+          "name": "In Progress"
+        }
+      },
+      "hasScreen": false,
+      "isGlobal": false,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false
+    },
+    {
+      "id": "31",
+      "name": "Release",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/10002",
+        "description": "Shipped to production.",
+        "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+        "name": "Released",
+        "id": "10002",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+          "id": 3,
+          "key": "done",
+          "colorName": "green",
+          "name": "Done"
+        }
+      },
+      "hasScreen": true,
+      "isGlobal": false,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false,
+      "fields": {
+        "resolution": {
+          "required": true,
+          "schema": { "type": "resolution", "system": "resolution" },
+          "name": "Resolution",
+          "key": "resolution",
+          "fieldId": "resolution",
+          "operations": ["set"],
+          "hasDefaultValue": false,
+          "allowedValues": [
+            {
+              "self": "https://example.atlassian.net/rest/api/3/resolution/10000",
+              "id": "10000",
+              "name": "Done",
+              "description": "Work has been completed."
+            },
+            {
+              "self": "https://example.atlassian.net/rest/api/3/resolution/10001",
+              "id": "10001",
+              "name": "Won't Do",
+              "description": "This will not be worked on."
+            }
+          ]
+        },
+        "customfield_10032": {
+          "required": false,
+          "schema": {
+            "type": "number",
+            "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+            "customId": 10032
+          },
+          "name": "Story Points",
+          "key": "customfield_10032",
+          "fieldId": "customfield_10032",
+          "operations": ["set"],
+          "hasDefaultValue": false
+        }
+      }
+    },
+    {
+      "id": "11",
+      "name": "Back to backlog",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/10000",
+        "description": "Not started yet.",
+        "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+        "name": "Backlog",
+        "id": "10000",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "blue-gray",
+          "name": "To Do"
+        }
+      },
+      "hasScreen": false,
+      "isGlobal": true,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false
+    }
+  ]
+}

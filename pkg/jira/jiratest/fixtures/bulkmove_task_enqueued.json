@@ -1,0 +1,12 @@
+{
+  "taskId": "10641",
+  "status": "ENQUEUED",
+  "progressPercent": 0,
+  "submittedBy": {
+    "accountId": "5b10a2844c20165700ede21g"
+  },
+  "created": 1770802882000,
+  "totalIssueCount": 3,
+  "processedAccessibleIssues": [],
+  "invalidOrInaccessibleIssueCount": 0
+}

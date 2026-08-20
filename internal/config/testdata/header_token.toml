@@ -1,0 +1,6 @@
+[profiles.work]
+site  = "example.atlassian.net"
+email = "you@example.com"
+
+[profiles.work.token]
+command = ["pass", "jira"]

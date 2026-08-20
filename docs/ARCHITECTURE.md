@@ -46,7 +46,7 @@ expressed in domain terms, not HTTP terms.
 ```go
 // pkg/jira/port.go
 type Client interface {
-	Capabilities(ctx context.Context) (Capabilities, error)
+	Capabilities(ctx context.Context, projectKey string) (Capabilities, error)
 
 	Search(ctx context.Context, q Query) (Page[Issue], error)
 	Issue(ctx context.Context, key string) (Issue, error)
@@ -62,7 +62,7 @@ type Client interface {
 
 	Attachments(ctx context.Context, key string) ([]Attachment, error)
 	Upload(ctx context.Context, key string, files []FileRef) ([]Attachment, error)
-	Download(ctx context.Context, id string, w io.Writer, progress func(int64)) error
+	Download(ctx context.Context, id string, w io.Writer, opt DownloadOptions) error
 	DeleteAttachment(ctx context.Context, id string) error
 
 	Versions(ctx context.Context, projectKey string) ([]Version, error)
@@ -72,7 +72,7 @@ type Client interface {
 
 	Boards(ctx context.Context, projectKey string) ([]Board, error)
 	BoardConfig(ctx context.Context, boardID int64) (BoardConfig, error)
-	Sprints(ctx context.Context, boardID int64) (Page[Sprint], error)
+	Sprints(ctx context.Context, boardID int64, states ...SprintState) (Page[Sprint], error)
 	CreateSprint(ctx context.Context, in SprintInput) (Sprint, error)
 	UpdateSprint(ctx context.Context, id int64, in SprintPatch) (Sprint, error)
 	StartSprint(ctx context.Context, id int64) (Sprint, error)
@@ -119,8 +119,8 @@ reports of Jira returning a token that loops back to page one.
 
 ## Capabilities as a value object
 
-The probe runs once per site, is cached in the store, and is refreshable with `R`. Views read it;
-nobody re-probes ad hoc.
+The probe runs once per site and project, is cached in the store, and is refreshable with `R`. Views
+read it; nobody re-probes ad hoc.
 
 ```go
 type Capabilities struct {
@@ -141,6 +141,10 @@ type Capability struct {
 
 A view whose capability is absent is never registered into the footer, and any keybinding that would
 reach it renders `Reason` in the status line. **A 403 is a capability answer, not an error.**
+
+The probe is scoped to a project, because three of these are: boards belong to a project, and Jira
+scopes Move, Delete and Create as project permissions, so one token answers differently in two
+projects on one site. Probing with no project leaves those three unavailable with a reason saying so.
 
 ## The UI kernel and its registries
 

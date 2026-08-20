@@ -1,0 +1,4 @@
+[profiles.work]
+site  = "example.atlassian.net"
+email = "you@example.com"
+token.keychain = "saral:work"

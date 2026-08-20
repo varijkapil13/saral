@@ -1,0 +1,6 @@
+active = "work"
+
+[profiles.work]
+site  = "example.atlassian.net"
+email = "you@example.com"
+token = { command = "pass show jira/work" }

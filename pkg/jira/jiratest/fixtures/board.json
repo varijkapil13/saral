@@ -1,0 +1,38 @@
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 2,
+  "isLast": true,
+  "values": [
+    {
+      "id": 10,
+      "self": "https://example.atlassian.net/rest/agile/1.0/board/10",
+      "name": "EX Scrum board",
+      "type": "scrum",
+      "location": {
+        "projectId": 10000,
+        "displayName": "Example (EX)",
+        "projectName": "Example",
+        "projectKey": "EX",
+        "projectTypeKey": "software",
+        "avatarURI": "https://example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10420?size=small",
+        "name": "Example (EX)"
+      }
+    },
+    {
+      "id": 11,
+      "self": "https://example.atlassian.net/rest/agile/1.0/board/11",
+      "name": "EX Kanban board",
+      "type": "kanban",
+      "location": {
+        "projectId": 10000,
+        "displayName": "Example (EX)",
+        "projectName": "Example",
+        "projectKey": "EX",
+        "projectTypeKey": "software",
+        "avatarURI": "https://example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10420?size=small",
+        "name": "Example (EX)"
+      }
+    }
+  ]
+}

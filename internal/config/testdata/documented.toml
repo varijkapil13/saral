@@ -1,0 +1,10 @@
+active = "work"
+
+[profiles.work]
+site  = "example.atlassian.net"
+email = "you@example.com"
+token = { keychain = "saral:work" }
+
+[profiles.work.timeline]
+start = ["Target start", "Start date"]
+end   = ["Target end", "Due date"]

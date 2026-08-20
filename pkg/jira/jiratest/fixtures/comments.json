@@ -1,0 +1,101 @@
+{
+  "startAt": 0,
+  "maxResults": 50,
+  "total": 2,
+  "comments": [
+    {
+      "self": "https://example.atlassian.net/rest/api/3/issue/10001/comment/10700",
+      "id": "10700",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+        "accountId": "5b10ac8d82e05b22cc7d4ef5",
+        "accountType": "atlassian",
+        "displayName": "Another User",
+        "active": true,
+        "timeZone": "Europe/Berlin"
+      },
+      "body": {
+        "type": "doc",
+        "version": 1,
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              { "type": "text", "text": "Reproduced on staging. The stack trace points at " },
+              { "type": "text", "text": "basketTotal()", "marks": [{ "type": "code" }] },
+              { "type": "text", "text": "." }
+            ]
+          }
+        ]
+      },
+      "updateAuthor": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+        "accountId": "5b10ac8d82e05b22cc7d4ef5",
+        "accountType": "atlassian",
+        "displayName": "Another User",
+        "active": true,
+        "timeZone": "Europe/Berlin"
+      },
+      "created": "2026-01-29T10:12:03.000+0000",
+      "updated": "2026-01-29T10:12:03.000+0000",
+      "jsdPublic": true
+    },
+    {
+      "self": "https://example.atlassian.net/rest/api/3/issue/10001/comment/10701",
+      "id": "10701",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g",
+        "accountId": "5b10a2844c20165700ede21g",
+        "accountType": "atlassian",
+        "displayName": "Example User",
+        "active": true,
+        "timeZone": "Europe/Berlin"
+      },
+      "body": {
+        "type": "doc",
+        "version": 1,
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              { "type": "text", "text": "Fix is behind a flag until the migration lands." }
+            ]
+          },
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  { "type": "paragraph", "content": [{ "type": "text", "text": "Guard the divide." }] }
+                ]
+              },
+              {
+                "type": "listItem",
+                "content": [
+                  { "type": "paragraph", "content": [{ "type": "text", "text": "Backfill the orphaned rows." }] }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "updateAuthor": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g",
+        "accountId": "5b10a2844c20165700ede21g",
+        "accountType": "atlassian",
+        "displayName": "Example User",
+        "active": true,
+        "timeZone": "Europe/Berlin"
+      },
+      "created": "2026-02-11T09:38:55.000+0000",
+      "updated": "2026-02-11T09:41:22.104+0000",
+      "jsdPublic": false,
+      "visibility": {
+        "type": "role",
+        "value": "Developers",
+        "identifier": "Developers"
+      }
+    }
+  ]
+}

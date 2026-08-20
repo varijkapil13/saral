@@ -1,0 +1,5 @@
+[profiles.work]
+sight = "example.atlassian.net"
+site  = "example.atlassian.net"
+email = "you@example.com"
+token = { env = "JIRA_TOKEN" }

@@ -1,0 +1,4 @@
+[profiles.work]
+site  = "example.atlassian.net"
+email = "you@example.com"
+token = { command = "pass jira | head -1" }

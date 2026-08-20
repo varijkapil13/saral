@@ -1,0 +1,88 @@
+{
+  "startAt": 0,
+  "maxResults": 50,
+  "total": 6,
+  "fields": [
+    {
+      "required": true,
+      "schema": { "type": "project", "system": "project" },
+      "name": "Project",
+      "key": "project",
+      "fieldId": "project",
+      "hasDefaultValue": false,
+      "operations": ["set"],
+      "allowedValues": [
+        {
+          "self": "https://example.atlassian.net/rest/api/3/project/10000",
+          "id": "10000",
+          "key": "EX",
+          "name": "Example",
+          "projectTypeKey": "software",
+          "simplified": false
+        }
+      ]
+    },
+    {
+      "required": true,
+      "schema": { "type": "issuetype", "system": "issuetype" },
+      "name": "Issue Type",
+      "key": "issuetype",
+      "fieldId": "issuetype",
+      "hasDefaultValue": false,
+      "operations": [],
+      "allowedValues": [
+        {
+          "self": "https://example.atlassian.net/rest/api/3/issuetype/10001",
+          "id": "10001",
+          "description": "A small piece of work.",
+          "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+          "name": "Task",
+          "subtask": false,
+          "avatarId": 10318,
+          "hierarchyLevel": 0
+        }
+      ]
+    },
+    {
+      "required": true,
+      "schema": { "type": "string", "system": "summary" },
+      "name": "Summary",
+      "key": "summary",
+      "fieldId": "summary",
+      "hasDefaultValue": false,
+      "operations": ["set"]
+    },
+    {
+      "required": false,
+      "schema": { "type": "string", "system": "description" },
+      "name": "Description",
+      "key": "description",
+      "fieldId": "description",
+      "hasDefaultValue": false,
+      "operations": ["set"]
+    },
+    {
+      "required": false,
+      "schema": { "type": "user", "system": "assignee" },
+      "name": "Assignee",
+      "key": "assignee",
+      "fieldId": "assignee",
+      "hasDefaultValue": false,
+      "autoCompleteUrl": "https://example.atlassian.net/rest/api/3/user/assignable/search?project=EX&query=",
+      "operations": ["set"]
+    },
+    {
+      "required": false,
+      "schema": {
+        "type": "number",
+        "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+        "customId": 10032
+      },
+      "name": "Story Points",
+      "key": "customfield_10032",
+      "fieldId": "customfield_10032",
+      "hasDefaultValue": false,
+      "operations": ["set"]
+    }
+  ]
+}

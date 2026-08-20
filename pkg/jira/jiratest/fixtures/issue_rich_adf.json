@@ -1,0 +1,306 @@
+{
+  "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+  "id": "10001",
+  "self": "https://example.atlassian.net/rest/api/3/issue/10001",
+  "key": "EX-1",
+  "fields": {
+    "summary": "Checkout fails when the basket is empty",
+    "project": {
+      "self": "https://example.atlassian.net/rest/api/3/project/10000",
+      "id": "10000",
+      "key": "EX",
+      "name": "Example",
+      "projectTypeKey": "software",
+      "simplified": false,
+      "avatarUrls": {
+        "48x48": "https://example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10420",
+        "24x24": "https://example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10420?size=small",
+        "16x16": "https://example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10420?size=xsmall",
+        "32x32": "https://example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10420?size=medium"
+      }
+    },
+    "issuetype": {
+      "self": "https://example.atlassian.net/rest/api/3/issuetype/10004",
+      "id": "10004",
+      "description": "A problem or error.",
+      "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10303?size=medium",
+      "name": "Bug",
+      "subtask": false,
+      "avatarId": 10303,
+      "hierarchyLevel": 0
+    },
+    "status": {
+      "self": "https://example.atlassian.net/rest/api/3/status/10001",
+      "description": "Waiting for a reviewer.",
+      "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+      "name": "In Review",
+      "id": "10001",
+      "statusCategory": {
+        "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+        "id": 4,
+        "key": "indeterminate",
+        "colorName": "yellow",
+        "name": "In Progress"
+      }
+    },
+    "priority": {
+      "self": "https://example.atlassian.net/rest/api/3/priority/2",
+      "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
+      "name": "High",
+      "id": "2"
+    },
+    "resolution": null,
+    "resolutiondate": null,
+    "assignee": {
+      "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g",
+      "accountId": "5b10a2844c20165700ede21g",
+      "accountType": "atlassian",
+      "displayName": "Example User",
+      "active": true,
+      "timeZone": "Europe/Berlin"
+    },
+    "reporter": {
+      "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+      "accountId": "5b10ac8d82e05b22cc7d4ef5",
+      "accountType": "atlassian",
+      "displayName": "Another User",
+      "active": true,
+      "timeZone": "Europe/Berlin"
+    },
+    "labels": ["checkout", "regression"],
+    "created": "2026-01-28T14:03:07.412+0000",
+    "updated": "2026-02-11T09:41:22.104+0000",
+    "duedate": "2026-03-06",
+    "customfield_10032": 5,
+    "customfield_10041": "2026-02-02",
+    "fixVersions": [
+      {
+        "self": "https://example.atlassian.net/rest/api/3/version/10100",
+        "id": "10100",
+        "name": "2026.3",
+        "archived": false,
+        "released": false,
+        "releaseDate": "2026-03-27"
+      }
+    ],
+    "timetracking": {
+      "originalEstimate": "1d",
+      "remainingEstimate": "4h",
+      "timeSpent": "4h",
+      "originalEstimateSeconds": 28800,
+      "remainingEstimateSeconds": 14400,
+      "timeSpentSeconds": 14400
+    },
+    "attachment": [
+      {
+        "self": "https://example.atlassian.net/rest/api/3/attachment/10501",
+        "id": "10501",
+        "filename": "har-capture.har",
+        "author": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "displayName": "Another User",
+          "active": true
+        },
+        "created": "2026-01-28T14:05:19.000+0000",
+        "size": 184320,
+        "mimeType": "application/json",
+        "content": "https://example.atlassian.net/rest/api/3/attachment/content/10501"
+      }
+    ],
+    "issuelinks": [
+      {
+        "id": "10600",
+        "self": "https://example.atlassian.net/rest/api/3/issueLink/10600",
+        "type": {
+          "id": "10003",
+          "name": "Blocks",
+          "inward": "is blocked by",
+          "outward": "blocks",
+          "self": "https://example.atlassian.net/rest/api/3/issueLinkType/10003"
+        },
+        "outwardIssue": {
+          "id": "10002",
+          "key": "EX-2",
+          "self": "https://example.atlassian.net/rest/api/3/issue/10002",
+          "fields": {
+            "summary": "Cache the field catalogue between runs",
+            "status": {
+              "self": "https://example.atlassian.net/rest/api/3/status/10000",
+              "name": "Backlog",
+              "id": "10000",
+              "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+              "statusCategory": {
+                "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+                "id": 2,
+                "key": "new",
+                "colorName": "blue-gray",
+                "name": "To Do"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "subtasks": [],
+    "description": {
+      "type": "doc",
+      "version": 1,
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            { "type": "text", "text": "The basket total is " },
+            { "type": "text", "text": "recalculated", "marks": [{ "type": "strong" }] },
+            { "type": "text", "text": " before the line items are read, so an empty basket divides by zero. See " },
+            {
+              "type": "text",
+              "text": "the checkout runbook",
+              "marks": [
+                { "type": "link", "attrs": { "href": "https://example.atlassian.net/wiki/spaces/EX/pages/98304" } },
+                { "type": "strong" }
+              ]
+            },
+            { "type": "text", "text": " and the " },
+            { "type": "text", "text": "basketTotal()", "marks": [{ "type": "code" }] },
+            { "type": "text", "text": " helper." }
+          ]
+        },
+        {
+          "type": "heading",
+          "attrs": { "level": 2 },
+          "content": [{ "type": "text", "text": "Steps to reproduce" }]
+        },
+        {
+          "type": "bulletList",
+          "content": [
+            {
+              "type": "listItem",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [{ "type": "text", "text": "Sign in as a customer with no saved basket." }]
+                }
+              ]
+            },
+            {
+              "type": "listItem",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    { "type": "text", "text": "Open " },
+                    { "type": "inlineCard", "attrs": { "url": "https://example.atlassian.net/browse/EX-2" } },
+                    { "type": "text", "text": " and follow the linked route." }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "listItem",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    { "type": "text", "text": "Ask " },
+                    {
+                      "type": "mention",
+                      "attrs": {
+                        "id": "5b10ac8d82e05b22cc7d4ef5",
+                        "text": "@user",
+                        "accessLevel": ""
+                      }
+                    },
+                    { "type": "text", "text": " to confirm the account state." }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "panel",
+          "attrs": { "panelType": "warning" },
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [{ "type": "text", "text": "Do not retry the request: each attempt writes an orphaned order row." }]
+            }
+          ]
+        },
+        {
+          "type": "codeBlock",
+          "attrs": { "language": "go" },
+          "content": [
+            {
+              "type": "text",
+              "text": "func basketTotal(items []Item) Money {\n\tvar sum Money\n\tfor _, it := range items {\n\t\tsum = sum.Add(it.Price)\n\t}\n\treturn sum.Div(len(items))\n}"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "attrs": { "isNumberColumnEnabled": false, "layout": "default", "localId": "cf4a1b90-0d5a-4f2e-9c31-7b2a5f0c4d18" },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableHeader",
+                  "attrs": { "colspan": 1, "rowspan": 1, "background": "#f1f2f4" },
+                  "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Environment" }] }]
+                },
+                {
+                  "type": "tableHeader",
+                  "attrs": { "colspan": 1, "rowspan": 1, "background": "#f1f2f4" },
+                  "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Reproduced" }] }]
+                }
+              ]
+            },
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {},
+                  "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "staging" }] }]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {},
+                  "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "twice" }] }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "mediaSingle",
+          "attrs": { "layout": "center", "width": 62.5 },
+          "content": [
+            {
+              "type": "media",
+              "attrs": {
+                "id": "3f6b1c72-9d0e-4a55-b1b7-6c6b0a9f2e41",
+                "type": "file",
+                "collection": "jira-issue-10001",
+                "width": 1280,
+                "height": 720
+              }
+            }
+          ]
+        },
+        {
+          "type": "futureBlock",
+          "attrs": { "variant": "callout", "localId": "8a1d6f30-5c22-4f8f-9c0e-1a7c4b6d2e59" },
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [{ "type": "text", "text": "This node type is not in any published ADF schema. It must survive the round trip untouched." }]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

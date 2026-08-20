@@ -1,0 +1,46 @@
+{
+  "id": 11,
+  "name": "EX Kanban board",
+  "self": "https://example.atlassian.net/rest/agile/1.0/board/11/configuration",
+  "type": "kanban",
+  "location": {
+    "type": "project",
+    "key": "EX",
+    "id": "10000",
+    "self": "https://example.atlassian.net/rest/api/3/project/10000",
+    "name": "Example"
+  },
+  "filter": {
+    "id": "10002",
+    "self": "https://example.atlassian.net/rest/api/3/filter/10002"
+  },
+  "columnConfig": {
+    "columns": [
+      {
+        "name": "Backlog",
+        "statuses": [
+          { "id": "10000", "self": "https://example.atlassian.net/rest/api/3/status/10000" }
+        ]
+      },
+      {
+        "name": "In Review",
+        "statuses": [
+          { "id": "10001", "self": "https://example.atlassian.net/rest/api/3/status/10001" }
+        ]
+      },
+      {
+        "name": "Released",
+        "statuses": [
+          { "id": "10002", "self": "https://example.atlassian.net/rest/api/3/status/10002" }
+        ]
+      }
+    ],
+    "constraintType": "none"
+  },
+  "estimation": {
+    "type": "none"
+  },
+  "ranking": {
+    "rankCustomFieldId": 10019
+  }
+}

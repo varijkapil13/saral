@@ -1,0 +1,5 @@
+[profiles.work]
+site   = "example.atlassian.net"
+email  = "you@example.com"
+glyphs = "nerdfont"
+token  = { env = "JIRA_TOKEN" }

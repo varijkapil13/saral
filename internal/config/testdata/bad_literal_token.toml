@@ -1,0 +1,6 @@
+active = "work"
+
+[profiles.work]
+site  = "example.atlassian.net"
+email = "you@example.com"
+token = "9d8f7a6b5c4d3e2f1a0b"

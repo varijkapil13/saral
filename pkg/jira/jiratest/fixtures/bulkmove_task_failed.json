@@ -1,0 +1,18 @@
+{
+  "taskId": "10641",
+  "status": "FAILED",
+  "progressPercent": 100,
+  "submittedBy": {
+    "accountId": "5b10a2844c20165700ede21g"
+  },
+  "created": 1770802882000,
+  "started": 1770802885000,
+  "updated": 1770802951000,
+  "totalIssueCount": 3,
+  "processedAccessibleIssues": [10001],
+  "failedAccessibleIssues": {
+    "10002": ["The target issue type does not have a matching status for In Review."],
+    "10003": ["You do not have permission to create issues in the target project."]
+  },
+  "invalidOrInaccessibleIssueCount": 0
+}

@@ -1,0 +1,104 @@
+{
+  "startAt": 0,
+  "maxResults": 50,
+  "total": 6,
+  "fields": [
+    {
+      "required": true,
+      "schema": { "type": "project", "system": "project" },
+      "name": "Project",
+      "key": "project",
+      "fieldId": "project",
+      "hasDefaultValue": false,
+      "operations": ["set"],
+      "allowedValues": [
+        {
+          "self": "https://example.atlassian.net/rest/api/3/project/10000",
+          "id": "10000",
+          "key": "EX",
+          "name": "Example",
+          "projectTypeKey": "software",
+          "simplified": false
+        }
+      ]
+    },
+    {
+      "required": true,
+      "schema": { "type": "issuetype", "system": "issuetype" },
+      "name": "Issue Type",
+      "key": "issuetype",
+      "fieldId": "issuetype",
+      "hasDefaultValue": false,
+      "operations": [],
+      "allowedValues": [
+        {
+          "self": "https://example.atlassian.net/rest/api/3/issuetype/10004",
+          "id": "10004",
+          "description": "A problem or error.",
+          "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10303?size=medium",
+          "name": "Bug",
+          "subtask": false,
+          "avatarId": 10303,
+          "hierarchyLevel": 0
+        }
+      ]
+    },
+    {
+      "required": true,
+      "schema": { "type": "string", "system": "summary" },
+      "name": "Summary",
+      "key": "summary",
+      "fieldId": "summary",
+      "hasDefaultValue": false,
+      "operations": ["set"]
+    },
+    {
+      "required": true,
+      "schema": { "type": "string", "system": "description" },
+      "name": "Description",
+      "key": "description",
+      "fieldId": "description",
+      "hasDefaultValue": false,
+      "operations": ["set"]
+    },
+    {
+      "required": true,
+      "schema": { "type": "priority", "system": "priority" },
+      "name": "Priority",
+      "key": "priority",
+      "fieldId": "priority",
+      "hasDefaultValue": true,
+      "defaultValue": {
+        "self": "https://example.atlassian.net/rest/api/3/priority/3",
+        "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+        "name": "Medium",
+        "id": "3"
+      },
+      "operations": ["set"],
+      "allowedValues": [
+        {
+          "self": "https://example.atlassian.net/rest/api/3/priority/2",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
+          "name": "High",
+          "id": "2"
+        },
+        {
+          "self": "https://example.atlassian.net/rest/api/3/priority/3",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+          "name": "Medium",
+          "id": "3"
+        }
+      ]
+    },
+    {
+      "required": false,
+      "schema": { "type": "array", "items": "string", "system": "labels" },
+      "name": "Labels",
+      "key": "labels",
+      "fieldId": "labels",
+      "hasDefaultValue": false,
+      "autoCompleteUrl": "https://example.atlassian.net/rest/api/1.0/labels/suggest?query=",
+      "operations": ["add", "set", "remove"]
+    }
+  ]
+}

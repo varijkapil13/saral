@@ -1,0 +1,76 @@
+{
+  "permissions": {
+    "ADMINISTER": {
+      "id": "0",
+      "key": "ADMINISTER",
+      "name": "Administer Jira",
+      "type": "GLOBAL",
+      "description": "Create and administer projects, issue types, fields, workflows, and schemes for all projects.",
+      "havePermission": true
+    },
+    "BULK_CHANGE": {
+      "id": "33",
+      "key": "BULK_CHANGE",
+      "name": "Make bulk changes",
+      "type": "GLOBAL",
+      "description": "Modify collections of issues at once.",
+      "havePermission": true
+    },
+    "CREATE_ISSUES": {
+      "id": "11",
+      "key": "CREATE_ISSUES",
+      "name": "Create Issues",
+      "type": "PROJECT",
+      "description": "Ability to create issues.",
+      "havePermission": true
+    },
+    "MOVE_ISSUES": {
+      "id": "25",
+      "key": "MOVE_ISSUES",
+      "name": "Move Issues",
+      "type": "PROJECT",
+      "description": "Ability to move issues between projects or between workflows of the same project.",
+      "havePermission": true
+    },
+    "EDIT_ISSUES": {
+      "id": "12",
+      "key": "EDIT_ISSUES",
+      "name": "Edit Issues",
+      "type": "PROJECT",
+      "description": "Ability to edit issues.",
+      "havePermission": true
+    },
+    "DELETE_ISSUES": {
+      "id": "16",
+      "key": "DELETE_ISSUES",
+      "name": "Delete Issues",
+      "type": "PROJECT",
+      "description": "Ability to delete issues.",
+      "havePermission": true
+    },
+    "CREATE_ATTACHMENTS": {
+      "id": "19",
+      "key": "CREATE_ATTACHMENTS",
+      "name": "Create Attachments",
+      "type": "PROJECT",
+      "description": "Users with this permission may create attachments.",
+      "havePermission": true
+    },
+    "ADD_COMMENTS": {
+      "id": "15",
+      "key": "ADD_COMMENTS",
+      "name": "Add Comments",
+      "type": "PROJECT",
+      "description": "Ability to comment on issues.",
+      "havePermission": true
+    },
+    "TRANSITION_ISSUES": {
+      "id": "46",
+      "key": "TRANSITION_ISSUES",
+      "name": "Transition Issues",
+      "type": "PROJECT",
+      "description": "Ability to transition issues.",
+      "havePermission": true
+    }
+  }
+}
