@@ -102,6 +102,27 @@ func capsVoid(ctx context.Context, errs []error) error {
 			return limited
 		}
 	}
+	// A host that never answered makes every answer as meaningless as a rejected
+	// credential does. Reporting five confident denials instead would be cached
+	// as "this token may do nothing", and the caller has no typed signal to tell
+	// a locked-down token from a mistyped site or one dropped packet —
+	// docs/ARCHITECTURE.md wants a transport failure to leave the cached answer
+	// standing behind a stale badge, which it cannot do if the probe says it
+	// succeeded.
+	var unreachable *jira.TransportError
+	for _, err := range errs {
+		if err == nil {
+			return nil
+		}
+		var broken *jira.TransportError
+		if !errors.As(err, &broken) {
+			return nil
+		}
+		unreachable = broken
+	}
+	if unreachable != nil {
+		return unreachable
+	}
 	return nil
 }
 

@@ -643,3 +643,27 @@ func TestCapsFailed_PrefersJirasOwnSentenceToOurs(t *testing.T) {
 		t.Error("a failure to reach Jira reads as a refusal by Jira")
 	}
 }
+
+func TestCapabilities_ReportsAnUnreachableSiteRatherThanFiveDenials(t *testing.T) {
+	t.Parallel()
+
+	// A mistyped site, a DNS failure, captive wifi. Every probe fails at the
+	// transport, and answering "you may do nothing" would be cached — and worse,
+	// the kernel replaces a good capability set with it on a refresh.
+	refused := &stubDoer{err: &url.Error{
+		Op:  "Get",
+		URL: "https://example.atlassian.net/rest/api/3/configuration",
+		Err: errors.New("dial tcp 127.0.0.1:9: connect: connection refused"),
+	}}
+	c, _ := testClient(t, "example.atlassian.net",
+		WithHTTPClient(refused), WithRetry(RetryPolicy{Attempts: 1}))
+
+	caps, err := c.Capabilities(t.Context(), "EX")
+	var broken *jira.TransportError
+	if !errors.As(err, &broken) {
+		t.Fatalf("got caps=%+v err=%v; want a *jira.TransportError: a host that never answered has told us nothing", caps, err)
+	}
+	if caps.Attachments.OK || caps.BulkMove.OK {
+		t.Error("a voided probe should not also hand back capabilities")
+	}
+}
