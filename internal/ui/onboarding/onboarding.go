@@ -97,6 +97,8 @@ var _ kernel.View = Model{}
 
 var _ kernel.Blocker = Model{}
 
+var _ kernel.KeyCapturer = Model{}
+
 // Model is the onboarding view: a state machine over five text inputs and one
 // choice, with a verification between the steps that need one.
 type Model struct {
@@ -143,6 +145,14 @@ type Model struct {
 
 	styles styles
 	cache  *renderCache
+}
+
+// WantsRawKeys is true whenever a field is on screen. Every Atlassian API token
+// contains digits, and without this the kernel's slot keys eat them before the
+// field sees them — the credential that gets verified is then not the one that
+// was typed, and the user is sent back to re-paste a token that was correct.
+func (m Model) WantsRawKeys() bool {
+	return m.step.field() != fieldNone
 }
 
 // Init loads the config file that may already exist, because onboarding also

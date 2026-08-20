@@ -60,10 +60,10 @@ func TestKernel_RunsTheWholeFlowThroughTheRegisteredView(t *testing.T) {
 	k.typeIn(testToken)
 	k.press("enter")
 	k.press("enter")
-	// The project is picked from the suggestions rather than typed: the kernel
-	// matches R before it forwards a key, so PROJ arrives as POJ. See
-	// TestKernel_TheGlobalKeysReachTheKernelBeforeAFormCanSeeThem.
-	k.press("down", "enter")
+	// Typed, not clicked: PROJ contains an R, which the kernel would have
+	// matched as its own refresh binding before the field ever saw it.
+	k.typeIn("PROJ")
+	k.press("enter")
 
 	if !strings.Contains(k.frame(), "What this token can do in PROJ") {
 		t.Fatalf("the probe result never reached the frame:\n%s", k.frame())
@@ -79,12 +79,55 @@ func TestKernel_RunsTheWholeFlowThroughTheRegisteredView(t *testing.T) {
 	}
 }
 
-// TestKernel_TheGlobalKeysReachTheKernelBeforeAFormCanSeeThem records a real
-// limitation rather than a wish: the kernel matches q, r, R, ? and 1-9 before
-// it forwards a key, so a root view cannot spell them. Onboarding blocks the
-// close so that q does not quit mid-setup, but the character is still lost.
-// Delete this test when the kernel grows a way for a view to claim text input.
-func TestKernel_TheGlobalKeysReachTheKernelBeforeAFormCanSeeThem(t *testing.T) {
+// A credential is typed, not pasted, and every Atlassian token contains digits.
+// If the kernel's own bindings reach the form first, the token that gets
+// verified is not the token that was typed — and the user is sent back to
+// re-enter one that was already correct.
+func TestKernel_TheFormReceivesEveryCharacterOfACredential(t *testing.T) {
+	var got struct{ site, email, token string }
+	SetConnector(func(site, email, token string) (jira.Client, error) {
+		got.site, got.email, got.token = site, email, token
+		return testFake(), nil
+	})
+	t.Cleanup(func() { SetConnector(nil) })
+
+	root, err := kernel.New(testDeps(), kernel.WithSize(100, 30), kernel.WithInitialView(ViewID), kernel.WithMouse(false))
+	if err != nil {
+		t.Fatalf("kernel.New: %v", err)
+	}
+	k := &kernelDriver{t: t, model: root}
+	k.send(tea.WindowSizeMsg{Width: 100, Height: 30})
+	k.run(root.Init())
+
+	// Every one of these carries a character the kernel binds globally: the
+	// digits are slot keys, r and R are refresh, q is quit, ? is help.
+	const (
+		site  = "acme1.atlassian.net"
+		email = "rita.quinn+jira2@acme.com"
+		token = "ATATT3xFfGF0Rq9Quick27?"
+	)
+	k.typeIn(site)
+	k.press("enter")
+	k.typeIn(email)
+	k.press("enter")
+	k.typeIn(token)
+	k.press("enter")
+	k.press("enter")
+
+	if got.site != site {
+		t.Errorf("the site arrived as %q, want %q", got.site, site)
+	}
+	if got.email != email {
+		t.Errorf("the email arrived as %q, want %q", got.email, email)
+	}
+	if got.token != token {
+		t.Errorf("the token arrived as %q, want %q", got.token, token)
+	}
+}
+
+// A view holding the keyboard must still be quittable by the one key that always
+// means it.
+func TestKernel_CtrlCStillQuitsWhileTheFormHasTheKeyboard(t *testing.T) {
 	SetConnector(func(string, string, string) (jira.Client, error) { return testFake(), nil })
 	t.Cleanup(func() { SetConnector(nil) })
 
@@ -94,14 +137,10 @@ func TestKernel_TheGlobalKeysReachTheKernelBeforeAFormCanSeeThem(t *testing.T) {
 	}
 	k := &kernelDriver{t: t, model: root}
 	k.send(tea.WindowSizeMsg{Width: 100, Height: 30})
-
 	k.typeIn("acme")
-	k.press("q")
-	if !strings.Contains(k.frame(), "nothing has been saved") {
-		t.Errorf("q did not reach the blocker, so a half-typed setup can be quit away:\n%s", k.frame())
-	}
-	if strings.Contains(k.frame(), "acmeq") {
-		t.Error("the kernel has started forwarding q; this test and its workaround can go")
+
+	if _, cmd := k.model.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd == nil {
+		t.Error("ctrl+c produced no command while the form had the keyboard")
 	}
 }
 
