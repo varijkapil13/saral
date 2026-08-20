@@ -623,14 +623,20 @@ func (f *Fake) BoardConfig(ctx context.Context, boardID int64) (jira.BoardConfig
 		Columns:  fakeColumns(),
 		FilterID: "filter-" + strconv.FormatInt(board.ID, 10),
 	}
-	if ref, found := fakeRefByName(f.fields, "Rank"); found {
-		cfg.RankFieldID = ref.ID
-	}
-	cfg.Estimation = jira.Estimation{Type: jira.EstimationNone}
+	// A Scrum board ranks and estimates; a Kanban board here does neither, and
+	// sends no estimation object at all rather than one saying "none". A caller
+	// that reads Estimation without checking is what this is here to catch.
 	if board.Type == jira.BoardScrum {
-		if ref, found := fakeRefByName(f.fields, "Story Points"); found {
-			cfg.Estimation = jira.Estimation{Type: jira.EstimationField, Field: ref}
+		if ref, found := fakeRefByName(f.fields, "Rank"); found {
+			cfg.RankFieldID = ref.ID
 		}
+		est := jira.Estimation{Type: jira.EstimationNone}
+		if ref, found := fakeRefByName(f.fields, "Story Points"); found {
+			est = jira.Estimation{Type: jira.EstimationField, Field: ref}
+		}
+		cfg.Estimation = &est
+	} else {
+		cfg.SubQuery = "resolved >= -14d OR resolved is EMPTY"
 	}
 	return cfg, nil
 }
@@ -794,7 +800,7 @@ func (f *Fake) MoveToSprint(ctx context.Context, sprintID int64, keys []string) 
 		if hasField {
 			iss.Fields = iss.Fields.With(ref, jira.FieldValue{
 				Kind:    jira.KindOptions,
-				Options: []jira.Option{{ID: strconv.FormatInt(sp.ID, 10), Value: sp.Name}},
+				Options: []jira.Option{{ID: strconv.FormatInt(sp.ID, 10), Label: sp.Name}},
 			})
 		}
 		iss.Updated = f.now
@@ -1257,7 +1263,7 @@ func fakePriorityByID(id string) *jira.Priority {
 func fakePriorityOptions() []jira.Option {
 	out := make([]jira.Option, 0, len(fakePriorities))
 	for _, p := range fakePriorities {
-		out = append(out, jira.Option{ID: p.ID, Value: p.Name})
+		out = append(out, jira.Option{ID: p.ID, Label: p.Name})
 	}
 	return out
 }
@@ -1296,7 +1302,7 @@ func fakeTransitionsFor(from jira.Status) []jira.Transition {
 func fakeResolutionMeta() jira.FieldMeta {
 	allowed := make([]jira.Option, 0, len(fakeResolutions))
 	for _, r := range fakeResolutions {
-		allowed = append(allowed, jira.Option{ID: r.ID, Value: r.Name})
+		allowed = append(allowed, jira.Option{ID: r.ID, Label: r.Name})
 	}
 	return jira.FieldMeta{
 		Field:         jira.FieldRef{ID: "resolution", Name: "Resolution", Schema: jira.FieldSchema{Type: "resolution", System: "resolution"}},
@@ -1319,7 +1325,7 @@ func fakeResolutionFrom(fields jira.FieldSet) (*jira.Resolution, error) {
 	case len(v.Options) > 0:
 		want = v.Options[0].ID
 		if want == "" {
-			want = v.Options[0].Value
+			want = v.Options[0].Label
 		}
 	case v.Text != "":
 		want = v.Text

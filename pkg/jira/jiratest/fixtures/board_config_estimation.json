@@ -1,34 +1,31 @@
 {
   "id": 10,
   "name": "EX Scrum board",
-  "self": "https://example.atlassian.net/rest/agile/1.0/board/10/configuration",
   "type": "scrum",
+  "self": "https://example.atlassian.net/rest/agile/1.0/board/10/configuration",
   "location": {
     "type": "project",
     "key": "EX",
     "id": "10000",
-    "self": "https://example.atlassian.net/rest/api/3/project/10000",
+    "self": "https://example.atlassian.net/rest/api/2/project/10000",
     "name": "Example"
   },
   "filter": {
     "id": "10001",
-    "self": "https://example.atlassian.net/rest/api/3/filter/10001"
-  },
-  "subQuery": {
-    "query": "resolution = EMPTY OR resolution != EMPTY AND resolutiondate >= -14d"
+    "self": "https://example.atlassian.net/rest/api/2/filter/10001"
   },
   "columnConfig": {
     "columns": [
       {
         "name": "Backlog",
         "statuses": [
-          { "id": "10000", "self": "https://example.atlassian.net/rest/api/3/status/10000" }
+          { "id": "10000", "self": "https://example.atlassian.net/rest/api/2/status/10000" }
         ]
       },
       {
         "name": "In Review",
         "statuses": [
-          { "id": "10001", "self": "https://example.atlassian.net/rest/api/3/status/10001" }
+          { "id": "10001", "self": "https://example.atlassian.net/rest/api/2/status/10001" }
         ],
         "min": 1,
         "max": 4
@@ -36,7 +33,7 @@
       {
         "name": "Released",
         "statuses": [
-          { "id": "10002", "self": "https://example.atlassian.net/rest/api/3/status/10002" }
+          { "id": "10002", "self": "https://example.atlassian.net/rest/api/2/status/10002" }
         ]
       }
     ],

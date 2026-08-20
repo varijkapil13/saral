@@ -153,9 +153,16 @@ type Component struct {
 }
 
 // Option is one allowed value of a select-like field.
+//
+// Jira labels these two different ways depending on the field: a custom select
+// option carries a value, while a priority, issue type, project or version
+// carries a name. Label is whichever one arrived, so a picker never renders a
+// column of empty strings.
 type Option struct {
 	ID    string
-	Value string
+	Label string
+	// Children are the second level of a cascading select, empty otherwise.
+	Children []Option
 }
 
 // FieldSchema describes what a field holds, as Jira reports it.
@@ -168,18 +175,29 @@ type FieldSchema struct {
 }
 
 // Field is a field definition from the site's field catalogue. Custom field IDs
-// differ on every site, so a field is always looked up by Name and then used by
+// differ on every site, so a field is always looked up by name and then used by
 // ID — never written into code as a customfield_NNNNN literal.
 type Field struct {
-	ID          string
-	Key         string
-	Name        string
-	Custom      bool
-	Navigable   bool
-	Searchable  bool
-	Orderable   bool
+	ID string
+	// Key is the field's key, which for a custom field is customfield_NNNNN.
+	Key string
+	// Name is the display name, in the site's language. On a German site the
+	// story point field is not called "Story Points".
+	Name string
+	// UntranslatedName is the name Jira gives the field regardless of site
+	// language, and it is what appears in ClauseNames. Jira sends it for custom
+	// fields only, so it is empty on every system field.
+	UntranslatedName string
+	Custom           bool
+	Navigable        bool
+	Searchable       bool
+	Orderable        bool
+	// ClauseNames are the identifiers this field can be written as in JQL. They
+	// follow UntranslatedName, not Name.
 	ClauseNames []string
-	Schema      FieldSchema
+	// Schema is absent on a few system fields — parent, issuekey, thumbnail —
+	// which is Jira saying they are not written through the generic field path.
+	Schema FieldSchema
 }
 
 // Ref returns the reference used to read and write this field's values.
@@ -193,10 +211,22 @@ type FieldRef struct {
 	Schema FieldSchema
 }
 
-// FieldByName finds a field by its display name, case-insensitively. Names are
-// not unique on every site, so the first match in catalogue order wins and the
-// caller may want to disambiguate on Schema.
+// FieldByName finds a field by name, case-insensitively.
+//
+// UntranslatedName is tried before Name, because Name is localised: a site in
+// German calls the story point field something else, and configuration that
+// names "Story Points" has to keep working there. Names are not unique either,
+// so the first match in catalogue order wins and a caller that cares should
+// disambiguate on Schema.
 func FieldByName(fields []Field, name string) (Field, bool) {
+	if strings.TrimSpace(name) == "" {
+		return Field{}, false
+	}
+	for i := range fields {
+		if fields[i].UntranslatedName != "" && strings.EqualFold(fields[i].UntranslatedName, name) {
+			return fields[i], true
+		}
+	}
 	for i := range fields {
 		if strings.EqualFold(fields[i].Name, name) {
 			return fields[i], true
@@ -673,17 +703,58 @@ type Estimation struct {
 	Field FieldRef
 }
 
+// Ordering is how a board decides the order of the issues in a column.
+type Ordering int
+
+// The board orderings. A board that ranks has a rank field; one that does not
+// is showing whatever its filter's ORDER BY produced.
+const (
+	// OrderFilter means the board has no rank field and the order is whatever
+	// the board's saved filter sorts by — priority, created, anything.
+	OrderFilter Ordering = iota
+	// OrderRank means the board exposes a rank field and rows can be reordered.
+	OrderRank
+)
+
 // BoardConfig is everything about a board that must be read rather than
 // assumed: which statuses make up which column, what the board estimates in,
 // and which custom field holds rank.
+//
+// Almost all of it is optional, and not in the "unset" sense — a Kanban board
+// sends no estimation object at all, and a board that is ordered by priority
+// sends no rank field. Every consumer feature-detects: estimation, ranking and
+// a sub-query are things a board may simply not have.
 type BoardConfig struct {
-	BoardID     int64
-	Name        string
-	Type        BoardType
-	Columns     []Column
-	Estimation  Estimation
+	BoardID int64
+	Name    string
+	Type    BoardType
+	Columns []Column
+	// Estimation is nil when the board does not estimate. That is different from
+	// EstimationNone, which is a Scrum board that has turned estimation off.
+	Estimation *Estimation
+	// RankFieldID is empty when the board has no rank field, which means its
+	// order comes from its filter and rows cannot be reordered.
 	RankFieldID string
-	FilterID    string
+	// FilterID is the saved filter behind the board. When there is no rank
+	// field, this filter's ORDER BY is the board's order, and reading it takes
+	// a separate call.
+	FilterID string
+	// SubQuery is the Kanban-only extra condition that decides which resolved
+	// issues still show. It is empty on a Scrum board.
+	SubQuery string
+}
+
+// Ordering reports how this board's columns are ordered.
+func (c BoardConfig) Ordering() Ordering {
+	if c.RankFieldID != "" {
+		return OrderRank
+	}
+	return OrderFilter
+}
+
+// Estimates reports whether the board measures issues at all.
+func (c BoardConfig) Estimates() bool {
+	return c.Estimation != nil && c.Estimation.Type == EstimationField && c.Estimation.Field.ID != ""
 }
 
 // SprintState is where a sprint is in its lifecycle. The only legal moves are

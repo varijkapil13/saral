@@ -23,6 +23,7 @@
       "isInitial": false,
       "isAvailable": true,
       "isConditional": false,
+      "fields": {},
       "isLooped": false
     },
     {
@@ -47,15 +48,19 @@
       "isInitial": false,
       "isAvailable": true,
       "isConditional": false,
-      "isLooped": false,
       "fields": {
         "resolution": {
           "required": true,
-          "schema": { "type": "resolution", "system": "resolution" },
+          "schema": {
+            "type": "resolution",
+            "system": "resolution"
+          },
           "name": "Resolution",
           "key": "resolution",
           "fieldId": "resolution",
-          "operations": ["set"],
+          "operations": [
+            "set"
+          ],
           "hasDefaultValue": false,
           "allowedValues": [
             {
@@ -82,10 +87,13 @@
           "name": "Story Points",
           "key": "customfield_10032",
           "fieldId": "customfield_10032",
-          "operations": ["set"],
+          "operations": [
+            "set"
+          ],
           "hasDefaultValue": false
         }
-      }
+      },
+      "isLooped": false
     },
     {
       "id": "11",
@@ -109,6 +117,7 @@
       "isInitial": false,
       "isAvailable": true,
       "isConditional": false,
+      "fields": {},
       "isLooped": false
     }
   ]

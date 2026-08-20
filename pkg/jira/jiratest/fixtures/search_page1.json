@@ -1,9 +1,7 @@
 {
-  "isLast": false,
-  "nextPageToken": "CAEaAggDIhBhZ2VudC1wYWdlLXR3byoA",
   "issues": [
     {
-      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
       "id": "10001",
       "self": "https://example.atlassian.net/rest/api/3/issue/10001",
       "key": "EX-1",
@@ -19,10 +17,25 @@
           "avatarId": 10303,
           "hierarchyLevel": 0
         },
+        "assignee": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g",
+          "accountId": "5b10a2844c20165700ede21g",
+          "displayName": "Example User",
+          "active": true,
+          "timeZone": "Europe/Berlin",
+          "accountType": "atlassian"
+        },
+        "priority": {
+          "self": "https://example.atlassian.net/rest/api/3/priority/2",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/high_new.svg",
+          "name": "High",
+          "id": "2"
+        },
+        "updated": "2026-02-11T09:41:22.104+0100",
         "status": {
           "self": "https://example.atlassian.net/rest/api/3/status/10001",
-          "description": "Waiting for a reviewer.",
-          "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/",
           "name": "In Review",
           "id": "10001",
           "statusCategory": {
@@ -32,37 +45,11 @@
             "colorName": "yellow",
             "name": "In Progress"
           }
-        },
-        "priority": {
-          "self": "https://example.atlassian.net/rest/api/3/priority/2",
-          "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
-          "name": "High",
-          "id": "2"
-        },
-        "assignee": {
-          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g",
-          "accountId": "5b10a2844c20165700ede21g",
-          "accountType": "atlassian",
-          "displayName": "Example User",
-          "active": true,
-          "timeZone": "Europe/Berlin",
-          "avatarUrls": {
-            "48x48": "https://example.atlassian.net/secure/useravatar?ownerId=5b10a2844c20165700ede21g&avatarId=10345",
-            "24x24": "https://example.atlassian.net/secure/useravatar?size=small&ownerId=5b10a2844c20165700ede21g&avatarId=10345",
-            "16x16": "https://example.atlassian.net/secure/useravatar?size=xsmall&ownerId=5b10a2844c20165700ede21g&avatarId=10345",
-            "32x32": "https://example.atlassian.net/secure/useravatar?size=medium&ownerId=5b10a2844c20165700ede21g&avatarId=10345"
-          }
-        },
-        "labels": ["checkout", "regression"],
-        "created": "2026-01-28T14:03:07.412+0000",
-        "updated": "2026-02-11T09:41:22.104+0000",
-        "duedate": "2026-03-06",
-        "customfield_10032": 5,
-        "customfield_10041": "2026-02-02"
+        }
       }
     },
     {
-      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
       "id": "10002",
       "self": "https://example.atlassian.net/rest/api/3/issue/10002",
       "key": "EX-2",
@@ -71,17 +58,25 @@
         "issuetype": {
           "self": "https://example.atlassian.net/rest/api/3/issuetype/10001",
           "id": "10001",
-          "description": "A small piece of work.",
+          "description": "A task that needs to be done.",
           "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
           "name": "Task",
           "subtask": false,
           "avatarId": 10318,
           "hierarchyLevel": 0
         },
+        "assignee": null,
+        "priority": {
+          "self": "https://example.atlassian.net/rest/api/3/priority/3",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium_new.svg",
+          "name": "Medium",
+          "id": "3"
+        },
+        "updated": "2026-02-09T16:20:01.888+0100",
         "status": {
           "self": "https://example.atlassian.net/rest/api/3/status/10000",
-          "description": "Not started yet.",
-          "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/",
           "name": "Backlog",
           "id": "10000",
           "statusCategory": {
@@ -91,55 +86,10 @@
             "colorName": "blue-gray",
             "name": "To Do"
           }
-        },
-        "priority": {
-          "self": "https://example.atlassian.net/rest/api/3/priority/3",
-          "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
-          "name": "Medium",
-          "id": "3"
-        },
-        "assignee": null,
-        "labels": [],
-        "created": "2026-02-02T08:15:44.000+0000",
-        "updated": "2026-02-09T16:20:01.888+0000",
-        "duedate": null,
-        "customfield_10032": null,
-        "customfield_10041": null
+        }
       }
     }
   ],
-  "names": {
-    "summary": "Summary",
-    "issuetype": "Issue Type",
-    "status": "Status",
-    "priority": "Priority",
-    "assignee": "Assignee",
-    "labels": "Labels",
-    "created": "Created",
-    "updated": "Updated",
-    "duedate": "Due date",
-    "customfield_10032": "Story Points",
-    "customfield_10041": "Target start"
-  },
-  "schema": {
-    "summary": { "type": "string", "system": "summary" },
-    "issuetype": { "type": "issuetype", "system": "issuetype" },
-    "status": { "type": "status", "system": "status" },
-    "priority": { "type": "priority", "system": "priority" },
-    "assignee": { "type": "user", "system": "assignee" },
-    "labels": { "type": "array", "items": "string", "system": "labels" },
-    "created": { "type": "datetime", "system": "created" },
-    "updated": { "type": "datetime", "system": "updated" },
-    "duedate": { "type": "date", "system": "duedate" },
-    "customfield_10032": {
-      "type": "number",
-      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
-      "customId": 10032
-    },
-    "customfield_10041": {
-      "type": "date",
-      "custom": "com.atlassian.jpo:jpo-custom-field-baseline-start",
-      "customId": 10041
-    }
-  }
+  "nextPageToken": "Ckl1cGRhdGVkJnVwZGF0ZWQmT1JERVJfREVTQyNMb25nJk1UYzNNRFkxTURRd01UZzRPQT09JVN0cmluZyZSVmc9JUludCZNZz09EAIY0KaJicUzIiJwcm9qZWN0ID0gRVggT1JERVIgQlkgdXBkYXRlZCBERVNDKgJbXQ==",
+  "isLast": false
 }

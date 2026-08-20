@@ -15,9 +15,10 @@
         "projectName": "Example",
         "projectKey": "EX",
         "projectTypeKey": "software",
-        "avatarURI": "https://example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10420?size=small",
+        "avatarURI": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10420?size=small",
         "name": "Example (EX)"
-      }
+      },
+      "isPrivate": false
     },
     {
       "id": 11,
@@ -30,9 +31,10 @@
         "projectName": "Example",
         "projectKey": "EX",
         "projectTypeKey": "software",
-        "avatarURI": "https://example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10420?size=small",
+        "avatarURI": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10420?size=small",
         "name": "Example (EX)"
-      }
+      },
+      "isPrivate": false
     }
   ]
 }
