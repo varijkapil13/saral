@@ -101,6 +101,13 @@ root model.
 **`gocritic`'s `hugeParam` is disabled.** Bubble Tea's MVU loop requires value receivers on the model,
 so it fires on every method of every view. The alternative was a `nolint` on each one, forever.
 
+**bbolt is not in `go.mod`.** The issue listed it among P0.1's dependencies, but nothing in this
+packet imports it and `make check` runs `go mod tidy && git diff --exit-code`, so it would be
+stripped on the first CI run. `docs/PARALLEL.md` already says where it belongs: "add dependencies in
+their own tiny PR, merged first" — that is P3.2, the packet that builds `internal/store`.
+`docs/ROADMAP.md` now says so too. Adding an unused import here to satisfy a checklist would mean
+creating a package P3.2 owns.
+
 **`FieldSet` is immutable.** `With` and `Without` return a new set rather than changing the receiver.
 A `FieldSet` is a value that travels into an `Issue`, into an `IssuePatch` and out of the cache; with
 a mutable map behind it, seeding an edit form from a cached issue silently rewrites the cached issue.

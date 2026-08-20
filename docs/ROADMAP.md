@@ -30,7 +30,9 @@ contracts every other packet codes against.
 - [x] **P0.1 — Contracts and kernel** · [#1](https://github.com/varijkapil13/saral/issues/1)
   **owns** `go.mod`, `pkg/jira/{port,types,errors,page}.go`, `pkg/adf/doc.go`,
   `pkg/jira/jiratest/**`, `internal/ui/kernel/**`, `internal/config/**`, `docs/adr/0001*`
-  - dependencies added: bubbletea v2, lipgloss v2, bubbles v2, bubblezone, bbolt
+  - dependencies added: bubbletea v2, lipgloss v2, bubbles v2, bubblezone
+    (bbolt lands with P3.2, which is the packet that imports it — `make check` runs `go mod tidy`,
+    so a dependency nothing imports is stripped on the first CI run)
   - `jira.Client` port, domain types, `Page[T]`, typed error taxonomy, `Capabilities`
   - `jiratest`: in-memory fake implementing the full port + an `httptest` server replaying fixtures
   - kernel: root model, view stack, focus, theme tokens, the three registries, help overlay shell
@@ -75,8 +77,9 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
 
 - [ ] **P3.1 — Command palette** · [#12](https://github.com/varijkapil13/saral/issues/12) · **owns** `internal/ui/palette/**`
   `ctrl+k`, fuzzy over the command registry, frecency ranking, shows the keybinding for what you ran.
-- [ ] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`
-  bbolt buckets, TTLs, stale-while-revalidate, cursor-preserving row patching, stale badge.
+- [ ] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`, `go.mod`
+  Adds the bbolt dependency, in its own commit ahead of the code that needs it. bbolt buckets, TTLs,
+  stale-while-revalidate, cursor-preserving row patching, stale badge.
 - [ ] **P3.3 — Mouse** · [#14](https://github.com/varijkapil13/saral/issues/14) · **owns** `internal/ui/widget/zone*.go` + zone wiring in own files
   Click, double-click, wheel-under-pointer, drag-to-resize, clickable chips and footer.
 - [ ] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/index.go`
