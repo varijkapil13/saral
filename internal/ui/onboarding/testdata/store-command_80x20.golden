@@ -1,0 +1,16 @@
+Set up Saral                                                         step 4 of 6
+
+    Where should the token live?
+
+       OS keychain
+       Environment variable
+    <> Command
+
+    Command        -> pass show jira 
+
+
+    Saral writes nothing. Each start it runs the command and reads the first
+    line of its output. The command is never handed to a shell, so it is an
+    argument list and not a pipeline. The config file only ever names the
+    source, so it stays safe to read, copy between machines and keep in a
+    dotfiles repository.

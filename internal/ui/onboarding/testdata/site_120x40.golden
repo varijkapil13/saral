@@ -1,0 +1,16 @@
+Set up Saral                                                                                                 step 1 of 6
+
+  -> Jira site
+     Account email
+     API token
+     Token store
+     Project
+     Review
+
+    Which Jira Cloud site?
+
+    -> example.atlassian.net                                                                            
+
+
+    The host you open in a browser, with or without the https:// in front. Saral talks to it over https and nothing
+    else.

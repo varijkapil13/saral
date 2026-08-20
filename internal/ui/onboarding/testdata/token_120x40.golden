@@ -1,0 +1,16 @@
+Set up Saral                                                                                                 step 3 of 6
+
+  +  Jira site       example.atlassian.net
+  +  Account email   you@example.com
+  -> API token
+     Token store
+     Project
+     Review
+
+    Paste the API token
+
+    -> ******************** 
+
+
+    Create one at id.atlassian.com/manage-profile/security/api-tokens. It is checked against the site before
+    anything at all is written, and it never goes into the config file.

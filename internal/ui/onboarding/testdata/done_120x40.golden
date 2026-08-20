@@ -1,0 +1,38 @@
+Saral is set up
+
+  +  Jira site       example.atlassian.net
+  +  Account email   you@example.com
+  +  API token       verified as Sam Tester
+  +  Token store     OS keychain
+  +  Project         PROJ
+  +  Review
+
+    The profile is written.
+
+    Profile        example
+    Written to     /home/you/.config/saral/config.toml
+    Token          keychain entry saral:example
+
+    Press enter to leave, then run saral again to open example.atlassian.net.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

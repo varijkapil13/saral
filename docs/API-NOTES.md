@@ -55,6 +55,7 @@ here cost time to find out; read this before writing an adapter method.
 | Whether attachments are enabled | `GET /rest/api/3/configuration` |
 | Permissions | `GET /rest/api/3/mypermissions?permissions=…` |
 | The user's timezone | `GET /rest/api/3/myself` |
+| Which projects exist, and which this token can see | `GET /rest/api/3/project/search` — paginated, and the only endpoint that answers it. The port has no method for it, so the onboarding picker derives the keys from the projects on a `/search/jql` page instead, which is a shorter answer: it lists what the account has touched, not what it could reach. |
 
 ## Permissions, which is what the capability probe reads
 

@@ -58,7 +58,7 @@ instance from day one.
   preserved verbatim. Golden-file tests over real captured ADF.
 - [x] **P1.5 — Issue list and detail views** · [#6](https://github.com/varijkapil13/saral/issues/6) · **owns** `internal/ui/{list,issue}/**`
   Virtualized table, incremental cursor paging, `142+` counts, detail pane, comment thread read-only.
-- [ ] **P1.6 — First-run onboarding** · [#7](https://github.com/varijkapil13/saral/issues/7) · **owns** `internal/ui/onboarding/**`
+- [x] **P1.6 — First-run onboarding** · [#7](https://github.com/varijkapil13/saral/issues/7) · **owns** `internal/ui/onboarding/**`
   Site, email, token, project picker; writes the profile; explains what the probe found.
 
 ## Batch 2 — Change your work · parallel ×4

@@ -1,0 +1,14 @@
+Set up Saral                                                         step 5 of 6
+
+    Which project should Saral open in?
+
+    Project key    -> PROJ                                                     
+
+    Recently worked in
+       PROJ
+
+
+    Jira grants Move, Create and Delete per project, and a board belongs to
+    one, so the same token answers differently in two projects on one site.
+    Saral remembers the one you pick, and naming a project on the command
+    line overrides it for that run.

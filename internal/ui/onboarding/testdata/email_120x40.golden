@@ -1,0 +1,16 @@
+Set up Saral                                                                                                 step 2 of 6
+
+  +  Jira site       example.atlassian.net
+  -> Account email
+     API token
+     Token store
+     Project
+     Review
+
+    Which account is the API token for?
+
+    -> you@example.com                                                                                  
+
+
+    Jira Cloud sends the email and the API token together as basic auth, so a token paired with the wrong address is
+    refused exactly the way a wrong token is.
