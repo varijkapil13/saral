@@ -46,7 +46,7 @@ contracts every other packet codes against.
 The first batch that produces something usable. Read-only, so it is safe to use against a real
 instance from day one.
 
-- [ ] **P1.1 — Transport and auth** · [#2](https://github.com/varijkapil13/saral/issues/2) · **owns** `pkg/jira/cloud/{client,auth,retry,paginate}.go`
+- [x] **P1.1 — Transport and auth** · [#2](https://github.com/varijkapil13/saral/issues/2) · **owns** `pkg/jira/cloud/{client,auth,retry,paginate}.go`
   Basic auth, `Retry-After` backoff, both paginators, repeated-cursor guard, request coalescing.
 - [ ] **P1.2 — Search and JQL** · [#3](https://github.com/varijkapil13/saral/issues/3) · **owns** `pkg/jira/cloud/search.go`, `internal/app/search.go`
   `POST /search/jql` with explicit field sets, `approximate-count`, saved queries.

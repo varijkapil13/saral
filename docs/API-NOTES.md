@@ -108,6 +108,12 @@ status name — "In Progress" is not guaranteed to exist.
 
 ## Rate limiting
 
+| Fact | Consequence |
+|---|---|
+| `Retry-After` is not always a number of seconds — HTTP permits an absolute date, and Atlassian also sends **`X-RateLimit-Reset`** as an RFC 3339 instant | A client that only does `strconv.Atoi` on `Retry-After` silently falls back to its own backoff on both, and waits the wrong amount. Read seconds, then an HTTP-date, then `X-RateLimit-Reset`, and clamp an instant already in the past to zero. |
+| A 429 refuses the request **before it runs**; a 5xx may have got far enough to change something | So a 429 is safe to replay whatever the method, and a 5xx is only safe for a request that was repeatable to begin with. Getting that backwards duplicates issues. |
+| `/search/jql` is a `POST` that only reads | Any blanket "never retry a POST" or "never coalesce a POST" rule has to make an exception for it, or search loses both retries and request coalescing on the hottest path in the application. |
+
 Honour `Retry-After` on 429. Back off exponentially with jitter, cap concurrent requests, and pause
 any poller on the first 429. Cost-based limits mean a burst of narrow requests beats one wide one.
 
