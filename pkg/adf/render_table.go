@@ -8,8 +8,12 @@ import (
 )
 
 // minCell is the narrowest a column is squeezed to before the table is allowed
-// to overflow the width it was given.
-const minCell = 3
+// to overflow the width it was given. It has to leave room for the ellipsis
+// itself and something either side of it, or squeezing a column erases it: the
+// ASCII ellipsis is three cells wide where the Unicode one is one.
+func minCell(ellipsis string) int {
+	return ansi.StringWidth(ellipsis) + 2
+}
 
 // table lays a table out as a padded pipe grid. Markdown's table syntax only
 // reads as a table once the columns line up, so the columns are measured in
@@ -26,7 +30,11 @@ func (w *writer) table(n Node) {
 	if len(rows) == 0 {
 		return
 	}
-	widths := columnWidths(rows, w.opt.TableWidth)
+	limit := w.opt.TableWidth
+	if limit > 0 {
+		limit -= ansi.StringWidth(w.prefix)
+	}
+	widths := columnWidths(rows, limit, minCell(w.gl.ellipsis))
 
 	for i := range rows {
 		if i > 0 {
@@ -58,10 +66,19 @@ func (w *writer) tableCells(n Node) (rows [][]string, header bool) {
 		cells := make([]string, 0, len(row.Content))
 		headers := 0
 		for j := range row.Content {
-			if row.Content[j].Type == "tableHeader" {
+			cell := row.Content[j]
+			if cell.Type == "tableHeader" {
 				headers++
 			}
-			cells = append(cells, scratch.cellText(row.Content[j]))
+			text := scratch.cellText(cell)
+			// A merged cell holds the grid positions it spans. Emitting one
+			// column for it puts every value after it under the wrong header,
+			// which is not a cosmetic problem — it is the wrong answer.
+			span, _ := attrInt(cell.Attrs, "colspan")
+			for span = max(1, span); span > 0; span-- {
+				cells = append(cells, text)
+				text = ""
+			}
 		}
 		if len(rows) == 0 {
 			header = headers > 0 && headers == len(cells)
@@ -105,6 +122,10 @@ func foldCell(b []byte) string {
 			b = nil
 		}
 		line = bytes.Trim(line, " \t")
+		// A tab reaches here from a code block. ansi.StringWidth counts it as
+		// nothing while a terminal jumps to the next stop, so the padding is
+		// self-consistent and the grid still comes out ragged.
+		line = bytes.ReplaceAll(line, []byte{'\t'}, []byte{' '})
 		if len(line) == 0 {
 			continue
 		}
@@ -127,10 +148,10 @@ func foldCell(b []byte) string {
 
 // columnWidths measures every column and, when a width was given, squeezes the
 // widest ones until the grid fits inside it.
-func columnWidths(rows [][]string, limit int) []int {
+func columnWidths(rows [][]string, limit, floor int) []int {
 	widths := make([]int, len(rows[0]))
 	for j := range widths {
-		widths[j] = minCell
+		widths[j] = floor
 	}
 	for i := range rows {
 		for j := range rows[i] {
@@ -149,7 +170,7 @@ func columnWidths(rows [][]string, limit int) []int {
 				widest = j
 			}
 		}
-		if widths[widest] <= minCell {
+		if widths[widest] <= floor {
 			break
 		}
 		widths[widest]--

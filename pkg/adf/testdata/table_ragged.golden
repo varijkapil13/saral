@@ -1,4 +1,4 @@
 | One                              | Two     | Three  |
 | -------------------------------- | ------- | ------ |
-| spans two                        | last    |        |
+| spans two                        |         | last   |
 | first paragraph second paragraph | - a - b | a \| b |

@@ -805,3 +805,74 @@ func marksJSON(types []string) []string {
 	}
 	return out
 }
+
+func TestMarkdown_NestedTaskListKeepsItsCheckboxes(t *testing.T) {
+	t.Parallel()
+
+	// Indenting an action item in the Jira editor stores a sibling taskList
+	// inside its parent, which is what ADF's (taskItem | taskList)+ content
+	// model allows. Treating that child as an item renders every one of its
+	// entries as unsupported and loses the DONE state.
+	const in = `{"version":1,"type":"doc","content":[{"type":"taskList","attrs":{"localId":"a"},"content":[
+		{"type":"taskItem","attrs":{"localId":"b","state":"TODO"},"content":[{"type":"text","text":"ship the fix"}]},
+		{"type":"taskList","attrs":{"localId":"c"},"content":[
+			{"type":"taskItem","attrs":{"localId":"d","state":"DONE"},"content":[{"type":"text","text":"write the test"}]},
+			{"type":"taskItem","attrs":{"localId":"e","state":"TODO"},"content":[{"type":"text","text":"update the docs"}]}]},
+		{"type":"taskItem","attrs":{"localId":"f","state":"TODO"},"content":[{"type":"text","text":"tell the reporter"}]}]}]}`
+
+	got := adf.Markdown(parse(t, in))
+	for _, want := range []string{"- [ ] ship the fix", "- [x] write the test", "- [ ] update the docs", "- [ ] tell the reporter"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "unsupported") {
+		t.Errorf("a nested task list rendered as unsupported:\n%s", got)
+	}
+}
+
+func TestMarkdown_MergedCellsKeepLaterValuesUnderTheirOwnHeading(t *testing.T) {
+	t.Parallel()
+
+	// A cell with colspan holds the grid positions it spans. Emitting one column
+	// for it slides every value after it left, so the answer under a heading is
+	// simply wrong rather than merely misaligned.
+	const in = `{"version":1,"type":"doc","content":[{"type":"table","content":[
+		{"type":"tableRow","content":[
+			{"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"Env"}]}]},
+			{"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"Runs"}]}]},
+			{"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"Owner"}]}]}]},
+		{"type":"tableRow","content":[
+			{"type":"tableCell","attrs":{"colspan":2},"content":[{"type":"paragraph","content":[{"type":"text","text":"both"}]}]},
+			{"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"nobody"}]}]}]}]}]}`
+
+	lines := strings.Split(strings.TrimRight(adf.Markdown(parse(t, in)), "\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("want a header, a delimiter and one row, got:\n%s", strings.Join(lines, "\n"))
+	}
+	cells := strings.Split(strings.Trim(lines[2], "| "), "|")
+	if len(cells) != 3 {
+		t.Fatalf("the merged row has %d columns, want 3: %q", len(cells), lines[2])
+	}
+	if got := strings.TrimSpace(cells[2]); got != "nobody" {
+		t.Errorf("the Owner column holds %q, want \"nobody\": a merged cell shifted it", got)
+	}
+}
+
+func TestMarkdown_ASCIIEllipsisDoesNotEraseASqueezedColumn(t *testing.T) {
+	t.Parallel()
+
+	// The ASCII ellipsis is three cells wide against the Unicode one's one, so a
+	// floor of three leaves a squeezed column holding nothing but "...".
+	const in = `{"version":1,"type":"doc","content":[{"type":"table","content":[
+		{"type":"tableRow","content":[
+			{"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"alpha bravo charlie"}]}]},
+			{"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"delta echo foxtrot"}]}]}]}]}]}`
+
+	got := adf.MarkdownWith(parse(t, in), adf.Options{ASCII: true, TableWidth: 24})
+	for _, cell := range strings.Split(strings.Trim(strings.TrimSpace(got), "| "), "|") {
+		if strings.TrimSpace(cell) == "..." {
+			t.Errorf("a squeezed column shows only the ellipsis:\n%s", got)
+		}
+	}
+}

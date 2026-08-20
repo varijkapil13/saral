@@ -279,6 +279,15 @@ func (w *writer) checklist(n Node) {
 			w.separate(false)
 		}
 		child := n.Content[i]
+		// ADF's content model for these lists is (item | list)+: indenting an
+		// action item in the editor stores a sibling list inside its parent, and
+		// treating that as an item renders every child as unsupported.
+		if child.Type == "taskList" || child.Type == "decisionList" {
+			done := w.push("  ", "  ")
+			w.checklist(child)
+			done()
+			continue
+		}
 		marker := "- " + w.gl.decision + " "
 		if child.Type == "taskItem" {
 			marker = "- [ ] "
