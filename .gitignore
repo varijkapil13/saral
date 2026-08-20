@@ -7,3 +7,4 @@ coverage.*
 .DS_Store
 /testdata/live/
 pkg/jira/jiratest/fixtures/*.raw
+/.claude/

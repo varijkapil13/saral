@@ -932,3 +932,25 @@ func TestEpochMillis_ReadsTheTaskEndpointsOwnTimeFormat(t *testing.T) {
 		t.Error("a string decoded as an epoch time without complaint")
 	}
 }
+
+func TestCoalesce_DoesNotPutTheRequestSignatureInTheErrorItReturns(t *testing.T) {
+	t.Parallel()
+
+	// The signature is method, path, query and body — for a search that is the
+	// JQL and the page token, and a page token embeds the query it came from.
+	// An error is the one value certain to be logged.
+	const secret = `{"jql":"project = EX","nextPageToken":"CAEaAggDIhBhZ2VudC1wYWdl"}`
+	c, _ := testClient(t, "example.atlassian.net")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	_, err := c.coalesce(ctx, "POST /rest/api/3/search/jql\x00"+secret, func(inner context.Context) (*response, error) {
+		cancel()
+		return nil, inner.Err()
+	})
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if strings.Contains(err.Error(), "nextPageToken") || strings.Contains(err.Error(), "project = EX") {
+		t.Errorf("the error quotes the request signature: %v", err)
+	}
+}

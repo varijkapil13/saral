@@ -593,7 +593,10 @@ func (c *Client) coalesce(ctx context.Context, key string, fn func(context.Conte
 			return resp, nil
 		}
 	}
-	return nil, &jira.TransportError{Op: key, Err: errLeaderGone}
+	// Deliberately not the key: it is the request signature, which for a search
+	// is the JQL and the page token, and docs/API-NOTES.md says a page token is
+	// never to be logged.
+	return nil, &jira.TransportError{Op: "coalesced request", Err: errLeaderGone}
 }
 
 // The platform API and the Agile API write date-times differently: the platform
