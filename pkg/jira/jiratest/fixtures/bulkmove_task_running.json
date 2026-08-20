@@ -1,0 +1,14 @@
+{
+  "taskId": "10641",
+  "status": "RUNNING",
+  "progressPercent": 33,
+  "submittedBy": {
+    "accountId": "5b10a2844c20165700ede21g"
+  },
+  "created": 1770802882000,
+  "started": 1770802885000,
+  "updated": 1770802924000,
+  "totalIssueCount": 3,
+  "processedAccessibleIssues": [10001],
+  "invalidOrInaccessibleIssueCount": 0
+}

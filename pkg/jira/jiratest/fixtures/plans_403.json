@@ -1,0 +1,6 @@
+{
+  "errorMessages": [
+    "The Plans API requires the Administer Jira global permission, and a Jira Premium subscription."
+  ],
+  "errors": {}
+}

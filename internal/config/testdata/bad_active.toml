@@ -1,0 +1,6 @@
+active = "prod"
+
+[profiles.work]
+site  = "example.atlassian.net"
+email = "you@example.com"
+token = { env = "JIRA_TOKEN" }

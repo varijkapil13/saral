@@ -27,7 +27,7 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` merged · **owns** = the only p
 One agent, one PR, reviewed carefully. Nothing else starts until this merges, because it defines the
 contracts every other packet codes against.
 
-- [ ] **P0.1 — Contracts and kernel** · [#1](https://github.com/varijkapil13/saral/issues/1)
+- [x] **P0.1 — Contracts and kernel** · [#1](https://github.com/varijkapil13/saral/issues/1)
   **owns** `go.mod`, `pkg/jira/{port,types,errors,page}.go`, `pkg/adf/doc.go`,
   `pkg/jira/jiratest/**`, `internal/ui/kernel/**`, `internal/config/**`, `docs/adr/0001*`
   - dependencies added: bubbletea v2, lipgloss v2, bubbles v2, bubblezone, bbolt

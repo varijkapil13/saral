@@ -24,7 +24,8 @@ linters:
           disabled: false
     gocritic:
       enabled-tags: [diagnostic, performance, style]
-      disabled-checks: [whyNoLint]
+      # hugeParam fires on every Bubble Tea value receiver; MVU requires them.
+      disabled-checks: [whyNoLint, hugeParam]
 formatters:
   enable:
     - gofmt

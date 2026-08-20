@@ -1,0 +1,6 @@
+{
+  "errorMessages": [
+    "Rate limit exceeded for this token. Retry after the interval given in the Retry-After header."
+  ],
+  "errors": {}
+}

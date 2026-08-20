@@ -1,0 +1,18 @@
+active = "personal"
+mouse  = false
+
+[profiles.work]
+site   = "https://Example.atlassian.net/"
+email  = "you@example.com"
+theme  = "no-color"
+glyphs = "ascii"
+token  = { command = ["pass", "show", "jira/work"] }
+
+[profiles.personal]
+site  = "personal.atlassian.net"
+email = "me@example.com"
+token = { env = "JIRA_TOKEN" }
+
+[profiles.personal.timeline]
+start = ["Start date"]
+end   = ["duedate"]
