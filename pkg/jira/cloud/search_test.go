@@ -819,3 +819,36 @@ func BenchmarkDecodeSearchPage(b *testing.B) {
 		}
 	}
 }
+
+func TestDecodeIssue_WithoutASchemaKeepsAnUnlabelledArrayAsItsBytes(t *testing.T) {
+	t.Parallel()
+
+	// A bare GET /issue/{key} carries no schema block, so every custom value is
+	// inferred. An attachment array is objects with an id and a filename and no
+	// value or name anywhere — inferring options from it produces one blank row
+	// per attachment and throws the JSON away.
+	const wire = `{"id":"10001","key":"EX-1","fields":{"attachment":[
+		{"id":"10501","filename":"har-capture.har"},
+		{"id":"10502","filename":"screenshot.png"}]}}`
+
+	var in apiIssue
+	if err := json.Unmarshal([]byte(wire), &in); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	got := decodeIssue(in, nil)
+
+	ref := jira.FieldRef{ID: "attachment"}
+	if opts, ok := got.Fields.Options(ref); ok {
+		t.Errorf("read as %d options %+v; jira.Option promises a picker never renders blank labels", len(opts), opts)
+	}
+	value, ok := got.Fields.Get(ref)
+	if !ok {
+		t.Fatal("the field was dropped entirely; an unreadable value must still leave a trace")
+	}
+	if value.Kind != jira.KindUnknown {
+		t.Errorf("kind is %v, want KindUnknown", value.Kind)
+	}
+	if !strings.Contains(value.Text, "har-capture.har") {
+		t.Errorf("the bytes are gone: %q", value.Text)
+	}
+}

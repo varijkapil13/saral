@@ -690,7 +690,12 @@ func (o apiOption) label() string {
 }
 
 func (o apiOption) domain() (jira.Option, bool) {
-	if o.ID == "" && o.label() == "" {
+	// An id with nothing to show is not an option. Without this, any array of
+	// objects that merely carry an id — an attachment list is the everyday one —
+	// infers as a row of blank-labelled options, which is both what jira.Option
+	// promises never to produce and worse than the honest KindUnknown, because
+	// the raw bytes are then gone.
+	if o.label() == "" {
 		return jira.Option{}, false
 	}
 	out := jira.Option{ID: string(o.ID), Label: o.label()}
