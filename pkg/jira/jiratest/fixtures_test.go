@@ -148,6 +148,27 @@ func TestFixtures_CarryNothingThatLooksLikeACredential(t *testing.T) {
 	}
 }
 
+// srvRealAccountRe is the shape of a live Atlassian account id: a numeric site
+// prefix, a colon, then a UUID. The placeholder ids these fixtures use are the
+// older opaque form and do not match it.
+var srvRealAccountRe = regexp.MustCompile(`\b\d{5,7}:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b`)
+
+// A real account id reached a public branch through the `self` link of a
+// captured /myself, where the scrubber's field-level rules did not look. The
+// scrubber handles it now; this is the check that would have caught it first.
+func TestFixtures_CarryNoRealAccountID(t *testing.T) {
+	t.Parallel()
+
+	for name, body := range srvJSONFixtures(t) {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if hit := srvRealAccountRe.FindString(string(body)); hit != "" {
+				t.Errorf("%s carries what looks like a live Atlassian account id: %q", name, hit)
+			}
+		})
+	}
+}
+
 func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 	t.Parallel()
 
