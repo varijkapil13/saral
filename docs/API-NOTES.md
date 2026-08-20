@@ -53,6 +53,17 @@ here cost time to find out; read this before writing an adapter method.
 | Permissions | `GET /rest/api/3/mypermissions?permissions=…` |
 | The user's timezone | `GET /rest/api/3/myself` |
 
+## Permissions, which is what the capability probe reads
+
+| Fact | Consequence |
+|---|---|
+| In the **global context** `mypermissions` reports a project permission as held if the token holds it in *any* project | An unscoped probe answers a different question from the one being asked, and answers it optimistically: it reports Move as available to a token that cannot move an issue in the project on screen. Always send `projectKey`. |
+| The `permissions` parameter is required, and an empty or unrecognised key is a **400** rather than a silently dropped one | Ask for a fixed, narrow list. Widening it speculatively is how a probe starts failing outright on a site that does not know the new key. |
+| A key that *was* asked for can still be missing from the answer, and a **404 means either "no such project" or "you may not see it"** — the endpoint does not distinguish them | Absent, `havePermission: false`, and "the call failed" are three different answers. Word all three differently; a view keyed off the wrong one is either hidden for no reason or lying about why. |
+| `BULK_CHANGE` is a `GLOBAL` permission while `MOVE_ISSUES`, `CREATE_ISSUES` and `DELETE_ISSUES` are `PROJECT` ones — each entry's `type` says which | A cross-project move needs the global one, Move in the source **and** Create in the target, so a probe scoped to one project can only half-answer it. The move flow has to re-check Create once a target is chosen. |
+| Every entry carries a localised `name` and `description` | The `name` is what the site's own administrator sees, in the site's own language, so it is the right wording for a capability's reason — and, being translated, it is never something to match on. |
+| `GET /rest/api/3/attachment/meta` answers the same question as `/configuration` with `enabled`, and adds `uploadLimit` | Narrower than reading the whole site configuration, and the only place the maximum attachment size comes from. |
+
 ## ADF
 
 | Fact | Consequence |
