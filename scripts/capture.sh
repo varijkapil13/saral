@@ -39,6 +39,8 @@ ask() { # ask <var> <prompt> [secret]
   else
     read -rp "$prompt: " value
   fi
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
   [ -n "$value" ] || { echo "capture: $var cannot be empty" >&2; exit 1; }
   printf -v "$var" '%s' "$value"
   export "${var?}"
@@ -69,21 +71,40 @@ fetch() { # fetch <method> <path> <slot> [body]
   fi
 }
 
-scrub() { # scrub <slot> <fixture> <what>
-  local slot="$1" fixture="$2" what="$3"
+# scrub <slot> <fixture> <what> [wanted-status]
+#
+# A fixture is only replaced when the call actually answered what was asked. The
+# first version of this script wrote whatever came back, so one wrong project key
+# quietly replaced four good fixtures with "Issue does not exist" — the failure
+# looked like a successful capture right up until the tests ran.
+scrub() {
+  local slot="$1" fixture="$2" what="$3" want="${4:-2xx}"
+  if ! wanted "$CODE" "$want"; then
+    printf '  %-34s %s  %s  !! left alone\n' "$fixture" "$CODE" "$what"
+    FAILED=$((FAILED + 1))
+    return 1
+  fi
   if ! SARAL_SITE="$SARAL_SITE" SARAL_EMAIL="$SARAL_EMAIL" \
     python3 "$ROOT/scripts/scrub.py" "$TMP/$slot" "$OUT/$fixture"; then
     cp "$TMP/$slot" "$OUT/${fixture%.json}.raw"
     printf '  %-34s %s  %s  !! not JSON, kept as %s\n' "$fixture" "$CODE" "$what" "${fixture%.json}.raw"
-    return
+    FAILED=$((FAILED + 1))
+    return 1
   fi
   printf '  %-34s %s  %s\n' "$fixture" "$CODE" "$what"
 }
 
-capture() { # capture <method> <path> <fixture> [body]
-  local method="$1" path="$2" fixture="$3" body="${4:-}"
+wanted() { # wanted <code> <2xx|exact code>
+  case "$2" in
+    2xx) case "$1" in 2??) return 0;; *) return 1;; esac;;
+    *) [ "$1" = "$2" ];;
+  esac
+}
+
+capture() { # capture <method> <path> <fixture> [body] [wanted-status]
+  local method="$1" path="$2" fixture="$3" body="${4:-}" want="${5:-2xx}"
   fetch "$method" "$path" slot "$body"
-  scrub slot "$fixture" "$method $path"
+  scrub slot "$fixture" "$method $path" "$want"
 }
 
 # pick <file> <what> — pull one value out of a captured response, or print nothing
@@ -91,11 +112,38 @@ pick() {
   python3 "$ROOT/scripts/pick.py" "$1" "$2" 2>/dev/null || true
 }
 
+FAILED=0
+
+# Jira answers an unauthenticated caller differently per endpoint rather than
+# refusing outright: /mypermissions comes back 200 with every permission false,
+# a search returns zero issues, and an issue is "does not exist or you do not
+# have permission to see it". A whole capture can therefore look like it worked
+# and be nothing but anonymous responses, so check once, up front, and stop.
+echo "checking the credentials"
+fetch GET "/rest/api/3/myself" whoami
+if [ "$CODE" != "200" ]; then
+  echo >&2
+  echo "capture: $SARAL_SITE rejected these credentials (HTTP $CODE)." >&2
+  echo "         $(head -c 200 "$TMP/whoami" 2>/dev/null)" >&2
+  echo >&2
+  echo "  Nothing was written. Check, in this order:" >&2
+  echo "    * the email is the Atlassian account the token belongs to, not an alias" >&2
+  echo "    * the token is current — they can be revoked at" >&2
+  echo "      https://id.atlassian.com/manage-profile/security/api-tokens" >&2
+  echo "    * the token is a plain API token, not one of the newer scoped ones" >&2
+  echo >&2
+  echo "  Verify it by hand with:" >&2
+  echo "    curl -su \"\$SARAL_EMAIL:\$SARAL_TOKEN\" https://$SARAL_SITE/rest/api/3/myself" >&2
+  exit 1
+fi
+echo "  authenticated as $(pick "$TMP/whoami" account-name)"
+echo
+
 echo "capturing from $SARAL_SITE into $OUT"
 echo
 
 echo "capability probe (P1.3)"
-capture GET "/rest/api/3/myself" myself.json
+scrub whoami myself.json "GET /rest/api/3/myself"
 capture GET "/rest/api/3/configuration" configuration.json
 
 # One token cannot produce both permission fixtures. Name the file for what this token actually is,
@@ -114,13 +162,32 @@ echo "  -> saved as $PERMS_AS (this token's own permissions)"
 # exist. 403 is the normal answer and is a capability result, not a failure.
 fetch GET "/rest/api/3/plans/plan?maxResults=5" plans
 if [ "$CODE" = "403" ]; then
-  scrub plans plans_403.json "GET /rest/api/3/plans/plan"
+  scrub plans plans_403.json "GET /rest/api/3/plans/plan" 403
 else
   scrub plans plans_ok.json "GET /rest/api/3/plans/plan"
   echo "  -> this token reaches the Plans API; plans_403.json is unchanged and still hand-authored"
 fi
 
 echo
+# A project key the token cannot see turns the rest of the run into 404 bodies.
+fetch GET "/rest/api/3/project/$SARAL_PROJECT" projcheck
+if [ "$CODE" != "200" ]; then
+  echo >&2
+  echo "capture: cannot read project $SARAL_PROJECT (HTTP $CODE) — check the key and that this" >&2
+  echo "         account can browse it. Projects this token can see:" >&2
+  fetch GET "/rest/api/3/project/search?maxResults=50" projlist
+  pick "$TMP/projlist" project-keys >&2
+  exit 1
+fi
+
+fetch GET "/rest/api/3/issue/$SARAL_ISSUE?fields=summary" issuecheck
+if [ "$CODE" != "200" ]; then
+  echo >&2
+  echo "capture: cannot read issue $SARAL_ISSUE (HTTP $CODE) — it has to be an issue this account" >&2
+  echo "         can see, and one with a rich description is the point of the exercise." >&2
+  exit 1
+fi
+
 echo "fields and create schema (P2.2)"
 capture GET "/rest/api/3/field" field.json
 
@@ -188,8 +255,12 @@ else
   echo "  !! no board on $SARAL_PROJECT; sprint_page.json is unchanged"
 fi
 
-cat <<'NOTE'
+echo
+if [ "$FAILED" -gt 0 ]; then
+  echo "$FAILED call(s) did not answer as expected; those fixtures were left as they were."
+fi
 
+cat <<'NOTE'
 Done. These fixtures cannot be captured and stay hand-authored:
 
   rate_limited.json        429 with Retry-After

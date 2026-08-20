@@ -47,6 +47,13 @@ def main() -> int:
     elif what == "board-ids":
         values = doc.get("values", []) if isinstance(doc, dict) else []
         print(" ".join(str(b["id"]) for b in values[:8] if "id" in b))
+    elif what == "account-name":
+        if isinstance(doc, dict):
+            print(doc.get("displayName") or doc.get("emailAddress") or doc.get("accountId", "?"))
+    elif what == "project-keys":
+        values = doc.get("values", []) if isinstance(doc, dict) else []
+        for p in values:
+            print(f"           {p.get('key','?'):<10} {p.get('name','')}")
     elif what == "estimation-type":
         estimation = (doc.get("estimation") or {}) if isinstance(doc, dict) else {}
         print(estimation.get("type", "none"))
