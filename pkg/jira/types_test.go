@@ -310,8 +310,8 @@ func TestFieldSet_StoresAndReturnsEveryKindOfValue(t *testing.T) {
 	set = set.With(date, jira.FieldValue{Kind: jira.KindDate, Date: jira.Date{Year: 2026, Month: time.August, Day: 20}})
 	set = set.With(stamp, jira.FieldValue{Kind: jira.KindTime, Time: when})
 	set = set.With(doc, jira.FieldValue{Kind: jira.KindDoc, Doc: body})
-	set = set.With(option, jira.FieldValue{Kind: jira.KindOption, Options: []jira.Option{{ID: "1", Value: "High"}}})
-	set = set.With(options, jira.FieldValue{Kind: jira.KindOptions, Options: []jira.Option{{ID: "1", Value: "api"}, {ID: "2", Value: "ui"}}})
+	set = set.With(option, jira.FieldValue{Kind: jira.KindOption, Options: []jira.Option{{ID: "1", Label: "High"}}})
+	set = set.With(options, jira.FieldValue{Kind: jira.KindOptions, Options: []jira.Option{{ID: "1", Label: "api"}, {ID: "2", Label: "ui"}}})
 	set = set.With(user, jira.FieldValue{Kind: jira.KindUser, Users: []jira.User{{AccountID: "acc-1"}}})
 	set = set.With(users, jira.FieldValue{Kind: jira.KindUsers, Users: []jira.User{{AccountID: "acc-1"}, {AccountID: "acc-2"}}})
 
@@ -337,7 +337,7 @@ func TestFieldSet_StoresAndReturnsEveryKindOfValue(t *testing.T) {
 	if got, ok := set.Doc(doc); !ok || !sameDoc(t, got, body) {
 		t.Errorf("Doc() = (%+v, %t), want the document that was stored", got, ok)
 	}
-	if got, ok := set.Options(option); !ok || len(got) != 1 || got[0].Value != "High" {
+	if got, ok := set.Options(option); !ok || len(got) != 1 || got[0].Label != "High" {
 		t.Errorf("Options() = (%+v, %t), want the single stored option", got, ok)
 	}
 	if got, ok := set.Options(options); !ok || len(got) != 2 {
@@ -370,7 +370,7 @@ func TestFieldSet_TypedGetterRefusesTheWrongKind(t *testing.T) {
 	set = set.With(text, jira.FieldValue{Kind: jira.KindText, Text: "a summary"})
 	set = set.With(number, jira.FieldValue{Kind: jira.KindNumber, Number: 3.5})
 	set = set.With(date, jira.FieldValue{Kind: jira.KindDate, Date: jira.Date{Year: 2026, Month: time.August, Day: 20}})
-	set = set.With(option, jira.FieldValue{Kind: jira.KindOption, Options: []jira.Option{{ID: "1", Value: "High"}}})
+	set = set.With(option, jira.FieldValue{Kind: jira.KindOption, Options: []jira.Option{{ID: "1", Label: "High"}}})
 	set = set.With(user, jira.FieldValue{Kind: jira.KindUser, Users: []jira.User{{AccountID: "acc-1"}}})
 
 	tests := []struct {
@@ -914,22 +914,22 @@ func TestFieldSet_HandsOutCopiesOfTheSlicesInsideAValue(t *testing.T) {
 	t.Parallel()
 
 	labels := ref("customfield_13500", "array")
-	stored := jira.FieldValue{Kind: jira.KindOptions, Options: []jira.Option{{ID: "1", Value: "api"}}}
+	stored := jira.FieldValue{Kind: jira.KindOptions, Options: []jira.Option{{ID: "1", Label: "api"}}}
 
 	var set jira.FieldSet
 	set = set.With(labels, stored)
 
 	// Writing through the value that was stored must not reach the set.
-	stored.Options[0].Value = "written through the input"
-	if got, _ := set.Options(labels); got[0].Value != "api" {
-		t.Errorf("the set now reads %q; With kept the caller's slice", got[0].Value)
+	stored.Options[0].Label = "written through the input"
+	if got, _ := set.Options(labels); got[0].Label != "api" {
+		t.Errorf("the set now reads %q; With kept the caller's slice", got[0].Label)
 	}
 
 	// Nor may writing through a value the set handed back.
 	got, _ := set.Options(labels)
-	got[0].Value = "written through the output"
-	if again, _ := set.Options(labels); again[0].Value != "api" {
-		t.Errorf("the set now reads %q; a reader wrote into it", again[0].Value)
+	got[0].Label = "written through the output"
+	if again, _ := set.Options(labels); again[0].Label != "api" {
+		t.Errorf("the set now reads %q; a reader wrote into it", again[0].Label)
 	}
 }
 
@@ -958,4 +958,45 @@ func TestFieldSet_HandsOutACopyOfARichTextValue(t *testing.T) {
 	if again.Content[0].Content[0].Text != "original" {
 		t.Errorf("the set reads %q; a reader wrote into it", again.Content[0].Content[0].Text)
 	}
+}
+
+func TestFieldByName_PrefersTheUntranslatedNameBecauseNameIsLocalised(t *testing.T) {
+	t.Parallel()
+
+	// What a German site sends: the display name is translated, the untranslated
+	// one is not, and configuration naming "Story Points" has to keep working.
+	fields := []jira.Field{
+		{ID: "summary", Name: "Zusammenfassung"},
+		{ID: "customfield_10032", Name: "Story-Punkte", UntranslatedName: "Story Points", Custom: true},
+		{ID: "customfield_10041", Name: "Zieltermin Start", UntranslatedName: "Target start", Custom: true},
+	}
+
+	for name, want := range map[string]string{
+		"Story Points":    "customfield_10032",
+		"story points":    "customfield_10032",
+		"Target start":    "customfield_10041",
+		"Zusammenfassung": "summary",
+		"Story-Punkte":    "customfield_10032",
+	} {
+		got, ok := FieldByNameHelper(t, fields, name)
+		if !ok || got.ID != want {
+			t.Errorf("FieldByName(%q) = %q, %t; want %q", name, got.ID, ok, want)
+		}
+	}
+
+	if _, ok := jira.FieldByName(fields, ""); ok {
+		t.Error("an empty name matched a field; every system field has an empty untranslated name")
+	}
+	if _, ok := jira.FieldByName(fields, "   "); ok {
+		t.Error("a blank name matched a field")
+	}
+	if _, ok := jira.FieldByName(fields, "Sprint"); ok {
+		t.Error("a name nothing carries matched anyway")
+	}
+}
+
+// FieldByNameHelper keeps the table above readable.
+func FieldByNameHelper(t *testing.T, fields []jira.Field, name string) (jira.Field, bool) {
+	t.Helper()
+	return jira.FieldByName(fields, name)
 }

@@ -1,0 +1,51 @@
+{
+  "maxResults": 5,
+  "total": 3,
+  "isLast": true,
+  "values": [
+    {
+      "id": "7",
+      "name": "EX Rollout Plan",
+      "scenarioId": "108",
+      "status": "Active",
+      "issueSources": [
+        {
+          "type": "Project",
+          "value": 10000
+        }
+      ]
+    },
+    {
+      "id": "12",
+      "name": "EX Cross-Team Plan",
+      "scenarioId": "117",
+      "status": "Active",
+      "issueSources": [
+        {
+          "type": "Board",
+          "value": 10
+        },
+        {
+          "type": "Board",
+          "value": 11
+        },
+        {
+          "type": "Filter",
+          "value": 10200
+        }
+      ]
+    },
+    {
+      "id": "31",
+      "name": "EX Retired Plan",
+      "scenarioId": "140",
+      "status": "Trashed",
+      "issueSources": [
+        {
+          "type": "Project",
+          "value": 10000
+        }
+      ]
+    }
+  ]
+}

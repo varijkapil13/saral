@@ -4,7 +4,18 @@
   "self": "https://example.atlassian.net/rest/api/3/issue/10001",
   "key": "EX-1",
   "fields": {
-    "summary": "Checkout fails when the basket is empty",
+    "statuscategorychangedate": "2026-03-02T09:12:44.318+0000",
+    "parent": null,
+    "issuetype": {
+      "self": "https://example.atlassian.net/rest/api/3/issuetype/10004",
+      "id": "10004",
+      "description": "A problem or error.",
+      "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10303?size=medium",
+      "name": "Bug",
+      "subtask": false,
+      "avatarId": 10303,
+      "hierarchyLevel": 0
+    },
     "project": {
       "self": "https://example.atlassian.net/rest/api/3/project/10000",
       "id": "10000",
@@ -19,60 +30,6 @@
         "32x32": "https://example.atlassian.net/rest/api/3/universal_avatar/view/type/project/avatar/10420?size=medium"
       }
     },
-    "issuetype": {
-      "self": "https://example.atlassian.net/rest/api/3/issuetype/10004",
-      "id": "10004",
-      "description": "A problem or error.",
-      "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10303?size=medium",
-      "name": "Bug",
-      "subtask": false,
-      "avatarId": 10303,
-      "hierarchyLevel": 0
-    },
-    "status": {
-      "self": "https://example.atlassian.net/rest/api/3/status/10001",
-      "description": "Waiting for a reviewer.",
-      "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
-      "name": "In Review",
-      "id": "10001",
-      "statusCategory": {
-        "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
-        "id": 4,
-        "key": "indeterminate",
-        "colorName": "yellow",
-        "name": "In Progress"
-      }
-    },
-    "priority": {
-      "self": "https://example.atlassian.net/rest/api/3/priority/2",
-      "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
-      "name": "High",
-      "id": "2"
-    },
-    "resolution": null,
-    "resolutiondate": null,
-    "assignee": {
-      "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g",
-      "accountId": "5b10a2844c20165700ede21g",
-      "accountType": "atlassian",
-      "displayName": "Example User",
-      "active": true,
-      "timeZone": "Europe/Berlin"
-    },
-    "reporter": {
-      "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
-      "accountId": "5b10ac8d82e05b22cc7d4ef5",
-      "accountType": "atlassian",
-      "displayName": "Another User",
-      "active": true,
-      "timeZone": "Europe/Berlin"
-    },
-    "labels": ["checkout", "regression"],
-    "created": "2026-01-28T14:03:07.412+0000",
-    "updated": "2026-02-11T09:41:22.104+0000",
-    "duedate": "2026-03-06",
-    "customfield_10032": 5,
-    "customfield_10041": "2026-02-02",
     "fixVersions": [
       {
         "self": "https://example.atlassian.net/rest/api/3/version/10100",
@@ -83,31 +40,34 @@
         "releaseDate": "2026-03-27"
       }
     ],
-    "timetracking": {
-      "originalEstimate": "1d",
-      "remainingEstimate": "4h",
-      "timeSpent": "4h",
-      "originalEstimateSeconds": 28800,
-      "remainingEstimateSeconds": 14400,
-      "timeSpentSeconds": 14400
+    "aggregatetimespent": null,
+    "resolution": null,
+    "customfield_10041": "2026-02-02",
+    "customfield_10046": null,
+    "resolutiondate": null,
+    "workratio": -1,
+    "watches": {
+      "self": "https://example.atlassian.net/rest/api/3/issue/EX-1/watchers",
+      "watchCount": 2,
+      "isWatching": false
     },
-    "attachment": [
-      {
-        "self": "https://example.atlassian.net/rest/api/3/attachment/10501",
-        "id": "10501",
-        "filename": "har-capture.har",
-        "author": {
-          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
-          "accountId": "5b10ac8d82e05b22cc7d4ef5",
-          "displayName": "Another User",
-          "active": true
-        },
-        "created": "2026-01-28T14:05:19.000+0000",
-        "size": 184320,
-        "mimeType": "application/json",
-        "content": "https://example.atlassian.net/rest/api/3/attachment/content/10501"
-      }
+    "lastViewed": null,
+    "created": "2026-01-28T14:03:07.412+0000",
+    "customfield_10032": 5,
+    "priority": {
+      "self": "https://example.atlassian.net/rest/api/3/priority/2",
+      "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
+      "name": "High",
+      "id": "2"
+    },
+    "labels": [
+      "checkout",
+      "regression"
     ],
+    "environment": null,
+    "aggregatetimeoriginalestimate": null,
+    "timeestimate": null,
+    "versions": [],
     "issuelinks": [
       {
         "id": "10600",
@@ -142,7 +102,31 @@
         }
       }
     ],
-    "subtasks": [],
+    "assignee": {
+      "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g",
+      "accountId": "5b10a2844c20165700ede21g",
+      "accountType": "atlassian",
+      "displayName": "Example User",
+      "active": true,
+      "timeZone": "Europe/Berlin"
+    },
+    "updated": "2026-02-11T09:41:22.104+0000",
+    "status": {
+      "self": "https://example.atlassian.net/rest/api/3/status/10001",
+      "description": "Waiting for a reviewer.",
+      "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+      "name": "In Review",
+      "id": "10001",
+      "statusCategory": {
+        "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+        "id": 4,
+        "key": "indeterminate",
+        "colorName": "yellow",
+        "name": "In Progress"
+      }
+    },
+    "components": [],
+    "timeoriginalestimate": null,
     "description": {
       "type": "doc",
       "version": 1,
@@ -150,26 +134,68 @@
         {
           "type": "paragraph",
           "content": [
-            { "type": "text", "text": "The basket total is " },
-            { "type": "text", "text": "recalculated", "marks": [{ "type": "strong" }] },
-            { "type": "text", "text": " before the line items are read, so an empty basket divides by zero. See " },
+            {
+              "type": "text",
+              "text": "The basket total is "
+            },
+            {
+              "type": "text",
+              "text": "recalculated",
+              "marks": [
+                {
+                  "type": "strong"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " before the line items are read, so an empty basket divides by zero. See "
+            },
             {
               "type": "text",
               "text": "the checkout runbook",
               "marks": [
-                { "type": "link", "attrs": { "href": "https://example.atlassian.net/wiki/spaces/EX/pages/98304" } },
-                { "type": "strong" }
+                {
+                  "type": "link",
+                  "attrs": {
+                    "href": "https://example.atlassian.net/wiki/spaces/EX/pages/98304"
+                  }
+                },
+                {
+                  "type": "strong"
+                }
               ]
             },
-            { "type": "text", "text": " and the " },
-            { "type": "text", "text": "basketTotal()", "marks": [{ "type": "code" }] },
-            { "type": "text", "text": " helper." }
+            {
+              "type": "text",
+              "text": " and the "
+            },
+            {
+              "type": "text",
+              "text": "basketTotal()",
+              "marks": [
+                {
+                  "type": "code"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " helper."
+            }
           ]
         },
         {
           "type": "heading",
-          "attrs": { "level": 2 },
-          "content": [{ "type": "text", "text": "Steps to reproduce" }]
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "Steps to reproduce"
+            }
+          ]
         },
         {
           "type": "bulletList",
@@ -179,19 +205,11 @@
               "content": [
                 {
                   "type": "paragraph",
-                  "content": [{ "type": "text", "text": "Sign in as a customer with no saved basket." }]
-                }
-              ]
-            },
-            {
-              "type": "listItem",
-              "content": [
-                {
-                  "type": "paragraph",
                   "content": [
-                    { "type": "text", "text": "Open " },
-                    { "type": "inlineCard", "attrs": { "url": "https://example.atlassian.net/browse/EX-2" } },
-                    { "type": "text", "text": " and follow the linked route." }
+                    {
+                      "type": "text",
+                      "text": "Sign in as a customer with no saved basket."
+                    }
                   ]
                 }
               ]
@@ -202,7 +220,34 @@
                 {
                   "type": "paragraph",
                   "content": [
-                    { "type": "text", "text": "Ask " },
+                    {
+                      "type": "text",
+                      "text": "Open "
+                    },
+                    {
+                      "type": "inlineCard",
+                      "attrs": {
+                        "url": "https://example.atlassian.net/browse/EX-2"
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "text": " and follow the linked route."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "listItem",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Ask "
+                    },
                     {
                       "type": "mention",
                       "attrs": {
@@ -211,7 +256,10 @@
                         "accessLevel": ""
                       }
                     },
-                    { "type": "text", "text": " to confirm the account state." }
+                    {
+                      "type": "text",
+                      "text": " to confirm the account state."
+                    }
                   ]
                 }
               ]
@@ -220,17 +268,26 @@
         },
         {
           "type": "panel",
-          "attrs": { "panelType": "warning" },
+          "attrs": {
+            "panelType": "warning"
+          },
           "content": [
             {
               "type": "paragraph",
-              "content": [{ "type": "text", "text": "Do not retry the request: each attempt writes an orphaned order row." }]
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Do not retry the request: each attempt writes an orphaned order row."
+                }
+              ]
             }
           ]
         },
         {
           "type": "codeBlock",
-          "attrs": { "language": "go" },
+          "attrs": {
+            "language": "go"
+          },
           "content": [
             {
               "type": "text",
@@ -240,20 +297,52 @@
         },
         {
           "type": "table",
-          "attrs": { "isNumberColumnEnabled": false, "layout": "default", "localId": "cf4a1b90-0d5a-4f2e-9c31-7b2a5f0c4d18" },
+          "attrs": {
+            "isNumberColumnEnabled": false,
+            "layout": "default",
+            "localId": "cf4a1b90-0d5a-4f2e-9c31-7b2a5f0c4d18"
+          },
           "content": [
             {
               "type": "tableRow",
               "content": [
                 {
                   "type": "tableHeader",
-                  "attrs": { "colspan": 1, "rowspan": 1, "background": "#f1f2f4" },
-                  "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Environment" }] }]
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "background": "#f1f2f4"
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Environment"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "tableHeader",
-                  "attrs": { "colspan": 1, "rowspan": 1, "background": "#f1f2f4" },
-                  "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Reproduced" }] }]
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "background": "#f1f2f4"
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Reproduced"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -263,12 +352,32 @@
                 {
                   "type": "tableCell",
                   "attrs": {},
-                  "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "staging" }] }]
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "staging"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "tableCell",
                   "attrs": {},
-                  "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "twice" }] }]
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "twice"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             }
@@ -276,7 +385,10 @@
         },
         {
           "type": "mediaSingle",
-          "attrs": { "layout": "center", "width": 62.5 },
+          "attrs": {
+            "layout": "center",
+            "width": 62.5
+          },
           "content": [
             {
               "type": "media",
@@ -292,15 +404,143 @@
         },
         {
           "type": "futureBlock",
-          "attrs": { "variant": "callout", "localId": "8a1d6f30-5c22-4f8f-9c0e-1a7c4b6d2e59" },
+          "attrs": {
+            "variant": "callout",
+            "localId": "8a1d6f30-5c22-4f8f-9c0e-1a7c4b6d2e59"
+          },
           "content": [
             {
               "type": "paragraph",
-              "content": [{ "type": "text", "text": "This node type is not in any published ADF schema. It must survive the round trip untouched." }]
+              "content": [
+                {
+                  "type": "text",
+                  "text": "This node type is not in any published ADF schema. It must survive the round trip untouched."
+                }
+              ]
             }
           ]
         }
       ]
+    },
+    "timetracking": {
+      "originalEstimate": "1d",
+      "remainingEstimate": "4h",
+      "timeSpent": "4h",
+      "originalEstimateSeconds": 28800,
+      "remainingEstimateSeconds": 14400,
+      "timeSpentSeconds": 14400
+    },
+    "attachment": [
+      {
+        "self": "https://example.atlassian.net/rest/api/3/attachment/10501",
+        "id": "10501",
+        "filename": "har-capture.har",
+        "author": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "displayName": "Another User",
+          "active": true
+        },
+        "created": "2026-01-28T14:05:19.000+0000",
+        "size": 184320,
+        "mimeType": "application/json",
+        "content": "https://example.atlassian.net/rest/api/3/attachment/content/10501"
+      }
+    ],
+    "aggregatetimeestimate": null,
+    "summary": "Checkout fails when the basket is empty",
+    "creator": {
+      "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g",
+      "accountId": "5b10a2844c20165700ede21g",
+      "emailAddress": "user@example.com",
+      "displayName": "Example User",
+      "active": true,
+      "timeZone": "Etc/UTC",
+      "accountType": "atlassian"
+    },
+    "subtasks": [],
+    "reporter": {
+      "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+      "accountId": "5b10ac8d82e05b22cc7d4ef5",
+      "accountType": "atlassian",
+      "displayName": "Another User",
+      "active": true,
+      "timeZone": "Europe/Berlin"
+    },
+    "aggregateprogress": {
+      "progress": 0,
+      "total": 0
+    },
+    "duedate": "2026-03-06",
+    "progress": {
+      "progress": 0,
+      "total": 0
+    },
+    "votes": {
+      "self": "https://example.atlassian.net/rest/api/3/issue/EX-1/votes",
+      "votes": 0,
+      "hasVoted": false
+    },
+    "worklog": {
+      "startAt": 0,
+      "maxResults": 20,
+      "total": 0,
+      "worklogs": []
+    },
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "comment": {
+      "comments": [
+        {
+          "self": "https://example.atlassian.net/rest/api/3/issue/10001/comment/10201",
+          "id": "10201",
+          "author": {
+            "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+            "accountId": "5b10ac8d82e05b22cc7d4ef5",
+            "emailAddress": "user@example.com",
+            "displayName": "Another User",
+            "active": true,
+            "timeZone": "Etc/UTC",
+            "accountType": "atlassian"
+          },
+          "body": {
+            "version": 1,
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Reproduced on a fresh account."
+                  }
+                ]
+              }
+            ]
+          },
+          "updateAuthor": {
+            "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+            "accountId": "5b10ac8d82e05b22cc7d4ef5",
+            "emailAddress": "user@example.com",
+            "displayName": "Another User",
+            "active": true,
+            "timeZone": "Etc/UTC",
+            "accountType": "atlassian"
+          },
+          "created": "2026-03-02T10:04:11.902+0000",
+          "updated": "2026-03-02T10:04:11.902+0000",
+          "jsdPublic": true
+        }
+      ],
+      "self": "https://example.atlassian.net/rest/api/3/issue/10001/comment",
+      "maxResults": 1,
+      "total": 1,
+      "startAt": 0
     }
   }
 }

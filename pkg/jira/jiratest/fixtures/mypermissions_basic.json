@@ -5,7 +5,7 @@
       "key": "ADMINISTER",
       "name": "Administer Jira",
       "type": "GLOBAL",
-      "description": "Create and administer projects, issue types, fields, workflows, and schemes for all projects.",
+      "description": "Create and administer projects, issue types, fields, workflows, and schemes for all projects. Users with this permission can perform most administration tasks, except: managing users, importing data, and editing system email settings.",
       "havePermission": false
     },
     "CREATE_ISSUES": {
@@ -21,7 +21,7 @@
       "key": "MOVE_ISSUES",
       "name": "Move Issues",
       "type": "PROJECT",
-      "description": "Ability to move issues between projects or between workflows of the same project.",
+      "description": "Ability to move issues between projects or between workflows of the same project (if applicable). Note the user can only move issues to a project they have the create permission for.",
       "havePermission": false
     },
     "EDIT_ISSUES": {
@@ -38,6 +38,14 @@
       "name": "Delete Issues",
       "type": "PROJECT",
       "description": "Ability to delete issues.",
+      "havePermission": false
+    },
+    "DELETE_ALL_COMMENTS": {
+      "id": "36",
+      "key": "DELETE_ALL_COMMENTS",
+      "name": "Delete All Comments",
+      "type": "PROJECT",
+      "description": "Ability to delete all comments made on issues.",
       "havePermission": false
     },
     "CREATE_ATTACHMENTS": {

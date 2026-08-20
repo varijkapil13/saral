@@ -1,48 +1,63 @@
-[
-  {
-    "self": "https://example.atlassian.net/rest/api/3/version/10099",
-    "id": "10099",
-    "description": "First cut of the checkout rewrite.",
-    "name": "2026.2",
-    "archived": false,
-    "released": true,
-    "startDate": "2026-01-05",
-    "releaseDate": "2026-02-27",
-    "userStartDate": "05/Jan/26",
-    "userReleaseDate": "27/Feb/26",
-    "overdue": false,
-    "projectId": 10000
-  },
-  {
-    "self": "https://example.atlassian.net/rest/api/3/version/10100",
-    "id": "10100",
-    "description": "Checkout fixes and the field cache.",
-    "name": "2026.3",
-    "archived": false,
-    "released": false,
-    "startDate": "2026-03-02",
-    "releaseDate": "2026-03-27",
-    "userStartDate": "02/Mar/26",
-    "userReleaseDate": "27/Mar/26",
-    "overdue": false,
-    "projectId": 10000,
-    "issuesStatusForFixVersion": {
-      "unmapped": 0,
-      "toDo": 4,
-      "inProgress": 2,
-      "done": 7
+{
+  "self": "https://example.atlassian.net/rest/api/3/project/EX/version?maxResults=50&startAt=0&expand=issuesstatus",
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 3,
+  "isLast": true,
+  "values": [
+    {
+      "self": "https://example.atlassian.net/rest/api/3/version/10099",
+      "id": "10099",
+      "description": "First cut of the checkout rewrite.",
+      "name": "2026.2",
+      "archived": false,
+      "released": true,
+      "startDate": "2026-01-05",
+      "releaseDate": "2026-02-27",
+      "userStartDate": "05/Jan/26",
+      "userReleaseDate": "27/Feb/26",
+      "projectId": 10000,
+      "issuesStatusForFixVersion": {
+        "unmapped": 0,
+        "toDo": 0,
+        "inProgress": 0,
+        "done": 12
+      }
+    },
+    {
+      "self": "https://example.atlassian.net/rest/api/3/version/10100",
+      "id": "10100",
+      "name": "2026.3",
+      "archived": false,
+      "released": false,
+      "startDate": "2026-03-02",
+      "releaseDate": "2026-03-27",
+      "userStartDate": "02/Mar/26",
+      "userReleaseDate": "27/Mar/26",
+      "projectId": 10000,
+      "issuesStatusForFixVersion": {
+        "unmapped": 1,
+        "toDo": 4,
+        "inProgress": 2,
+        "done": 7
+      }
+    },
+    {
+      "self": "https://example.atlassian.net/rest/api/3/version/10098",
+      "id": "10098",
+      "description": "Superseded by 2026.2.",
+      "name": "2026.1",
+      "archived": true,
+      "released": true,
+      "releaseDate": "2026-01-16",
+      "userReleaseDate": "16/Jan/26",
+      "projectId": 10000,
+      "issuesStatusForFixVersion": {
+        "unmapped": 0,
+        "toDo": 0,
+        "inProgress": 0,
+        "done": 5
+      }
     }
-  },
-  {
-    "self": "https://example.atlassian.net/rest/api/3/version/10098",
-    "id": "10098",
-    "description": "Superseded by 2026.2.",
-    "name": "2026.1",
-    "archived": true,
-    "released": true,
-    "releaseDate": "2026-01-16",
-    "userReleaseDate": "16/Jan/26",
-    "overdue": false,
-    "projectId": 10000
-  }
-]
+  ]
+}

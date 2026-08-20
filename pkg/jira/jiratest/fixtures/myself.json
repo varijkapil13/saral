@@ -14,5 +14,6 @@
     "32x32": "https://example.atlassian.net/secure/useravatar?size=medium&ownerId=5b10a2844c20165700ede21g&avatarId=10345"
   },
   "groups": { "size": 2, "items": [] },
-  "applicationRoles": { "size": 1, "items": [] }
+  "applicationRoles": { "size": 1, "items": [] },
+  "expand": "groups,applicationRoles"
 }

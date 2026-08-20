@@ -22,6 +22,22 @@
     "schema": { "type": "string", "system": "description" }
   },
   {
+    "id": "customfield_10032",
+    "key": "customfield_10032",
+    "name": "Story Points",
+    "untranslatedName": "Story Points",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10032]", "Story Points"],
+    "schema": {
+      "type": "number",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+      "customId": 10032
+    }
+  },
+  {
     "id": "issuetype",
     "key": "issuetype",
     "name": "Issue Type",
@@ -29,7 +45,7 @@
     "orderable": true,
     "navigable": true,
     "searchable": true,
-    "clauseNames": ["issuetype", "type"],
+    "clauseNames": ["issuetype", "type", "worktype"],
     "schema": { "type": "issuetype", "system": "issuetype" }
   },
   {
@@ -40,7 +56,7 @@
     "orderable": false,
     "navigable": true,
     "searchable": true,
-    "clauseNames": ["project"],
+    "clauseNames": ["project", "spaceJira"],
     "schema": { "type": "project", "system": "project" }
   },
   {
@@ -53,6 +69,23 @@
     "searchable": true,
     "clauseNames": ["status"],
     "schema": { "type": "status", "system": "status" }
+  },
+  {
+    "id": "customfield_10020",
+    "key": "customfield_10020",
+    "name": "Sprint",
+    "untranslatedName": "Sprint",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10020]", "Sprint"],
+    "schema": {
+      "type": "array",
+      "items": "json",
+      "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+      "customId": 10020
+    }
   },
   {
     "id": "priority",
@@ -110,6 +143,22 @@
     "schema": { "type": "user", "system": "reporter" }
   },
   {
+    "id": "customfield_10021",
+    "key": "customfield_10021",
+    "name": "Rank",
+    "untranslatedName": "Rank",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10021]", "Rank"],
+    "schema": {
+      "type": "any",
+      "custom": "com.pyxis.greenhopper.jira:gh-lexo-rank",
+      "customId": 10021
+    }
+  },
+  {
     "id": "labels",
     "key": "labels",
     "name": "Labels",
@@ -158,11 +207,20 @@
     "key": "parent",
     "name": "Parent",
     "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["parent"]
+  },
+  {
+    "id": "issuekey",
+    "key": "issuekey",
+    "name": "Key",
+    "custom": false,
     "orderable": false,
     "navigable": true,
     "searchable": false,
-    "clauseNames": ["parent"],
-    "schema": { "type": "issuelink", "system": "parent" }
+    "clauseNames": ["id", "issue", "issuekey", "key", "workItem", "workItemKey"]
   },
   {
     "id": "fixVersions",
@@ -176,6 +234,28 @@
     "schema": { "type": "array", "items": "version", "system": "fixVersions" }
   },
   {
+    "id": "components",
+    "key": "components",
+    "name": "Components",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["component"],
+    "schema": { "type": "array", "items": "component", "system": "components" }
+  },
+  {
+    "id": "issuelinks",
+    "key": "issuelinks",
+    "name": "Linked Issues",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["issueLink", "workItemLink"],
+    "schema": { "type": "array", "items": "issuelinks", "system": "issuelinks" }
+  },
+  {
     "id": "attachment",
     "key": "attachment",
     "name": "Attachment",
@@ -185,33 +265,6 @@
     "searchable": true,
     "clauseNames": ["attachments"],
     "schema": { "type": "array", "items": "attachment", "system": "attachment" }
-  },
-  {
-    "id": "timetracking",
-    "key": "timetracking",
-    "name": "Time tracking",
-    "custom": false,
-    "orderable": true,
-    "navigable": false,
-    "searchable": true,
-    "clauseNames": [],
-    "schema": { "type": "timetracking", "system": "timetracking" }
-  },
-  {
-    "id": "customfield_10032",
-    "key": "customfield_10032",
-    "name": "Story Points",
-    "untranslatedName": "Story Points",
-    "custom": true,
-    "orderable": true,
-    "navigable": true,
-    "searchable": true,
-    "clauseNames": ["cf[10032]", "Story Points"],
-    "schema": {
-      "type": "number",
-      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
-      "customId": 10032
-    }
   },
   {
     "id": "customfield_10041",
@@ -227,6 +280,106 @@
       "type": "date",
       "custom": "com.atlassian.jpo:jpo-custom-field-baseline-start",
       "customId": 10041
+    }
+  },
+  {
+    "id": "customfield_10050",
+    "key": "customfield_10050",
+    "name": "Rollout Phase",
+    "untranslatedName": "Rollout Phase",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10050]", "Rollout Phase", "Rollout Phase[Dropdown]"],
+    "schema": {
+      "type": "option",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:select",
+      "customId": 10050
+    }
+  },
+  {
+    "id": "customfield_10051",
+    "key": "customfield_10051",
+    "name": "Readiness Checklist",
+    "untranslatedName": "Readiness Checklist",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10051]", "Readiness Checklist"],
+    "scope": { "type": "PROJECT", "project": { "id": "10000" } },
+    "schema": {
+      "type": "array",
+      "items": "option",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multicheckboxes",
+      "customId": 10051
+    }
+  },
+  {
+    "id": "customfield_10052",
+    "key": "customfield_10052",
+    "name": "Cutover Scope",
+    "untranslatedName": "Cutover Scope",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10052]", "Cutover Scope"],
+    "schema": {
+      "type": "option-with-child",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:cascadingselect",
+      "customId": 10052
+    }
+  },
+  {
+    "id": "customfield_10053",
+    "key": "customfield_10053",
+    "name": "Reviewers",
+    "untranslatedName": "Reviewers",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10053]", "Reviewers"],
+    "schema": {
+      "type": "array",
+      "items": "user",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:people",
+      "customId": 10053,
+      "configuration": { "isMulti": true }
+    }
+  },
+  {
+    "id": "customfield_10062",
+    "key": "customfield_10062",
+    "name": "Freigabestufe",
+    "untranslatedName": "Signoff Tier",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10062]", "Signoff Tier"],
+    "schema": {
+      "type": "option",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:select",
+      "customId": 10062
+    }
+  },
+  {
+    "id": "customfield_10063",
+    "key": "customfield_10063",
+    "name": "Rollout Phase",
+    "untranslatedName": "Rollout Phase",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10063]", "Rollout Phase", "Rollout Phase[Short text]"],
+    "schema": {
+      "type": "string",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textfield",
+      "customId": 10063
     }
   }
 ]

@@ -29,7 +29,12 @@ here cost time to find out; read this before writing an adapter method.
 | `editJiraIssue`-style field writes cannot change an issue's project | Cross-project moves go through the bulk-move endpoint only. |
 | Status is not a writable field | Only `POST /issue/{key}/transitions`, and the available transitions depend on current status. |
 | The platform and Agile APIs write date-times differently: `2021-01-17T12:34:00.000+0000` (no colon in the offset) versus `2015-04-11T15:22:00.000+10:00` (colon) | Two layouts, `2006-01-02T15:04:05.000-0700` and `2006-01-02T15:04:05.000-07:00`. One decoder cannot serve both. `/task/{id}` timestamps are epoch millis instead. |
-| The `/search/jql` response has exactly six fields — `issues`, `nextPageToken`, `isLast`, `names`, `schema`, `warnings` | There is no `total`, confirmed against the OpenAPI schema. Treat an absent `nextPageToken` as the end and `isLast` as advisory. |
+| The `/search/jql` response carries **three** keys in practice — `issues`, `nextPageToken`, `isLast` | There is no `total`. `names` and `schema` come back only if you send `expand=names,schema`, and each issue's own `expand` string lists them anyway, which reads as though they were expanded when they were not. Treat an absent `nextPageToken` as the end. |
+| The `nextPageToken` is **not opaque**: base64url-decoding one yields the sort column and direction, the last row's sort value, the project key, a row count, and **the full JQL string** | Never cache a token across sessions, never reuse one with a different `jql`, `fields` or sort, and never log one — it carries the query. It is not a stable identifier for a result set. |
+| `status.iconUrl` is the **site root URL**, not an icon | Fetching it gets the Jira homepage. Status glyphs come from `statusCategory.key`. `issuetype.iconUrl` and `priority.iconUrl` are real images; only status is degenerate. |
+| A bare `GET /issue/{key}` returns **every field on the site**, with unset ones as explicit `null` | On a site with ninety custom fields that is ninety nulls per issue. This is the concrete reason a narrow `fields` list is not an optimisation but the normal way to call it. |
+| `fields.statusCategory` arrives as a field in its own right, beside `fields.status` | Two places carry the same answer; `status.statusCategory` is the one to read. |
+| `timetracking` is `{}` — an empty object, not `null` — on an issue with no estimates | Decoding into a struct gives zeroes, which is right; decoding into a pointer never gives nil. |
 | `statusCategory.id` is a **number** while `status.id` is a **string** | The four categories are fixed on every site: 1 `undefined`, 2 `new`, 3 `done`, 4 `indeterminate`. Branch on `key`; `name` is localised. |
 | `GET /rest/api/3/issue/createmeta?expand=…` is deprecated | Use the paginated pair, `GET /issue/createmeta/{projectIdOrKey}/issuetypes` then `…/issuetypes/{issueTypeId}`. |
 
@@ -37,7 +42,8 @@ here cost time to find out; read this before writing an adapter method.
 
 | Thing | Where to get it |
 |---|---|
-| Custom field IDs (story points, start date, target dates) | `GET /rest/api/3/field`, resolved **by name** |
+| Custom field IDs (story points, start date, target dates) | `GET /rest/api/3/field`, resolved **by `untranslatedName`, falling back to `name`** — see below |
+| Which fields a board estimates in, and whether it ranks at all | `GET /rest/agile/1.0/board/{id}/configuration`, **feature-detected** — see below |
 | Estimation field for a board | `GET /rest/agile/1.0/board/{id}/configuration` → `estimation.field.fieldId` (or `type: none`) |
 | Rank field | same response → `ranking.rankCustomFieldId` |
 | Column → status mapping | same response → `columnConfig.columns[].statuses` |
@@ -57,6 +63,45 @@ here cost time to find out; read this before writing an adapter method.
 | The validator *repairs* rather than rejects: unknown `attrs` keys are deleted and an `unsupportedNodeAttribute` mark is appended | Sending a document you rebuilt from a partial model is lossy even when it validates. Send back what you were given wherever you did not edit. |
 | `text` on a text node has `minLength: 1` | An empty text node is invalid. Drop it; never emit `"text": ""`. |
 | A node's permitted marks depend on where it sits — the schema encodes this with `_with_no_marks` / `_with_alignment` / `_root_only` variants | A paragraph at the root may carry `alignment`; the same paragraph inside a list item may carry none. |
+
+## Localisation, which breaks resolution by name
+
+`name` is translated into the site's language — statuses, transitions, issue types, priorities,
+resolutions and custom fields all arrive in German on a German site. Anything that matches on a
+display name works on exactly one site.
+
+| Fact | Consequence |
+|---|---|
+| `/rest/api/3/field` sends `untranslatedName` alongside `name`, on **custom fields only** | Resolve by `untranslatedName` first and fall back to `name`. `jira.FieldByName` does this. A system field has no `untranslatedName`, so an empty query must not match one. |
+| `clauseNames` follows `untranslatedName`, never the localised `name` | JQL written from a display name does not parse. Prefer `cf[NNNNN]`, which is always in `clauseNames`. |
+| `untranslatedName` appears on `/field` and **not** in createmeta | A form builder that only has a create screen cannot know it; join to the `/field` catalogue on `fieldId`. |
+| Field names are not unique, and Jira signals it by adding a clause name `Name[Field Type]` | That bracketed form is the only unambiguous name; `cf[NNNNN]` is better. |
+| Statuses and transitions are localised too, and their `id` values are not | Group columns by `statusCategory.key` and move issues by transition **id**. Never by name. |
+
+## Boards differ from each other far more than the schema suggests
+
+Everything below is per-board, and absence is a normal answer rather than an unset value.
+
+| Fact | Consequence |
+|---|---|
+| A Kanban board sends **no `estimation` object at all** | `estimation.type: "none"` is a Scrum answer meaning "estimation is off". Absent means "this board does not estimate". `jira.BoardConfig.Estimation` is a pointer for exactly this. |
+| A board ordered by priority — or by anything its filter sorts on — has **no rank field**: `ranking` is present but empty | Detect on `rankCustomFieldId`, never on the presence of `ranking`. Without one, the order comes from the board's saved filter and rows cannot be reordered. Reading that order takes a separate `GET /rest/api/3/filter/{id}`. |
+| `subQuery` is Kanban-only; `estimation` is Scrum-only | Branch on board type before reading either. |
+| Column `min` and `max` are independently optional | Keep both as pointers; a default of zero means something. |
+| The Agile API's nested `self` links point at `/rest/api/2/` | Code that derives a URL by string-matching `/rest/api/3/`, or follows a `self` expecting a v3 body, is broken. |
+| `location.projectId` is a number on `GET /board`; `location.id` is a string on `GET /board/{id}/configuration` | Same project, two types, one call apart. |
+
+## Version and plan endpoints
+
+| Fact | Consequence |
+|---|---|
+| `/project/{key}/versions` returns a **bare array**; `/project/{key}/version` returns a **paged envelope** | One letter apart, different top-level JSON type. Use the paged one — a project accumulates hundreds of versions. |
+| `expand=issuesstatus` is per-request, not per-version | Either every version in the page has `issuesStatusForFixVersion` or none does. Its absence never means "no issues". |
+| `issuesStatusForFixVersion` buckets by **status category**; `unresolvedIssueCount` counts by **resolution** | They disagree — an issue can be in the Done category with no resolution. Only the second is the pre-release gate. |
+| `overdue` is emitted only when true, and the date fields are independently optional | Absent means false. Do not round-trip it. |
+| `userStartDate` / `userReleaseDate` are locale display strings (`05/Jan/26`) | Render `startDate` / `releaseDate` yourself. |
+| Archived versions are filtered out of createmeta allowed values but present in `/project/{key}/version` | A fix-version picker fed from the wrong endpoint offers archived versions. |
+| Plans `id` is a **string** in the list response while the get-plan example shows a number | Decode leniently. `issueSources[].value` is a numeric project **id**, never a key. |
 
 Group board columns by `statusCategory` (three fixed values: To Do, In Progress, Done), never by
 status name — "In Progress" is not guaranteed to exist.

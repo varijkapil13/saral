@@ -1,14 +1,13 @@
 {
   "startAt": 0,
   "maxResults": 50,
-  "total": 6,
+  "total": 18,
   "fields": [
     {
       "required": true,
       "schema": { "type": "project", "system": "project" },
       "name": "Project",
       "key": "project",
-      "fieldId": "project",
       "hasDefaultValue": false,
       "operations": ["set"],
       "allowedValues": [
@@ -18,87 +17,319 @@
           "key": "EX",
           "name": "Example",
           "projectTypeKey": "software",
-          "simplified": false
+          "simplified": false,
+          "projectCategory": {
+            "self": "https://example.atlassian.net/rest/api/3/projectCategory/10200",
+            "id": "10200",
+            "description": "Grouping used by the example fixtures.",
+            "name": "Example Programs"
+          }
         }
-      ]
+      ],
+      "fieldId": "project"
     },
     {
       "required": true,
       "schema": { "type": "issuetype", "system": "issuetype" },
       "name": "Issue Type",
       "key": "issuetype",
-      "fieldId": "issuetype",
       "hasDefaultValue": false,
       "operations": [],
       "allowedValues": [
         {
           "self": "https://example.atlassian.net/rest/api/3/issuetype/10004",
           "id": "10004",
-          "description": "A problem or error.",
+          "description": "A problem which impairs or prevents the functions of the product.",
           "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10303?size=medium",
           "name": "Bug",
           "subtask": false,
           "avatarId": 10303,
           "hierarchyLevel": 0
         }
-      ]
+      ],
+      "fieldId": "issuetype"
     },
     {
       "required": true,
       "schema": { "type": "string", "system": "summary" },
       "name": "Summary",
       "key": "summary",
-      "fieldId": "summary",
       "hasDefaultValue": false,
-      "operations": ["set"]
+      "operations": ["set"],
+      "fieldId": "summary"
     },
     {
       "required": true,
       "schema": { "type": "string", "system": "description" },
       "name": "Description",
       "key": "description",
-      "fieldId": "description",
       "hasDefaultValue": false,
-      "operations": ["set"]
+      "operations": ["set"],
+      "fieldId": "description"
     },
     {
       "required": true,
       "schema": { "type": "priority", "system": "priority" },
       "name": "Priority",
       "key": "priority",
-      "fieldId": "priority",
       "hasDefaultValue": true,
-      "defaultValue": {
-        "self": "https://example.atlassian.net/rest/api/3/priority/3",
-        "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
-        "name": "Medium",
-        "id": "3"
-      },
       "operations": ["set"],
       "allowedValues": [
         {
+          "self": "https://example.atlassian.net/rest/api/3/priority/1",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/highest_new.svg",
+          "name": "Highest",
+          "id": "1"
+        },
+        {
           "self": "https://example.atlassian.net/rest/api/3/priority/2",
-          "iconUrl": "https://example.atlassian.net/images/icons/priorities/high.svg",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/high_new.svg",
           "name": "High",
           "id": "2"
         },
         {
           "self": "https://example.atlassian.net/rest/api/3/priority/3",
-          "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium.svg",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium_new.svg",
           "name": "Medium",
           "id": "3"
+        },
+        {
+          "self": "https://example.atlassian.net/rest/api/3/priority/4",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/low_new.svg",
+          "name": "Low",
+          "id": "4"
+        },
+        {
+          "self": "https://example.atlassian.net/rest/api/3/priority/5",
+          "iconUrl": "https://example.atlassian.net/images/icons/priorities/lowest_new.svg",
+          "name": "Lowest",
+          "id": "5"
         }
-      ]
+      ],
+      "defaultValue": {
+        "self": "https://example.atlassian.net/rest/api/3/priority/3",
+        "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium_new.svg",
+        "name": "Medium",
+        "id": "3"
+      },
+      "fieldId": "priority"
+    },
+    {
+      "required": false,
+      "schema": { "type": "string", "system": "environment" },
+      "name": "Environment",
+      "key": "environment",
+      "hasDefaultValue": false,
+      "operations": ["set"],
+      "fieldId": "environment"
+    },
+    {
+      "required": false,
+      "schema": { "type": "user", "system": "assignee" },
+      "name": "Assignee",
+      "key": "assignee",
+      "autoCompleteUrl": "https://example.atlassian.net/rest/api/3/user/assignable/search?project=EX&query=",
+      "hasDefaultValue": false,
+      "operations": ["set"],
+      "fieldId": "assignee"
+    },
+    {
+      "required": false,
+      "schema": { "type": "user", "system": "reporter" },
+      "name": "Reporter",
+      "key": "reporter",
+      "autoCompleteUrl": "https://example.atlassian.net/rest/api/3/user/recommend?context=Reporter&issueKey=",
+      "hasDefaultValue": true,
+      "operations": ["set"],
+      "fieldId": "reporter"
     },
     {
       "required": false,
       "schema": { "type": "array", "items": "string", "system": "labels" },
       "name": "Labels",
       "key": "labels",
-      "fieldId": "labels",
-      "hasDefaultValue": false,
       "autoCompleteUrl": "https://example.atlassian.net/rest/api/1.0/labels/suggest?query=",
-      "operations": ["add", "set", "remove"]
+      "hasDefaultValue": false,
+      "operations": ["add", "set", "remove"],
+      "fieldId": "labels"
+    },
+    {
+      "required": false,
+      "schema": { "type": "date", "system": "duedate" },
+      "name": "Due date",
+      "key": "duedate",
+      "hasDefaultValue": false,
+      "operations": ["set"],
+      "fieldId": "duedate"
+    },
+    {
+      "required": false,
+      "schema": { "type": "array", "items": "version", "system": "versions" },
+      "name": "Affects versions",
+      "key": "versions",
+      "hasDefaultValue": false,
+      "operations": ["set", "add", "remove"],
+      "allowedValues": [
+        {
+          "self": "https://example.atlassian.net/rest/api/3/version/10099",
+          "id": "10099",
+          "description": "First cut of the checkout rewrite.",
+          "name": "2026.2",
+          "archived": false,
+          "released": true,
+          "startDate": "2026-01-05",
+          "releaseDate": "2026-02-27",
+          "userStartDate": "05/Jan/26",
+          "userReleaseDate": "27/Feb/26",
+          "projectId": 10000
+        },
+        {
+          "self": "https://example.atlassian.net/rest/api/3/version/10100",
+          "id": "10100",
+          "name": "2026.3",
+          "archived": false,
+          "released": false,
+          "startDate": "2026-03-02",
+          "releaseDate": "2026-03-27",
+          "userStartDate": "02/Mar/26",
+          "userReleaseDate": "27/Mar/26",
+          "projectId": 10000
+        }
+      ],
+      "fieldId": "versions"
+    },
+    {
+      "required": false,
+      "schema": { "type": "array", "items": "version", "system": "fixVersions" },
+      "name": "Fix versions",
+      "key": "fixVersions",
+      "hasDefaultValue": false,
+      "operations": ["set", "add", "remove"],
+      "allowedValues": [
+        {
+          "self": "https://example.atlassian.net/rest/api/3/version/10099",
+          "id": "10099",
+          "description": "First cut of the checkout rewrite.",
+          "name": "2026.2",
+          "archived": false,
+          "released": true,
+          "startDate": "2026-01-05",
+          "releaseDate": "2026-02-27",
+          "userStartDate": "05/Jan/26",
+          "userReleaseDate": "27/Feb/26",
+          "projectId": 10000
+        },
+        {
+          "self": "https://example.atlassian.net/rest/api/3/version/10100",
+          "id": "10100",
+          "name": "2026.3",
+          "archived": false,
+          "released": false,
+          "startDate": "2026-03-02",
+          "releaseDate": "2026-03-27",
+          "userStartDate": "02/Mar/26",
+          "userReleaseDate": "27/Mar/26",
+          "projectId": 10000
+        }
+      ],
+      "fieldId": "fixVersions"
+    },
+    {
+      "required": false,
+      "schema": { "type": "issuelink", "system": "parent" },
+      "name": "Parent",
+      "key": "parent",
+      "hasDefaultValue": false,
+      "operations": ["set"],
+      "fieldId": "parent"
+    },
+    {
+      "required": false,
+      "schema": { "type": "array", "items": "attachment", "system": "attachment" },
+      "name": "Attachment",
+      "key": "attachment",
+      "hasDefaultValue": false,
+      "operations": ["set", "copy"],
+      "fieldId": "attachment"
+    },
+    {
+      "required": false,
+      "schema": { "type": "array", "items": "issuelinks", "system": "issuelinks" },
+      "name": "Linked Issues",
+      "key": "issuelinks",
+      "autoCompleteUrl": "https://example.atlassian.net/rest/api/3/issue/picker?currentProjectId=&showSubTaskParent=true&showSubTasks=true&currentIssueKey=null&query=",
+      "hasDefaultValue": false,
+      "operations": ["add", "copy"],
+      "fieldId": "issuelinks"
+    },
+    {
+      "required": false,
+      "schema": {
+        "type": "array",
+        "items": "option",
+        "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multicheckboxes",
+        "customId": 10051
+      },
+      "name": "Readiness Checklist",
+      "key": "customfield_10051",
+      "hasDefaultValue": false,
+      "operations": ["add", "set", "remove"],
+      "allowedValues": [
+        {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10520",
+          "value": "Guardrails Agreed",
+          "id": "10520"
+        },
+        {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10521",
+          "value": "Trace Enabled",
+          "id": "10521"
+        },
+        {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10522",
+          "value": "Waiver Filed",
+          "id": "10522"
+        }
+      ],
+      "fieldId": "customfield_10051"
+    },
+    {
+      "required": false,
+      "schema": {
+        "type": "option",
+        "custom": "com.atlassian.jira.plugin.system.customfieldtypes:select",
+        "customId": 10062
+      },
+      "name": "Freigabestufe",
+      "key": "customfield_10062",
+      "hasDefaultValue": false,
+      "operations": ["set"],
+      "allowedValues": [
+        {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10530",
+          "value": "Level One",
+          "id": "10530"
+        },
+        {
+          "self": "https://example.atlassian.net/rest/api/3/customFieldOption/10531",
+          "value": "Level Two",
+          "id": "10531"
+        }
+      ],
+      "fieldId": "customfield_10062"
+    },
+    {
+      "required": false,
+      "schema": {
+        "type": "number",
+        "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+        "customId": 10032
+      },
+      "name": "Story Points",
+      "key": "customfield_10032",
+      "hasDefaultValue": false,
+      "operations": ["set"],
+      "fieldId": "customfield_10032"
     }
   ]
 }

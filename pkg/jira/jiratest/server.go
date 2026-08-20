@@ -215,6 +215,7 @@ var srvDefaultRoutes = []srvRoute{
 	{http.MethodGet, "/rest/api/3/issue/{key}/comment", srvFixtureHandler(http.StatusOK, "comments.json")},
 	{http.MethodGet, "/rest/api/3/issue/{key}/transitions", srvFixtureHandler(http.StatusOK, "transitions.json")},
 	{http.MethodGet, "/rest/api/3/field", srvFixtureHandler(http.StatusOK, "field.json")},
+	{http.MethodGet, "/rest/api/3/issue/createmeta/{projectIdOrKey}/issuetypes", srvFixtureHandler(http.StatusOK, "createmeta_issuetypes.json")},
 	{http.MethodGet, "/rest/api/3/issue/createmeta/{projectIdOrKey}/issuetypes/{issueTypeId}", srvCreateMeta},
 	{http.MethodGet, "/rest/api/3/myself", srvFixtureHandler(http.StatusOK, "myself.json")},
 	{http.MethodGet, "/rest/api/3/configuration", srvFixtureHandler(http.StatusOK, "configuration.json")},
@@ -223,6 +224,9 @@ var srvDefaultRoutes = []srvRoute{
 	{http.MethodGet, "/rest/agile/1.0/board", srvFixtureHandler(http.StatusOK, "board.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/configuration", srvFixtureHandler(http.StatusOK, "board_config_estimation.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/sprint", srvFixtureHandler(http.StatusOK, "sprint_page.json")},
+	// 403 is the normal answer — the Plans API needs Administer Jira — so it is
+	// the default. A test that wants the reachable case overrides the route:
+	//   WithFixture(http.MethodGet, "/rest/api/3/plans/plan", "plans_ok.json")
 	{http.MethodGet, "/rest/api/3/plans/plan", srvFixtureHandler(http.StatusForbidden, "plans_403.json")},
 	{http.MethodPost, "/rest/api/3/bulk/issues/move", srvFixtureHandler(http.StatusCreated, "bulkmove_submit.json")},
 	{http.MethodGet, "/rest/api/3/task/{id}", srvFixtureHandler(http.StatusOK, "bulkmove_task_complete.json")},

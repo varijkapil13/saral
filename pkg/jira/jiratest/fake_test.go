@@ -772,7 +772,7 @@ func TestMoveToSprint_RecordsMembershipAndRefusesMoreThanFiftyAtOnce(t *testing.
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
-	if opts, present := iss.Fields.Options(sprintField.Ref()); !present || len(opts) != 1 || opts[0].Value != sprint.Name {
+	if opts, present := iss.Fields.Options(sprintField.Ref()); !present || len(opts) != 1 || opts[0].Label != sprint.Name {
 		t.Fatalf("want the sprint recorded on the issue, got %v", opts)
 	}
 	if err := c.MoveToBacklog(ctx, []string{"PROJ-1"}); err != nil {
