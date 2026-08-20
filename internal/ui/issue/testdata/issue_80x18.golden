@@ -1,0 +1,18 @@
+PROJ-12  Retire the nightly export
+Story | Triage | Urgent | unassigned | updated 03 Mar 2025 10:00
+--------------------------------------------------------------------------------
+Retire the nightly export.                                                      
+                                                                                
+- Filed against PROJ-12.                                                        
+- The old ticket for this was closed as cannot reproduce.                       
+- Waiting on a decision.                                                        
+                                                                                
+Details                                                                         
+  Reporter     Grace Hopper                                                     
+  Project      PROJ PROJ Project                                                
+  Fix versions 2.0                                                              
+  Due          2025-03-16                                                       
+  Created      02 Mar 2025 21:00                                                
+                                                                                
+Comments (2)                                                                    
+  Sam Tester | 02 Mar 2026 09:00                                                

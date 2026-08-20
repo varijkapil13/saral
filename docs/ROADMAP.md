@@ -56,7 +56,7 @@ instance from day one.
 - [x] **P1.4 — ADF to markdown** · [#5](https://github.com/varijkapil13/saral/issues/5) · **owns** `pkg/adf/render*.go`
   Paragraphs, headings, lists, code, links, marks, panels, mentions, status lozenges. Unknown nodes
   preserved verbatim. Golden-file tests over real captured ADF.
-- [ ] **P1.5 — Issue list and detail views** · [#6](https://github.com/varijkapil13/saral/issues/6) · **owns** `internal/ui/{list,issue}/**`
+- [x] **P1.5 — Issue list and detail views** · [#6](https://github.com/varijkapil13/saral/issues/6) · **owns** `internal/ui/{list,issue}/**`
   Virtualized table, incremental cursor paging, `142+` counts, detail pane, comment thread read-only.
 - [ ] **P1.6 — First-run onboarding** · [#7](https://github.com/varijkapil13/saral/issues/7) · **owns** `internal/ui/onboarding/**`
   Site, email, token, project picker; writes the profile; explains what the probe found.

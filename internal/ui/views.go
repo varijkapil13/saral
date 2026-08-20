@@ -6,6 +6,7 @@
 // adding two views merge cleanly.
 package ui
 
-// No views exist yet. The first one adds a line here, like:
-//
-//	_ "github.com/varijkapil13/saral/internal/ui/board"
+import (
+	_ "github.com/varijkapil13/saral/internal/ui/issue"
+	_ "github.com/varijkapil13/saral/internal/ui/list"
+)
