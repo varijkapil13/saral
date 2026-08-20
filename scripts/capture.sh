@@ -153,7 +153,7 @@ if [ -n "$NEXT" ]; then
 else
   echo "  !! page one reported no nextPageToken — pick a project with more than 5 issues"
 fi
-capture POST "/rest/api/3/search/jql/approximate-count" approximate_count.json \
+capture POST "/rest/api/3/search/approximate-count" approximate_count.json \
   "{\"jql\":\"project = $SARAL_PROJECT\"}"
 
 echo
