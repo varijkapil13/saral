@@ -172,6 +172,11 @@ Three registries, all with the same conflict-free property:
 | `RegisterCommand` | any package | command palette (`ctrl+k`) |
 | `RegisterKeys` | each view, scoped to itself | help overlay, footer hints |
 
+A view that is taking typing — a filter, a form field, the command palette — implements
+`kernel.KeyCapturer` and answers `WantsRawKeys() true` while it is. The kernel then hands it every
+key except `ctrl+c`, and the footer stops advertising the globals it is swallowing. Without it a
+global keymap makes the letters `q` and `r`, and the escape key, unreachable inside any text input.
+
 Because every registration lives in a file that exactly one packet owns, two agents adding two views
 never touch the same line. This is the single most important structural decision for parallel work.
 

@@ -29,6 +29,17 @@ const (
 // binds ctrl+k to opening it and says so when nothing has registered it.
 const PaletteViewID = "palette"
 
+// KeyCapturer is the optional interface a view implements while it is taking
+// typing — a filter, a form field, the command palette. While it says yes, every
+// key except ctrl+c goes to it untouched, because a view that cannot receive the
+// letter q or the escape key is not one a user can type into.
+//
+// It is asked on every key rather than latched, so a view answers for the state
+// it is in rather than remembering to tell the kernel when it changes.
+type KeyCapturer interface {
+	WantsRawKeys() bool
+}
+
 // Blocker is the optional interface a view implements when it is holding
 // something the user would lose — a draft, an in-flight write. The kernel asks
 // before anything that would discard the view: quitting, going back, and
@@ -43,16 +54,17 @@ type stackEntry struct {
 }
 
 type chromeKey struct {
-	width    int
-	themeGen int
-	capsGen  int
-	rootID   string
-	topID    string
-	title    string
-	status   string
-	help     bool
-	depth    int
-	palette  bool
+	width     int
+	themeGen  int
+	capsGen   int
+	rootID    string
+	topID     string
+	title     string
+	status    string
+	help      bool
+	depth     int
+	palette   bool
+	capturing bool
 }
 
 type chromeCache struct {
@@ -262,6 +274,12 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	}
+	// A view taking typing gets the keys first. ctrl+c above is the exception,
+	// because a terminal program that cannot be interrupted is broken whatever
+	// it is doing.
+	if m.capturing() {
+		return m.forwardTop(msg)
+	}
 	if m.showHelp {
 		switch {
 		case Matches(msg, m.keys.Help), Matches(msg, m.keys.Back), msg.String() == "q":
@@ -325,6 +343,15 @@ func (m Model) handleClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m.forwardTop(msg)
+}
+
+// capturing reports whether the focused view is taking typing right now.
+func (m Model) capturing() bool {
+	if len(m.stack) == 0 || m.showHelp {
+		return false
+	}
+	c, ok := m.top().view.(KeyCapturer)
+	return ok && c.WantsRawKeys()
 }
 
 func (m Model) blocked() (string, bool) {
@@ -588,6 +615,7 @@ func (m Model) chromeFor() (header, footer string) {
 	key := chromeKey{
 		width: m.width, themeGen: m.deps.Theme.Gen, capsGen: m.capsGen,
 		status: m.status, help: m.showHelp, depth: len(m.stack), palette: palette,
+		capturing: m.capturing(),
 	}
 	if len(m.stack) > 0 {
 		key.rootID = m.stack[0].spec.ID
@@ -732,6 +760,11 @@ func (m Model) hintLine(width int) string {
 	set := KeySet{}
 	if len(m.stack) > 0 {
 		set = KeysFor(m.top().spec.ID)
+	}
+	if m.capturing() {
+		// The globals are unreachable while the view has the keyboard, and
+		// docs/UX.md asks the footer to show only what works right now.
+		return h.View(keyMap{short: set.Short})
 	}
 	return h.View(mergeKeys(set, m.liveGlobals()))
 }

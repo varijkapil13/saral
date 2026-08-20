@@ -10,12 +10,13 @@ import (
 )
 
 type stubView struct {
-	id      string
-	width   int
-	height  int
-	seen    []string
-	content string
-	blocks  string
+	id        string
+	width     int
+	height    int
+	seen      []string
+	content   string
+	blocks    string
+	capturing bool
 }
 
 func (s *stubView) Init() tea.Cmd { return nil }
@@ -34,6 +35,8 @@ func (s *stubView) View() string {
 	}
 	return s.id + " body"
 }
+
+func (s *stubView) WantsRawKeys() bool { return s.capturing }
 
 func (s *stubView) BlocksClose() (string, bool) {
 	if s.blocks == "" {

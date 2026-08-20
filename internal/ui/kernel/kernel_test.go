@@ -733,3 +733,52 @@ func TestFocus_IsHandedOverWhenTheStackChanges(t *testing.T) {
 		t.Errorf("focus was not handed back on pop: root=%v pushed=%v", root.seen, pushed.seen)
 	}
 }
+
+func TestKeys_AViewTakingTypingGetsThemAllExceptCtrlC(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	view := &stubView{id: "board", capturing: true}
+	RegisterView(spec("board", 1, "", view))
+	RegisterView(spec("backlog", 2, "", &stubView{id: "backlog"}))
+
+	m := newAt(t, testDeps(), 120, 30)
+	view.seen = nil
+
+	// Every one of these is a global binding. A filter or a form field that
+	// cannot receive them is not one anybody can type into.
+	for _, k := range []string{"q", "r", "R", "?", "esc", "2"} {
+		m, _ = press(m, k)
+		if !saw(view, "key:"+k) {
+			t.Errorf("the view never received %q: %v", k, view.seen)
+		}
+	}
+	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "board body") {
+		t.Errorf("a global key acted anyway:\n%s", got)
+	}
+
+	if _, cmd := press(m, "ctrl+c"); !isQuit(cmd) {
+		t.Error("ctrl+c must work even while a view is taking typing")
+	}
+}
+
+func TestFooter_SaysNothingAboutGlobalsAViewIsSwallowing(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	view := &stubView{id: "board"}
+	RegisterView(spec("board", 1, "", view))
+	RegisterKeys("board", KeySet{Short: []Binding{Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter")}})
+
+	m := newAt(t, testDeps(), 140, 30)
+	if got := lastLine(ansi.Strip(m.Frame())); !strings.Contains(got, "quit") {
+		t.Fatalf("the globals should show while nothing is capturing:\n%s", got)
+	}
+
+	view.capturing = true
+	got := lastLine(ansi.Strip(m.Frame()))
+	if !strings.Contains(got, "clear filter") {
+		t.Errorf("the view's own keys vanished:\n%s", got)
+	}
+	if strings.Contains(got, "quit") || strings.Contains(got, "help") {
+		t.Errorf("the footer advertises globals the view is swallowing:\n%s", got)
+	}
+}
