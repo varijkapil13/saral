@@ -1,0 +1,20 @@
+ saral | Issues                                           example.atlassian.net 
+All issues                                                             12 issues
+  KEY      SUMMARY                                       TYPE       STATUS      
+> PROJ-1   Add the nightly export                        Epic       Building    
+  PROJ-2   Rework webhook retries                        Chore      Shipped     
+  PROJ-3   Investigate the onboarding wizard             Story      Triage      
+  PROJ-4   Document CSV import                           Defect     Building    
+  PROJ-5   Retire the audit trail                        Chore      Shipped     
+  PROJ-6   Speed up session expiry                       Story      Triage      
+  PROJ-7   Fix the search index                          Defect     Building    
+  PROJ-8   Add invoice rounding                          Chore      Shipped     
+  PROJ-9   Rework the mobile layout                      Story      Triage      
+  PROJ-10  Investigate the release checklist             Defect     Building    
+  PROJ-11  Document the login flow                       Epic       Shipped     
+  PROJ-12  Retire the nightly export                     Story      Triage      
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+ 1 Issues            ↓/j down | ↑/k up | enter open | / filter | ? help | q quit
