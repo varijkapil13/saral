@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -635,4 +636,100 @@ func TestFooter_DoesNotAdvertiseThePaletteWhenItIsNotInTheBuild(t *testing.T) {
 func lastLine(s string) string {
 	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
 	return lines[len(lines)-1]
+}
+
+func TestFrame_IsNeverTallerThanTheTerminal(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	long := strings.Repeat("a very long view title ", 8)
+	RegisterView(ViewSpec{ID: "board", Title: long, Slot: 1,
+		New: func(Deps) View { return &stubView{id: "board"} }})
+
+	m := newAt(t, testDeps(), 80, 24)
+	for name, status := range map[string]string{
+		"no status":       "",
+		"a short one":     "saved",
+		"exactly as wide": strings.Repeat("x", 80),
+		"far too wide":    `search failed: Get "https://example.atlassian.net/rest/api/3/search/jql": dial tcp: lookup example.atlassian.net: no such host`,
+		"with a newline":  "first line\nsecond line that should never become a row of its own",
+	} {
+		t.Run(name, func(t *testing.T) {
+			next, _ := m.Update(StatusMsg{Text: status, Level: LevelError})
+			frame := ansi.Strip(next.(Model).Frame())
+			if got := strings.Count(frame, "\n") + 1; got != 24 {
+				t.Errorf("frame is %d rows, want 24 — the footer is off the screen\n%s", got, frame)
+			}
+			for i, line := range strings.Split(frame, "\n") {
+				if w := lipgloss.Width(line); w > 80 {
+					t.Errorf("row %d is %d columns wide, want at most 80", i, w)
+				}
+			}
+		})
+	}
+}
+
+func TestBlocker_IsAskedBeforeAnythingThatWouldDiscardTheView(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
+	RegisterView(spec("backlog", 2, "", &stubView{id: "backlog"}))
+
+	draft := &stubView{id: "editor", blocks: "the comment you are writing is unsaved"}
+	for name, act := range map[string]func(Model) (tea.Model, tea.Cmd){
+		"going back with esc":      func(m Model) (tea.Model, tea.Cmd) { return m.Update(keyPress("esc")) },
+		"switching view by key":    func(m Model) (tea.Model, tea.Cmd) { return m.Update(keyPress("2")) },
+		"switching view by name":   func(m Model) (tea.Model, tea.Cmd) { return m.Update(OpenMsg{ID: "backlog"}) },
+		"popping programmatically": func(m Model) (tea.Model, tea.Cmd) { return m.Update(PopMsg{}) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newAt(t, testDeps(), 120, 30)
+			next, _ := m.Update(PushMsg{View: draft, ID: "editor", Title: "Editing"})
+			after, _ := act(next.(Model))
+
+			frame := ansi.Strip(after.(Model).Frame())
+			if !strings.Contains(frame, "editor body") {
+				t.Errorf("the view was discarded although it said it was holding something:\n%s", frame)
+			}
+			if !strings.Contains(frame, "unsaved") {
+				t.Errorf("the reason was not shown:\n%s", frame)
+			}
+		})
+	}
+}
+
+func TestCtrlC_QuitsEvenWithTheHelpOverlayOpen(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
+
+	m := newAt(t, testDeps(), 120, 30)
+	m, _ = press(m, "?")
+	if _, cmd := press(m, "ctrl+c"); !isQuit(cmd) {
+		t.Error("ctrl+c was swallowed by the help overlay")
+	}
+}
+
+func TestFocus_IsHandedOverWhenTheStackChanges(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	root := &stubView{id: "board"}
+	RegisterView(spec("board", 1, "", root))
+
+	m := newAt(t, testDeps(), 120, 30)
+	root.seen = nil
+
+	pushed := &stubView{id: "detail"}
+	next, _ := m.Update(PushMsg{View: pushed, ID: "issue"})
+	m = next.(Model)
+	if !saw(root, "blur") {
+		t.Errorf("the root was not told it lost focus: %v", root.seen)
+	}
+	if !saw(pushed, "focus") {
+		t.Errorf("the pushed view was not told it has focus: %v", pushed.seen)
+	}
+
+	root.seen, pushed.seen = nil, nil
+	if _, _ = m.Update(PopMsg{}); !saw(pushed, "blur") || !saw(root, "focus") {
+		t.Errorf("focus was not handed back on pop: root=%v pushed=%v", root.seen, pushed.seen)
+	}
 }

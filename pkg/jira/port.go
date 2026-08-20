@@ -28,9 +28,14 @@ import (
 // The signature is frozen: adding a method is a small reviewed change, but
 // changing one breaks every packet at once.
 type Client interface {
-	// Capabilities reports what this site and token can do. It is probed once
-	// and cached; a negative carries a reason for the UI to show.
-	Capabilities(ctx context.Context) (Capabilities, error)
+	// Capabilities reports what this site and token can do in one project.
+	//
+	// The project matters: boards belong to a project, and Jira scopes Move,
+	// Delete and Create as project permissions, so the same token answers
+	// differently in two projects on one site. An empty projectKey probes only
+	// what is site-wide and leaves the per-project capabilities unavailable
+	// with a reason saying so.
+	Capabilities(ctx context.Context, projectKey string) (Capabilities, error)
 
 	// Search runs a JQL query. Query.Fields must be an explicit narrow list.
 	Search(ctx context.Context, q Query) (Page[Issue], error)
@@ -58,8 +63,8 @@ type Client interface {
 	Attachments(ctx context.Context, key string) ([]Attachment, error)
 	// Upload attaches files to an issue.
 	Upload(ctx context.Context, key string, files []FileRef) ([]Attachment, error)
-	// Download streams an attachment, reporting bytes written as it goes.
-	Download(ctx context.Context, id string, w io.Writer, progress func(int64)) error
+	// Download streams an attachment into w, starting at opt.From.
+	Download(ctx context.Context, id string, w io.Writer, opt DownloadOptions) error
 	// DeleteAttachment removes an attachment.
 	DeleteAttachment(ctx context.Context, id string) error
 
@@ -77,8 +82,10 @@ type Client interface {
 	Boards(ctx context.Context, projectKey string) ([]Board, error)
 	// BoardConfig reads a board's columns, estimation field and rank field.
 	BoardConfig(ctx context.Context, boardID int64) (BoardConfig, error)
-	// Sprints lists a board's sprints.
-	Sprints(ctx context.Context, boardID int64) (Page[Sprint], error)
+	// Sprints lists a board's sprints, narrowed to the states named. Passing no
+	// state lists them all, which on a board with years of history is a walk
+	// nothing on a first-paint path should be doing.
+	Sprints(ctx context.Context, boardID int64, states ...SprintState) (Page[Sprint], error)
 	// CreateSprint creates a future sprint.
 	CreateSprint(ctx context.Context, in SprintInput) (Sprint, error)
 	// UpdateSprint changes only the fields the patch names.

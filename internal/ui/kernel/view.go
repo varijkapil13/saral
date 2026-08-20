@@ -60,8 +60,11 @@ type Command struct {
 type Deps struct {
 	// Jira is the port. It is never a concrete adapter here.
 	Jira jira.Client
-	// Caps is the probe result, already resolved.
+	// Caps is the probe result, already resolved for Project.
 	Caps jira.Capabilities
+	// Project is the project this session is scoped to. Several capabilities
+	// are per-project, so it is what the probe was run against.
+	Project string
 	// Theme holds the styles, built once per theme generation.
 	Theme *Theme
 	// Zones resolves mouse clicks to the element that was rendered there.

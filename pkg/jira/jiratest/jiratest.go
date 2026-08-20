@@ -426,6 +426,7 @@ func fakeCloneIssue(in *jira.Issue) jira.Issue {
 	out.Subtasks = slices.Clone(in.Subtasks)
 	out.Links = slices.Clone(in.Links)
 	out.Fields = in.Fields
+	out.Description = in.Description.Clone()
 	out.Assignee = fakeClonePtr(in.Assignee)
 	out.Reporter = fakeClonePtr(in.Reporter)
 	out.Priority = fakeClonePtr(in.Priority)
@@ -449,6 +450,20 @@ func fakeCloneSprint(in jira.Sprint) jira.Sprint {
 	out.Start = fakeClonePtr(in.Start)
 	out.End = fakeClonePtr(in.End)
 	out.Complete = fakeClonePtr(in.Complete)
+	return out
+}
+
+// fakeInStates narrows sprints to the states asked for; no state means all.
+func fakeInStates(in []jira.Sprint, states []jira.SprintState) []jira.Sprint {
+	if len(states) == 0 {
+		return in
+	}
+	out := make([]jira.Sprint, 0, len(in))
+	for i := range in {
+		if slices.Contains(states, in[i].State) {
+			out = append(out, in[i])
+		}
+	}
 	return out
 }
 

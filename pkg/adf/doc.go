@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"maps"
 	"sort"
 )
 
@@ -101,6 +102,83 @@ func (n Node) WithContent(c ...Node) Node { n.Content = c; return n }
 
 // WithMarks returns a copy of the node carrying the given marks.
 func (n Node) WithMarks(m ...Mark) Node { n.Marks = m; return n }
+
+// Clone returns a document that shares nothing with this one, so that a caller
+// handed a document out of a cache cannot edit what is still cached. The parsed
+// bytes travel with the copy, so a clone that is not edited still round-trips
+// byte for byte.
+func (d Doc) Clone() Doc {
+	out := d
+	out.Content = cloneNodes(d.Content)
+	out.extra = maps.Clone(d.extra)
+	return out
+}
+
+// Clone returns a node that shares nothing with this one.
+func (n Node) Clone() Node {
+	out := n
+	out.Attrs = cloneAttrs(n.Attrs)
+	out.Content = cloneNodes(n.Content)
+	out.extra = maps.Clone(n.extra)
+	if n.Marks != nil {
+		out.Marks = make([]Mark, len(n.Marks))
+		for i := range n.Marks {
+			out.Marks[i] = n.Marks[i].Clone()
+		}
+	}
+	return out
+}
+
+// Clone returns a mark that shares nothing with this one.
+func (m Mark) Clone() Mark {
+	out := m
+	out.Attrs = cloneAttrs(m.Attrs)
+	out.extra = maps.Clone(m.extra)
+	return out
+}
+
+func cloneNodes(in []Node) []Node {
+	if in == nil {
+		return nil
+	}
+	out := make([]Node, len(in))
+	for i := range in {
+		out[i] = in[i].Clone()
+	}
+	return out
+}
+
+// cloneAttrs copies the decoded JSON behind a node's attributes, which is maps
+// and slices all the way down.
+func cloneAttrs(in Attrs) Attrs {
+	if in == nil {
+		return nil
+	}
+	out := make(Attrs, len(in))
+	for k := range in {
+		out[k] = cloneAny(in[k])
+	}
+	return out
+}
+
+func cloneAny(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k := range t {
+			out[k] = cloneAny(t[k])
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i := range t {
+			out[i] = cloneAny(t[i])
+		}
+		return out
+	default:
+		return v
+	}
+}
 
 // IsZero reports whether the document is the zero value, which is how a Jira
 // field that is set to null arrives and how it is written back.

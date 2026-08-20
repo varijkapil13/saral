@@ -12,6 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -30,9 +31,10 @@ const PaletteViewID = "palette"
 
 // Blocker is the optional interface a view implements when it is holding
 // something the user would lose — a draft, an in-flight write. The kernel asks
-// before quitting and shows the reason instead of exiting.
+// before anything that would discard the view: quitting, going back, and
+// switching to another view. It shows the reason instead.
 type Blocker interface {
-	BlocksQuit() (reason string, blocked bool)
+	BlocksClose() (reason string, blocked bool)
 }
 
 type stackEntry struct {
@@ -256,6 +258,10 @@ func (m Model) route(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "ctrl+c" {
+		m.quitting = true
+		return m, tea.Quit
+	}
 	if m.showHelp {
 		switch {
 		case Matches(msg, m.keys.Help), Matches(msg, m.keys.Back), msg.String() == "q":
@@ -266,10 +272,6 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch {
-	case msg.String() == "ctrl+c":
-		m.quitting = true
-		return m, tea.Quit
-
 	case Matches(msg, m.keys.Help):
 		m.showHelp = true
 		return m, m.resizeAll()
@@ -289,8 +291,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.pop()
 		}
 		if reason, blocked := m.blocked(); blocked {
-			m.status, m.statusLevel = reason, LevelWarn
-			return m, nil
+			return m.refuse(reason)
 		}
 		m.quitting = true
 		return m, tea.Quit
@@ -331,9 +332,15 @@ func (m Model) blocked() (string, bool) {
 		return "", false
 	}
 	if b, ok := m.top().view.(Blocker); ok {
-		return b.BlocksQuit()
+		return b.BlocksClose()
 	}
 	return "", false
+}
+
+// refuse puts the reason a view gave for staying open into the status line.
+func (m Model) refuse(reason string) (tea.Model, tea.Cmd) {
+	m.status, m.statusLevel = reason, LevelWarn
+	return m, nil
 }
 
 func (m Model) openSlot(slot int) (tea.Model, tea.Cmd) {
@@ -363,6 +370,9 @@ func (m Model) open(id string) (tea.Model, tea.Cmd) {
 	if len(m.stack) == 1 && m.stack[0].spec.ID == id {
 		return m, nil
 	}
+	if reason, blocked := m.blocked(); blocked {
+		return m.refuse(reason)
+	}
 	m.keepRoot()
 
 	view, resumed := m.live[id]
@@ -370,12 +380,14 @@ func (m Model) open(id string) (tea.Model, tea.Cmd) {
 		view = spec.New(m.deps)
 		m.live[id] = view
 	}
+	blurred := m.blur()
 	m.stack = []stackEntry{{spec: spec, view: view}}
 	m.status = ""
-	if resumed {
-		return m, m.resizeAll()
+	cmds := []tea.Cmd{blurred, m.focus(), m.resizeAll()}
+	if !resumed {
+		cmds = append(cmds, view.Init())
 	}
-	return m, tea.Batch(view.Init(), m.resizeAll())
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) push(msg PushMsg) (tea.Model, tea.Cmd) {
@@ -386,18 +398,23 @@ func (m Model) push(msg PushMsg) (tea.Model, tea.Cmd) {
 	if spec.Title == "" && len(m.stack) > 0 {
 		spec.Title = m.top().spec.Title
 	}
+	blurred := m.blur()
 	m.stack = append(append([]stackEntry(nil), m.stack...), stackEntry{spec: spec, view: msg.View})
 	m.status = ""
-	return m, tea.Batch(msg.View.Init(), m.resizeAll())
+	return m, tea.Batch(blurred, msg.View.Init(), m.focus(), m.resizeAll())
 }
 
 func (m Model) pop() (tea.Model, tea.Cmd) {
 	if len(m.stack) <= 1 {
 		return m, nil
 	}
+	if reason, blocked := m.blocked(); blocked {
+		return m.refuse(reason)
+	}
+	blurred := m.blur()
 	m.stack = append([]stackEntry(nil), m.stack[:len(m.stack)-1]...)
 	m.status = ""
-	return m, m.resizeAll()
+	return m, tea.Batch(blurred, m.focus(), m.resizeAll())
 }
 
 func (m Model) retheme(t *Theme) (tea.Model, tea.Cmd) {
@@ -452,6 +469,23 @@ func (m Model) forwardTopWith(msg tea.Msg, extra tea.Cmd) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmd, extra)
 }
 
+// blur tells the view losing focus, and focus tells the one gaining it. Only
+// the top of the stack ever has focus, so a view can stop a cursor blinking or
+// pause a poller the moment it stops being looked at.
+func (m Model) blur() tea.Cmd { return m.tellTop(FocusMsg{}) }
+
+func (m Model) focus() tea.Cmd { return m.tellTop(FocusMsg{Focused: true}) }
+
+func (m Model) tellTop(msg FocusMsg) tea.Cmd {
+	if len(m.stack) == 0 {
+		return nil
+	}
+	top := len(m.stack) - 1
+	view, cmd := m.stack[top].view.Update(msg)
+	m.stack[top].view = view
+	return cmd
+}
+
 // keepRoot remembers the current root's state so that switching away and back
 // does not reset the cursor, scroll offset or filter.
 func (m Model) keepRoot() {
@@ -492,14 +526,14 @@ func (m Model) forwardAll(msg tea.Msg) (tea.Model, tea.Cmd) {
 // probeCaps re-runs the capability probe, which is what R means beyond a
 // refetch: permissions and instance settings can change under a session.
 func (m Model) probeCaps() tea.Cmd {
-	client := m.deps.Jira
+	client, project := m.deps.Jira, m.deps.Project
 	if client == nil {
 		return nil
 	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		caps, err := client.Capabilities(ctx)
+		caps, err := client.Capabilities(ctx, project)
 		if err != nil {
 			text, _ := jira.Reason(err)
 			return StatusMsg{Text: text, Level: LevelError}
@@ -582,7 +616,7 @@ func (m Model) header() string {
 		gap = 1
 		right = ""
 	}
-	return t.Header.Width(m.width).Render(title + strings.Repeat(" ", gap) + right)
+	return t.Header.Width(m.width).Render(oneLine(title+strings.Repeat(" ", gap)+right, m.width-2, t.Glyphs.Ellipsis))
 }
 
 func (m Model) body() string {
@@ -640,7 +674,19 @@ func (m Model) statusLine() string {
 		style = t.StatusFail
 	case LevelInfo:
 	}
-	return style.Width(m.width).MaxWidth(m.width).Render(m.status)
+	return style.Width(m.width).Render(oneLine(m.status, m.width-2, t.Glyphs.Ellipsis))
+}
+
+// oneLine keeps a string to a single row. lipgloss.Style.Width word-wraps rather
+// than clamping, and a chrome row that wraps pushes the footer off the bottom of
+// the screen — which is exactly when it happens, because the long strings are
+// error messages.
+func oneLine(s string, width int, ellipsis string) string {
+	if width < 1 {
+		return ""
+	}
+	s = strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", " "), "\n", " ")
+	return ansi.Truncate(s, width, ellipsis)
 }
 
 // footer draws the view slots and the hints for the keys that work right now.

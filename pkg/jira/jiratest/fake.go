@@ -23,14 +23,30 @@ func fakeInvalid(field, msg string) error {
 	return &jira.ValidationError{Fields: []jira.FieldError{{Field: field, Message: msg}}}
 }
 
-// Capabilities reports what this fake site and token can do.
-func (f *Fake) Capabilities(ctx context.Context) (jira.Capabilities, error) {
+// Capabilities reports what this fake site and token can do in a project.
+// Boards is answered from whether that project actually has one, which is what
+// makes a site-wide probe visibly wrong here.
+func (f *Fake) Capabilities(ctx context.Context, projectKey string) (jira.Capabilities, error) {
 	if err := f.fakeBegin(ctx, "Capabilities"); err != nil {
 		return jira.Capabilities{}, err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.caps, nil
+
+	caps := f.caps
+	if projectKey == "" {
+		unscoped := jira.Capability{Reason: "no project is selected, so per-project permissions are unknown"}
+		caps.Boards, caps.BulkMove, caps.DeleteIssues = unscoped, unscoped, unscoped
+		return caps, nil
+	}
+	proj, ok := f.projects[projectKey]
+	if !ok {
+		return jira.Capabilities{}, fakeNotFound("project", projectKey)
+	}
+	if caps.Boards.OK && proj.boardID == 0 {
+		caps.Boards = jira.Capability{Reason: fmt.Sprintf("%s has no board", projectKey)}
+	}
+	return caps, nil
 }
 
 // Me returns the authenticated account.
@@ -381,7 +397,7 @@ func (f *Fake) Upload(ctx context.Context, key string, files []jira.FileRef) ([]
 
 // Download streams an attachment's bytes, which are derived from its ID and so
 // are the same on every run, reporting the running total as it goes.
-func (f *Fake) Download(ctx context.Context, id string, w io.Writer, progress func(int64)) error {
+func (f *Fake) Download(ctx context.Context, id string, w io.Writer, opt jira.DownloadOptions) error {
 	if err := f.fakeBegin(ctx, "Download"); err != nil {
 		return err
 	}
@@ -393,6 +409,11 @@ func (f *Fake) Download(ctx context.Context, id string, w io.Writer, progress fu
 	}
 
 	data := fakeAttachmentBytes(&att)
+	if opt.From < 0 || opt.From > int64(len(data)) {
+		return fakeInvalid("from", fmt.Sprintf("cannot resume at byte %d of a %d byte attachment", opt.From, len(data)))
+	}
+	data = data[opt.From:]
+	progress := opt.Progress
 	var written int64
 	for off := 0; off < len(data); off += fakeDownloadChunk {
 		if err := ctx.Err(); err != nil {
@@ -616,7 +637,7 @@ func (f *Fake) BoardConfig(ctx context.Context, boardID int64) (jira.BoardConfig
 
 // Sprints lists a board's sprints, paged by offset with a total, which is the
 // Agile API's model rather than the platform API's cursor.
-func (f *Fake) Sprints(ctx context.Context, boardID int64) (jira.Page[jira.Sprint], error) {
+func (f *Fake) Sprints(ctx context.Context, boardID int64, states ...jira.SprintState) (jira.Page[jira.Sprint], error) {
 	return jira.Offset(ctx, func(ctx context.Context, startAt int) ([]jira.Sprint, int, bool, error) {
 		if err := f.fakeBegin(ctx, "Sprints"); err != nil {
 			return nil, 0, false, err
@@ -629,7 +650,7 @@ func (f *Fake) Sprints(ctx context.Context, boardID int64) (jira.Page[jira.Sprin
 		if _, ok := f.boards[boardID]; !ok {
 			return nil, 0, false, fakeNotFound("board", strconv.FormatInt(boardID, 10))
 		}
-		all := f.fakeSprintsOn(boardID)
+		all := fakeInStates(f.fakeSprintsOn(boardID), states)
 		start := min(startAt, len(all))
 		end := min(start+f.pageSize, len(all))
 		return all[start:end], len(all), end >= len(all), nil
@@ -1366,6 +1387,10 @@ func fakeAttachmentBytes(att *jira.Attachment) []byte {
 	return out
 }
 
+// fakeApplyFieldMask strips an issue down to the fields the query named, both
+// the custom-field set and the struct fields. A fake that hands back a whole
+// issue whatever was asked for lets a list view be written against data the
+// real endpoint will not send.
 func fakeApplyFieldMask(iss *jira.Issue, fields []string) {
 	keep := make(map[string]bool, len(fields))
 	for _, name := range fields {
@@ -1373,6 +1398,61 @@ func fakeApplyFieldMask(iss *jira.Issue, fields []string) {
 			return
 		}
 		keep[name] = true
+	}
+	// Identity is not a field and always comes back.
+	if !keep["summary"] {
+		iss.Summary = ""
+	}
+	if !keep["description"] {
+		iss.Description = adf.Doc{}
+	}
+	if !keep["status"] {
+		iss.Status = jira.Status{}
+	}
+	if !keep["issuetype"] {
+		iss.Type = jira.IssueType{}
+	}
+	if !keep["priority"] {
+		iss.Priority = nil
+	}
+	if !keep["resolution"] {
+		iss.Resolution, iss.Resolved = nil, nil
+	}
+	if !keep["assignee"] {
+		iss.Assignee = nil
+	}
+	if !keep["reporter"] {
+		iss.Reporter = nil
+	}
+	if !keep["labels"] {
+		iss.Labels = nil
+	}
+	if !keep["components"] {
+		iss.Components = nil
+	}
+	if !keep["fixVersions"] {
+		iss.FixVersions = nil
+	}
+	if !keep["parent"] {
+		iss.Parent = nil
+	}
+	if !keep["subtasks"] {
+		iss.Subtasks = nil
+	}
+	if !keep["issuelinks"] {
+		iss.Links = nil
+	}
+	if !keep["duedate"] {
+		iss.Due = jira.Date{}
+	}
+	if !keep["created"] {
+		iss.Created = time.Time{}
+	}
+	if !keep["updated"] {
+		iss.Updated = time.Time{}
+	}
+	if !keep["timetracking"] {
+		iss.TimeTracking = nil
 	}
 	drop := make(map[string]bool)
 	for _, id := range iss.Fields.IDs() {

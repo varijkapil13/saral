@@ -8,7 +8,7 @@ here cost time to find out; read this before writing an adapter method.
 | Fact | Consequence |
 |---|---|
 | `/rest/api/3/search` returns **410 Gone** | Use `POST /rest/api/3/search/jql`. Not optional. |
-| `/search/jql` pages by opaque `nextPageToken` and returns **no `total`** | The UI must work without a count. Use `POST /search/jql/approximate-count` where a number is genuinely needed. Guard against a token that repeats. |
+| `/search/jql` pages by opaque `nextPageToken` and returns **no `total`** | The UI must work without a count. Use `POST /rest/api/3/search/approximate-count` — no `/jql` segment — where a number is genuinely needed. Guard against a token that repeats. |
 | `/search/jql` returns almost nothing without `fields` | Always send an explicit, narrow field list. |
 | The Agile API still uses `startAt`/`maxResults`/`total` | Two pagination models in one client, unified behind `Page[T]`. It also silently truncates against an unreadable instance limit. |
 | v3 requires **ADF** for description, environment, comments, worklog comments and multi-line custom fields | Single-line fields take plain strings. `pkg/adf` is not optional. |

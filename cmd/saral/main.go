@@ -21,15 +21,25 @@ var (
 	date    = "unknown"
 )
 
+// errAlreadyReported means the message has been printed already, so main exits
+// without printing a second one.
+var errAlreadyReported = errors.New("")
+
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+	err := run(os.Args[1:], os.Stdout, os.Stderr)
+	switch {
+	case err == nil:
+		return
+	case errors.Is(err, errAlreadyReported):
+	default:
 		fmt.Fprintln(os.Stderr, "saral: "+err.Error())
-		os.Exit(1)
 	}
+	os.Exit(1)
 }
 
 type options struct {
 	profile    string
+	project    string
 	view       string
 	theme      string
 	mouse      bool
@@ -42,6 +52,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	var opt options
 	fs := flag.NewFlagSet("saral", flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	fs.StringVar(&opt.project, "project", "", "project key to scope the session to; several capabilities are per-project")
 	fs.StringVar(&opt.profile, "profile", "", "profile to use (default: the active one)")
 	fs.StringVar(&opt.theme, "theme", "", "auto, dark, light or no-color")
 	fs.BoolVar(&opt.mouse, "mouse", true, "enable mouse reporting")
@@ -55,7 +66,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 		args = []string{"--version"}
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		// --help is a request, not a failure, and flag has already printed the
+		// usage and the error for anything else.
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return errAlreadyReported
 	}
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "mouse" {
@@ -97,11 +113,14 @@ func build(opt options) (kernel.Deps, []kernel.Option, error) {
 		return deps, nil, err
 	}
 
+	// A config file that exists but points nowhere is a mistake worth naming: the
+	// alternative is a session that silently talks to no site at all.
 	profile, perr := profileFor(cfg, opt.profile)
-	if perr != nil && opt.profile != "" {
+	if perr != nil && (opt.profile != "" || len(cfg.Profiles) > 0) {
 		return deps, nil, perr
 	}
 	deps.Site = profile.Site
+	deps.Project = opt.project
 
 	theme := opt.theme
 	if theme == "" {

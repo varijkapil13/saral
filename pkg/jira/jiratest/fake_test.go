@@ -547,7 +547,7 @@ func TestEveryCall_ShortCircuitsOnAContextThatIsAlreadyDone(t *testing.T) {
 	cancel()
 
 	calls := map[string]func() error{
-		"Capabilities": func() error { _, err := c.Capabilities(ctx); return err },
+		"Capabilities": func() error { _, err := c.Capabilities(ctx, "PROJ"); return err },
 		"Search": func() error {
 			_, err := c.Search(ctx, jira.Query{JQL: "project = PROJ", Fields: fakeNarrow})
 			return err
@@ -557,7 +557,7 @@ func TestEveryCall_ShortCircuitsOnAContextThatIsAlreadyDone(t *testing.T) {
 		"UpdateIssue": func() error { return c.UpdateIssue(ctx, "PROJ-1", jira.IssuePatch{}) },
 		"Comments":    func() error { _, err := c.Comments(ctx, "PROJ-1"); return err },
 		"Sprints":     func() error { _, err := c.Sprints(ctx, 1); return err },
-		"Download":    func() error { return c.Download(ctx, "att-1", io.Discard, nil) },
+		"Download":    func() error { return c.Download(ctx, "att-1", io.Discard, jira.DownloadOptions{}) },
 		"Me":          func() error { _, err := c.Me(ctx); return err },
 	}
 	for name, call := range calls {
@@ -585,7 +585,7 @@ func TestFake_IsSafeForConcurrentUse(t *testing.T) {
 		func() error { return c.UpdateIssue(ctx, "PROJ-4", jira.IssuePatch{Labels: &[]string{"hot"}}) },
 		func() error { _, err := c.AddComment(ctx, "PROJ-5", adf.NewDoc()); return err },
 		func() error { _, err := c.Sprints(ctx, board.ID); return err },
-		func() error { _, err := c.Capabilities(ctx); return err },
+		func() error { _, err := c.Capabilities(ctx, "PROJ"); return err },
 		func() error {
 			_, err := c.CreateIssue(ctx, jira.IssueInput{ProjectKey: "PROJ", IssueTypeID: "10301", Summary: "concurrent"})
 			return err
@@ -1153,10 +1153,10 @@ func TestUploadAndDownload_RoundTripDeterministicBytes(t *testing.T) {
 
 	var first, second bytes.Buffer
 	var progress []int64
-	if err := c.Download(ctx, added[0].ID, &first, func(n int64) { progress = append(progress, n) }); err != nil {
+	if err := c.Download(ctx, added[0].ID, &first, jira.DownloadOptions{Progress: func(n int64) { progress = append(progress, n) }}); err != nil {
 		t.Fatalf("Download: %v", err)
 	}
-	if err := c.Download(ctx, added[0].ID, &second, nil); err != nil {
+	if err := c.Download(ctx, added[0].ID, &second, jira.DownloadOptions{}); err != nil {
 		t.Fatalf("Download: %v", err)
 	}
 	if first.Len() != len(body) {
@@ -1267,7 +1267,7 @@ func TestUnknownKeysAndIDs_ComeBackAsNotFound(t *testing.T) {
 		"DeleteComment":    func() error { return c.DeleteComment(ctx, "PROJ-1", "cmt-999") },
 		"Attachments":      func() error { _, err := c.Attachments(ctx, "PROJ-999"); return err },
 		"DeleteAttachment": func() error { return c.DeleteAttachment(ctx, "att-999") },
-		"Download":         func() error { return c.Download(ctx, "att-999", io.Discard, nil) },
+		"Download":         func() error { return c.Download(ctx, "att-999", io.Discard, jira.DownloadOptions{}) },
 		"Versions":         func() error { _, err := c.Versions(ctx, "NOPE"); return err },
 		"UnresolvedCount":  func() error { _, err := c.UnresolvedCount(ctx, "ver-999"); return err },
 		"ReleaseVersion":   func() error { _, err := c.ReleaseVersion(ctx, "ver-999", jira.ReleaseInput{}); return err },
@@ -1442,7 +1442,7 @@ func TestCalls_RecordEveryCallInOrderIncludingTheFailedOnes(t *testing.T) {
 	if _, err := c.Issue(ctx, "PROJ-1"); err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
-	if _, err := c.Capabilities(ctx); err != nil {
+	if _, err := c.Capabilities(ctx, "PROJ"); err != nil {
 		t.Fatalf("Capabilities: %v", err)
 	}
 	want := []string{"Me", "Issue", "Capabilities"}
@@ -1724,5 +1724,149 @@ func TestSprints_HandOutCopiesOfTheirDates(t *testing.T) {
 		if s.ID == dated.ID && !s.End.Equal(want) {
 			t.Errorf("the stored sprint moved to %s; a caller wrote through the pointer it was handed", s.End)
 		}
+	}
+}
+
+func TestSearch_LeavesOutTheStructFieldsTheQueryDidNotName(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	c := jiratest.New(jiratest.WithProject("PROJ", jiratest.Scrum), jiratest.WithIssues(jiratest.Gen(5)))
+
+	page, err := c.Search(ctx, jira.Query{JQL: "project = PROJ", Fields: []string{"summary", "status"}})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(page.Items) == 0 {
+		t.Fatal("no issues came back")
+	}
+	got := page.Items[0]
+	if got.Key == "" || got.ID == "" {
+		t.Error("identity should always come back")
+	}
+	if got.Summary == "" || got.Status.ID == "" {
+		t.Error("the fields the query named are missing")
+	}
+	for name, present := range map[string]bool{
+		"assignee":    got.Assignee != nil,
+		"priority":    got.Priority != nil,
+		"labels":      len(got.Labels) > 0,
+		"description": !got.Description.IsZero(),
+		"created":     !got.Created.IsZero(),
+		"issuetype":   got.Type.ID != "",
+	} {
+		if present {
+			t.Errorf("%s came back although the query did not ask for it; a list view built on this would render blank against a real site", name)
+		}
+	}
+}
+
+func TestCapabilities_AreAnsweredPerProject(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	c := jiratest.New(
+		jiratest.WithProject("PROJ", jiratest.Scrum),
+		jiratest.WithProject("OPS", jiratest.NoBoard),
+	)
+
+	with, err := c.Capabilities(ctx, "PROJ")
+	if err != nil {
+		t.Fatalf("Capabilities: %v", err)
+	}
+	if !with.Allows(jira.CapBoards) {
+		t.Error("a project with a board should report boards as available")
+	}
+
+	without, err := c.Capabilities(ctx, "OPS")
+	if err != nil {
+		t.Fatalf("Capabilities: %v", err)
+	}
+	if without.Allows(jira.CapBoards) {
+		t.Error("a project with no board reported boards as available")
+	}
+	if reason := without.Capability(jira.CapBoards).Reason; !strings.Contains(reason, "OPS") {
+		t.Errorf("the reason does not name the project: %q", reason)
+	}
+
+	site, err := c.Capabilities(ctx, "")
+	if err != nil {
+		t.Fatalf("Capabilities: %v", err)
+	}
+	for _, k := range []jira.CapabilityKey{jira.CapBoards, jira.CapBulkMove, jira.CapDeleteIssues} {
+		if site.Allows(k) {
+			t.Errorf("%s was answered without a project to answer it for", k)
+		}
+	}
+	if _, err := c.Capabilities(ctx, "NOPE"); err == nil {
+		t.Error("an unknown project should not probe clean")
+	}
+}
+
+func TestSprints_CanBeNarrowedToTheStatesAsked(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	c := jiratest.New(jiratest.WithProject("PROJ", jiratest.Scrum))
+
+	boards, err := c.Boards(ctx, "PROJ")
+	if err != nil || len(boards) == 0 {
+		t.Fatalf("Boards: %v (%d)", err, len(boards))
+	}
+
+	all, err := c.Sprints(ctx, boards[0].ID)
+	if err != nil {
+		t.Fatalf("Sprints: %v", err)
+	}
+	every, err := jira.Collect(ctx, all, 0)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	page, err := c.Sprints(ctx, boards[0].ID, jira.SprintActive)
+	if err != nil {
+		t.Fatalf("Sprints: %v", err)
+	}
+	active, err := jira.Collect(ctx, page, 0)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if len(active) == 0 || len(active) >= len(every) {
+		t.Fatalf("filtering gave %d of %d sprints", len(active), len(every))
+	}
+	for _, s := range active {
+		if s.State != jira.SprintActive {
+			t.Errorf("a %s sprint came back from an active-only query", s.State)
+		}
+	}
+}
+
+func TestDownload_ResumesFromAnOffset(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	c := jiratest.New(jiratest.WithProject("PROJ", jiratest.Scrum), jiratest.WithIssues(jiratest.Gen(2)))
+
+	up, err := c.Upload(ctx, "PROJ-1", []jira.FileRef{{
+		Name: "log.txt", Size: 4,
+		Open: func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("abcd")), nil },
+	}})
+	if err != nil || len(up) != 1 {
+		t.Fatalf("Upload: %v (%d)", err, len(up))
+	}
+
+	var whole bytes.Buffer
+	if err := c.Download(ctx, up[0].ID, &whole, jira.DownloadOptions{}); err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	if whole.Len() < 3 {
+		t.Fatalf("attachment is only %d bytes, too small to resume into", whole.Len())
+	}
+
+	var rest bytes.Buffer
+	if err := c.Download(ctx, up[0].ID, &rest, jira.DownloadOptions{From: 2}); err != nil {
+		t.Fatalf("resumed Download: %v", err)
+	}
+	if got, want := rest.String(), whole.String()[2:]; got != want {
+		t.Errorf("resume gave %q, want %q", got, want)
+	}
+	if err := c.Download(ctx, up[0].ID, io.Discard, jira.DownloadOptions{From: int64(whole.Len() + 1)}); err == nil {
+		t.Error("resuming past the end should be an error, not an empty success")
 	}
 }

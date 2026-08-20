@@ -932,3 +932,30 @@ func TestFieldSet_HandsOutCopiesOfTheSlicesInsideAValue(t *testing.T) {
 		t.Errorf("the set now reads %q; a reader wrote into it", again[0].Value)
 	}
 }
+
+func TestFieldSet_HandsOutACopyOfARichTextValue(t *testing.T) {
+	t.Parallel()
+
+	body := ref("customfield_13600", "doc")
+	doc, err := adf.Unmarshal([]byte(`{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"original"}]}]}`))
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	var set jira.FieldSet
+	set = set.With(body, jira.FieldValue{Kind: jira.KindDoc, Doc: doc})
+
+	// Writing through the document that was stored must not reach the set.
+	doc.Content[0].Content[0].Text = "written through the input"
+	got, _ := set.Doc(body)
+	if got.Content[0].Content[0].Text != "original" {
+		t.Errorf("the set reads %q; With kept the caller's document", got.Content[0].Content[0].Text)
+	}
+
+	// Nor may writing through a document the set handed back.
+	got.Content[0].Content[0].Text = "written through the output"
+	again, _ := set.Doc(body)
+	if again.Content[0].Content[0].Text != "original" {
+		t.Errorf("the set reads %q; a reader wrote into it", again.Content[0].Content[0].Text)
+	}
+}

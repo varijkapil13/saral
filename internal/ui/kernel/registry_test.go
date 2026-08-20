@@ -35,7 +35,7 @@ func (s *stubView) View() string {
 	return s.id + " body"
 }
 
-func (s *stubView) BlocksQuit() (string, bool) {
+func (s *stubView) BlocksClose() (string, bool) {
 	if s.blocks == "" {
 		return "", false
 	}
@@ -55,6 +55,11 @@ func msgName(msg tea.Msg) string {
 		return "theme"
 	case CapabilitiesMsg:
 		return "caps"
+	case FocusMsg:
+		if m.Focused {
+			return "focus"
+		}
+		return "blur"
 	case tea.KeyPressMsg:
 		return "key:" + m.String()
 	default:

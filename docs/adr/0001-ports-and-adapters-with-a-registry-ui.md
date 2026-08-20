@@ -101,6 +101,25 @@ root model.
 **`gocritic`'s `hugeParam` is disabled.** Bubble Tea's MVU loop requires value receivers on the model,
 so it fires on every method of every view. The alternative was a `nolint` on each one, forever.
 
+**Three signatures moved before the freeze**, each because the alternative afterwards is a
+deprecation step rather than an added method:
+
+- `Capabilities` takes a project key. Boards belong to a project and Jira scopes Move, Delete and
+  Create as project permissions, so a site-wide probe answers three of the five capabilities wrongly
+  — and the kernel gates the footer and every keybinding on that answer.
+- `Download` takes a `DownloadOptions` with a `From` offset. P4.1 is defined as resumable, and an
+  `io.Writer` carries no position, so without it a dropped 300 MB transfer starts again.
+- `Sprints` takes the states to narrow to. The board view needs one active sprint, and the only
+  alternative was walking a four-year-old board's whole sprint history on a first-paint path.
+
+**The fake masks struct fields, not just the custom-field set.** A search naming `summary` used to
+come back with the assignee, the priority and the description populated. Every list view would have
+been written and golden-tested against data the real endpoint does not send.
+
+**`adf.Doc` has a deep `Clone`, and `FieldSet` uses it.** Copying a `FieldValue` cloned its slices
+but not the node tree inside a rich-text value, so "immutable" stopped one level short and a cached
+issue's description was still writable through anything handed out of the cache.
+
 **bbolt is not in `go.mod`.** The issue listed it among P0.1's dependencies, but nothing in this
 packet imports it and `make check` runs `go mod tidy && git diff --exit-code`, so it would be
 stripped on the first CI run. `docs/PARALLEL.md` already says where it belongs: "add dependencies in

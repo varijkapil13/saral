@@ -426,3 +426,54 @@ func BenchmarkMarshalEdited(b *testing.B) {
 		}
 	}
 }
+
+func TestClone_SharesNothingWithTheOriginal(t *testing.T) {
+	t.Parallel()
+	original, err := adf.Unmarshal([]byte(richDoc))
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	before, err := adf.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	clone := original.Clone()
+	clone.Content[0].Content[0].Text = "edited"
+	clone.Content[1].Attrs["kind"] = 99
+	clone.Content[1].Attrs["nested"].(map[string]any)["a"] = []any{9}
+	clone.Content[0].Content[1].Marks[0].Attrs["href"] = "https://elsewhere.example"
+	clone.Content = append(clone.Content, adf.NewText("extra"))
+
+	after, err := adf.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Errorf("editing the clone changed the original\n got: %s\nwant: %s", after, before)
+	}
+
+	// And the clone is still a document, not a shallow husk.
+	out, err := adf.Marshal(clone)
+	if err != nil {
+		t.Fatalf("marshal clone: %v", err)
+	}
+	if !containsAll(string(out), `"text":"edited"`, `"kind":99`, `https://elsewhere.example`) {
+		t.Errorf("the clone did not keep its edits: %s", out)
+	}
+}
+
+func TestClone_OfAnUntouchedDocumentStillRoundTripsByteStably(t *testing.T) {
+	t.Parallel()
+	original, err := adf.Unmarshal([]byte(richDoc))
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	out, err := adf.Marshal(original.Clone())
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if string(out) != richDoc {
+		t.Errorf("cloning cost the document its verbatim bytes\n got: %s\nwant: %s", out, richDoc)
+	}
+}

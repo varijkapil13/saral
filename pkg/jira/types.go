@@ -244,6 +244,7 @@ type FieldValue struct {
 func (v FieldValue) clone() FieldValue {
 	v.Options = slices.Clone(v.Options)
 	v.Users = slices.Clone(v.Users)
+	v.Doc = v.Doc.Clone()
 	return v
 }
 
@@ -343,7 +344,7 @@ func (s FieldSet) Doc(ref FieldRef) (adf.Doc, bool) {
 	if !ok || v.Kind != KindDoc {
 		return adf.Doc{}, false
 	}
-	return v.Doc, true
+	return v.Doc.Clone(), true
 }
 
 // Options returns a select-like field's chosen values.
@@ -548,6 +549,14 @@ type Attachment struct {
 	Author       User
 	ContentURL   string
 	ThumbnailURL string
+}
+
+// DownloadOptions says how to fetch an attachment. From is where to start,
+// which is what makes a resumed download resume rather than start again: the
+// caller already has that many bytes on disk and the endpoint honours Range.
+type DownloadOptions struct {
+	From     int64
+	Progress func(written int64)
 }
 
 // FileRef is a file to upload. Open is called once per attempt, so a retry
