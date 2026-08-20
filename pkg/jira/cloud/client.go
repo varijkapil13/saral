@@ -17,14 +17,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/varijkapil13/saral/pkg/jira"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // DefaultMaxConcurrent is how many requests a client keeps in the air at once
@@ -53,7 +55,7 @@ type Client struct {
 
 	concurrency int
 	gate        chan struct{}
-	flight      *singleflight
+	flight      *singleflight.Group
 }
 
 // Option configures a Client at construction.
@@ -86,7 +88,7 @@ func New(site, email, token string, opts ...Option) (*Client, error) {
 		retry:       DefaultRetry(),
 		agent:       defaultUserAgent,
 		concurrency: DefaultMaxConcurrent,
-		flight:      newSingleflight(),
+		flight:      &singleflight.Group{},
 	}
 	for _, o := range opts {
 		if o != nil {
@@ -301,7 +303,7 @@ func (c *Client) do(ctx context.Context, r request) (*response, error) {
 	if !r.canRepeat() {
 		return c.send(ctx, pending)
 	}
-	return c.flight.do(ctx, signature(pending), func(ctx context.Context) (*response, error) {
+	return c.coalesce(ctx, signature(pending), func(ctx context.Context) (*response, error) {
 		return c.send(ctx, pending)
 	})
 }
@@ -346,6 +348,14 @@ func signature(pending call) string {
 	if len(pending.encoded) > 0 {
 		b.WriteByte(0)
 		b.Write(pending.encoded)
+	}
+	// Two ranged reads of one attachment differ only by a header. Without this
+	// they share a key, and the second caller is handed the first one's bytes.
+	for _, name := range slices.Sorted(maps.Keys(pending.header)) {
+		b.WriteByte(0)
+		b.WriteString(name)
+		b.WriteByte('=')
+		b.WriteString(strings.Join(pending.header.Values(name), ","))
 	}
 	return b.String()
 }
@@ -534,79 +544,56 @@ func fieldMessage(raw json.RawMessage) string {
 	return string(raw)
 }
 
-// singleflight collapses identical in-flight requests, so that rapid cursor
-// movement cannot fan out N fetches of the same page. golang.org/x/sync has
-// this, but promoting it from an indirect dependency to a direct one is a
-// go.mod change, and those are a separate PR here.
-type singleflight struct {
-	mu    sync.Mutex
-	calls map[string]*flight
-}
+// errLeaderGone marks a shared call that ended because the caller who started
+// it walked away. It is never returned to anyone: it exists so that a waiter can
+// tell that case apart from a site that failed, which is not something the error
+// value can say — a stalled server produces a timeout that unwraps to
+// context.DeadlineExceeded just as a caller's own deadline does.
+var errLeaderGone = errors.New("cloud: the caller that started this request left")
 
-type flight struct {
-	done    chan struct{}
-	callers int
-	resp    *response
-	err     error
-}
+// coalesceAttempts bounds how many times a waiter will restart a call that
+// successive callers keep abandoning.
+const coalesceAttempts = 3
 
-func newSingleflight() *singleflight {
-	return &singleflight{calls: make(map[string]*flight)}
-}
-
-// do runs fn once for a key however many callers ask for it at the same moment.
-// Each caller waits on its own context, so one of them giving up neither
-// cancels the others nor fails them: a call abandoned by the caller that
-// started it is taken over by whoever is still waiting.
-func (s *singleflight) do(ctx context.Context, key string, fn func(context.Context) (*response, error)) (*response, error) {
-	for {
+// coalesce runs one request for however many callers ask for it at the same
+// moment, so that rapid cursor movement cannot fan out N fetches of one page.
+//
+// The shared call runs on the context of whichever caller started it, so that
+// cancelling the only caller really does cancel the request rather than leaving
+// it to run for nothing. When that caller leaves while others are still waiting,
+// one of them starts the call again — which is why abandonment has to be read
+// from the leader's own context and not from the error it produced.
+func (c *Client) coalesce(ctx context.Context, key string, fn func(context.Context) (*response, error)) (*response, error) {
+	for attempt := 0; attempt < coalesceAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		s.mu.Lock()
-		shared, running := s.calls[key]
-		if !running {
-			shared = &flight{done: make(chan struct{})}
-			s.calls[key] = shared
-		}
-		shared.callers++
-		s.mu.Unlock()
-
-		if !running {
-			shared.resp, shared.err = fn(ctx)
-			s.mu.Lock()
-			delete(s.calls, key)
-			s.mu.Unlock()
-			close(shared.done)
-			return shared.resp, shared.err
-		}
-
+		shared := c.flight.DoChan(key, func() (any, error) {
+			resp, err := fn(ctx)
+			if ctx.Err() != nil {
+				return nil, errLeaderGone
+			}
+			return resp, err
+		})
 		select {
 		case <-ctx.Done():
+			// This caller is leaving. Forget the key so that whoever comes next
+			// starts a fresh call rather than attaching to one that is about to
+			// be abandoned.
+			c.flight.Forget(key)
 			return nil, ctx.Err()
-		case <-shared.done:
+		case res := <-shared:
+			if errors.Is(res.Err, errLeaderGone) {
+				continue
+			}
+			if res.Err != nil {
+				return nil, res.Err
+			}
+			resp, _ := res.Val.(*response)
+			return resp, nil
 		}
-		if ctx.Err() == nil && abandoned(shared.err) {
-			continue
-		}
-		return shared.resp, shared.err
 	}
-}
-
-// waiting reports how many callers are attached to the call under key.
-func (s *singleflight) waiting(key string) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if shared, ok := s.calls[key]; ok {
-		return shared.callers
-	}
-	return 0
-}
-
-// abandoned reports whether a shared call ended because its own caller's
-// context did, which is not an answer about Jira and not one to hand on.
-func abandoned(err error) bool {
-	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+	return nil, &jira.TransportError{Op: key, Err: errLeaderGone}
 }
 
 // The platform API and the Agile API write date-times differently: the platform

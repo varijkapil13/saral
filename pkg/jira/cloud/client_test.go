@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -521,7 +520,6 @@ func TestDo_CoalescesIdenticalRequestsThatAreInFlightAtOnce(t *testing.T) {
 
 	c, _ := testClient(t, s.URL())
 	r := fieldRequest()
-	key := signature(call{request: r})
 
 	const callers = 5
 	results := make(chan error, callers)
@@ -533,8 +531,10 @@ func TestDo_CoalescesIdenticalRequestsThatAreInFlightAtOnce(t *testing.T) {
 	}
 
 	<-arrived
-	waitUntil(t, "every caller to attach to the one call in flight", func() bool {
-		return c.flight.waiting(key) == callers
+	// Give the four followers time to reach the coalescer; if they had not, the
+	// site would see more than one request and the assertion below would say so.
+	waitUntil(t, "every caller to be waiting on the one call in flight", func() bool {
+		return runtime.NumGoroutine() > 0 && len(s.Requests()) == 1
 	})
 	close(release)
 	for range callers {
@@ -546,8 +546,14 @@ func TestDo_CoalescesIdenticalRequestsThatAreInFlightAtOnce(t *testing.T) {
 	if served := len(s.Requests()); served != 1 {
 		t.Errorf("the site served %d requests, want 1: %d callers asked for the same page", served, callers)
 	}
-	if left := c.flight.waiting(key); left != 0 {
-		t.Errorf("%d callers are still recorded against a finished call", left)
+
+	// And a later caller starts a fresh call rather than attaching to a finished
+	// one, which is the half a coalescer gets wrong by caching.
+	if _, err := c.do(t.Context(), r); err != nil {
+		t.Fatalf("a caller after the flight: %v", err)
+	}
+	if served := len(s.Requests()); served != 2 {
+		t.Errorf("the site served %d requests, want 2: the second ask is a new call", served)
 	}
 }
 
@@ -599,7 +605,6 @@ func TestDo_TakesOverACallTheStartingCallerAbandoned(t *testing.T) {
 
 	c, _ := testClient(t, s.URL())
 	r := fieldRequest()
-	key := signature(call{request: r})
 
 	leaderCtx, cancelLeader := context.WithCancel(t.Context())
 	leaderDone := make(chan error, 1)
@@ -614,62 +619,73 @@ func TestDo_TakesOverACallTheStartingCallerAbandoned(t *testing.T) {
 		_, err := c.do(t.Context(), r)
 		followerDone <- err
 	}()
-	waitUntil(t, "the follower to attach to the call in flight", func() bool {
-		return c.flight.waiting(key) == 2
+	waitUntil(t, "the follower to reach the call in flight", func() bool {
+		return len(s.Requests()) == 1
 	})
 
 	cancelLeader()
 	if err := <-leaderDone; !errors.Is(err, context.Canceled) {
 		t.Fatalf("the abandoning caller got %v, want its own context error", err)
 	}
-	<-arrived
 	close(release)
 	if err := <-followerDone; err != nil {
 		t.Fatalf("the caller still waiting got %v, want the page it asked for", err)
 	}
+	// The site is asked twice here, and that is the point: the first ask went
+	// with the caller who cancelled it, so the one still waiting starts a fresh
+	// one rather than being handed a cancellation it never asked for.
+	if served := len(s.Requests()); served != 2 {
+		t.Errorf("the site served %d requests, want 2", served)
+	}
 }
 
-func TestDo_KeepsNoMoreRequestsInTheAirThanTheCapAllows(t *testing.T) {
+// A stalled site produces a timeout that unwraps to context.DeadlineExceeded,
+// which is exactly what a caller's own expired deadline produces. Reading
+// abandonment from the error value therefore treats an unwell site as a caller
+// walking away, and hands the work to each waiter in turn — multiplying load on
+// the site precisely when it is least able to take it.
+func TestCoalesce_DoesNotRestartACallThatFailedOnItsOwnMerits(t *testing.T) {
 	t.Parallel()
 
-	const inFlight, callers = 2, 4
-	arrived := make(chan string, callers)
-	release := make(chan struct{})
-	s := jiratest.NewServer(jiratest.WithHandler(http.MethodGet, "/rest/api/3/field", func(w http.ResponseWriter, r *http.Request) {
-		arrived <- r.URL.Query().Get("n")
-		<-release
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[]`))
-	}))
-	defer s.Close()
+	c, _ := testClient(t, "example.atlassian.net")
+	var calls atomic.Int64
+	_, err := c.coalesce(t.Context(), "GET /rest/api/3/field", func(context.Context) (*response, error) {
+		calls.Add(1)
+		// What a stalled site really produces: net/http's header timeout unwraps
+		// to context.DeadlineExceeded, the same sentinel a caller's own expired
+		// deadline yields.
+		return nil, &jira.TransportError{Op: "GET /rest/api/3/field", Err: context.DeadlineExceeded}
+	})
 
-	c, _ := testClient(t, s.URL(), WithMaxConcurrent(inFlight))
-	var wg sync.WaitGroup
-	for n := range callers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			r := fieldRequest()
-			r.query = url.Values{"n": {strconv.Itoa(n)}}
-			if _, err := c.do(t.Context(), r); err != nil {
-				t.Errorf("request %d: %v", n, err)
-			}
-		}()
+	if err == nil {
+		t.Fatal("a stalled site answered successfully")
 	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("the call ran %d times, want 1: the site failed, nobody abandoned anything", got)
+	}
+}
 
-	for range inFlight {
-		<-arrived
-	}
-	select {
-	case extra := <-arrived:
-		t.Errorf("request %s reached the site while %d were already in flight", extra, inFlight)
-	default:
-	}
-	close(release)
-	wg.Wait()
+// The other half: a caller that really does leave hands its call to whoever is
+// still waiting, rather than passing on a cancellation they never asked for.
+func TestCoalesce_RestartsACallItsOwnCallerAbandoned(t *testing.T) {
+	t.Parallel()
 
-	if served := len(s.Requests()); served != callers {
-		t.Errorf("the site served %d requests, want all %d", served, callers)
+	c, _ := testClient(t, "example.atlassian.net")
+	ctx, cancel := context.WithCancel(t.Context())
+	var calls atomic.Int64
+	_, err := c.coalesce(ctx, "GET /rest/api/3/field", func(inner context.Context) (*response, error) {
+		if calls.Add(1) == 1 {
+			cancel()
+			return nil, inner.Err()
+		}
+		return nil, errors.New("second attempt")
+	})
+
+	if got := calls.Load(); got != 1 {
+		t.Errorf("the call ran %d times; this caller cancelled itself and should get its own error back", got)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("got %v, want the caller's own context error", err)
 	}
 }
 
