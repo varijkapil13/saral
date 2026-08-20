@@ -11,6 +11,8 @@ here cost time to find out; read this before writing an adapter method.
 | `/search/jql` pages by opaque `nextPageToken` and returns **no `total`** | The UI must work without a count. Use `POST /rest/api/3/search/approximate-count` — no `/jql` segment — where a number is genuinely needed. Guard against a token that repeats. |
 | `/search/jql` returns almost nothing without `fields` | Always send an explicit, narrow field list. |
 | The Agile API still uses `startAt`/`maxResults`/`total` | Two pagination models in one client, unified behind `Page[T]`. It also silently truncates against an unreadable instance limit. |
+| There is a **third** paging style: `/rest/api/3/plans/plan` uses `cursor`/`nextPageCursor` and *does* report a `total` and an `isLast` | It is neither of the other two. `Plans` returns a plain slice for that reason. A fourth shape — no paging at all — covers `/field`, `/project/{key}/versions` and attachment upload. |
+| The Plans API lives at `/rest/api/3/plans/plan` — the doubled segment is correct | `GET /rest/api/3/plans` does not exist. |
 | v3 requires **ADF** for description, environment, comments, worklog comments and multi-line custom fields | Single-line fields take plain strings. `pkg/adf` is not optional. |
 | `PUT /rest/agile/1.0/sprint/{id}` is a **full replace** — omitted fields become null | Never expose it. Use `POST /rest/agile/1.0/sprint/{id}` for partial updates. |
 | Sprint state machine: `future → active → closed` only, start needs both dates set, `completeDate` is never writable, a closed sprint only accepts `name` and `goal` | Validate locally and return a real error instead of a 400. |
