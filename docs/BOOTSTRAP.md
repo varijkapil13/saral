@@ -52,10 +52,13 @@ verbatim.
 curl -su "$SARAL_EMAIL:$SARAL_TOKEN" "https://$SARAL_SITE/rest/api/3/issue/PROJ-1?fields=description"
 ```
 
-## 2. Capture the fixtures
+## 2. Capture, to check the shapes
 
-Once the calls above look sane, capture them properly. This is what makes every later packet testable
-with no Jira, no credentials and no shared sandbox.
+Once the calls above look sane, capture them properly. The capture lands in `testdata/live/fixtures/`,
+which is gitignored — **it is never committed**, because a real response carries your ticket
+summaries, release names and field names. What it is for is checking that the fixtures in
+`pkg/jira/jiratest/fixtures/` have the right keys, types, date formats and paging envelopes; those
+are what make every later packet testable with no Jira, no credentials and no shared sandbox.
 
 ```sh
 ./scripts/capture.sh

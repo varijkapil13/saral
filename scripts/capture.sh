@@ -18,7 +18,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT="$ROOT/pkg/jira/jiratest/fixtures"
+# Captures land outside the tracked tree, always. A response from a real company
+# Jira carries ticket summaries, release names, custom field names and board
+# names — none of which belongs in a public repository, and none of which any
+# scrubber can recognise. Turning a capture into a committed fixture is a
+# deliberate, separate act: port the shape, invent the words.
+OUT="${SARAL_CAPTURE_DIR:-$ROOT/testdata/live/fixtures}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$OUT"
@@ -351,18 +356,15 @@ Done. These fixtures cannot be captured and stay hand-authored:
   bulkmove_submit.json     and bulkmove_task_{enqueued,running,complete,failed}.json
   the mypermissions variant this token is not
 
-Now reconcile and read the diff:
+Nothing above is committed, and none of it should be. What you captured is your
+instance: ticket summaries, release names, custom field names, board names, plan
+names. The scrubber removes identity — account ids, emails, avatars, the site
+host, the names inside ADF mentions — and it cannot remove any of that.
 
-  1. git diff pkg/jira/jiratest/fixtures/ — check for real names, emails, account ids, your site
-     host, and anything in a summary or comment body you would not publish. The scrubber handles
-     structure, not prose.
-  2. pkg/jira/jiratest/fixtures_test.go pins the fixture inventory in
-     TestFixtures_CoverEveryResponseTheServerReplays. Add createmeta_issuetypes.json (and plans_ok.json
-     if you captured one) to that list, or delete the files.
-  3. pkg/jira/jiratest/server.go dispatches createmeta on srvBugIssueTypeID and reads the page-one
-     token out of search_page1.json. Point the const at the issue type you actually captured.
-  4. TestFixtures_RichDescriptionExercisesTheNodesARendererMustHandle asserts which ADF node types
-     the description contains. Run the census and update it to what your issue really has:
-       go test ./pkg/jira/jiratest/ -run RichDescription -v
-  5. go test ./... — green before you commit.
+What the capture is *for* is the shape. When a fixture in
+pkg/jira/jiratest/fixtures/ is wrong about a key, a type, a date format or an
+envelope, correct it from what you captured and invent the words. Then:
+
+  scripts/checkleak.py            # proves no string of yours reached a fixture
+  go test ./pkg/jira/jiratest/    # green before you commit
 NOTE

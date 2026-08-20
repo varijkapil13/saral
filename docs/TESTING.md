@@ -33,9 +33,18 @@ c.CursorLoop()                           // reproduce Jira's repeated-token bug
 An `httptest.Server` replaying recorded JSON from `pkg/jira/jiratest/fixtures/`. This is how the
 `cloud` adapter is tested: real wire bytes, real headers, no live site.
 
-Fixtures are captured with `scripts/capture.sh` (needs a real token, run by a human, never in CI) and
-**must be scrubbed** — no account IDs, no email addresses, no site names, no tokens. The scrubber
-runs as part of capture and there is a test asserting no fixture contains an `@` or a real site host.
+**A capture is not a fixture.** `scripts/capture.sh` (needs a real token, run by a human, never in
+CI) writes to `testdata/live/fixtures/`, which is gitignored, and nothing there is ever committed. A
+response from a company's Jira carries ticket summaries, release names, custom field names, board
+names and plan names, and no scrubber can tell those from the shape around them. The scrubber removes
+*identity* — account IDs, emails, avatars, the site host, the names inside ADF mentions — which is a
+different and much smaller problem.
+
+What a capture is for is the **shape**: the keys, the nesting, the types, the date formats, the paging
+envelopes. When a committed fixture is wrong about one of those, correct it from the capture and
+invent the words. `scripts/checkleak.py` then proves no string of yours came across; run it before
+committing. There are also tests asserting no fixture contains an `@` beyond the placeholder, a host
+other than `example.atlassian.net`, or anything shaped like a live Atlassian account ID.
 
 Fixtures to keep, at minimum: a rich ADF description, a paginated search response and its second
 page, `createmeta` for two different projects, a board configuration with and without estimation,
