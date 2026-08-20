@@ -53,7 +53,7 @@ instance from day one.
 - [ ] **P1.3 — Capability probe** · [#4](https://github.com/varijkapil13/saral/issues/4) · **owns** `pkg/jira/cloud/caps.go`
   `/mypermissions`, `/configuration`, `/myself`, `/plans` probe, board presence, terminal graphics
   detection. Populates `Capabilities` with a human-readable `Reason` for every negative.
-- [ ] **P1.4 — ADF to markdown** · [#5](https://github.com/varijkapil13/saral/issues/5) · **owns** `pkg/adf/render*.go`
+- [x] **P1.4 — ADF to markdown** · [#5](https://github.com/varijkapil13/saral/issues/5) · **owns** `pkg/adf/render*.go`
   Paragraphs, headings, lists, code, links, marks, panels, mentions, status lozenges. Unknown nodes
   preserved verbatim. Golden-file tests over real captured ADF.
 - [ ] **P1.5 — Issue list and detail views** · [#6](https://github.com/varijkapil13/saral/issues/6) · **owns** `internal/ui/{list,issue}/**`
