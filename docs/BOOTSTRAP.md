@@ -19,8 +19,10 @@ export SARAL_TOKEN=...   # https://id.atlassian.com/manage-profile/security/api-
 what the locally-defined-plan fallback exists for. Either way it is a valid capability answer, not a
 failure.
 
+The path has a doubled segment and that is not a typo — `/rest/api/3/plans` alone does not exist.
+
 ```sh
-curl -su "$SARAL_EMAIL:$SARAL_TOKEN" "https://$SARAL_SITE/rest/api/3/plans?maxResults=5"
+curl -su "$SARAL_EMAIL:$SARAL_TOKEN" "https://$SARAL_SITE/rest/api/3/plans/plan?maxResults=5"
 ```
 
 **b. What can this token do?** Look for `havePermission: true` on `BULK_CHANGE`, `MOVE_ISSUES` and
@@ -56,13 +58,19 @@ Once the calls above look sane, capture them properly. This is what makes every 
 with no Jira, no credentials and no shared sandbox.
 
 ```sh
-export SARAL_PROJECT=PROJ
-export SARAL_ISSUE=PROJ-1        # pick one with lists, code blocks, panels and links
 ./scripts/capture.sh
 ```
 
-Then do the two manual follow-ups the script prints (second search page, board configuration) and
-**read the diff** — the scrubber is best-effort and you are the last line of defence. See
+It asks for the site, email, token, a project key and an issue key, so nothing has to be exported
+first; set any of `SARAL_SITE`, `SARAL_EMAIL`, `SARAL_TOKEN`, `SARAL_PROJECT` or `SARAL_ISSUE`
+beforehand to skip that prompt. Pick an issue with lists, code blocks, panels, links and an image —
+that one description decides what `pkg/adf` has to render properly.
+
+The script follows the search page token and walks the boards itself, so there is nothing left to
+capture by hand. What it cannot capture it names at the end, along with the four places a real
+capture has to be reconciled with the tests: the fixture inventory, the create-meta issue type the
+fixture server dispatches on, and the ADF node census. **Read the diff** — the scrubber handles
+account ids, names, emails and mentions, but not the prose in a summary or a comment. See
 [`pkg/jira/jiratest/fixtures/README.md`](../pkg/jira/jiratest/fixtures/README.md).
 
 ## 3. Start P0.1
