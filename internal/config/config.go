@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/BurntSushi/toml"
 )
@@ -42,9 +43,13 @@ type Config struct {
 
 // Profile is one Jira account on one site.
 type Profile struct {
-	Name     string
-	Site     string
-	Email    string
+	Name  string
+	Site  string
+	Email string
+	// Project is the project a session opens in. Jira grants Move, Create and
+	// Delete per project and a board belongs to one, so the capability probe
+	// answers differently in two projects on one site and has to be told which.
+	Project  string
 	Token    TokenSource
 	Timeline Timeline
 	Theme    string
@@ -143,6 +148,7 @@ type fileConfig struct {
 type fileProfile struct {
 	Site     string         `toml:"site"`
 	Email    string         `toml:"email"`
+	Project  string         `toml:"project"`
 	Token    toml.Primitive `toml:"token"`
 	Timeline Timeline       `toml:"timeline"`
 	Theme    string         `toml:"theme"`
@@ -222,6 +228,7 @@ func decodeProfile(md *toml.MetaData, name string, fp fileProfile) (Profile, err
 		Name:     name,
 		Site:     site,
 		Email:    strings.TrimSpace(fp.Email),
+		Project:  strings.TrimSpace(fp.Project),
 		Token:    token,
 		Timeline: fp.Timeline,
 		Theme:    strings.TrimSpace(fp.Theme),
@@ -361,6 +368,9 @@ func (p Profile) Validate() error {
 	}
 	if strings.TrimSpace(p.Email) == "" {
 		return fmt.Errorf(`profile %q: email is required, it is the account the API token belongs to`, p.Name)
+	}
+	if strings.ContainsFunc(p.Project, unicode.IsSpace) {
+		return fmt.Errorf("profile %q: project %q is not a project key", p.Name, p.Project)
 	}
 	if n := p.Token.count(); n != 1 {
 		return tokenSourceErr(p.Name, countPhrase(n))
@@ -506,6 +516,9 @@ func (c Config) encode() ([]byte, error) {
 		}
 		fmt.Fprintf(&b, "\n[profiles.%s]\n", tomlKey(name))
 		pairs := [][2]string{{"site", quote(p.Site)}, {"email", quote(p.Email)}}
+		if p.Project != "" {
+			pairs = append(pairs, [2]string{"project", quote(p.Project)})
+		}
 		if p.Theme != "" {
 			pairs = append(pairs, [2]string{"theme", quote(p.Theme)})
 		}

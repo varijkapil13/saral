@@ -1,0 +1,21 @@
+Set up Saral                                                                                                 step 4 of 6
+
+  +  Jira site       example.atlassian.net
+  +  Account email   you@example.com
+  +  API token       verified as Sam Tester
+  -> Token store
+     Project
+     Review
+
+    Where should the token live?
+
+    <> OS keychain
+       Environment variable
+       Command
+
+    Keychain entry -> saral:example 
+
+
+    Saral writes the token into the keychain now and the config file only names the entry. This is the one place
+    Saral can write a secret to. The config file only ever names the source, so it stays safe to read, copy between
+    machines and keep in a dotfiles repository.
