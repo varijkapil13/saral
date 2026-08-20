@@ -32,8 +32,17 @@ def main() -> int:
         if perms.get("ADMINISTER", {}).get("havePermission"):
             print("yes")
     elif what == "first-issue-type":
-        for t in issue_types(doc):
-            if not t.get("subtask"):
+        # An epic's create screen is unusual and is often the one type a project
+        # refuses to let you create, so it is the last thing to fall back to.
+        types = [t for t in issue_types(doc) if not t.get("subtask")]
+        named = {str(t.get("name", "")).lower(): t for t in types}
+        for want in ("story", "task"):
+            if want in named:
+                print(named[want].get("id", ""))
+                break
+        else:
+            ordinary = [t for t in types if str(t.get("name", "")).lower() != "epic"]
+            for t in ordinary or types:
                 print(t.get("id", ""))
                 break
     elif what == "bug-issue-type":
@@ -47,6 +56,12 @@ def main() -> int:
     elif what == "board-ids":
         values = doc.get("values", []) if isinstance(doc, dict) else []
         print(" ".join(str(b["id"]) for b in values[:8] if "id" in b))
+    elif what == "error-message":
+        if isinstance(doc, dict):
+            msgs = doc.get("errorMessages") or []
+            errs = doc.get("errors") or {}
+            parts = list(msgs) + [f"{k}: {v}" for k, v in errs.items()]
+            print("; ".join(str(p) for p in parts)[:160] if parts else "")
     elif what == "account-name":
         if isinstance(doc, dict):
             print(doc.get("displayName") or doc.get("emailAddress") or doc.get("accountId", "?"))

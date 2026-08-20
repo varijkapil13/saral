@@ -17,14 +17,23 @@ import sys
 
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 
+# An account id turns up inside strings as well as in its own field: Jira embeds
+# it in every `self` link as a query parameter, and there it survived the
+# field-level rules and reached a public repository.
+ACCOUNT_IN_TEXT = re.compile(r"\b\d{5,7}:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
+ACCOUNT_PARAM = re.compile(r"(accountId=)([^&\s\"]+)")
+
 # Anything that identifies a person, mapped to a stable stand-in so that two comments by the same
 # author still look like the same author in the fixture.
 ACCOUNT_KEYS = {"accountId", "leadAccountId", "authorAccountId", "updateAuthorAccountId"}
 DROP_KEYS = {"avatarUrls", "profilePicture"}
 
 
+FAKE_PREFIX = "5b10a2844c20165700"
+
+
 def fake_account(value: str) -> str:
-    return "5b10a2844c20165700" + hashlib.sha256(value.encode()).hexdigest()[:6]
+    return FAKE_PREFIX + hashlib.sha256(value.encode()).hexdigest()[:6]
 
 
 def fake_name(value: str) -> str:
@@ -61,7 +70,14 @@ def scrub(node, site: str, email: str):
 
     if isinstance(node, str):
         text = node.replace(site, "example.atlassian.net").replace(email, "user@example.com")
-        return EMAIL.sub("user@example.com", text)
+        text = EMAIL.sub("user@example.com", text)
+        text = ACCOUNT_IN_TEXT.sub(lambda m: fake_account(m.group(0)), text)
+        # Anything left in an accountId= parameter that the pattern above did not
+        # recognise; skip what it already replaced so one person keeps one id.
+        return ACCOUNT_PARAM.sub(
+            lambda m: m.group(1) + (m.group(2) if m.group(2).startswith(FAKE_PREFIX) else fake_account(m.group(2))),
+            text,
+        )
 
     return node
 
