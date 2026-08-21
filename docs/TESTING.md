@@ -84,8 +84,9 @@ Bubble Tea's `teatest` drives full programs where an interaction sequence matter
 - `t.Parallel()` wherever there is no shared state — which should be everywhere.
 - No `time.Sleep` in tests. Inject a clock; `jiratest.Delay` plus `teatest`'s wait helpers cover the
   async cases.
-- No network in any test. There is a CI check that fails the build if a test opens a non-loopback
-  connection.
+- No network in any test. A CI check fails the build if a test opens a non-loopback connection —
+  once PC.4 ([#33](https://github.com/varijkapil13/saral/issues/33)) lands. Until then the rule is
+  enforced by review, and it is exactly as load-bearing either way.
 - Test names describe behaviour: `TestReleaseVersion_RefusesWhenUnresolvedIssuesExist`.
 
 ## Import boundaries

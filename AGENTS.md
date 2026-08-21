@@ -21,10 +21,25 @@ You are one of several agents working on this repository at the same time. Read 
 - **Never hardcode anything instance-specific.** No `customfield_10016`, no `"In Progress"`, no
   project keys, no assumed permissions. Resolve at runtime and cache. This is the most common way a
   PR gets rejected here.
+- **Reach for the library before writing the mechanism.** If a well-maintained package solves the
+  problem — `x/sync/singleflight` for request coalescing, `x/time/rate` for limiting, `testify` or
+  `go-cmp` for comparison — use it rather than hand-rolling one. Custom code is a maintenance
+  liability that has to earn its place. **The library does not supply the domain judgement, though:**
+  swapping in `singleflight` deleted a pile of bookkeeping here and fixed none of the actual bug,
+  which was about whose context cancellation counts. Use the library for the mechanism; still think
+  about the behaviour.
+- **Never commit anything from a real instance.** Captures land in `testdata/live/`, which is
+  gitignored and stays that way. `pkg/jira/jiratest/fixtures/**` is synthetic: a capture is used to
+  correct the *shape* of a fixture — keys, nesting, types, date formats, paging envelopes — and the
+  words are invented. The scrubber is best-effort and cannot remove prose: ticket summaries, release
+  names, board names and custom field names are all somebody's private information. Run
+  `scripts/checkleak.py` before you commit, read the diff, and never `git add -A` when a capture has
+  been run in this tree.
 - **Never expose a raw destructive API shape.** The canonical example: `PUT` on a sprint nulls every
   omitted field, so the port exposes `StartSprint`/`CompleteSprint`/`UpdateSprint` instead.
 - **Tests must not touch the network.** Use `pkg/jira/jiratest`. CI fails on a non-loopback
-  connection from a test.
+  connection from a test — mechanically, once PC.4 ([#33](https://github.com/varijkapil13/saral/issues/33))
+  lands; by convention until then.
 - **No comments that restate the code.** One line only where the code cannot express a non-obvious
   constraint. No ticket or PR numbers in comments, no notes aimed at a reviewer — that belongs in the
   PR description.
@@ -46,8 +61,15 @@ Rebase on `origin/main` before every push. PRs are squash-merged, so keep the br
 
 The checklist in `docs/PARALLEL.md` is the gate. In short: works against the fake, failure paths
 tested (403 / 429 / transport), golden files for rendering, keybindings and mouse zones registered,
-benchmarks if you touched a render path, `make check` green, and the roadmap checkbox ticked in the
-same PR.
+benchmarks if you touched a render path, no instance data in the diff, `make check` green, and the
+roadmap checkbox ticked in the same PR.
+
+**If your packet changes something other packets consume, changing it is half the job.** Naming the
+consumers and checking each one actually adopted it is the other half. Batch 1 landed a kernel
+interface that let a view claim raw keypresses, rebased both waiting branches onto it, and neither
+view implemented it — so an API token typed into the connector arrived with its digits eaten, and the
+view reported success. Grep for the new symbol and expect a hit per consumer, not just at the
+definition and its own test.
 
 ## Performance is a requirement, not a follow-up
 

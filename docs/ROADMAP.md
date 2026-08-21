@@ -1,15 +1,19 @@
 # Roadmap
 
-> **Where the work lives.** This file is the plan; the trackable units are **GitHub issues
-> [#1–#31](https://github.com/varijkapil13/saral/issues)**, one per packet, grouped into
+> **Where the work lives.** This file is the plan; the trackable units are **GitHub
+> [issues](https://github.com/varijkapil13/saral/issues)**, grouped into
 > [milestones](https://github.com/varijkapil13/saral/milestones) by batch. Each packet below links to
-> its issue. Tick the checkbox here in the same PR that closes the issue.
+> its issue — usually one apiece, occasionally two where a shared file forces them into one PR. Tick
+> the checkbox here in the same PR that closes the issue.
 >
 > **Picking this up cold:** start with [`docs/BOOTSTRAP.md`](BOOTSTRAP.md) — it takes a fresh clone to
-> the first line of code. Then open the lowest-numbered open
-> milestone and take any unassigned packet with no unchecked dependency —
-> `gh issue list --milestone "Batch 0 — Foundations"`. Claim it by commenting on the issue.
+> the first line of code. Then open the **lowest-numbered open milestone** and take any unassigned
+> packet with no unchecked dependency — today that is
+> `gh issue list --milestone "Batch 1.5 — Corrections"`. Claim it by commenting on the issue.
 > `AGENTS.md` is the working agreement; `docs/PARALLEL.md` is the definition of done.
+>
+> **A batch does not open until the one before it closes**, and Batch 1.5 exists precisely so that
+> nobody starts Batch 2 on top of a claim that is not true. Lowest-numbered means 1.5 before 2.
 
 Work is organised into **batches** (waves) containing **packets** (single-PR units of work). Batches
 are ordered by *when the value arrives*, not by architectural tidiness: the aim is that Saral is
@@ -18,7 +22,9 @@ worth opening every day as early as possible, and that everything after that is 
 Within a batch, packets are independent and can run in parallel. A batch closes when all its packets
 merge; the next batch opens then. Batch 0 is the exception — it is strictly serial.
 
-Legend: `[ ]` open · `[~]` in progress · `[x]` merged · **owns** = the only paths that packet may touch.
+Legend: `[ ]` open · `[~]` in progress · `[x]` merged · **owns** = the only paths that packet may
+touch. `P<batch>.<n>` is a feature packet; `PC.<n>` is a correction packet, which pays off something
+the project already claims to be true (see Batch 1.5).
 
 ---
 
@@ -61,14 +67,62 @@ instance from day one.
 - [x] **P1.6 — First-run onboarding** · [#7](https://github.com/varijkapil13/saral/issues/7) · **owns** `internal/ui/onboarding/**`
   Site, email, token, project picker; writes the profile; explains what the probe found.
 
+## Batch 1.5 — Corrections · **PC.1 serial, then parallel ×4** · blocks Batch 2
+
+Batch 1 shipped and left the project asserting several things that are not true. None of them is a
+feature and none was worth stopping Batch 1 for; all of them are load-bearing for **Batch 2, which is
+where Saral starts writing to Jira**. A tool that reads can be wrong and merely unhelpful. A tool that
+writes and is wrong about which project it is in, or about which fields it actually fetched, damages
+someone's ticket.
+
+The claims being made good on: that CI keeps tests off the network; that the layer diagram is
+enforced; that `Capabilities` gives a reason for every negative; that an `Issue` means what its zero
+values say; that the session knows its project; that the fixture server replays the right shape; and
+that the number keys have exactly one owner.
+
+**PC.1 lands first and alone** — it amends the port, which `docs/PARALLEL.md` makes a serial change
+because it unblocks or blocks everyone. The other four run in parallel behind it.
+
+- [ ] **PC.1 — Port amendments** · [#46](https://github.com/varijkapil13/saral/issues/46), [#37](https://github.com/varijkapil13/saral/issues/37) · **owns** `pkg/jira/{port,types}.go`, `pkg/jira/cloud/{caps,search}.go`, `pkg/jira/jiratest/jiratest.go`
+  Two additive amendments, one PR, because two agents editing the frozen port is the one guaranteed
+  conflict. `Capabilities` gains a way to say the timezone probe failed, instead of leaving
+  `TimeZone` nil and rendering every date in UTC with nothing on screen to explain it. `Issue` gains
+  a way to distinguish *not requested* from *empty*, so that P2.3's fetch-edit-PUT cycle cannot blank
+  a field nobody touched.
+- [ ] **PC.2 — One owner for the number keys** · [#49](https://github.com/varijkapil13/saral/issues/49) · **owns** `internal/ui/kernel/{view,keys}.go`, `internal/ui/list/register.go`, `internal/app/search.go`, `docs/UX.md`
+  Three claimants on `1`–`9`: kernel view slots, the six root views `docs/UX.md` promises, and
+  `SavedQuery.Slot`, which P1.2 built and tested and nothing calls. Pick one, give the others a
+  prefix, and write down the slot allocation so six later packets do not each guess.
+  **A product decision, not a defect — it wants a human answer.**
+- [ ] **PC.3 — Session project scope** · [#50](https://github.com/varijkapil13/saral/issues/50) · **owns** `cmd/saral/main.go`, `internal/ui/kernel/kernel.go`, `internal/ui/list/list.go`
+  Onboarding asks which project you work in, validates it, writes it to the profile, and nothing ever
+  reads it back: `deps.Project` comes only from `--project`. So the capability probe resolves
+  per-project permissions against an empty key and the list opens unscoped over the whole site.
+  Includes deciding what no-project-at-all means and how a project is changed mid-session.
+- [ ] **PC.4 — Make the test rules enforceable** · [#33](https://github.com/varijkapil13/saral/issues/33), [#35](https://github.com/varijkapil13/saral/issues/35) · **owns** `.github/workflows/ci.yml`, `internal/arch/**`
+  `AGENTS.md` and `docs/TESTING.md` both say CI fails a test that opens a non-loopback connection. It
+  does not. `internal/arch` enforces four of the six rules the layer diagram implies. Both are rules
+  the project relies on being mechanical and are currently honour-system.
+- [ ] **PC.5 — Fixture gaps** · [#34](https://github.com/varijkapil13/saral/issues/34) · **owns** `pkg/jira/jiratest/{fixtures/**,server.go}`
+  `GET /task/{id}` replays the bulk-move body, which is the wrong shape and would let an adapter
+  decode it wrongly and still pass; the `createmeta` issue-type list page is missing entirely. Landed
+  here rather than in P2.2 and P7.1 because the fixture tree is shared and both would edit the same
+  hardcoded manifest, two batches apart.
+
 ## Batch 2 — Change your work · parallel ×4
+
+**Gated on Batch 1.5.** Do not open a Batch 2 packet while the corrections milestone has an open
+issue. This is the first batch that mutates a real instance, and every one of PC.1, PC.3 and PC.5 is
+a thing Batch 2 would otherwise get quietly wrong.
 
 - [ ] **P2.1 — Markdown to ADF** · [#8](https://github.com/varijkapil13/saral/issues/8) · **owns** `pkg/adf/parse*.go`
   The inverse of P1.4, with round-trip property tests asserting byte-stability on untouched docs.
 - [ ] **P2.2 — Schema-driven forms** · [#9](https://github.com/varijkapil13/saral/issues/9) · **owns** `internal/ui/form/**`, `pkg/jira/cloud/meta.go`
   `createmeta` → widgets, required-field validation, `ValidationError` mapped to fields.
+  Needs PC.3 (`createmeta` is keyed by project and issue type) and PC.5 (the issue-type list page).
 - [ ] **P2.3 — Create, edit, transition** · [#10](https://github.com/varijkapil13/saral/issues/10) · **owns** `internal/ui/issue/edit*.go`, `pkg/jira/cloud/issue.go`
   `$EDITOR` handoff for long text, transition picker with per-issue transitions.
+  Needs PC.1: an edit must send only fields it actually fetched, or it blanks the rest.
 - [ ] **P2.4 — Comments CRUD** · [#11](https://github.com/varijkapil13/saral/issues/11) · **owns** `internal/ui/comment/**`, `pkg/jira/cloud/comment.go`
 
 ## Batch 3 — Make it a daily driver · parallel ×5
@@ -77,9 +131,13 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
 
 - [ ] **P3.1 — Command palette** · [#12](https://github.com/varijkapil13/saral/issues/12) · **owns** `internal/ui/palette/**`
   `ctrl+k`, fuzzy over the command registry, frecency ranking, shows the keybinding for what you ran.
+  Wires up `app.SavedQuery`, whose number-key binding PC.2 settles.
 - [ ] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`, `go.mod`
   Adds the bbolt dependency, in its own commit ahead of the code that needs it. bbolt buckets, TTLs,
-  stale-while-revalidate, cursor-preserving row patching, stale badge.
+  stale-while-revalidate, cursor-preserving row patching, stale badge. Row patching is the other
+  consumer of PC.1's field-presence answer. **Adds the `internal/store` must-not-import-`internal/ui`
+  rule to `internal/arch` in the same PR** — PC.4 adds its sibling and cannot add this one, because
+  the package does not exist yet.
 - [ ] **P3.3 — Mouse** · [#14](https://github.com/varijkapil13/saral/issues/14) · **owns** `internal/ui/widget/zone*.go` + zone wiring in own files
   Click, double-click, wheel-under-pointer, drag-to-resize, clickable chips and footer.
 - [ ] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/index.go`
@@ -110,23 +168,33 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
 
 - [ ] **P6.1 — Board configuration** · [#22](https://github.com/varijkapil13/saral/issues/22) · **owns** `pkg/jira/cloud/board.go`
   Columns by `statusCategory`, estimation field and rank field read from board config — never guessed.
+  **Every part of a board config is optional and the absences are not exotic.** A Kanban board sends
+  no estimation object at all, which is why `BoardConfig.Estimation` is a pointer; a board may expose
+  no rank field, so drag-to-reorder has to be a capability and not an assumption; and a board may be
+  ordered by priority rather than by rank. Match everything by id or `untranslatedName`, never by
+  display name — on a German instance the field, status and priority names all arrive translated, and
+  `clauseNames` follows the translation too.
 - [ ] **P6.2 — Sprint lifecycle** · [#23](https://github.com/varijkapil13/saral/issues/23) · **owns** `pkg/jira/cloud/sprint.go`
   `UpdateSprint` over the partial-update `POST`; `StartSprint`/`CompleteSprint` validate state
   locally first. **The raw `PUT` must never be reachable from the port** — it nulls omitted fields.
 - [ ] **P6.3 — Board and backlog views** · [#24](https://github.com/varijkapil13/saral/issues/24) · **owns** `internal/ui/board/**`, `internal/ui/backlog/**`
   Column view, drag or key to move between sprint and backlog (50-issue cap per call), rank-aware
-  reorder when the board exposes a rank field.
+  reorder when the board exposes a rank field. Takes the footer slot PC.2 assigns it; the kernel
+  rejects a duplicate at startup, so this cannot be settled by guessing.
 
 ## Batch 7 — Cross-project move · parallel ×1
 
 - [ ] **P7.1 — Move wizard** · [#25](https://github.com/varijkapil13/saral/issues/25) · **owns** `pkg/jira/cloud/bulkmove.go`, `internal/ui/move/**`
   Target project and issue type, status remap, mandatory-field resolution, a confirm screen showing
   the full mapping, submit, then poll the task. Hidden with a reason when `BULK_CHANGE` is absent.
+  Polls `/bulk/queue/{taskId}`, not `/task/{taskId}` — different shapes, both fixtured by PC.5.
 
 ## Batch 8 — Timeline and plans · parallel ×3
 
 - [ ] **P8.1 — Date resolution** · [#26](https://github.com/varijkapil13/saral/issues/26) · **owns** `internal/app/dates.go`
   The cascade that gives every issue a start and an end (see below). Reports provenance per bar.
+  Rule 4 needs [#38](https://github.com/varijkapil13/saral/issues/38) first: an issue's sprint value
+  carries `{id, name}` and no dates, and the timeline has no board id to look them up with.
 - [ ] **P8.2 — Timeline view** · [#27](https://github.com/varijkapil13/saral/issues/27) · **owns** `internal/ui/timeline/**`
   Horizontal bars, zoom by day/week/month/quarter, today marker, version and sprint markers,
   milestone diamonds where only one date resolves. Virtualized like every other list.
