@@ -43,7 +43,7 @@ telemetry leaves the machine, ever.
 A stack, not a graph — so "back" always means something.
 
 ```
-views (footer 1–6)     board · backlog · sprints · releases · timeline · plans
+views (footer 1–6)     board · backlog · sprints · releases · timeline · plans   ← contested, see #49
 push                   enter          open the thing under the cursor
 pop                    esc            back, never quits from a pushed view
 quit                   q / ctrl+c     only from a root view, and only when no draft is open
@@ -55,6 +55,11 @@ refresh                r / R          current view / purge and refetch
 ```
 
 Vim keys and arrows are both always bound. `j/k` and `↑/↓` are not a preference to configure.
+
+The footer row above is **not yet true and not yet decided**: the issue list holds slot 1, `board`
+does not exist until P6.3, and `app.SavedQuery` claims the same nine digits from the other direction.
+PC.2 ([#49](https://github.com/varijkapil13/saral/issues/49)) settles who owns them and rewrites this
+line. Do not register a slot against it until then.
 
 ## Mouse
 

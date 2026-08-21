@@ -38,6 +38,7 @@ The only genuinely shared files are `go.mod`, `go.sum` and the port interface.
 | `go.mod` / `go.sum` | Add dependencies in their own tiny PR, merged first. Never bundle a dep bump with feature work — it is the one guaranteed conflict. |
 | `internal/ui/kernel/**` | Owned by the kernel packet. Other packets consume it. Changes need the `kernel` label. |
 | `docs/ROADMAP.md` | Append-only status ticks. Do not restructure while others are mid-flight. |
+| `pkg/jira/jiratest/fixtures/**` | Synthetic, and shared by every packet. One manifest test lists every file, so two packets adding a fixture conflict. Needing one that is not there is an issue, not a drive-by. |
 
 If two packets both need the same new helper, the *second* one to need it consumes what the first
 landed. Duplicating a helper is better than editing across ownership lines; consolidate later in a
@@ -55,6 +56,9 @@ A packet is done when all of these hold. A PR missing any of them is not ready f
 - [ ] Public API in `pkg/**` has doc comments; `internal/**` does not need them
 - [ ] Keybindings registered, not hardcoded; mouse zones added for anything clickable
 - [ ] Benchmarks added if the packet touches a render path or a list
+- [ ] Nothing from a real instance in the diff — `scripts/checkleak.py` clean, and the fixtures you
+      touched still describe the invented site
+- [ ] Every consumer of anything shared you changed has actually adopted it, by name
 - [ ] `docs/ROADMAP.md` checkbox ticked in the same PR
 
 ## Branch and commit conventions
@@ -97,7 +101,9 @@ Reviews look for exactly four things, in order:
 
 1. Does it stay inside its ownership boundary?
 2. Does it work with the fake, and are the failure paths tested?
-3. Does it assume anything about a Jira instance? (field IDs, statuses, permissions — all forbidden)
+3. Does it assume anything about a Jira instance? (field IDs, statuses, permissions, English field
+   names — all forbidden)
 4. Does it hold the performance budget on the path it touches?
+5. If it changed something shared, did every consumer adopt the change, or only compile against it?
 
 Style is the linter's job, not a reviewer's.
