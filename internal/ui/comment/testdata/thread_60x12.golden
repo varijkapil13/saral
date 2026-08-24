@@ -1,0 +1,11 @@
+PROJ-1 | 2 comments                      write  edit  delete
+------------------------------------------------------------
+  Sam Tester | 02 Mar 2026 09:00                            
+    Reproduced on staging.                                  
+                                                            
+    The stack trace points at the total.                    
+
+> Sam Tester | 02 Mar 2026 09:00                            
+    Fix is behind a flag until the migration lands.         
+
+

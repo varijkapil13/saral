@@ -7,6 +7,7 @@
 package ui
 
 import (
+	_ "github.com/varijkapil13/saral/internal/ui/comment"
 	_ "github.com/varijkapil13/saral/internal/ui/form"
 	_ "github.com/varijkapil13/saral/internal/ui/issue"
 	_ "github.com/varijkapil13/saral/internal/ui/list"

@@ -171,7 +171,14 @@ a thing Batch 2 would otherwise get quietly wrong.
   builds its patch from `Issue.Requested` and refuses a field outside it, saying so on the row.
   Create landed as the adapter method only — the create *form* is P2.2's schema-driven form, which is
   what will call it.
-- [ ] **P2.4 — Comments CRUD** · [#11](https://github.com/varijkapil13/saral/issues/11) · **owns** `internal/ui/comment/**`, `pkg/jira/cloud/comment.go`
+- [x] **P2.4 — Comments CRUD** · [#11](https://github.com/varijkapil13/saral/issues/11) · **owns** `internal/ui/comment/**`, `pkg/jira/cloud/comment.go`, its blank import line in `internal/ui/views.go`, `docs/API-NOTES.md`
+  A virtualized thread on one issue, with an editor for writing and editing a comment and a named
+  confirmation for deleting one. A new comment is parsed with `adf.ParseMarkdown`; an edit goes
+  through `adf.ParseMarkdownInto`, which is the only way a mention keeps its account id. `EditComment`
+  reads the comment before writing it so that a restriction the port cannot carry is echoed back
+  rather than dropped. Unsent text is kept on disk per issue and per comment being edited.
+  The thread is reached by being pushed with an issue; the detail pane cannot push it yet
+  ([#67](https://github.com/varijkapil13/saral/issues/67)).
 
 ## Batch 3 — Make it a daily driver · parallel ×5
 
