@@ -22,4 +22,10 @@ Deliberately not Jira's stock vocabulary: the statuses are `Backlog` / `In Revie
 code that hardcodes `"In Progress"` fails here rather than in front of a user.
 
 Hand-authored (cannot be captured): `rate_limited.json` (429 with `Retry-After`),
-`bulkmove_task_*.json` (one per task state), `validation_error.json` (400 with per-field errors).
+`bulkmove_task_*.json` (one per task state), `task_*.json` (the same four states on the generic task
+endpoint, which answers a different shape), `validation_error.json` (400 with per-field errors).
+
+The `task_*.json` set describes one run of the operation Atlassian's docs point at this endpoint from:
+replacing a custom-field select option across issues. It reuses the invented `Rollout Phase` field and
+its options from `createmeta_task.json`, and numbers its task differently from the bulk-move one —
+they are separate registries, and a shared id would read as one task answering at both endpoints.

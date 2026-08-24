@@ -1,0 +1,18 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/task/11072",
+  "id": "11072",
+  "description": "Deselect the Rollout Phase option Phase Three on EX issues and select Phase Two instead",
+  "status": "COMPLETE",
+  "message": "Phase Three was replaced with Phase Two on 2 issues.",
+  "progress": 100,
+  "elapsedRuntime": 31000,
+  "submitted": 1770814500000,
+  "started": 1770814503000,
+  "lastUpdate": 1770814534000,
+  "finished": 1770814534000,
+  "submittedBy": 11703,
+  "result": {
+    "modifiedIssues": [10001, 10003],
+    "unmodifiedIssues": []
+  }
+}

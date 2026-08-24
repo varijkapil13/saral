@@ -220,7 +220,9 @@ var srvDefaultRoutes = []srvRoute{
 	{http.MethodGet, "/rest/api/3/myself", srvFixtureHandler(http.StatusOK, "myself.json")},
 	{http.MethodGet, "/rest/api/3/configuration", srvFixtureHandler(http.StatusOK, "configuration.json")},
 	{http.MethodGet, "/rest/api/3/mypermissions", srvFixtureHandler(http.StatusOK, "mypermissions_admin.json")},
-	{http.MethodGet, "/rest/api/3/project/{key}/versions", srvFixtureHandler(http.StatusOK, "versions.json")},
+	// versions.json is a paged envelope, which is what the singular /version
+	// endpoint answers; the plural /versions answers a bare array and cannot page.
+	{http.MethodGet, "/rest/api/3/project/{key}/version", srvFixtureHandler(http.StatusOK, "versions.json")},
 	{http.MethodGet, "/rest/agile/1.0/board", srvFixtureHandler(http.StatusOK, "board.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/configuration", srvFixtureHandler(http.StatusOK, "board_config_estimation.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/sprint", srvFixtureHandler(http.StatusOK, "sprint_page.json")},
@@ -229,10 +231,12 @@ var srvDefaultRoutes = []srvRoute{
 	//   WithFixture(http.MethodGet, "/rest/api/3/plans/plan", "plans_ok.json")
 	{http.MethodGet, "/rest/api/3/plans/plan", srvFixtureHandler(http.StatusForbidden, "plans_403.json")},
 	{http.MethodPost, "/rest/api/3/bulk/issues/move", srvFixtureHandler(http.StatusCreated, "bulkmove_submit.json")},
-	{http.MethodGet, "/rest/api/3/task/{id}", srvFixtureHandler(http.StatusOK, "bulkmove_task_complete.json")},
-	// The bulk move task is polled here, not on /task/{id}; both are served so
-	// an adapter that follows the submit response and one that does not are
-	// both exercised.
+	// Two task endpoints answering two shapes that do not decode as each other:
+	// the generic one answers TaskProgressBeanObject, the bulk move is polled on
+	// its own queue route. Both default to the finished state; a test picks
+	// another the way it picks any other fixture:
+	//   WithFixture(http.MethodGet, "/rest/api/3/task/{id}", "task_running.json")
+	{http.MethodGet, "/rest/api/3/task/{id}", srvFixtureHandler(http.StatusOK, "task_complete.json")},
 	{http.MethodGet, "/rest/api/3/bulk/queue/{id}", srvFixtureHandler(http.StatusOK, "bulkmove_task_complete.json")},
 }
 
