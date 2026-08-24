@@ -170,6 +170,15 @@ PC.2 and PC.3 also edit.
   line through `kernel.StatusMsg`, applied to the model before the program starts because the alt
   screen wipes anything printed ahead of it. No probe runs before the first frame; PC.3's `Init`
   probe does it once a client exists.
+  Verification then found the thing the role assertions cannot catch: two types satisfying one
+  interface and disagreeing about the answer. `cloud.Me` refuses a 200 that names nobody, because
+  onboarding reads a success there as proof the three fields go together; `jiratest.Fake.Me` returned
+  it as an account, so the guard was unreachable from a suite that runs on the fake. The fake now
+  refuses the same state — `WithMe(jira.User{})` is how a test asks for it — and `fakeDefaultMe`
+  carries the avatar `cloud.Me` populates. `pkg/jira/cloud/conformance_test.go` is the durable half:
+  one table of cases run over both adapters through `jira.Identifier`, so the next divergence in `Me`
+  fails on the adapter that has it. Generalising that to the rest of the port is
+  [#74](https://github.com/varijkapil13/saral/issues/74).
 
 ## Batch 2 — Change your work · parallel ×4
 

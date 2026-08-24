@@ -59,6 +59,7 @@ var fakeDefaultMe = jira.User{
 	Email:       "sam@example.invalid",
 	TimeZone:    time.UTC,
 	Active:      true,
+	AvatarURL:   fakeBaseURL + "/avatar/me",
 }
 
 var fakeDefaultFields = []jira.Field{

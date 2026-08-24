@@ -40,6 +40,22 @@ func TestRun_BenchFirstPaintPrintsMicroseconds(t *testing.T) {
 	}
 }
 
+func TestRun_BenchFirstPaintStillSaysWhyThereIsNoClient(t *testing.T) {
+	writeProfile(t)
+	t.Setenv("SARAL_TEST_TOKEN", "")
+
+	var out, errOut bytes.Buffer
+	if err := run([]string{"--bench-first-paint"}, &out, &errOut); err != nil {
+		t.Fatalf("run: %v (stderr %q)", err, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "SARAL_TEST_TOKEN") {
+		t.Errorf("stderr is %q, want the reason the session has no client", errOut.String())
+	}
+	if _, err := strconv.Atoi(strings.TrimSpace(out.String())); err != nil {
+		t.Errorf("stdout is %q, want only the microsecond count", out.String())
+	}
+}
+
 func TestRun_UnknownProfileIsAnError(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
 

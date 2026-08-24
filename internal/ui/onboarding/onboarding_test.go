@@ -129,6 +129,26 @@ func TestFlow_AnUnreachableSiteReturnsToTheSiteFieldAndSaysWhichProblemItIs(t *t
 	d.noTokenAnywhere()
 }
 
+// The whole point of asking who the token belongs to is that an answer proves
+// the three fields go together. An answer that names nobody proves nothing, so
+// it has to stop the flow rather than reach the review screen as an account with
+// no name.
+func TestFlow_AnAnswerThatNamesNobodyIsNotProofTheCredentialsGoTogether(t *testing.T) {
+	t.Parallel()
+
+	d := newDriver(t, testFake(jiratest.WithMe(jira.User{})))
+
+	d.credentials()
+
+	d.atStep(stepSite)
+	d.mustContain("names no account")
+	if strings.Contains(d.frame(), "verified") {
+		t.Errorf("an answer naming nobody read as a verified credential:\n%s", d.frame())
+	}
+	d.nothingWritten()
+	d.noTokenAnywhere()
+}
+
 func TestFlow_AConnectorThatCannotBuildAClientIsReportedOnTheTokenStep(t *testing.T) {
 	t.Parallel()
 

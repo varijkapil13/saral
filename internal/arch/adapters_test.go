@@ -16,12 +16,19 @@ import (
 // portDir is the package the adapters under it adapt.
 const portDir = "pkg/jira"
 
-// An adapter package has to say which of the port's interfaces it satisfies.
+// unionRole is the composite a session is built with, and the one line an
+// adapter may not be without.
+const unionRole = "SessionClient"
+
+// An adapter package has to say which of the port's interfaces it satisfies, and
+// one of them has to be the composite.
 //
-// Only the presence of the line is checked here. Whether it is true is the
-// compiler's job, and one `var _ jira.Prober = (*Client)(nil)` fails the build
-// the moment the type stops satisfying the role. What nothing checked before was
-// whether anybody had written one.
+// Whether an assertion is true is the compiler's job: one
+// `var _ jira.Prober = (*Client)(nil)` fails the build the moment the type stops
+// satisfying the role. What no compiler checks is whether anybody wrote one, and
+// presence alone would let a package drop nine of ten claims and still pass —
+// which is why the composite is required by name. Nothing that satisfies it can
+// have dropped a role inside it.
 //
 // The scan skips _test.go files: an assertion only a test file carries fails
 // `go test` and not `go build`.
@@ -37,6 +44,10 @@ func TestAdapters_StateWhichPortRolesTheySatisfy(t *testing.T) {
 	}
 	if !slices.Contains(roles, "Client") {
 		t.Errorf("the port declares no Client interface; roles found: %v", roles)
+	}
+	if !slices.Contains(roles, unionRole) {
+		t.Fatalf("the port declares no %s interface, so there is no composite to require; roles found: %v",
+			unionRole, roles)
 	}
 
 	adapters := adapterPackages(t, root)
@@ -62,6 +73,13 @@ func TestAdapters_StateWhichPortRolesTheySatisfy(t *testing.T) {
 					t.Errorf("%s asserts it satisfies jira.%s, which %s does not declare; it declares %v",
 						dir, name, portDir, roles)
 				}
+			}
+			if !slices.Contains(asserted, unionRole) {
+				t.Errorf("%s asserts %v and not jira.%s.\n"+
+					"the composite is what a session is built with, so an adapter that does not claim it "+
+					"cannot be wired in, and claiming it is what stops the single-role lines from being "+
+					"quietly dropped one at a time",
+					dir, asserted, unionRole)
 			}
 		})
 	}

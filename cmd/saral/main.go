@@ -111,7 +111,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if opt.benchPaint {
-		return benchFirstPaint(stdout, deps, kopts)
+		return benchFirstPaint(stdout, stderr, deps, kopts, notice)
 	}
 	return start(deps, kopts, notice)
 }
@@ -271,7 +271,14 @@ func profileFor(cfg config.Config, name string) (config.Profile, error) {
 // benchFirstPaint measures the budget in docs/PERFORMANCE.md that is otherwise
 // unmeasurable: how long it takes to put the first frame on the screen from
 // what is already on disk.
-func benchFirstPaint(stdout io.Writer, deps kernel.Deps, kopts []kernel.Option) error {
+//
+// There is no status line on this path, so the startup notice goes to stderr
+// instead: a run measuring a session with no client is measuring something else,
+// and stdout stays the single number a script reads.
+func benchFirstPaint(stdout, stderr io.Writer, deps kernel.Deps, kopts []kernel.Option, notice string) error {
+	if notice != "" {
+		_, _ = fmt.Fprintln(stderr, "saral: "+notice)
+	}
 	took, _, err := kernel.FirstPaint(deps, 120, 40, kopts...)
 	if err != nil {
 		return err

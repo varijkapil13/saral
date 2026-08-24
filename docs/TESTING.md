@@ -127,8 +127,25 @@ writes down which of its interfaces it satisfies:
 var _ jira.Prober = (*Client)(nil)
 ```
 
-The test only checks the line exists, in a file that is part of the build rather than in a `_test.go`
-— the compiler checks that it is *true*, and does so at `go build` time. Nobody had written one for
-`pkg/jira/cloud`, so it implemented 12 of the port's 34 methods for two whole batches while passing
-lint, vet, race and a cross-build. Nothing outside the package assigned a `*Client` to anything, so
-nothing ever asked.
+The test checks the lines exist, in a file that is part of the build rather than in a `_test.go` —
+the compiler checks that they are *true*, and does so at `go build` time. One of them has to be
+`jira.SessionClient`, the composite a session is built with, so that an adapter cannot shed its
+single-role claims one at a time and still pass. Nobody had written one for `pkg/jira/cloud`, so it
+implemented 12 of the port's 34 methods for two whole batches while passing lint, vet, race and a
+cross-build. Nothing outside the package assigned a `*Client` to anything, so nothing ever asked.
+
+## Adapters answer the same question the same way
+
+An assertion is only worth what it is run against. Everything above the port is tested against the
+fake, so a rule the cloud adapter enforces and the fake does not is a rule no test ever meets — and
+the suite stays green while the binary fails against a site. That has happened twice: the fake
+accepted a whitespace-only field list the site refuses, and the fake accepted a 200 naming nobody
+that the cloud adapter refuses, which is the answer onboarding reads as proof a credential works.
+
+`pkg/jira/cloud/conformance_test.go` runs one table of cases over both adapters through the port role
+that names the method — `jira.Identifier` for `Me`. Each case builds a site in each adapter's own
+terms (a replay server for `cloud`, an option for `jiratest`) and then asserts the same thing about
+the answer, so a divergence fails on the adapter that has it.
+
+It covers `Me`. A new adapter method is a new table beside that one; a harness over all 34 port
+methods is [#74](https://github.com/varijkapil13/saral/issues/74) and deliberately not this.

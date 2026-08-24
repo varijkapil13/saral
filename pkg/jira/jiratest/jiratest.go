@@ -261,7 +261,8 @@ func WithFields(fields []jira.Field) Option {
 	return func(f *Fake) { f.fields = fakeCloneFields(fields) }
 }
 
-// WithMe sets the authenticated account.
+// WithMe sets the authenticated account. A user with no AccountID is the site
+// that answers 200 and names nobody, which Me refuses rather than returns.
 func WithMe(u jira.User) Option {
 	return func(f *Fake) { f.me = u }
 }
