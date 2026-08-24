@@ -37,9 +37,10 @@ You are one of several agents working on this repository at the same time. Read 
   been run in this tree.
 - **Never expose a raw destructive API shape.** The canonical example: `PUT` on a sprint nulls every
   omitted field, so the port exposes `StartSprint`/`CompleteSprint`/`UpdateSprint` instead.
-- **Tests must not touch the network.** Use `pkg/jira/jiratest`. CI fails on a non-loopback
-  connection from a test — mechanically, once PC.4 ([#33](https://github.com/varijkapil13/saral/issues/33))
-  lands; by convention until then.
+- **Tests must not touch the network.** Use `pkg/jira/jiratest`. CI runs the race suite inside a
+  network namespace with only loopback up, and the step proves the namespace isolates before it
+  trusts it, so a test that reaches a real host fails the build rather than passing for you and
+  failing for everyone else. A test that needs a server starts one on loopback with `httptest`.
 - **No comments that restate the code.** One line only where the code cannot express a non-obvious
   constraint. No ticket or PR numbers in comments, no notes aimed at a reviewer — that belongs in the
   PR description.

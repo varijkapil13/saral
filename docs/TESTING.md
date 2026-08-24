@@ -84,17 +84,36 @@ Bubble Tea's `teatest` drives full programs where an interaction sequence matter
 - `t.Parallel()` wherever there is no shared state — which should be everywhere.
 - No `time.Sleep` in tests. Inject a clock; `jiratest.Delay` plus `teatest`'s wait helpers cover the
   async cases.
-- No network in any test. A CI check fails the build if a test opens a non-loopback connection —
-  once PC.4 ([#33](https://github.com/varijkapil13/saral/issues/33)) lands. Until then the rule is
-  enforced by review, and it is exactly as load-bearing either way.
+- No network in any test, and CI is what makes that true. The race suite runs inside a network
+  namespace with only loopback up, so a test that reaches for a real host fails the build instead of
+  passing for whoever wrote it. A step before it compiles every test binary while the network is
+  still reachable, because the namespace has no route to the module proxy; `GOPROXY=off` inside turns
+  a cache miss into a legible error rather than a timeout. The jailed step first proves it isolates —
+  it attempts a request to the module proxy and fails the build if that request gets out — because an
+  `unshare` that quietly stopped working reads as a hermetic suite. A test that needs a server starts
+  one on loopback with `httptest`, which is what `jiratest.Server` does; `internal/arch` asserts that
+  the workflow still runs the suite that way.
 - Test names describe behaviour: `TestReleaseVersion_RefusesWhenUnresolvedIssuesExist`.
 
 ## Import boundaries
 
-A test in `internal/arch` asserts the layering from `docs/ARCHITECTURE.md`:
+A test in `internal/arch` asserts the layering from `docs/ARCHITECTURE.md`. Five rules, one table
+entry each:
 
 - `pkg/**` must not import `internal/**`
 - `internal/ui/**` must not import `pkg/jira/cloud`
 - only `cmd/**` and `internal/config` may construct a concrete adapter
+- `internal/app` must not import `internal/ui`
+- `pkg/adf` must not import `pkg/jira`
+
+The sixth rule the layer diagram implies — `internal/store` must not import `internal/ui` — waits for
+P3.2 to create the package; its case is already in the table, expecting nothing.
+
+A second test reads the table itself, because a rule can be wrong in a way that only ever shows up as
+green: a duplicated name, a missing `why`, an exemption that no package the rule covers could match,
+or one broad enough to swallow the rule's whole scope.
+
+The rules only see imports within this module. "No IO libs in `internal/app`" is a convention nobody
+can check this way — a `net/http` import there is invisible to the walk.
 
 This catches the most common way a modular design quietly stops being modular.
