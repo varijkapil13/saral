@@ -16,6 +16,10 @@ here cost time to find out; read this before writing an adapter method.
 | The Plans API lives at `/rest/api/3/plans/plan` — the doubled segment is correct | `GET /rest/api/3/plans` does not exist. |
 | v3 requires **ADF** for description, environment, comments, worklog comments and multi-line custom fields | Single-line fields take plain strings. `pkg/adf` is not optional. |
 | `PUT /rest/agile/1.0/sprint/{id}` is a **full replace** — omitted fields become null | Never expose it. Use `POST /rest/agile/1.0/sprint/{id}` for partial updates. |
+| `PUT /rest/api/3/issue/{key}/comment/{id}` takes a whole comment, and `visibility` is one of its properties | A request that names only `body` is a request for a comment with no restriction on it, which publishes a comment one role could see. The port cannot carry the restriction — `EditComment` takes a body and nothing else — so the adapter reads the comment first and echoes its `visibility` object back verbatim. That is right whichever way the endpoint would have treated the omission, and it costs one `GET` per edit. |
+| A comment's `visibility` carries **`identifier`** beside `type` and `value`, and `value` is the localised display name of the role or group | Echo the object you were given rather than rebuilding one from `type` and `value`: on a German site the role name is German, and `identifier` is the half of it no translation moves. `jira.Visibility` has no slot for the identifier, which is the other reason an edit sends back the original bytes. |
+| `GET /rest/api/3/issue/{key}/comment` pages by `startAt`/`maxResults`/`total` — the Agile shape — while living on the platform API, and names its array **`comments`** rather than `values` | Neither shared envelope in `pkg/jira/cloud/paginate.go` reads it, so it decodes its own. It sends no `isLast`, so the walk ends on the total; an envelope that reports no total at all can only be ended by a page shorter than the `maxResults` the response itself echoes, because a site may cap the number asked for without saying so anywhere else. |
+| The order comments come back in is not documented | Send `orderBy=created` when oldest-first is what the caller was promised. |
 | Sprint state machine: `future → active → closed` only, start needs both dates set, `completeDate` is never writable, a closed sprint only accepts `name` and `goal` | Validate locally and return a real error instead of a 400. |
 | `POST /rest/agile/1.0/backlog/issue` caps at **50 issues** | Chunk, and report partial progress. |
 | Attachment upload needs `X-Atlassian-Token: no-check` and a multipart part named exactly `file` | Otherwise rejected by the XSRF guard. |
@@ -160,6 +164,9 @@ any poller on the first 429. Cost-based limits mean a burst of narrow requests b
 ## Still to confirm against live responses
 
 - The precise shape of `GET /rest/api/3/configuration`.
+- Whether `PUT /issue/{key}/comment/{id}` really clears a `visibility` the request omits. The
+  adapter re-sends it either way, because being wrong in that direction publishes somebody's
+  restricted comment and being wrong in the other direction costs a round trip.
 - Everything above is from the published OpenAPI schemas, not from a live site. `scripts/capture.sh`
   has not been run yet, so the fixtures in `pkg/jira/jiratest/fixtures/` are hand-authored to those
   schemas. Re-capture against a real instance before trusting a field name that only matters once.
