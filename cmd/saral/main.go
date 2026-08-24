@@ -2,11 +2,14 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -121,7 +124,11 @@ func build(opt options) (kernel.Deps, []kernel.Option, error) {
 		return deps, nil, perr
 	}
 	deps.Site = profile.Site
-	deps.Project = opt.project
+	project, err := sessionProject(opt.project, profile.Project)
+	if err != nil {
+		return deps, nil, err
+	}
+	deps.Project = project
 
 	saved, err := app.NewSavedQueries(profile.Queries...)
 	if err != nil {
@@ -155,6 +162,17 @@ func build(opt options) (kernel.Deps, []kernel.Option, error) {
 		kopts = append(kopts, kernel.WithInitialView(kernel.SetupViewID))
 	}
 	return deps, kopts, nil
+}
+
+// sessionProject scopes the session. The flag overrides the profile for one run
+// rather than replacing it, and reaches JQL the way a stored key does, so it is
+// held to the rule internal/config enforces on one.
+func sessionProject(fromFlag, stored string) (string, error) {
+	key := cmp.Or(strings.TrimSpace(fromFlag), stored)
+	if strings.ContainsFunc(key, unicode.IsSpace) {
+		return "", fmt.Errorf("--project %q is not a project key", key)
+	}
+	return key, nil
 }
 
 // queryWriter persists a changed set of saved queries back into the profile

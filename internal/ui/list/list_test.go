@@ -324,7 +324,11 @@ func TestList_EnterOnAnEmptyResultDoesNothing(t *testing.T) {
 func TestList_RendersWhenTheCapabilityProbeFoundNothing(t *testing.T) {
 	t.Parallel()
 
-	d := testDeps(newFake(12))
+	// The fake has to answer with nothing too: the kernel probes on Init, so a
+	// hand-built empty Caps would be replaced before the first frame.
+	d := testDeps(newFake(12, jiratest.WithCapabilities(
+		jiratest.NoPlans, jiratest.NoBulkMove, jiratest.NoBoards,
+		jiratest.NoAttachments, jiratest.NoDeleteIssues, jiratest.NoTimeZone)))
 	d.Caps = jira.Capabilities{}
 	m := startAll(t, d, 120, 30)
 

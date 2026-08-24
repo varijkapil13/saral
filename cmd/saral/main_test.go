@@ -123,4 +123,52 @@ token = { env = "JIRA_TOKEN" }
 	}
 }
 
+func TestBuild_TheProjectFlagOverridesTheProfileRatherThanReplacingIt(t *testing.T) {
+	tests := map[string]struct {
+		stored string
+		flag   string
+		want   string
+		fails  bool
+	}{
+		"the profile alone scopes the session":   {stored: "EX", want: "EX"},
+		"the flag alone scopes the session":      {flag: "OTHER", want: "OTHER"},
+		"the flag wins over the profile":         {stored: "EX", flag: "OTHER", want: "OTHER"},
+		"neither leaves the session unscoped":    {},
+		"a blank flag falls back to the profile": {stored: "EX", flag: "   ", want: "EX"},
+		"a padded flag is taken trimmed":         {flag: "  OTHER  ", want: "OTHER"},
+		"a flag with a space in it is refused":   {flag: "two words", fails: true},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("SARAL_CONFIG_DIR", dir)
+			cfg := "active = \"work\"\n\n[profiles.work]\nsite  = \"example.atlassian.net\"\n" +
+				"email = \"you@example.com\"\ntoken = { env = \"JIRA_TOKEN\" }\n"
+			if tc.stored != "" {
+				cfg += "project = " + strconv.Quote(tc.stored) + "\n"
+			}
+			if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(cfg), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			deps, _, err := build(options{project: tc.flag})
+			switch {
+			case tc.fails && err == nil:
+				t.Fatalf("--project %q was accepted and reached JQL", tc.flag)
+			case tc.fails:
+				if !strings.Contains(err.Error(), tc.flag) {
+					t.Errorf("error %q does not quote the offending value", err)
+				}
+				return
+			case err != nil:
+				t.Fatalf("build: %v", err)
+			}
+			if deps.Project != tc.want {
+				t.Errorf("the session is scoped to %q, want %q", deps.Project, tc.want)
+			}
+		})
+	}
+}
+
 func initialView(opts []kernel.Option) string { return kernel.InitialViewOf(opts...) }
