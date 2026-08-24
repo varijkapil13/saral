@@ -27,8 +27,26 @@ jobs:
         run: go mod tidy && git diff --exit-code
       - name: vet
         run: go vet ./...
-      - name: test with race detector
-        run: go test -race -count=1 ./...
+      - name: warm the caches while the network is still there
+        run: go test -race -count=1 -run '^$' ./...
+      - name: test with race detector, on a loopback-only network
+        run: |
+          sudo env "PATH=$PATH" "HOME=$HOME" \
+            "GOCACHE=$(go env GOCACHE)" "GOMODCACHE=$(go env GOMODCACHE)" \
+            GOPROXY=off GOTOOLCHAIN=local \
+            unshare -n -- sh -euc '
+              ip link set lo up
+              ip -o link show lo | grep -qw UP || { echo "::error::loopback is down inside the namespace"; exit 1; }
+              command -v curl >/dev/null || { echo "::error::no curl to prove the namespace isolates"; exit 1; }
+              if curl -sS --max-time 5 -o /dev/null https://proxy.golang.org; then
+                echo "::error::a request left the namespace, so this check proves nothing"
+                exit 1
+              fi
+              go test -race -count=1 ./...
+            '
+      - name: give the caches back to the runner
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" "$(go env GOCACHE)" "$(go env GOMODCACHE)"
       - name: build
         run: go build -trimpath -ldflags "-s -w" -o saral ./cmd/saral
       - name: binary size budget

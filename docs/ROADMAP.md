@@ -103,10 +103,14 @@ because it unblocks or blocks everyone. The other four run in parallel behind it
   reads it back: `deps.Project` comes only from `--project`. So the capability probe resolves
   per-project permissions against an empty key and the list opens unscoped over the whole site.
   Includes deciding what no-project-at-all means and how a project is changed mid-session.
-- [ ] **PC.4 — Make the test rules enforceable** · [#33](https://github.com/varijkapil13/saral/issues/33), [#35](https://github.com/varijkapil13/saral/issues/35) · **owns** `.github/workflows/ci.yml`, `internal/arch/**`
-  `AGENTS.md` and `docs/TESTING.md` both say CI fails a test that opens a non-loopback connection. It
-  does not. `internal/arch` enforces four of the six rules the layer diagram implies. Both are rules
-  the project relies on being mechanical and are currently honour-system.
+- [x] **PC.4 — Make the test rules enforceable** · [#33](https://github.com/varijkapil13/saral/issues/33), [#35](https://github.com/varijkapil13/saral/issues/35) · **owns** `.github/workflows/ci.yml`, `internal/arch/**`
+  `AGENTS.md` and `docs/TESTING.md` both said CI fails a test that opens a non-loopback connection,
+  and it did not. Now it does: the race suite runs inside a network namespace with only loopback up,
+  behind a warm-up that compiles the test binaries while the network is still there, and the step
+  proves the namespace isolates before it trusts it. `internal/arch` already enforced five of the six
+  rules the layer diagram implies — P1.2 landed the `internal/app` one — so what was left there was
+  three documents miscounting them and a rule table that could hold a rule unable to fire. Both docs
+  now describe the mechanism instead of the honour system.
 - [ ] **PC.5 — Fixture gaps** · [#34](https://github.com/varijkapil13/saral/issues/34) · **owns** `pkg/jira/jiratest/{fixtures/**,server.go}`
   `GET /task/{id}` replays the bulk-move body, which is the wrong shape and would let an adapter
   decode it wrongly and still pass; the `createmeta` issue-type list page is missing entirely. Landed
