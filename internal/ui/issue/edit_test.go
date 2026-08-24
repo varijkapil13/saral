@@ -213,6 +213,30 @@ func TestEdit_OffersToReReadAndReapplyAfterAConflict(t *testing.T) {
 	}
 }
 
+// TestEdit_KeepsTheEditWhenTheRefreshKeyReReadsTheIssue is the refresh every
+// other view does, in the one pane where throwing the cursor away would also
+// throw text away.
+func TestEdit_KeepsTheEditWhenTheRefreshKeyReReadsTheIssue(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(8)
+	p := openEditor(t, f, fullIssue(t, f, "PROJ-3"), 100, 30)
+
+	p.keys("enter")
+	p.typed(" and mine")
+	p.keys("enter")
+
+	p.send(kernel.RefreshMsg{})
+
+	m := p.editor()
+	if !m.dirty() {
+		t.Fatal("the refresh threw the edit away")
+	}
+	if got := m.rowByID("summary").value; !strings.HasSuffix(got, " and mine") {
+		t.Errorf("summary = %q, want the edit back on top of the re-read issue", got)
+	}
+}
+
 func TestEdit_HandsTheDescriptionToTheEditorAndKeepsWhatMarkdownCannotCarry(t *testing.T) {
 	t.Parallel()
 

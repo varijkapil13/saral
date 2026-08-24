@@ -161,6 +161,9 @@ func (m *editModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 
+	case kernel.RefreshMsg:
+		cmd = m.reread()
+
 	case editLoadedMsg:
 		cmd = m.loaded(msg)
 
@@ -457,11 +460,19 @@ func (m *editModel) conflictKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.stage = stageBrowse
 		return nil
 	}
-	m.stage = stageBrowse
-	m.note = "re-reading " + m.issue.Key + " and putting your edits back on top"
+	return m.reread()
+}
+
+// reread reads the issue again and rebases the edits onto it, which is what
+// both reload-and-reapply after a 409 and the refresh key mean here. It is the
+// one refresh that must not throw anything away: docs/UX.md principle 5 is
+// about a cursor, and this pane is holding text as well.
+func (m *editModel) reread() tea.Cmd {
 	if m.search == nil {
 		return nil
 	}
+	m.stage = stageBrowse
+	m.note = "re-reading " + m.issue.Key + " and putting your edits back on top"
 	ctx, gen := m.begin()
 	return loadForEdit(ctx, m.search, m.issue.Key, gen)
 }
