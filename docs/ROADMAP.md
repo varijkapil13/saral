@@ -83,12 +83,16 @@ that the number keys have exactly one owner.
 **PC.1 lands first and alone** — it amends the port, which `docs/PARALLEL.md` makes a serial change
 because it unblocks or blocks everyone. The other four run in parallel behind it.
 
-- [ ] **PC.1 — Port amendments** · [#46](https://github.com/varijkapil13/saral/issues/46), [#37](https://github.com/varijkapil13/saral/issues/37) · **owns** `pkg/jira/{port,types}.go`, `pkg/jira/cloud/{caps,search}.go`, `pkg/jira/jiratest/jiratest.go`
+- [x] **PC.1 — Port amendments** · [#46](https://github.com/varijkapil13/saral/issues/46), [#37](https://github.com/varijkapil13/saral/issues/37) · **owns** `pkg/jira/{port,types}.go`, `pkg/jira/cloud/{caps,search}.go`, `pkg/jira/jiratest/{jiratest,fake}.go`, `internal/ui/onboarding/render.go`, `docs/{ARCHITECTURE,API-NOTES}.md`
   Two additive amendments, one PR, because two agents editing the frozen port is the one guaranteed
-  conflict. `Capabilities` gains a way to say the timezone probe failed, instead of leaving
-  `TimeZone` nil and rendering every date in UTC with nothing on screen to explain it. `Issue` gains
-  a way to distinguish *not requested* from *empty*, so that P2.3's fetch-edit-PUT cycle cannot blank
-  a field nobody touched.
+  conflict. Both landed in `types.go`: `port.go` needed no edit at all, since neither amendment
+  touches a method signature. `Capabilities` gained `TimeZoneReason` and `Zone()`, so a probe that
+  could not establish the account's zone says which of its three ways it failed instead of leaving
+  `TimeZone` nil and rendering every date in UTC with nothing on screen to explain it. `Issue` gained
+  `Requested`, a `FieldMask` naming the fields it was read with, so that P2.3's fetch-edit-PUT cycle
+  cannot blank a field nobody touched. The owned paths grew by the fake's field masking and the one
+  line in onboarding that names a timezone, which are the only consumers either amendment has:
+  without them the packet adds two things nobody uses.
 - [ ] **PC.2 — One owner for the number keys** · [#49](https://github.com/varijkapil13/saral/issues/49) · **owns** `internal/ui/kernel/{view,keys}.go`, `internal/ui/list/register.go`, `internal/app/search.go`, `docs/UX.md`
   Three claimants on `1`–`9`: kernel view slots, the six root views `docs/UX.md` promises, and
   `SavedQuery.Slot`, which P1.2 built and tested and nothing calls. Pick one, give the others a
