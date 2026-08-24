@@ -12,6 +12,8 @@ type keyMap struct {
 	Go       kernel.Binding
 	Top      kernel.Binding
 	Bottom   kernel.Binding
+	Edit     kernel.Binding
+	Move     kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -25,15 +27,18 @@ func defaultKeys() keyMap {
 		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
 		Top:      kernel.Bind([]string{"home"}, "g g", "top"),
 		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "bottom"),
+		Edit:     editBinding(),
+		Move:     moveBinding(),
 	}
 }
 
 func (k keyMap) keySet() kernel.KeySet {
 	return kernel.KeySet{
-		Short: []kernel.Binding{k.Down, k.Up, k.PageDown},
+		Short: []kernel.Binding{k.Down, k.Up, k.Edit, k.Move},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.HalfDown, k.HalfUp, k.Top, k.Bottom},
+			{k.Edit, k.Move},
 		},
 	}
 }
