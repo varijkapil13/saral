@@ -289,6 +289,9 @@ func TestCapabilities_KeepsTheOtherAnswersWhenOneProbeFails(t *testing.T) {
 	if got.TimeZone == nil {
 		t.Error("the timezone probe was lost with the configuration one")
 	}
+	if got.TimeZoneReason != "" {
+		t.Errorf("TimeZoneReason = %q while the zone came back; the two are never both set", got.TimeZoneReason)
+	}
 }
 
 func TestCapabilities_SaysWhichAnswersNeedAProjectWhenThereIsNone(t *testing.T) {
@@ -343,26 +346,97 @@ func TestCapabilities_ReadsTheAccountTimezoneRatherThanTheMachines(t *testing.T)
 	if got.Location() != got.TimeZone {
 		t.Error("Location did not return the probed zone")
 	}
+	zone, why := got.Zone()
+	if zone != got.TimeZone || why != "" {
+		t.Errorf("Zone() = %s with reason %q, want the account's zone and nothing to explain", zone, why)
+	}
 }
 
-func TestCapabilities_FallsBackToUTCWhenTheZoneNameIsUnknownHere(t *testing.T) {
+// TestCapabilities_SaysWhyTheTimezoneIsNotTheAccountsOwn covers the three ways
+// the zone can be missing, which are three different sentences: a zone renders
+// as UTC whichever it was, and this reason is the only thing on screen that can
+// tell someone in Berlin why their timestamps are an hour out.
+func TestCapabilities_SaysWhyTheTimezoneIsNotTheAccountsOwn(t *testing.T) {
 	t.Parallel()
 
-	s := jiratest.NewServer(capsJSON(http.MethodGet, capsMyselfPath, http.StatusOK,
-		`{"accountId":"5b10a2844c20165700ede21g","timeZone":"Mars/Olympus"}`))
+	tests := []struct {
+		name   string
+		serve  jiratest.ServerOption
+		reason string
+	}{
+		{
+			name: "this machine has no entry for the zone Jira named",
+			serve: capsJSON(http.MethodGet, capsMyselfPath, http.StatusOK,
+				`{"accountId":"5b10a2844c20165700ede21g","timeZone":"Mars/Olympus"}`),
+			reason: "This machine has no zoneinfo entry for Mars/Olympus, the timezone this account is set to",
+		},
+		{
+			name: "the account answered without a zone at all",
+			serve: capsJSON(http.MethodGet, capsMyselfPath, http.StatusOK,
+				`{"accountId":"5b10a2844c20165700ede21g"}`),
+			reason: "Jira did not say what timezone this account is in",
+		},
+		{
+			// The site knows which permission scheme refused and this client does
+			// not, so the sentence a user reads has to be Jira's own.
+			name: "the site refused to say who this token is",
+			serve: capsJSON(http.MethodGet, capsMyselfPath, http.StatusForbidden,
+				`{"errorMessages":["You do not have permission to view this user profile."],"errors":{}}`),
+			reason: "You do not have permission to view this user profile.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			s := jiratest.NewServer(tt.serve)
+			defer s.Close()
+
+			c, _ := testClient(t, s.URL())
+			got, err := c.Capabilities(t.Context(), capsProject)
+			if err != nil {
+				t.Fatalf("an unusable timezone sank the whole probe: %v", err)
+			}
+			if got.TimeZone != nil {
+				t.Errorf("timezone = %v, want none", got.TimeZone)
+			}
+			if got.TimeZoneReason != tt.reason {
+				t.Errorf("TimeZoneReason = %q, want %q", got.TimeZoneReason, tt.reason)
+			}
+			zone, why := got.Zone()
+			if zone != time.UTC || why != tt.reason {
+				t.Errorf("Zone() = %s with reason %q, want UTC with %q", zone, why, tt.reason)
+			}
+			capsAssert(t, "Boards", got.Boards, true, "")
+			capsAssert(t, "Attachments", got.Attachments, true, "")
+		})
+	}
+}
+
+func TestCapabilities_KeepsTheOtherAnswersWhenTheTimezoneProbeFails(t *testing.T) {
+	t.Parallel()
+
+	s := jiratest.NewServer(jiratest.WithStatus(http.MethodGet, capsMyselfPath, http.StatusInternalServerError, ""))
 	defer s.Close()
 
-	c, _ := testClient(t, s.URL())
+	c, _ := testClient(t, s.URL(), WithRetry(RetryPolicy{Attempts: 1}))
 	got, err := c.Capabilities(t.Context(), capsProject)
 	if err != nil {
-		t.Fatalf("a zone this machine cannot load sank the probe: %v", err)
+		t.Fatalf("the failed timezone probe sank the whole capability probe: %v", err)
 	}
-	if got.TimeZone != nil {
-		t.Errorf("timezone = %v, want none for a zone no zoneinfo database has", got.TimeZone)
+
+	const reason = "Jira did not answer what timezone this account is in: " +
+		"GET /rest/api/3/myself failed with HTTP 500: Internal Server Error"
+	if got.TimeZoneReason != reason {
+		t.Errorf("TimeZoneReason = %q, want %q", got.TimeZoneReason, reason)
 	}
 	if got.Location() != time.UTC {
 		t.Errorf("Location = %v, want UTC", got.Location())
 	}
+	capsAssert(t, "Boards", got.Boards, true, "")
+	capsAssert(t, "BulkMove", got.BulkMove, true, "")
+	capsAssert(t, "Attachments", got.Attachments, true, "")
 }
 
 func TestCapabilities_ReturnsTheRejectedCredentialRatherThanAbsentCapabilities(t *testing.T) {

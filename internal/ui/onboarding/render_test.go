@@ -18,7 +18,12 @@ const goldenPath = "/home/you/.config/saral/config.toml"
 
 func goldenDriver(t *testing.T) *driver {
 	t.Helper()
-	d := newDriver(t, testFake(jiratest.WithCapabilities(jiratest.NoBulkMove, jiratest.NoPlans)))
+	return goldenDriverWith(t, jiratest.NoBulkMove, jiratest.NoPlans)
+}
+
+func goldenDriverWith(t *testing.T, mods ...jiratest.CapMod) *driver {
+	t.Helper()
+	d := newDriver(t, testFake(jiratest.WithCapabilities(mods...)))
 	d.send(configLoadedMsg{path: goldenPath})
 	return d
 }
@@ -136,6 +141,40 @@ func TestView_TheSummaryScrollsWhenItDoesNotFit(t *testing.T) {
 	if !strings.Contains(d.frame(), "Site           "+testSite) {
 		t.Errorf("the wheel did not scroll the summary back to the top:\n%s", d.frame())
 	}
+}
+
+// TestView_SaysWhyTheDatesAreNotInTheAccountsZone covers the one line in the
+// program that names a timezone. Every date renders in UTC when the probe could
+// not establish the account's zone, and this row is the only place that can say
+// so — without it a user in Berlin reads timestamps an hour out and nothing on
+// screen accounts for it.
+func TestView_SaysWhyTheDatesAreNotInTheAccountsZone(t *testing.T) {
+	t.Parallel()
+
+	const why = "Jira did not answer what timezone this account is in"
+
+	unknown := goldenDriverWith(t, jiratest.NoBulkMove, jiratest.NoPlans, jiratest.NoTimeZone)
+	unknown.send(kernel.SizeMsg{Width: 120, Height: 40})
+	unknown.credentials()
+	unknown.press("enter")
+	unknown.typeIn("PROJ")
+	unknown.press("enter")
+	unknown.atStep(stepReview)
+	unknown.mustContain("Dates in       UTC · " + why)
+	golden(t, "review-unknown-zone_120x40.golden", unknown.frame())
+
+	// The zone the account is really in explains nothing, so it says nothing.
+	known := goldenDriver(t)
+	known.send(kernel.SizeMsg{Width: 120, Height: 40})
+	known.credentials()
+	known.press("enter")
+	known.typeIn("PROJ")
+	known.press("enter")
+	known.atStep(stepReview)
+	if strings.Contains(known.frame(), why) {
+		t.Errorf("the summary explains a timezone that needs no explaining:\n%s", known.frame())
+	}
+	known.mustContain("Dates in       UTC\n")
 }
 
 func TestView_DrawsNothingBeforeItHasBeenGivenASize(t *testing.T) {

@@ -1,0 +1,38 @@
+Set up Saral                                                                                                 step 6 of 6
+
+  +  Jira site       example.atlassian.net
+  +  Account email   you@example.com
+  +  API token       verified as Sam Tester
+  +  Token store     OS keychain
+  +  Project         PROJ
+  -> Review
+
+    This is what will be written.
+
+    Site           example.atlassian.net
+    Account        Sam Tester · you@example.com
+    Profile        example in /home/you/.config/saral/config.toml
+    Token          keychain entry saral:example
+    Project        PROJ
+
+    What this token can do in PROJ
+    + Boards
+    x Move between projects  needs Bulk Change permission
+    + Delete issues
+    + Attachments
+    x Plans                  the Plans API needs Administer Jira
+
+    Dates in       UTC · Jira did not answer what timezone this account is in
+    Images         halfblocks
+
+
+
+
+
+
+
+
+
+
+
+

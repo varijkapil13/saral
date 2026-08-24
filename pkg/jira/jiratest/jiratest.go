@@ -67,12 +67,26 @@ var (
 	NoAttachments = CapReason(jira.CapAttachments, "attachments are disabled on this site")
 	// NoDeleteIssues turns off the delete-issues capability.
 	NoDeleteIssues = CapReason(jira.CapDeleteIssues, "needs Delete Issues permission")
+	// NoTimeZone leaves the account timezone unknown, which makes every date
+	// render in UTC with the reason beside it.
+	NoTimeZone = CapZone(nil, "Jira did not answer what timezone this account is in")
 )
 
 // CapReason turns a capability off with wording of the caller's own.
 func CapReason(k jira.CapabilityKey, reason string) CapMod {
 	return func(c *jira.Capabilities) {
 		fakeSetCap(c, k, jira.Capability{Reason: reason})
+	}
+}
+
+// CapZone sets the account timezone and, when there is none, why there is none.
+// A location clears the reason: a probe never has both.
+func CapZone(loc *time.Location, reason string) CapMod {
+	return func(c *jira.Capabilities) {
+		if loc != nil {
+			reason = ""
+		}
+		c.TimeZone, c.TimeZoneReason = loc, reason
 	}
 }
 
@@ -402,6 +416,8 @@ func (f *Fake) fakePutIssue(in *jira.Issue) {
 		f.fakeAddProject(in.Project.Key, NoBoard)
 	}
 	stored := fakeCloneIssue(in)
+	// The one funnel into the store, so a seeded issue is as honest as a fetched one.
+	stored.Requested = jira.AllFields()
 	if _, ok := f.issues[stored.Key]; !ok {
 		f.issueKeys = append(f.issueKeys, stored.Key)
 	}

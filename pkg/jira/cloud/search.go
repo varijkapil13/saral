@@ -80,7 +80,9 @@ func (s apiFieldSchema) domain() jira.FieldSchema {
 //
 // Query.Fields must name the fields the caller wants. An empty list is refused
 // rather than sent: the endpoint answers such a request with an id and a key
-// per issue, which looks like a result set and is not one.
+// per issue, which looks like a result set and is not one. Every issue comes
+// back carrying that list as its jira.FieldMask, so a later merge or write can
+// tell a field nobody asked for from one the site had nothing to send for.
 //
 // Pages are walked by jira.Cursor, whose repeated-token guard is what makes the
 // walk terminate. The token is reachable only from inside the returned Page, on
@@ -92,6 +94,7 @@ func (c *Client) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue
 	if len(fields) == 0 {
 		return jira.Page[jira.Issue]{}, errSearchNeedsFields()
 	}
+	mask := jira.NewFieldMask(fields)
 	body := apiSearchBody{
 		JQL:        strings.TrimSpace(q.JQL),
 		Fields:     fields,
@@ -114,7 +117,7 @@ func (c *Client) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue
 	}
 	op := http.MethodPost + " " + searchJQLPath
 	return cursorPages(ctx, c, build, func(resp *response) ([]jira.Issue, string, error) {
-		return decodeSearchPage(resp, op)
+		return decodeSearchPage(resp, op, mask)
 	})
 }
 
@@ -149,7 +152,7 @@ func errSearchNeedsFields() error {
 	}}}
 }
 
-func decodeSearchPage(resp *response, op string) ([]jira.Issue, string, error) {
+func decodeSearchPage(resp *response, op string, mask jira.FieldMask) ([]jira.Issue, string, error) {
 	var page apiSearchPage
 	if err := resp.decode(op, &page); err != nil {
 		return nil, "", err
@@ -157,7 +160,7 @@ func decodeSearchPage(resp *response, op string) ([]jira.Issue, string, error) {
 	raw := page.items()
 	issues := make([]jira.Issue, 0, len(raw))
 	for i := range raw {
-		issues = append(issues, decodeIssue(raw[i], page.Schema))
+		issues = append(issues, decodeIssue(raw[i], page.Schema, mask))
 	}
 	return issues, page.next(), nil
 }
@@ -205,9 +208,10 @@ func uniqueStrings(in []string) []string {
 // the JSON it arrived as: a dropped field is one a user cannot tell is missing,
 // and one odd custom field must not blank an issue. Unset fields arrive as an
 // explicit null and are skipped, so a narrow field list really does produce an
-// issue with everything else absent.
-func decodeIssue(in apiIssue, schema map[string]apiFieldSchema) jira.Issue {
-	iss := jira.Issue{ID: in.ID, Key: in.Key}
+// issue with everything else absent — and the mask is what says which list that
+// was, since the issue itself can no longer tell.
+func decodeIssue(in apiIssue, schema map[string]apiFieldSchema, mask jira.FieldMask) jira.Issue {
+	iss := jira.Issue{ID: in.ID, Key: in.Key, Requested: mask}
 	values := make(map[string]jira.FieldValue, len(in.Fields))
 	for id, raw := range in.Fields {
 		if isJSONNull(raw) {

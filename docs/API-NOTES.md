@@ -10,6 +10,7 @@ here cost time to find out; read this before writing an adapter method.
 | `/rest/api/3/search` returns **410 Gone** | Use `POST /rest/api/3/search/jql`. Not optional. |
 | `/search/jql` pages by opaque `nextPageToken` and returns **no `total`** | The UI must work without a count. Use `POST /rest/api/3/search/approximate-count` — no `/jql` segment — where a number is genuinely needed. Guard against a token that repeats. |
 | `/search/jql` returns almost nothing without `fields` | Always send an explicit, narrow field list. |
+| The response carries only the field keys it **actually returned** — nothing anywhere says what the endpoint did with the list you sent | The field list cannot be recovered from the answer, so the `jira.FieldMask` on `Issue.Requested` records what was *asked for*, never what the site had. "Requested and absent" means the site sent nothing for that field, and a field ID the site does not have looks exactly the same. Every consumer of the mask has to know that. |
 | The Agile API still uses `startAt`/`maxResults`/`total` | Two pagination models in one client, unified behind `Page[T]`. It also silently truncates against an unreadable instance limit. |
 | There is a **third** paging style: `/rest/api/3/plans/plan` uses `cursor`/`nextPageCursor` and *does* report a `total` and an `isLast` | It is neither of the other two. `Plans` returns a plain slice for that reason. A fourth shape — no paging at all — covers `/field`, `/project/{key}/versions` and attachment upload. |
 | The Plans API lives at `/rest/api/3/plans/plan` — the doubled segment is correct | `GET /rest/api/3/plans` does not exist. |
@@ -40,6 +41,7 @@ here cost time to find out; read this before writing an adapter method.
 | `timetracking` is `{}` — an empty object, not `null` — on an issue with no estimates | Decoding into a struct gives zeroes, which is right; decoding into a pointer never gives nil. |
 | `statusCategory.id` is a **number** while `status.id` is a **string** | The four categories are fixed on every site: 1 `undefined`, 2 `new`, 3 `done`, 4 `indeterminate`. Branch on `key`; `name` is localised. |
 | `GET /rest/api/3/issue/createmeta?expand=…` is deprecated | Use the paginated pair, `GET /issue/createmeta/{projectIdOrKey}/issuetypes` then `…/issuetypes/{issueTypeId}`. |
+| A `timeZone` on `/rest/api/3/myself` is not a promise this machine can load it | The name comes out of the site's own zone database and is resolved locally against Go's zoneinfo, which a slim container image may not carry at all. That failure is **local**: report it as this machine having no entry for the zone the account is set to, never as Jira failing to answer, and fall back to UTC. |
 
 ## Things that vary per instance — never hardcode
 

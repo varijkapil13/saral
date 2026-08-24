@@ -76,6 +76,7 @@ func (f *Fake) Fields(ctx context.Context) ([]jira.Field, error) {
 // jql, so a query the fake cannot honour never passes as a query that matched
 // everything.
 func (f *Fake) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue], error) {
+	mask := jira.NewFieldMask(q.Fields)
 	return jira.Cursor(ctx, func(ctx context.Context, token string) ([]jira.Issue, string, error) {
 		if err := f.fakeBegin(ctx, "Search"); err != nil {
 			return nil, "", err
@@ -83,7 +84,7 @@ func (f *Fake) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue],
 		f.mu.Lock()
 		defer f.mu.Unlock()
 
-		if len(q.Fields) == 0 {
+		if mask.Len() == 0 && !mask.Wide() {
 			return nil, "", fakeInvalid("fields", "a search must name the fields it wants; /search/jql returns almost nothing without them")
 		}
 		plan, err := fakeParseJQL(q.JQL)
@@ -108,7 +109,7 @@ func (f *Fake) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue],
 		items := make([]jira.Issue, 0, end-offset)
 		for _, iss := range matched[offset:end] {
 			clone := fakeCloneIssue(iss)
-			fakeApplyFieldMask(&clone, q.Fields)
+			fakeApplyFieldMask(&clone, mask)
 			items = append(items, clone)
 		}
 		next := ""
@@ -1397,72 +1398,72 @@ func fakeAttachmentBytes(att *jira.Attachment) []byte {
 // the custom-field set and the struct fields. A fake that hands back a whole
 // issue whatever was asked for lets a list view be written against data the
 // real endpoint will not send.
-func fakeApplyFieldMask(iss *jira.Issue, fields []string) {
-	keep := make(map[string]bool, len(fields))
-	for _, name := range fields {
-		if name == "*all" || name == "*navigable" {
-			return
-		}
-		keep[name] = true
+//
+// The mask both blanks the fields and records itself on the issue, so the fake
+// cannot mask one set and claim another.
+func fakeApplyFieldMask(iss *jira.Issue, mask jira.FieldMask) {
+	iss.Requested = mask
+	if mask.Wide() {
+		return
 	}
 	// Identity is not a field and always comes back.
-	if !keep["summary"] {
+	if !mask.Has("summary") {
 		iss.Summary = ""
 	}
-	if !keep["description"] {
+	if !mask.Has("description") {
 		iss.Description = adf.Doc{}
 	}
-	if !keep["status"] {
+	if !mask.Has("status") {
 		iss.Status = jira.Status{}
 	}
-	if !keep["issuetype"] {
+	if !mask.Has("issuetype") {
 		iss.Type = jira.IssueType{}
 	}
-	if !keep["priority"] {
+	if !mask.Has("priority") {
 		iss.Priority = nil
 	}
-	if !keep["resolution"] {
+	if !mask.Has("resolution") {
 		iss.Resolution, iss.Resolved = nil, nil
 	}
-	if !keep["assignee"] {
+	if !mask.Has("assignee") {
 		iss.Assignee = nil
 	}
-	if !keep["reporter"] {
+	if !mask.Has("reporter") {
 		iss.Reporter = nil
 	}
-	if !keep["labels"] {
+	if !mask.Has("labels") {
 		iss.Labels = nil
 	}
-	if !keep["components"] {
+	if !mask.Has("components") {
 		iss.Components = nil
 	}
-	if !keep["fixVersions"] {
+	if !mask.Has("fixVersions") {
 		iss.FixVersions = nil
 	}
-	if !keep["parent"] {
+	if !mask.Has("parent") {
 		iss.Parent = nil
 	}
-	if !keep["subtasks"] {
+	if !mask.Has("subtasks") {
 		iss.Subtasks = nil
 	}
-	if !keep["issuelinks"] {
+	if !mask.Has("issuelinks") {
 		iss.Links = nil
 	}
-	if !keep["duedate"] {
+	if !mask.Has("duedate") {
 		iss.Due = jira.Date{}
 	}
-	if !keep["created"] {
+	if !mask.Has("created") {
 		iss.Created = time.Time{}
 	}
-	if !keep["updated"] {
+	if !mask.Has("updated") {
 		iss.Updated = time.Time{}
 	}
-	if !keep["timetracking"] {
+	if !mask.Has("timetracking") {
 		iss.TimeTracking = nil
 	}
 	drop := make(map[string]bool)
 	for _, id := range iss.Fields.IDs() {
-		if !keep[id] {
+		if !mask.Has(id) {
 			drop[id] = true
 		}
 	}
