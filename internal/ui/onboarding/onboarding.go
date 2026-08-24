@@ -37,10 +37,11 @@ const opTimeout = 30 * time.Second
 
 // Connector opens a client for credentials that have not been saved yet.
 //
-// The view cannot build one itself: internal/ui takes the jira.Client port and
-// never an adapter, so the composition root registers the adapter this build
-// uses with SetConnector.
-type Connector func(site, email, token string) (jira.Client, error)
+// The view cannot build one itself: internal/ui takes the port and never an
+// adapter, so the composition root registers the adapter this build uses with
+// SetConnector. What comes back is the same narrowed client a session runs on,
+// because this view hands it straight to one.
+type Connector func(site, email, token string) (jira.SessionClient, error)
 
 var registered struct {
 	mu sync.RWMutex
@@ -125,7 +126,7 @@ type Model struct {
 	problem string
 	note    string
 
-	client  jira.Client
+	client  jira.SessionClient
 	search  *app.Search
 	account jira.User
 	caps    jira.Capabilities

@@ -33,7 +33,7 @@ var importRules = []importRule{
 		name:   "ui-must-not-import-the-cloud-adapter",
 		from:   "internal/ui",
 		forbid: "pkg/jira/cloud",
-		why:    "views take the jira.Client port so they can be driven by pkg/jira/jiratest",
+		why:    "views take the pkg/jira port so they can be driven by pkg/jira/jiratest",
 	},
 	{
 		name:   "only-cmd-and-config-construct-the-cloud-adapter",

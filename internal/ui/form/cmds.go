@@ -94,7 +94,7 @@ func distinctTypes(issues []jira.Issue) []jira.IssueType {
 }
 
 // loadSchema reads a create screen, from the cache when it is still fresh.
-func loadSchema(ctx context.Context, client jira.Client, cache *schemaCache, key screen, gen int) tea.Cmd {
+func loadSchema(ctx context.Context, client jira.SchemaReader, cache *schemaCache, key screen, gen int) tea.Cmd {
 	return func() tea.Msg {
 		if schema, ok := cache.get(key); ok {
 			return schemaLoadedMsg{gen: gen, screen: key, schema: schema}
@@ -110,7 +110,7 @@ func loadSchema(ctx context.Context, client jira.Client, cache *schemaCache, key
 
 // loadAccount reads the authenticated account. A failure is not reported: it
 // costs a person picker one candidate, and there is nothing the user can do.
-func loadAccount(ctx context.Context, client jira.Client, gen int) tea.Cmd {
+func loadAccount(ctx context.Context, client jira.Identifier, gen int) tea.Cmd {
 	return func() tea.Msg {
 		user, err := client.Me(ctx)
 		if err != nil {
@@ -121,7 +121,7 @@ func loadAccount(ctx context.Context, client jira.Client, gen int) tea.Cmd {
 }
 
 // create asks Jira to store the issue.
-func create(ctx context.Context, client jira.Client, in jira.IssueInput, gen int) tea.Cmd {
+func create(ctx context.Context, client jira.IssueWriter, in jira.IssueInput, gen int) tea.Cmd {
 	return func() tea.Msg {
 		issue, err := client.CreateIssue(ctx, in)
 		if err != nil {

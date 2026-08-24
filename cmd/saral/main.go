@@ -3,12 +3,14 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"time"
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
@@ -17,7 +19,17 @@ import (
 	"github.com/varijkapil13/saral/internal/config"
 	_ "github.com/varijkapil13/saral/internal/ui"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/onboarding"
+	"github.com/varijkapil13/saral/pkg/jira"
+	"github.com/varijkapil13/saral/pkg/jira/cloud"
 )
+
+// tokenTimeout bounds resolving the token, which happens before the first frame
+// and cannot be cancelled by anyone watching it. internal/config gives a command
+// source 15s plus a 2s wait delay of its own, so this sits above that and lets
+// the resolver's better-worded failure win; what it really caps is a keychain
+// prompt nobody is at the machine to answer.
+const tokenTimeout = 20 * time.Second
 
 var (
 	version = "dev"
@@ -94,45 +106,50 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("%d view(s) failed to register: %w", len(errs), errors.Join(errs...))
 	}
 
-	deps, kopts, err := build(opt)
+	deps, kopts, notice, err := build(opt)
 	if err != nil {
 		return err
 	}
 	if opt.benchPaint {
-		return benchFirstPaint(stdout, deps, kopts)
+		return benchFirstPaint(stdout, stderr, deps, kopts, notice)
 	}
-	return start(deps, kopts)
+	return start(deps, kopts, notice)
 }
 
 // build turns flags and config into the kernel's dependencies. A missing config
 // file is not an error: there is nothing to onboard with yet, so the UI opens
 // with no site and says so.
-func build(opt options) (kernel.Deps, []kernel.Option, error) {
+//
+// The third result is a sentence to put in front of the user once the program is
+// running. Resolving a token can fail for reasons that are nobody's mistake — a
+// locked keychain, a helper command that is not installed on this machine — and
+// none of them is a reason to refuse to open.
+func build(opt options) (kernel.Deps, []kernel.Option, string, error) {
 	deps := kernel.Deps{}
 	cfg, err := config.Load()
 	switch {
 	case errors.Is(err, config.ErrNoConfig):
 		cfg = config.Config{Mouse: true}
 	case err != nil:
-		return deps, nil, err
+		return deps, nil, "", err
 	}
 
 	// A config file that exists but points nowhere is a mistake worth naming: the
 	// alternative is a session that silently talks to no site at all.
 	profile, perr := profileFor(cfg, opt.profile)
 	if perr != nil && (opt.profile != "" || len(cfg.Profiles) > 0) {
-		return deps, nil, perr
+		return deps, nil, "", perr
 	}
 	deps.Site = profile.Site
 	project, err := sessionProject(opt.project, profile.Project)
 	if err != nil {
-		return deps, nil, err
+		return deps, nil, "", err
 	}
 	deps.Project = project
 
 	saved, err := app.NewSavedQueries(profile.Queries...)
 	if err != nil {
-		return deps, nil, err
+		return deps, nil, "", err
 	}
 	deps.Saved = saved
 	deps.SaveQueries = queryWriter(profile.Name)
@@ -142,6 +159,20 @@ func build(opt options) (kernel.Deps, []kernel.Option, error) {
 	// first footer slot, and setup is reachable only by someone who already
 	// knows its name — which is nobody on their first run.
 	firstRun := perr != nil || profile.Site == ""
+
+	// A first run is exactly the path with no token yet, and onboarding is what
+	// gets one, so this goes on whether or not there is a profile to open with.
+	onboarding.SetConnector(connect)
+
+	var notice string
+	if !firstRun {
+		client, cerr := clientFor(profile)
+		if cerr != nil {
+			notice = cerr.Error()
+		} else {
+			deps.Jira = client
+		}
+	}
 
 	theme := opt.theme
 	if theme == "" {
@@ -161,7 +192,37 @@ func build(opt options) (kernel.Deps, []kernel.Option, error) {
 	case firstRun:
 		kopts = append(kopts, kernel.WithInitialView(kernel.SetupViewID))
 	}
-	return deps, kopts, nil
+	return deps, kopts, notice, nil
+}
+
+// connect opens a client for credentials the caller already holds, which is what
+// onboarding does with three fields that have never been saved.
+//
+// The error path returns a nil interface deliberately. cloud.New returns a
+// *cloud.Client, and returning that straight into the result would hand back a
+// non-nil jira.SessionClient wrapping a nil pointer — every `== nil` check
+// downstream would pass and the first call would panic.
+func connect(site, email, token string) (jira.SessionClient, error) {
+	client, err := cloud.New(site, email, token, cloud.WithUserAgent("saral/"+version))
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+// clientFor resolves the profile's token and opens a client with it.
+//
+// Nothing is probed here. The kernel probes on Init once deps.Jira is set, so
+// the first frame is drawn from what is already on disk (docs/UX.md).
+func clientFor(p config.Profile) (jira.SessionClient, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), tokenTimeout)
+	defer cancel()
+
+	token, err := p.ResolveToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return connect(p.Site, p.Email, token)
 }
 
 // sessionProject scopes the session. The flag overrides the profile for one run
@@ -210,7 +271,14 @@ func profileFor(cfg config.Config, name string) (config.Profile, error) {
 // benchFirstPaint measures the budget in docs/PERFORMANCE.md that is otherwise
 // unmeasurable: how long it takes to put the first frame on the screen from
 // what is already on disk.
-func benchFirstPaint(stdout io.Writer, deps kernel.Deps, kopts []kernel.Option) error {
+//
+// There is no status line on this path, so the startup notice goes to stderr
+// instead: a run measuring a session with no client is measuring something else,
+// and stdout stays the single number a script reads.
+func benchFirstPaint(stdout, stderr io.Writer, deps kernel.Deps, kopts []kernel.Option, notice string) error {
+	if notice != "" {
+		_, _ = fmt.Fprintln(stderr, "saral: "+notice)
+	}
 	took, _, err := kernel.FirstPaint(deps, 120, 40, kopts...)
 	if err != nil {
 		return err
@@ -219,13 +287,28 @@ func benchFirstPaint(stdout io.Writer, deps kernel.Deps, kopts []kernel.Option) 
 	return err
 }
 
-func start(deps kernel.Deps, kopts []kernel.Option) error {
+func start(deps kernel.Deps, kopts []kernel.Option, notice string) error {
 	m, err := kernel.New(deps, kopts...)
 	if err != nil {
 		return err
 	}
-	if _, err := tea.NewProgram(m).Run(); err != nil {
+	if _, err := tea.NewProgram(withNotice(m, notice)).Run(); err != nil {
 		return err
 	}
 	return nil
+}
+
+// withNotice puts a startup message on the status line before the program runs.
+//
+// The alt screen wipes anything printed ahead of it, so the status line is the
+// only surface left, and Update is a pure function on a value, so the message
+// goes onto the model rather than into a running event loop. The resize command
+// it returns is dropped: no size is known yet, and the WindowSizeMsg that
+// arrives at startup does the same work.
+func withNotice(m kernel.Model, notice string) tea.Model {
+	if notice == "" {
+		return m
+	}
+	next, _ := m.Update(kernel.StatusMsg{Text: notice, Level: kernel.LevelWarn})
+	return next
 }

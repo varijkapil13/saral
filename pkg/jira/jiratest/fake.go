@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -49,13 +50,22 @@ func (f *Fake) Capabilities(ctx context.Context, projectKey string) (jira.Capabi
 	return caps, nil
 }
 
-// Me returns the authenticated account.
+// Me returns the authenticated account, and refuses an account with no ID the
+// way a real site's answer is refused: a caller that reads a success here as
+// proof a credential works must not be able to get that proof from nobody.
+// WithMe is how a test asks for the refusal.
 func (f *Fake) Me(ctx context.Context) (jira.User, error) {
 	if err := f.fakeBegin(ctx, "Me"); err != nil {
 		return jira.User{}, err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.me.AccountID == "" {
+		return jira.User{}, &jira.TransportError{
+			Op:  "read the authenticated account",
+			Err: errors.New("the answer names no account"),
+		}
+	}
 	return f.me, nil
 }
 

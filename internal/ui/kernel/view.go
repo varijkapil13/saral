@@ -64,8 +64,11 @@ type Command struct {
 // a view affects the rest of the program by returning one of this package's
 // commands, never by reaching for another model.
 type Deps struct {
-	// Jira is the port. It is never a concrete adapter here.
-	Jira jira.Client
+	// Jira is the port, narrowed to the roles the views in this build call. It
+	// is never a concrete adapter here, and it is deliberately not the whole
+	// jira.Client: an adapter that can serve every view that exists is wired in
+	// now rather than when it can serve the ones that do not.
+	Jira jira.SessionClient
 	// Caps is the probe result, already resolved for Project.
 	Caps jira.Capabilities
 	// Project is the project this session is scoped to. Several capabilities

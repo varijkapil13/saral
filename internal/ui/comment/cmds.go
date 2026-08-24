@@ -43,7 +43,7 @@ type failedMsg struct {
 	err error
 }
 
-func load(ctx context.Context, client jira.Client, key string, gen int) tea.Cmd {
+func load(ctx context.Context, client jira.CommentReader, key string, gen int) tea.Cmd {
 	return func() tea.Msg {
 		page, err := client.Comments(ctx, key)
 		if err != nil {
@@ -63,7 +63,7 @@ func more(ctx context.Context, page jira.Page[jira.Comment], gen int) tea.Cmd {
 	}
 }
 
-func add(ctx context.Context, client jira.Client, key string, body adf.Doc, gen int) tea.Cmd {
+func add(ctx context.Context, client jira.Commenter, key string, body adf.Doc, gen int) tea.Cmd {
 	return func() tea.Msg {
 		stored, err := client.AddComment(ctx, key, body)
 		if err != nil {
@@ -73,7 +73,7 @@ func add(ctx context.Context, client jira.Client, key string, body adf.Doc, gen 
 	}
 }
 
-func edit(ctx context.Context, client jira.Client, key, id string, body adf.Doc, gen int) tea.Cmd {
+func edit(ctx context.Context, client jira.Commenter, key, id string, body adf.Doc, gen int) tea.Cmd {
 	return func() tea.Msg {
 		stored, err := client.EditComment(ctx, key, id, body)
 		if err != nil {
@@ -83,7 +83,7 @@ func edit(ctx context.Context, client jira.Client, key, id string, body adf.Doc,
 	}
 }
 
-func remove(ctx context.Context, client jira.Client, key, id string, gen int) tea.Cmd {
+func remove(ctx context.Context, client jira.Commenter, key, id string, gen int) tea.Cmd {
 	return func() tea.Msg {
 		if err := client.DeleteComment(ctx, key, id); err != nil {
 			return failedMsg{gen: gen, err: err}

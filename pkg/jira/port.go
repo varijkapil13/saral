@@ -13,6 +13,11 @@
 // Everything in this package is safe for concurrent use by definition: every
 // method takes a context and must honour its cancellation, because views cancel
 // their in-flight work when they close.
+//
+// Client is what an adapter grows into, not what a caller asks for. Callers take
+// one of the role interfaces in roles.go — Prober, Searcher, Commenter and the
+// rest — each named for a job, so that a holder's signature says which part of
+// Jira it needs and an adapter is usable for that job before it is complete.
 package jira
 
 import (
