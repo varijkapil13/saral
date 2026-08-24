@@ -155,9 +155,16 @@ a thing Batch 2 would otherwise get quietly wrong.
   untouched document come back byte-identical — markdown alone carries no account id, no lozenge
   colour and none of an unknown node's attributes. Landed ahead of the Batch 1.5 gate on purpose:
   PC.1, PC.3 and PC.5 are all outside `pkg/adf`.
-- [ ] **P2.2 — Schema-driven forms** · [#9](https://github.com/varijkapil13/saral/issues/9) · **owns** `internal/ui/form/**`, `pkg/jira/cloud/meta.go`
-  `createmeta` → widgets, required-field validation, `ValidationError` mapped to fields.
-  Needs PC.3 (`createmeta` is keyed by project and issue type) and PC.5 (the issue-type list page).
+- [x] **P2.2 — Schema-driven forms** · [#9](https://github.com/varijkapil13/saral/issues/9) · **owns** `internal/ui/form/**`, `pkg/jira/cloud/meta.go`, its blank import in `internal/ui/views.go`, `docs/{API-NOTES,ROADMAP}.md`
+  `createmeta` → widgets, required-field validation, `ValidationError` mapped to fields. The screen is
+  read through the pair that replaced the deprecated endpoint — the issue types a project offers, then
+  one type's fields — both paginated, and cached per project and issue type for 24h. Every widget is
+  chosen from the schema and never from a display name, and a field Jira will not let a create set is
+  kept off the form with the reason attached. Long text goes through `ParseMarkdownInto`, so an edit to
+  one paragraph does not rewrite the mentions in another. The project comes from `Deps.Project`, which
+  is what PC.3 makes non-empty. Two port gaps found and left as issues rather than widened into:
+  no way to list a project's issue types or to search users ([#69](https://github.com/varijkapil13/saral/issues/69)),
+  and no slot for the default value createmeta states ([#68](https://github.com/varijkapil13/saral/issues/68)).
 - [x] **P2.3 — Create, edit, transition** · [#10](https://github.com/varijkapil13/saral/issues/10) · **owns** `internal/ui/issue/edit*.go`, `pkg/jira/cloud/issue.go`, `docs/API-NOTES.md`, plus the two lines each in `internal/ui/issue/keys.go` and `internal/ui/issue/issue.go` that hang the new keys and the palette's messages off the detail pane
   `$EDITOR` handoff for long text, transition picker with per-issue transitions.
   Needs PC.1: an edit must send only fields it actually fetched, or it blanks the rest. The editor
