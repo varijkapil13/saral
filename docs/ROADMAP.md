@@ -144,9 +144,12 @@ a thing Batch 2 would otherwise get quietly wrong.
 - [ ] **P2.2 — Schema-driven forms** · [#9](https://github.com/varijkapil13/saral/issues/9) · **owns** `internal/ui/form/**`, `pkg/jira/cloud/meta.go`
   `createmeta` → widgets, required-field validation, `ValidationError` mapped to fields.
   Needs PC.3 (`createmeta` is keyed by project and issue type) and PC.5 (the issue-type list page).
-- [ ] **P2.3 — Create, edit, transition** · [#10](https://github.com/varijkapil13/saral/issues/10) · **owns** `internal/ui/issue/edit*.go`, `pkg/jira/cloud/issue.go`
+- [x] **P2.3 — Create, edit, transition** · [#10](https://github.com/varijkapil13/saral/issues/10) · **owns** `internal/ui/issue/edit*.go`, `pkg/jira/cloud/issue.go`, `docs/API-NOTES.md`, plus the two lines each in `internal/ui/issue/keys.go` and `internal/ui/issue/issue.go` that hang the new keys and the palette's messages off the detail pane
   `$EDITOR` handoff for long text, transition picker with per-issue transitions.
-  Needs PC.1: an edit must send only fields it actually fetched, or it blanks the rest.
+  Needs PC.1: an edit must send only fields it actually fetched, or it blanks the rest. The editor
+  builds its patch from `Issue.Requested` and refuses a field outside it, saying so on the row.
+  Create landed as the adapter method only — the create *form* is P2.2's schema-driven form, which is
+  what will call it.
 - [ ] **P2.4 — Comments CRUD** · [#11](https://github.com/varijkapil13/saral/issues/11) · **owns** `internal/ui/comment/**`, `pkg/jira/cloud/comment.go`
 
 ## Batch 3 — Make it a daily driver · parallel ×5

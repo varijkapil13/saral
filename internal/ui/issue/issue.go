@@ -137,6 +137,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case tea.MouseWheelMsg:
 		m.pager, _ = m.pager.Update(msg)
+
+	default:
+		cmd = m.editMsg(msg)
 	}
 	// The pager is filled here rather than in View so that a key pressed before
 	// the first frame scrolls the content that is already in hand.
@@ -192,6 +195,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			m.pager.GotoBottom()
 			return nil
 		}
+	}
+	if cmd, took := m.editKey(msg); took {
+		return cmd
 	}
 	switch {
 	case kernel.Matches(msg, m.keys.Go):
