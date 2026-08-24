@@ -95,6 +95,9 @@ Rules for the port:
   underlying `PUT /rest/agile/1.0/sprint/{id}` nulls every omitted field. The port hides that.
 - **No `map[string]any` in signatures.** Custom fields are carried in `Issue.Fields` as a typed
   `FieldSet` keyed by resolved field ID, with accessors that take a `FieldRef`.
+- **An issue knows which fields it was read with**, in `Issue.Requested`. A narrow read is otherwise
+  indistinguishable from an empty one — a nil `Assignee` means both unassigned and never asked for —
+  and anything that merges, caches or writes an issue back has to tell those apart.
 - **Every method takes `context.Context`** and must honour cancellation — views cancel in-flight
   work when they close.
 
@@ -124,13 +127,14 @@ read it; nobody re-probes ad hoc.
 
 ```go
 type Capabilities struct {
-	Plans        Capability // Administer Jira required
-	BulkMove     Capability // BULK_CHANGE + MOVE_ISSUES + CREATE_ISSUES
-	Boards       Capability // project has at least one board
-	Attachments  Capability // instance-wide setting
-	DeleteIssues Capability
-	Graphics     GraphicsMode // kitty | iterm2 | halfblocks | none
-	TimeZone     *time.Location
+	Plans          Capability // Administer Jira required
+	BulkMove       Capability // BULK_CHANGE + MOVE_ISSUES + CREATE_ISSUES
+	Boards         Capability // project has at least one board
+	Attachments    Capability // instance-wide setting
+	DeleteIssues   Capability
+	Graphics       GraphicsMode // kitty | iterm2 | halfblocks | none
+	TimeZone       *time.Location
+	TimeZoneReason string // why the zone is not the account's own; empty when it is
 }
 
 type Capability struct {
@@ -141,6 +145,12 @@ type Capability struct {
 
 A view whose capability is absent is never registered into the footer, and any keybinding that would
 reach it renders `Reason` in the status line. **A 403 is a capability answer, not an error.**
+
+A timezone the probe could not establish is reported the same way. `TimeZone` stays nil,
+`TimeZoneReason` carries the sentence — a refusal in Jira's own words, a zone name this machine has
+no zoneinfo entry for, or an account that named none — and `Zone()` hands a view both at once. Dates
+render in UTC whichever it was, so that sentence is the only thing on screen that can say why they
+may be an hour out.
 
 The probe is scoped to a project, because three of these are: boards belong to a project, and Jira
 scopes Move, Delete and Create as project permissions, so one token answers differently in two

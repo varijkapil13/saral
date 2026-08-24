@@ -649,6 +649,174 @@ func TestCapabilities_LocationFallsBackToUTC(t *testing.T) {
 	}
 }
 
+func TestCapabilities_ZoneCarriesTheReasonItIsNotTheAccounts(t *testing.T) {
+	t.Parallel()
+
+	berlin := location(t, "Europe/Berlin")
+
+	tests := []struct {
+		name       string
+		caps       jira.Capabilities
+		wantZone   *time.Location
+		wantReason string
+	}{
+		{
+			name:     "the account's own zone comes back with nothing to explain",
+			caps:     jira.Capabilities{TimeZone: berlin, TimeZoneReason: "ignored while there is a zone"},
+			wantZone: berlin,
+		},
+		{
+			name:       "a probe that failed says so beside UTC",
+			caps:       jira.Capabilities{TimeZoneReason: "Jira did not answer what timezone this account is in"},
+			wantZone:   time.UTC,
+			wantReason: "Jira did not answer what timezone this account is in",
+		},
+		{
+			name:     "an unprobed value is UTC with nothing claimed about it",
+			caps:     jira.Capabilities{},
+			wantZone: time.UTC,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotZone, gotReason := tt.caps.Zone()
+			if gotZone != tt.wantZone {
+				t.Errorf("Zone() = %s, want %s", gotZone, tt.wantZone)
+			}
+			if gotReason != tt.wantReason {
+				t.Errorf("Zone() reason = %q, want %q", gotReason, tt.wantReason)
+			}
+			if gotZone != tt.caps.Location() {
+				t.Errorf("Zone() and Location() disagree: %s and %s", gotZone, tt.caps.Location())
+			}
+		})
+	}
+}
+
+// TestCapabilities_StaysComparable pins what keeps the whole value object usable
+// as a probe result: the adapter compares it against the zero value to say that
+// a rejected credential produced no answer at all.
+func TestCapabilities_StaysComparable(t *testing.T) {
+	t.Parallel()
+
+	var unprobed, alsoUnprobed jira.Capabilities
+	if unprobed != alsoUnprobed {
+		t.Fatal("two unprobed values compare unequal")
+	}
+	withReason := jira.Capabilities{TimeZoneReason: "Jira did not say what timezone this account is in"}
+	if withReason == unprobed {
+		t.Error("a value carrying a timezone reason compares equal to an unprobed one")
+	}
+}
+
+func TestNewFieldMask_DropsBlanksAndRepeatsAndSorts(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		in       []string
+		want     []string
+		wantWide bool
+	}{
+		{name: "nothing asked for", in: nil, want: []string{}},
+		{name: "blanks are not fields", in: []string{"", "   ", "\t"}, want: []string{}},
+		{name: "sorted so two equal reads compare equal", in: []string{"status", "assignee", "summary"}, want: []string{"assignee", "status", "summary"}},
+		{name: "a repeat was still asked for once", in: []string{"summary", "summary"}, want: []string{"summary"}},
+		{name: "surrounding space is not part of an ID", in: []string{" summary ", "customfield_11101"}, want: []string{"customfield_11101", "summary"}},
+		{name: "*all is every field there is", in: []string{"summary", jira.FieldsAll}, want: []string{}, wantWide: true},
+		{name: "*navigable is wide too", in: []string{jira.FieldsNavigable}, want: []string{}, wantWide: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := jira.NewFieldMask(tt.in)
+			if !slices.Equal(got.IDs(), tt.want) {
+				t.Errorf("IDs() = %q, want %q", got.IDs(), tt.want)
+			}
+			if got.Wide() != tt.wantWide {
+				t.Errorf("Wide() = %v, want %v", got.Wide(), tt.wantWide)
+			}
+			if got.Len() != len(tt.want) {
+				t.Errorf("Len() = %d, want %d", got.Len(), len(tt.want))
+			}
+		})
+	}
+}
+
+func TestFieldMask_HasAnswersForWhatWasAskedFor(t *testing.T) {
+	t.Parallel()
+
+	narrow := jira.NewFieldMask([]string{"summary", "status"})
+	if !narrow.Has("summary") || !narrow.Has("status") {
+		t.Error("a field the read named is not in the mask")
+	}
+	if narrow.Has("assignee") {
+		t.Error("a field the read never named is in the mask, so a nil assignee reads as unassigned")
+	}
+
+	wide := jira.AllFields()
+	if !wide.Has("assignee") || !wide.Has("a-field-nothing-has-enumerated") {
+		t.Error("a wide mask must answer for every field, including ones no client can enumerate")
+	}
+	if wide.Len() != 0 || len(wide.IDs()) != 0 {
+		t.Errorf("a wide mask names %d fields; the list is the site's, not the caller's", wide.Len())
+	}
+
+	var unread jira.FieldMask
+	if unread.Has("summary") || unread.Wide() {
+		t.Error("the zero mask asked for something; an issue that came from no read must refuse a write")
+	}
+}
+
+func TestFieldMask_IsImmutableSoAReaderCannotWidenIt(t *testing.T) {
+	t.Parallel()
+
+	mask := jira.NewFieldMask([]string{"summary", "assignee"})
+	ids := mask.IDs()
+	ids[0] = "labels"
+
+	if mask.Has("labels") {
+		t.Error("writing into the slice IDs() handed back changed the mask, so a cached issue can be told it read a field it did not")
+	}
+	if !slices.Equal(mask.IDs(), []string{"assignee", "summary"}) {
+		t.Errorf("IDs() = %q after a caller wrote into an earlier copy", mask.IDs())
+	}
+}
+
+// TestFieldMask_CostsNothingToCarryOnAnIssue is why the mask is a sorted slice
+// behind a value type rather than a map or a per-issue copy: an adapter builds
+// one per read and hands the same one to every issue on the page, so a page of
+// ten thousand rows pays for it once.
+func TestFieldMask_CostsNothingToCarryOnAnIssue(t *testing.T) {
+	mask := jira.NewFieldMask([]string{"summary", "status", "assignee", "priority", "updated", "issuetype"})
+	issues := make([]jira.Issue, 512)
+
+	carry := testing.AllocsPerRun(50, func() {
+		for i := range issues {
+			issues[i].Requested = mask
+		}
+	})
+	if carry != 0 {
+		t.Errorf("carrying the mask onto %d issues cost %.0f allocations, want none", len(issues), carry)
+	}
+
+	read := testing.AllocsPerRun(50, func() {
+		for i := range issues {
+			if !issues[i].Requested.Has("assignee") || issues[i].Requested.Has("labels") {
+				t.Fatal("the mask lost what it was asked for")
+			}
+		}
+	})
+	if read != 0 {
+		t.Errorf("reading the mask %d times cost %.0f allocations, want none", len(issues), read)
+	}
+}
+
 func TestIssuePatch_IsEmptyOnlyWhenItWouldChangeNothing(t *testing.T) {
 	t.Parallel()
 

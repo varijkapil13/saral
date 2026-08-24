@@ -94,9 +94,67 @@ func TestSearch_RefusesAQueryThatNamesNoFieldsWithoutAskingTheSite(t *testing.T)
 
 	// The fake refuses the same query, and the two adapters have to agree about
 	// why, or a view written against one reads differently against the other.
-	_, fakeErr := jiratest.New().Search(t.Context(), jira.Query{JQL: "project = EX"})
-	if fakeErr == nil || fakeErr.Error() != err.Error() {
-		t.Errorf("the fake refuses it as %v; the cloud adapter as %v", fakeErr, err)
+	// The whitespace matters: a field list that trims away to nothing is a list
+	// that names no fields, and both adapters have to see that the same way.
+	for _, fields := range [][]string{nil, {"  "}, {"", " \t "}} {
+		_, fakeErr := jiratest.New().Search(t.Context(), jira.Query{JQL: "project = EX", Fields: fields})
+		if fakeErr == nil || fakeErr.Error() != err.Error() {
+			t.Errorf("with Fields %q the fake refuses it as %v; the cloud adapter as %v", fields, fakeErr, err)
+		}
+	}
+}
+
+// TestSearch_TellsEveryIssueWhichFieldsWereAskedFor is the half of a narrow read
+// that the issue itself cannot express: a nil assignee on an issue read without
+// the assignee is not an unassigned issue, and only the mask says which it is.
+func TestSearch_TellsEveryIssueWhichFieldsWereAskedFor(t *testing.T) {
+	t.Parallel()
+
+	s := jiratest.NewServer()
+	defer s.Close()
+
+	want := slices.Sorted(slices.Values(listFields))
+	first := searchOnce(t, s, listQuery())
+	all, err := jira.Collect(t.Context(), first, 0)
+	if err != nil {
+		t.Fatalf("walking the pages: %v", err)
+	}
+	if len(all) < 3 {
+		t.Fatalf("the fixture pages carried %d issues, want the walk to reach page two", len(all))
+	}
+
+	for _, issue := range all {
+		if issue.Requested.Wide() {
+			t.Errorf("%s claims every field was asked for", issue.Key)
+		}
+		if got := issue.Requested.IDs(); !slices.Equal(got, want) {
+			t.Errorf("%s was read with %q, want exactly %q", issue.Key, got, want)
+		}
+		if !issue.Requested.Has("assignee") {
+			t.Errorf("%s does not know the assignee was asked for, so an unassigned issue reads as unfetched", issue.Key)
+		}
+		if issue.Requested.Has("labels") {
+			t.Errorf("%s claims labels were asked for; they were not, so its empty labels mean nothing", issue.Key)
+		}
+	}
+}
+
+// TestSearch_MarksAFieldTheSiteDoesNotHaveAsRequestedAnyway pins the caveat the
+// mask cannot avoid: a response carries only the fields it returned, so a field
+// ID this site does not have is in the mask and never in the values.
+func TestSearch_MarksAFieldTheSiteDoesNotHaveAsRequestedAnyway(t *testing.T) {
+	t.Parallel()
+
+	s := searchServing(onePage(`{"id":"1","key":"EX-1","fields":{"summary":"A row"}}`))
+	defer s.Close()
+
+	const absent = "customfield_99999"
+	got := firstIssue(t, searchOnce(t, s, jira.Query{JQL: "project = EX", Fields: []string{"summary", absent}}))
+	if !got.Requested.Has(absent) {
+		t.Errorf("the mask dropped %s; it records what was asked for, not what the site had", absent)
+	}
+	if _, ok := got.Fields.ByID(absent); ok {
+		t.Errorf("the site sent a value for %s, which it never echoed", absent)
 	}
 }
 
@@ -434,7 +492,7 @@ func TestSearch_ReadsAnIssueShapedLikeARealOne(t *testing.T) {
 		t.Fatalf("parsing the fixture: %v", err)
 	}
 
-	got := decodeIssue(wire, nil)
+	got := decodeIssue(wire, nil, jira.AllFields())
 
 	if got.Key != "EX-1" || got.ID != "10001" {
 		t.Errorf("the issue is %s/%s, want EX-1/10001", got.Key, got.ID)
@@ -811,10 +869,11 @@ func BenchmarkDecodeSearchPage(b *testing.B) {
 		b.Fatalf("reading the fixture: %v", err)
 	}
 	resp := &response{status: http.StatusOK, body: raw}
+	mask := jira.NewFieldMask(listFields)
 
 	b.ReportAllocs()
 	for b.Loop() {
-		if _, _, err := decodeSearchPage(resp, "POST "+searchJQLPath); err != nil {
+		if _, _, err := decodeSearchPage(resp, "POST "+searchJQLPath, mask); err != nil {
 			b.Fatalf("decoding: %v", err)
 		}
 	}
@@ -835,7 +894,7 @@ func TestDecodeIssue_WithoutASchemaKeepsAnUnlabelledArrayAsItsBytes(t *testing.T
 	if err := json.Unmarshal([]byte(wire), &in); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	got := decodeIssue(in, nil)
+	got := decodeIssue(in, nil, jira.AllFields())
 
 	ref := jira.FieldRef{ID: "attachment"}
 	if opts, ok := got.Fields.Options(ref); ok {

@@ -475,6 +475,10 @@ type Issue struct {
 	Resolved     *time.Time
 	TimeTracking *TimeTracking
 	Fields       FieldSet
+	// Requested is the set of fields this issue was read with. A field outside
+	// it is absent because nothing asked for it, which is a different answer
+	// from Jira having nothing to send.
+	Requested FieldMask
 }
 
 // IssueInput is a new issue. Anything beyond the fields named here goes in
@@ -895,6 +899,75 @@ type Query struct {
 	MaxResults int
 }
 
+// The two wildcards Query.Fields understands. Either asks for every field the
+// site has, on every issue in the result set, which is the expensive mistake
+// Query.Fields exists to avoid.
+const (
+	FieldsAll       = "*all"
+	FieldsNavigable = "*navigable"
+)
+
+// FieldMask is the set of field IDs an issue was read with.
+//
+// A narrow read is otherwise indistinguishable from an empty one: Assignee is
+// nil both for an unassigned issue and for a search whose Query.Fields never
+// named the assignee. Anything that merges, caches or writes an issue back has
+// to know which of those two it is holding, or a refresh that never asked about
+// the assignee unassigns the issue.
+//
+// The zero mask asked for nothing, which is the honest answer for an issue that
+// did not come from a read, and the answer that refuses a write rather than
+// permitting one.
+//
+// It is immutable for the reason FieldSet is: a mask travels by value into an
+// Issue, into the cache and back out, and a collection that could be written
+// through would mean seeding an edit form from a cached issue rewrites the
+// cached issue.
+type FieldMask struct {
+	ids []string
+	all bool
+}
+
+// NewFieldMask builds a mask from the field IDs a read asked for, dropping
+// blanks and repeats and sorting what is left. Either wildcard makes the whole
+// mask wide, because that is what the endpoint does with it.
+func NewFieldMask(ids []string) FieldMask {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		trimmed := strings.TrimSpace(id)
+		switch {
+		case trimmed == "":
+		case trimmed == FieldsAll || trimmed == FieldsNavigable:
+			return FieldMask{all: true}
+		case !slices.Contains(out, trimmed):
+			out = append(out, trimmed)
+		}
+	}
+	if len(out) == 0 {
+		return FieldMask{}
+	}
+	slices.Sort(out)
+	return FieldMask{ids: out}
+}
+
+// AllFields is the mask of a read that asked for everything the site holds.
+func AllFields() FieldMask { return FieldMask{all: true} }
+
+// Has reports whether the read asked for a field. When it did, that field being
+// absent from the issue means the site had nothing to send for it.
+func (m FieldMask) Has(id string) bool { return m.all || slices.Contains(m.ids, id) }
+
+// Wide reports whether the read asked for every field the site has.
+func (m FieldMask) Wide() bool { return m.all }
+
+// IDs returns the field IDs the read named, sorted. A wide mask names none:
+// what it asked for is the site's list, which no client can enumerate.
+func (m FieldMask) IDs() []string { return slices.Clone(m.ids) }
+
+// Len reports how many field IDs the mask names. That is zero for a wide mask
+// as well as for the zero one, so Wide is what tells those two apart.
+func (m FieldMask) Len() int { return len(m.ids) }
+
 // GraphicsMode is how, if at all, this terminal can show an image.
 type GraphicsMode int
 
@@ -949,6 +1022,11 @@ type Capabilities struct {
 	DeleteIssues Capability
 	Graphics     GraphicsMode
 	TimeZone     *time.Location
+	// TimeZoneReason is why TimeZone is not the account's own, worded the way a
+	// Capability.Reason is and empty exactly when TimeZone is set. Dates render
+	// in UTC either way, so this sentence is the only thing that can tell a user
+	// their timestamps are an hour out.
+	TimeZoneReason string
 }
 
 // Capability returns the probe result for a key. An unknown key comes back as
@@ -989,4 +1067,14 @@ func (c Capabilities) Location() *time.Location {
 		return time.UTC
 	}
 	return c.TimeZone
+}
+
+// Zone returns the timezone to render dates in and, when that is not the
+// account's own, the reason it is not. The reason is empty exactly when the
+// zone is the account's.
+func (c Capabilities) Zone() (zone *time.Location, reason string) {
+	if c.TimeZone == nil {
+		return time.UTC, c.TimeZoneReason
+	}
+	return c.TimeZone, ""
 }

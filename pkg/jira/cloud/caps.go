@@ -196,15 +196,25 @@ func (c *Client) capsTimeZone(ctx context.Context) (capsApply, error) {
 	}, &body)
 
 	var zone *time.Location
-	if err == nil && body.TimeZone != "" {
-		// A machine carrying no zoneinfo database, or a zone name Go does not
-		// know, is not a Jira failure and must not read as one: dates then
-		// render in UTC, which is what Capabilities.Location falls back to.
-		if loaded, loadErr := time.LoadLocation(body.TimeZone); loadErr == nil {
-			zone = loaded
+	var reason string
+	switch {
+	case err != nil:
+		reason = capsFailed("what timezone this account is in", err)
+	case body.TimeZone == "":
+		reason = "Jira did not say what timezone this account is in"
+	default:
+		loaded, loadErr := time.LoadLocation(body.TimeZone)
+		if loadErr != nil {
+			// A zone Jira knows and this machine does not is a local failure, not Jira's.
+			reason = "This machine has no zoneinfo entry for " + body.TimeZone +
+				", the timezone this account is set to"
+			break
 		}
+		zone = loaded
 	}
-	return func(caps *jira.Capabilities) { caps.TimeZone = zone }, err
+	return func(caps *jira.Capabilities) {
+		caps.TimeZone, caps.TimeZoneReason = zone, reason
+	}, err
 }
 
 // capsPlans asks whether the Plans API answers this token at all. A 403 is the

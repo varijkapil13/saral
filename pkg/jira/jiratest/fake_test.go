@@ -360,12 +360,143 @@ func TestSearch_NarrowsTheFieldSetToTheFieldsAsked(t *testing.T) {
 	if _, present := narrow.Items[0].Fields.Get(rank.Ref()); present {
 		t.Error("a field the query did not ask for must not come back")
 	}
-	wide, err := c.Search(ctx, jira.Query{JQL: `key = PROJ-1`, Fields: []string{"*all"}})
+	wide, err := c.Search(ctx, jira.Query{JQL: `key = PROJ-1`, Fields: []string{jira.FieldsAll}})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
 	if _, present := wide.Items[0].Fields.Get(rank.Ref()); !present {
 		t.Error("*all must return the whole field set")
+	}
+}
+
+// TestSearch_ReportsTheSameFieldsItMasked is the anti-lying test: the fake
+// blanks the fields the query did not name and reports what it blanked from the
+// same value, so it cannot mask one set and claim another. A fake that could
+// would be worse than no fake, since every consumer of the mask is written
+// against it.
+func TestSearch_ReportsTheSameFieldsItMasked(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 6, jiratest.WithPageSize(100))
+
+	page, err := c.Search(t.Context(), jira.Query{JQL: `project = PROJ ORDER BY key`, Fields: fakeNarrow})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(page.Items) == 0 {
+		t.Fatal("the search matched nothing")
+	}
+
+	want := slices.Sorted(slices.Values(fakeNarrow))
+	for _, iss := range page.Items {
+		if iss.Requested.Wide() {
+			t.Errorf("%s claims every field was asked for", iss.Key)
+		}
+		if got := iss.Requested.IDs(); !slices.Equal(got, want) {
+			t.Errorf("%s reports %q as requested, want %q", iss.Key, got, want)
+		}
+		for _, id := range iss.Fields.IDs() {
+			if !iss.Requested.Has(id) {
+				t.Errorf("%s carries the field %s, which it says was never asked for", iss.Key, id)
+			}
+		}
+		carried := map[string]bool{
+			"summary":      iss.Summary != "",
+			"status":       iss.Status.Name != "",
+			"description":  !iss.Description.IsZero(),
+			"issuetype":    iss.Type.ID != "",
+			"priority":     iss.Priority != nil,
+			"reporter":     iss.Reporter != nil,
+			"components":   iss.Components != nil,
+			"fixVersions":  iss.FixVersions != nil,
+			"duedate":      !iss.Due.IsZero(),
+			"created":      !iss.Created.IsZero(),
+			"updated":      !iss.Updated.IsZero(),
+			"timetracking": iss.TimeTracking != nil,
+		}
+		for id, present := range carried {
+			if present && !iss.Requested.Has(id) {
+				t.Errorf("%s carries %s while reporting it was not asked for", iss.Key, id)
+			}
+		}
+		if !carried["summary"] || !carried["status"] {
+			t.Errorf("%s is missing a field the query did ask for: %+v", iss.Key, iss)
+		}
+	}
+}
+
+func TestSearch_ReportsAWideMaskForAWildcard(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 2, jiratest.WithPageSize(100))
+
+	for _, wildcard := range []string{jira.FieldsAll, jira.FieldsNavigable} {
+		page, err := c.Search(t.Context(), jira.Query{JQL: `project = PROJ`, Fields: []string{wildcard}})
+		if err != nil {
+			t.Fatalf("Search with %s: %v", wildcard, err)
+		}
+		iss := page.Items[0]
+		if !iss.Requested.Wide() {
+			t.Errorf("%s asked for with %s does not report a wide read", iss.Key, wildcard)
+		}
+		if !iss.Requested.Has("assignee") || !iss.Requested.Has("a-field-nothing-has-enumerated") {
+			t.Errorf("a wide read must answer for every field, including ones nothing enumerated")
+		}
+	}
+}
+
+// TestIssue_AndCreateIssue_ComeBackWide covers the two calls that return a bare
+// issue with no field list anywhere: both read everything, so an edit built off
+// one may write any field back.
+func TestIssue_AndCreateIssue_ComeBackWide(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 3)
+	ctx := t.Context()
+
+	fetched, err := c.Issue(ctx, "PROJ-1")
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if !fetched.Requested.Wide() {
+		t.Error("a fetched issue does not report a wide read, so an edit off it would refuse every field")
+	}
+
+	created, err := c.CreateIssue(ctx, jira.IssueInput{
+		ProjectKey:  "PROJ",
+		IssueTypeID: fetched.Type.ID,
+		Summary:     "A new row",
+	})
+	if err != nil {
+		t.Fatalf("CreateIssue: %v", err)
+	}
+	if !created.Requested.Wide() {
+		t.Error("a created issue does not report a wide read")
+	}
+	again, err := c.Issue(ctx, created.Key)
+	if err != nil {
+		t.Fatalf("Issue after CreateIssue: %v", err)
+	}
+	if !again.Requested.Wide() {
+		t.Error("an issue read back after creation does not report a wide read")
+	}
+}
+
+// TestSearch_RefusesAFieldListThatOnlyLooksLikeOne pins the fake to the cloud
+// adapter, which drops blanks before it counts what it was given: a list of
+// spaces names no fields, and an adapter that accepts it teaches a view that a
+// search with no fields works.
+func TestSearch_RefusesAFieldListThatOnlyLooksLikeOne(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 2)
+
+	for _, fields := range [][]string{nil, {}, {"  "}, {"", "\t"}} {
+		_, err := c.Search(t.Context(), jira.Query{JQL: `project = PROJ`, Fields: fields})
+
+		var invalid *jira.ValidationError
+		if !errors.As(err, &invalid) {
+			t.Fatalf("Fields %q was answered with %v, want a *jira.ValidationError", fields, err)
+		}
+		if _, ok := invalid.For("fields"); !ok {
+			t.Errorf("the refusal of %q does not name the fields list: %v", fields, invalid)
+		}
 	}
 }
 
@@ -1578,7 +1709,7 @@ func fakeHasVersion(versions []jira.Version, id string) bool {
 
 func fakeIssuesOnVersion(t *testing.T, c *jiratest.Fake, versionID string) []jira.Issue {
 	t.Helper()
-	page, err := c.Search(t.Context(), jira.Query{JQL: "project = PROJ ORDER BY key", Fields: []string{"*all"}})
+	page, err := c.Search(t.Context(), jira.Query{JQL: "project = PROJ ORDER BY key", Fields: []string{jira.FieldsAll}})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

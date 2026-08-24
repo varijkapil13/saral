@@ -362,8 +362,17 @@ func (m Model) summary() []string {
 		rows = append(rows, m.capabilityRow(c.key, c.label))
 	}
 	return append(rows, "",
-		m.pair("Dates in", m.caps.Location().String()),
+		m.pair("Dates in", m.datesLine()),
 		m.pair("Images", m.caps.Graphics.String()))
+}
+
+func (m Model) datesLine() string {
+	loc, why := m.caps.Zone()
+	dates := loc.String()
+	if why != "" {
+		dates += m.styles.muted.Render(" · " + why)
+	}
+	return dates
 }
 
 func (m Model) capsHeading() string {
