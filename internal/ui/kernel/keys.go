@@ -29,7 +29,15 @@ type GlobalKeys struct {
 	Palette Binding
 	Refresh Binding
 	Purge   Binding
-	Slot    Binding
+	// Go is the prefix the view slots sit behind. The kernel buffers it rather
+	// than forwarding it, because two views already spend g on gg and ge.
+	Go Binding
+	// Slot switches to a footer slot. Its keys are the bare digits because that
+	// is what arrives after the prefix; its help text is the whole gesture.
+	Slot Binding
+	// Saved runs the query bound to a number key. Same nine digits, pressed
+	// alone, and only in a root view.
+	Saved Binding
 }
 
 // DefaultGlobalKeys is the keymap from docs/UX.md. Vim keys and arrows are both
@@ -42,15 +50,19 @@ func DefaultGlobalKeys() GlobalKeys {
 		Palette: Bind([]string{"ctrl+k"}, "ctrl+k", "commands"),
 		Refresh: Bind([]string{"r"}, "r", "refresh"),
 		Purge:   Bind([]string{"R"}, "R", "refetch everything"),
-		Slot:    Bind([]string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}, "1-9", "switch view"),
+		Go:      Bind([]string{"g"}, "g", "go to"),
+		Slot:    Bind(digits, "g 1-9", "switch view"),
+		Saved:   Bind(digits, "1-9", "saved query"),
 	}
 }
+
+var digits = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
 
 // KeySet renders the global keys for the footer and the help overlay.
 func (g GlobalKeys) KeySet() KeySet {
 	return KeySet{
 		Short: []Binding{g.Help, g.Palette, g.Quit},
-		Full:  [][]Binding{{g.Slot, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}},
+		Full:  [][]Binding{{g.Saved, g.Slot, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}},
 	}
 }
 

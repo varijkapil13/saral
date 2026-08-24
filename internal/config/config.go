@@ -10,10 +10,13 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/varijkapil13/saral/internal/app"
 )
 
 const (
@@ -54,6 +57,11 @@ type Profile struct {
 	Timeline Timeline
 	Theme    string
 	Glyphs   string
+	// Queries are the searches this profile keeps, each optionally bound to a
+	// number key. They are app's own type, validated by app's own rules, so that
+	// a file and a keypress cannot disagree about what a saved query is; the
+	// projection is not written, because a saved query opens into the issue list.
+	Queries []app.SavedQuery
 }
 
 // TokenSource names where the API token comes from. Exactly one field is set.
@@ -153,6 +161,13 @@ type fileProfile struct {
 	Timeline Timeline       `toml:"timeline"`
 	Theme    string         `toml:"theme"`
 	Glyphs   string         `toml:"glyphs"`
+	Queries  []fileQuery    `toml:"queries"`
+}
+
+type fileQuery struct {
+	Name string `toml:"name"`
+	JQL  string `toml:"jql"`
+	Key  int    `toml:"key"`
 }
 
 type fileToken struct {
@@ -233,11 +248,27 @@ func decodeProfile(md *toml.MetaData, name string, fp fileProfile) (Profile, err
 		Timeline: fp.Timeline,
 		Theme:    strings.TrimSpace(fp.Theme),
 		Glyphs:   strings.TrimSpace(fp.Glyphs),
+		Queries:  decodeQueries(fp.Queries),
 	}
 	if err := p.Validate(); err != nil {
 		return Profile{}, err
 	}
 	return p, nil
+}
+
+func decodeQueries(in []fileQuery) []app.SavedQuery {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]app.SavedQuery, 0, len(in))
+	for _, q := range in {
+		out = append(out, app.SavedQuery{
+			Name: strings.TrimSpace(q.Name),
+			JQL:  strings.TrimSpace(q.JQL),
+			Slot: q.Key,
+		})
+	}
+	return out
 }
 
 func decodeToken(md *toml.MetaData, name string, prim toml.Primitive) (TokenSource, error) {
@@ -386,6 +417,34 @@ func (p Profile) Validate() error {
 	if !slices.Contains(glyphSets, p.Glyphs) {
 		return fmt.Errorf("profile %q: glyphs %q is not one of %s", p.Name, p.Glyphs, strings.Join(glyphSets[1:], ", "))
 	}
+	return validateQueries(p.Name, p.Queries)
+}
+
+// validateQueries holds a query in the file to the rules app applies to one
+// bound at the keyboard, and refuses the two things a file can say that a
+// keypress cannot: two queries under one name, or two on one key. Add resolves
+// both by taking the newer, which here would drop a line somebody wrote.
+func validateQueries(profile string, queries []app.SavedQuery) error {
+	names := make(map[string]struct{}, len(queries))
+	keys := make(map[int]string, len(queries))
+	for _, q := range queries {
+		name := strings.TrimSpace(q.Name)
+		lowered := strings.ToLower(name)
+		if _, dup := names[lowered]; dup {
+			return fmt.Errorf("profile %q: two saved queries are called %q", profile, name)
+		}
+		names[lowered] = struct{}{}
+		if q.Slot <= 0 {
+			continue
+		}
+		if other, dup := keys[q.Slot]; dup {
+			return fmt.Errorf("profile %q: %q and %q both ask for key %d", profile, other, name, q.Slot)
+		}
+		keys[q.Slot] = name
+	}
+	if _, err := app.NewSavedQueries(queries...); err != nil {
+		return fmt.Errorf("profile %q: %w", profile, err)
+	}
 	return nil
 }
 
@@ -526,26 +585,37 @@ func (c Config) encode() ([]byte, error) {
 			pairs = append(pairs, [2]string{"glyphs", quote(p.Glyphs)})
 		}
 		pairs = append(pairs, [2]string{"token", inlineToken(p.Token)})
-		width := 0
-		for _, kv := range pairs {
-			width = max(width, len(kv[0]))
-		}
-		for _, kv := range pairs {
-			fmt.Fprintf(&b, "%-*s = %s\n", width, kv[0], kv[1])
-		}
+		writePairs(&b, pairs)
 
-		if len(p.Timeline.Start) == 0 && len(p.Timeline.End) == 0 {
-			continue
+		if len(p.Timeline.Start) > 0 || len(p.Timeline.End) > 0 {
+			fmt.Fprintf(&b, "\n[profiles.%s.timeline]\n", tomlKey(name))
+			if len(p.Timeline.Start) > 0 {
+				fmt.Fprintf(&b, "start = %s\n", tomlArray(p.Timeline.Start))
+			}
+			if len(p.Timeline.End) > 0 {
+				fmt.Fprintf(&b, "end   = %s\n", tomlArray(p.Timeline.End))
+			}
 		}
-		fmt.Fprintf(&b, "\n[profiles.%s.timeline]\n", tomlKey(name))
-		if len(p.Timeline.Start) > 0 {
-			fmt.Fprintf(&b, "start = %s\n", tomlArray(p.Timeline.Start))
-		}
-		if len(p.Timeline.End) > 0 {
-			fmt.Fprintf(&b, "end   = %s\n", tomlArray(p.Timeline.End))
+		for _, q := range p.Queries {
+			fmt.Fprintf(&b, "\n[[profiles.%s.queries]]\n", tomlKey(name))
+			query := [][2]string{{"name", quote(q.Name)}, {"jql", quote(q.JQL)}}
+			if q.Slot > 0 {
+				query = append(query, [2]string{"key", strconv.Itoa(q.Slot)})
+			}
+			writePairs(&b, query)
 		}
 	}
 	return []byte(b.String()), nil
+}
+
+func writePairs(b *strings.Builder, pairs [][2]string) {
+	width := 0
+	for _, kv := range pairs {
+		width = max(width, len(kv[0]))
+	}
+	for _, kv := range pairs {
+		fmt.Fprintf(b, "%-*s = %s\n", width, kv[0], kv[1])
+	}
 }
 
 func inlineToken(t TokenSource) string {

@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/config"
 	_ "github.com/varijkapil13/saral/internal/ui"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -122,6 +123,13 @@ func build(opt options) (kernel.Deps, []kernel.Option, error) {
 	deps.Site = profile.Site
 	deps.Project = opt.project
 
+	saved, err := app.NewSavedQueries(profile.Queries...)
+	if err != nil {
+		return deps, nil, err
+	}
+	deps.Saved = saved
+	deps.SaveQueries = queryWriter(profile.Name)
+
 	// Nothing configured means the first thing to show is the thing that
 	// configures it. Without this the kernel opens whichever view claimed the
 	// first footer slot, and setup is reachable only by someone who already
@@ -147,6 +155,31 @@ func build(opt options) (kernel.Deps, []kernel.Option, error) {
 		kopts = append(kopts, kernel.WithInitialView(kernel.SetupViewID))
 	}
 	return deps, kopts, nil
+}
+
+// queryWriter persists a changed set of saved queries back into the profile
+// they came from. It re-reads the file rather than writing back the copy this
+// session started with, because onboarding may have written one since; an empty
+// name is the first run, where the profile to write into is whichever one is
+// active by the time a key is bound.
+func queryWriter(name string) func(app.SavedQueries) error {
+	return func(saved app.SavedQueries) error {
+		path, err := config.Path()
+		if err != nil {
+			return err
+		}
+		cfg, err := config.LoadFile(path)
+		if err != nil {
+			return err
+		}
+		profile, err := profileFor(cfg, name)
+		if err != nil {
+			return err
+		}
+		profile.Queries = saved.All()
+		cfg.Profiles[profile.Name] = profile
+		return cfg.Save(path)
+	}
 }
 
 func profileFor(cfg config.Config, name string) (config.Profile, error) {

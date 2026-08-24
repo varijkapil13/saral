@@ -43,9 +43,15 @@ func newAt(t *testing.T, d Deps, w, h int, opts ...Option) Model {
 	return next.(Model)
 }
 
-func press(m Model, keys string) (Model, tea.Cmd) {
-	next, cmd := m.Update(keyPress(keys))
-	return next.(Model), cmd
+// press sends one key, or a gesture spelt out one key at a time.
+func press(m Model, keys ...string) (Model, tea.Cmd) {
+	var cmd tea.Cmd
+	for _, k := range keys {
+		var next tea.Model
+		next, cmd = m.Update(keyPress(k))
+		m = next.(Model)
+	}
+	return m, cmd
 }
 
 func keyPress(s string) tea.KeyPressMsg {
@@ -98,13 +104,13 @@ func TestFooter_HidesAViewWhoseCapabilityIsAbsentAndExplainsItOnItsKey(t *testin
 	if strings.Contains(frame, "Plans") {
 		t.Errorf("an unavailable view is in the footer:\n%s", frame)
 	}
-	m, _ = press(m, "2")
+	m, _ = press(m, "g", "2")
 	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "Administer Jira") {
 		t.Errorf("pressing an unavailable view's key did not show the reason:\n%s", got)
 	}
 }
 
-func TestKeys_SlotSwitchesRootView(t *testing.T) {
+func TestKeys_GoThenADigitSwitchesRootView(t *testing.T) {
 	resetRegistry()
 	t.Cleanup(resetRegistry)
 	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
@@ -114,9 +120,9 @@ func TestKeys_SlotSwitchesRootView(t *testing.T) {
 	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "board body") {
 		t.Fatalf("did not start on the first slot:\n%s", got)
 	}
-	m, _ = press(m, "2")
+	m, _ = press(m, "g", "2")
 	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "backlog body") {
-		t.Errorf("slot 2 did not switch view:\n%s", got)
+		t.Errorf("g 2 did not switch view:\n%s", got)
 	}
 }
 
@@ -126,7 +132,7 @@ func TestKeys_UnboundSlotSaysSoRatherThanDoingNothing(t *testing.T) {
 	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
 
 	m := newAt(t, testDeps(), 120, 30)
-	m, _ = press(m, "7")
+	m, _ = press(m, "g", "7")
 	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "nothing is bound to 7") {
 		t.Errorf("silent no-op on an unbound slot:\n%s", got)
 	}
@@ -231,7 +237,7 @@ func TestFooter_ShowsOnlyTheFocusedViewsHints(t *testing.T) {
 	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "move issue") || strings.Contains(got, "sprint") {
 		t.Errorf("footer shows the wrong view's keys:\n%s", got)
 	}
-	m, _ = press(m, "2")
+	m, _ = press(m, "g", "2")
 	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "sprint") || strings.Contains(got, "move issue") {
 		t.Errorf("footer did not follow the focus:\n%s", got)
 	}
@@ -515,8 +521,8 @@ func TestSwitchingRootViewsAndBackKeepsTheUsersPlace(t *testing.T) {
 
 	m := newAt(t, testDeps(), 120, 30)
 	board.content = "cursor is on row 42"
-	m, _ = press(m, "2")
-	m, _ = press(m, "1")
+	m, _ = press(m, "g", "2")
+	m, _ = press(m, "g", "1")
 
 	if built != 1 {
 		t.Errorf("the board was rebuilt %d times; switching away should not throw it away", built)
@@ -540,7 +546,7 @@ func TestOpen_WorksWhenNothingWasAvailableAtStartup(t *testing.T) {
 
 	next, _ := m.Update(CapabilitiesMsg{Caps: fullCaps()})
 	m = next.(Model)
-	m, _ = press(m, "1")
+	m, _ = press(m, "g", "1")
 
 	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "plans body") {
 		t.Errorf("opening a view that only just became available did not work:\n%s", got)
@@ -580,7 +586,7 @@ func TestThemeChange_ReachesARootViewTheUserSwitchedAwayFrom(t *testing.T) {
 	d := testDeps()
 	d.Theme = NewTheme(ThemeAuto, false, UnicodeGlyphs())
 	m := newAt(t, d, 120, 30)
-	m, _ = press(m, "2")
+	m, _ = press(m, "g", "2")
 	board.seen = nil
 
 	next, _ := m.Update(tea.BackgroundColorMsg{Color: black()})
@@ -676,8 +682,11 @@ func TestBlocker_IsAskedBeforeAnythingThatWouldDiscardTheView(t *testing.T) {
 
 	draft := &stubView{id: "editor", blocks: "the comment you are writing is unsaved"}
 	for name, act := range map[string]func(Model) (tea.Model, tea.Cmd){
-		"going back with esc":      func(m Model) (tea.Model, tea.Cmd) { return m.Update(keyPress("esc")) },
-		"switching view by key":    func(m Model) (tea.Model, tea.Cmd) { return m.Update(keyPress("2")) },
+		"going back with esc": func(m Model) (tea.Model, tea.Cmd) { return m.Update(keyPress("esc")) },
+		"switching view by key": func(m Model) (tea.Model, tea.Cmd) {
+			next, _ := m.Update(keyPress("g"))
+			return next.(Model).Update(keyPress("2"))
+		},
 		"switching view by name":   func(m Model) (tea.Model, tea.Cmd) { return m.Update(OpenMsg{ID: "backlog"}) },
 		"popping programmatically": func(m Model) (tea.Model, tea.Cmd) { return m.Update(PopMsg{}) },
 	} {

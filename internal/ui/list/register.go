@@ -10,10 +10,11 @@ import (
 
 func init() {
 	kernel.RegisterView(kernel.ViewSpec{
-		ID:    ViewID,
-		Title: "Issues",
-		Slot:  1,
-		New:   New,
+		ID:          ViewID,
+		Title:       "Issues",
+		Slot:        1,
+		RunsQueries: true,
+		New:         New,
 	})
 	kernel.RegisterKeys(ViewID, defaultKeys().keySet())
 	kernel.RegisterCommand(kernel.Command{
@@ -21,6 +22,14 @@ func init() {
 		Title: "Issues",
 		Group: "Go to",
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
+	})
+	kernel.RegisterCommand(kernel.Command{
+		ID:    "issues.save-query",
+		Title: "Save this query to a number key",
+		Group: "Search",
+		Run: func(kernel.Deps) tea.Cmd {
+			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SaveQueryMsg{}))
+		},
 	})
 	for _, q := range []struct{ id, title, jql string }{
 		{"issues.mine", "My issues", "assignee = currentUser() ORDER BY updated DESC"},

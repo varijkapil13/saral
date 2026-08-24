@@ -14,6 +14,7 @@ type keyMap struct {
 	Bottom   kernel.Binding
 	Open     kernel.Binding
 	Filter   kernel.Binding
+	Save     kernel.Binding
 	Accept   kernel.Binding
 	Clear    kernel.Binding
 }
@@ -31,6 +32,7 @@ func defaultKeys() keyMap {
 		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "last row"),
 		Open:     kernel.Bind([]string{"enter"}, "enter", "open"),
 		Filter:   kernel.Bind([]string{"/"}, "/", "filter"),
+		Save:     kernel.Bind([]string{"s"}, "s", "save this query to a key"),
 		Accept:   kernel.Bind([]string{"enter"}, "enter", "keep filter"),
 		Clear:    kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "clear filter"),
 	}
@@ -45,7 +47,7 @@ func (k keyMap) keySet() kernel.KeySet {
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.HalfDown, k.HalfUp, k.Top, k.Bottom},
-			{k.Open, k.Filter, k.Accept, k.Clear},
+			{k.Open, k.Filter, k.Save, k.Accept, k.Clear},
 		},
 	}
 }
@@ -65,6 +67,7 @@ const (
 	actBottom
 	actOpen
 	actFilter
+	actSave
 	actAccept
 	actClear
 )
@@ -80,6 +83,7 @@ func (k keyMap) tables() (normal, filtering map[string]action) {
 		binding{k.HalfDown, actHalfDown}, binding{k.HalfUp, actHalfUp},
 		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
 		binding{k.Open, actOpen}, binding{k.Filter, actFilter},
+		binding{k.Save, actSave},
 	)
 	filtering = table(binding{k.Accept, actAccept}, binding{k.Clear, actClear})
 	return normal, filtering

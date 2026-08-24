@@ -3,6 +3,7 @@ package kernel
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -23,6 +24,27 @@ type OpenMsg struct{ ID string }
 // BroadcastMsg carries a message to every view on the stack, which is how one
 // view tells another that something changed without holding a pointer to it.
 type BroadcastMsg struct{ Msg tea.Msg }
+
+// RunQueryMsg carries a search to the view that registered RunsQueries. The
+// kernel sends it when a number key runs a saved query; the view turns it into
+// whatever retargeting means for it.
+type RunQueryMsg struct {
+	JQL   string
+	Title string
+}
+
+// BindQueryMsg asks for a query to be bound to a number key and kept. A view
+// sends it for the search it is showing, because the kernel does not know what
+// is on screen; the kernel owns the set, because it is what dispatches the key.
+type BindQueryMsg struct {
+	Name string
+	JQL  string
+	Slot int
+}
+
+// SavedQueriesMsg carries the saved queries after one changed, so that a view
+// offering to bind another can say what a key already runs.
+type SavedQueriesMsg struct{ Queries app.SavedQueries }
 
 // SizeMsg tells a view the box it has been given. It is not the terminal size:
 // the kernel has already taken the header, status line and footer out of it.
@@ -78,6 +100,12 @@ func Broadcast(msg tea.Msg) tea.Cmd {
 // Refresh returns a command that asks the focused view to refetch.
 func Refresh(purge bool) tea.Cmd {
 	return func() tea.Msg { return RefreshMsg{Purge: purge} }
+}
+
+// BindQuery returns a command that binds a query to a number key and persists
+// it.
+func BindQuery(name, jql string, slot int) tea.Cmd {
+	return func() tea.Msg { return BindQueryMsg{Name: name, JQL: jql, Slot: slot} }
 }
 
 // Status returns a command that shows a plain status message.
