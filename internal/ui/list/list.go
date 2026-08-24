@@ -79,6 +79,11 @@ type Model struct {
 	filter    textinput.Model
 	query     string
 
+	// defaulted records that the search on screen is still the one New derived
+	// from the session's project. A project switch retargets that search and
+	// leaves alone one the user asked for.
+	defaulted bool
+
 	// saved is the kernel's set of saved queries, as this view was built and as
 	// the kernel last changed it, kept so that binding a key can name what that
 	// key already runs.
@@ -136,6 +141,7 @@ func New(d kernel.Deps) kernel.View {
 	}
 	m.normal, m.inFilter = defaultKeys().tables()
 	m.jql, m.title = defaultQuery(d.Project)
+	m.defaulted = true
 	m.relayout()
 	return m
 }
@@ -194,6 +200,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.rows.reset()
+
+	case kernel.ProjectMsg:
+		cmd = m.reproject(msg.Project)
 
 	case kernel.RefreshMsg:
 		cmd = m.refresh(msg.Purge)
@@ -338,13 +347,32 @@ func (m *Model) refresh(purge bool) tea.Cmd {
 }
 
 func (m *Model) retarget(msg QueryMsg) tea.Cmd {
-	jql := strings.TrimSpace(msg.JQL)
+	return m.setQuery(msg.JQL, msg.Title, false)
+}
+
+// reproject follows a mid-session project switch. The key is taken whatever the
+// search is, because the detail pane is built from these deps; the search moves
+// only while it is the one this view chose, never one the user ran.
+func (m *Model) reproject(project string) tea.Cmd {
+	if project == m.deps.Project {
+		return nil
+	}
+	m.deps.Project = project
+	if !m.defaulted {
+		return nil
+	}
+	jql, title := defaultQuery(project)
+	return m.setQuery(jql, title, true)
+}
+
+func (m *Model) setQuery(jql, title string, byDefault bool) tea.Cmd {
+	jql = strings.TrimSpace(jql)
 	if jql == "" {
 		return nil
 	}
-	m.jql = jql
-	if msg.Title != "" {
-		m.title = msg.Title
+	m.jql, m.defaulted = jql, byDefault
+	if title != "" {
+		m.title = title
 	}
 	m.issues, m.page, m.missing, m.view, m.needles = nil, jira.Page[jira.Issue]{}, nil, nil, nil
 	m.cursor, m.top, m.loaded = 0, 0, false

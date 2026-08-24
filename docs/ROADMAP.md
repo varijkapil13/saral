@@ -106,11 +106,25 @@ because it unblocks or blocks everyone. The other four run in parallel behind it
   a key with a confirmation when it is taking one, and the injection through `kernel.Deps` and
   `cmd/saral/main.go`. The owned paths grew to match: the digit dispatch, the footer and the memo key
   are all in `kernel.go`, and saved-query persistence was owned by nobody at all.
-- [ ] **PC.3 — Session project scope** · [#50](https://github.com/varijkapil13/saral/issues/50) · **owns** `cmd/saral/main.go`, `internal/ui/kernel/kernel.go`, `internal/ui/list/list.go`
-  Onboarding asks which project you work in, validates it, writes it to the profile, and nothing ever
-  reads it back: `deps.Project` comes only from `--project`. So the capability probe resolves
-  per-project permissions against an empty key and the list opens unscoped over the whole site.
-  Includes deciding what no-project-at-all means and how a project is changed mid-session.
+- [x] **PC.3 — Session project scope** · [#50](https://github.com/varijkapil13/saral/issues/50) · **owns** `cmd/saral/main.go`, `internal/ui/kernel/kernel.go`, `internal/ui/list/list.go` and their tests, `internal/ui/list/testdata/**`, `docs/ROADMAP.md`
+  Onboarding asked which project you work in, validated it, wrote it to the profile, and nothing ever
+  read it back: `deps.Project` came only from `--project`, which was itself validated nowhere, so
+  `--project "two words"` reached JQL. The flag now overrides the profile rather than replacing it,
+  and is held to the rule `internal/config` already enforces on a stored key.
+  Half of the issue's premise was stale. `cloud.Capabilities("")` was already right — it skips the
+  per-project probes and writes three sentences saying why those answers are unknown. The untested
+  denials were the kernel's *zero* `jira.Capabilities`, which is indistinguishable from a token that
+  may do nothing, so a session that had probed nothing still answered `open()` with "is not available
+  on this site" for a question never asked. The kernel now probes on `Init`, remembers whether a
+  probe has answered, and says which of the two it is.
+  A project can be changed mid-session with `kernel.SetProject`, which is as far into the gesture as
+  the kernel goes — the palette command belongs to P3.1. The kernel re-probes under a sequence
+  number so two switches cannot land out of order, tells every view including the roots parked off
+  screen, keeps the project being left answering until the new answers arrive, and names the scope in
+  the header. A view already open when a switch takes its capability away stays on screen and lets
+  its own actions refuse with the capability's `Reason`, per `docs/UX.md`. The list follows a switch
+  only while the search on screen is still the one it derived from the project, so a query the user
+  ran is never silently discarded.
 - [x] **PC.4 — Make the test rules enforceable** · [#33](https://github.com/varijkapil13/saral/issues/33), [#35](https://github.com/varijkapil13/saral/issues/35) · **owns** `.github/workflows/ci.yml`, `internal/arch/**`
   `AGENTS.md` and `docs/TESTING.md` both said CI fails a test that opens a non-loopback connection,
   and it did not. Now it does: the race suite runs inside a network namespace with only loopback up,

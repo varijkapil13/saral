@@ -67,6 +67,7 @@ type chromeKey struct {
 	rootID    string
 	topID     string
 	title     string
+	project   string
 	status    string
 	help      bool
 	depth     int
@@ -104,6 +105,17 @@ type Model struct {
 	// chrome memoizes the header and footer, which are otherwise rebuilt on
 	// every frame and would put a few hundred allocations under every scroll.
 	chrome *chromeCache
+
+	// capsProbed records that a probe has actually answered. Without it the zero
+	// jira.Capabilities is indistinguishable from a site where the token may do
+	// nothing, and the kernel invents a denial for a question never asked.
+	capsProbed bool
+
+	// capsSeq tags each probe so that an answer overtaken by a newer one is
+	// dropped; scopeSeq is the probe a project switch is waiting on, zero when
+	// none is — which is also the sequence the startup probe carries.
+	capsSeq  int
+	scopeSeq int
 
 	// prefix holds the go-to key while it waits for the one that completes it.
 	// It is buffered rather than forwarded, because a view that spends g on its
@@ -226,8 +238,11 @@ func (m Model) available(spec ViewSpec) bool {
 
 // Init starts the model. It asks the terminal for its background colour so the
 // theme can settle before the second frame; the first frame is already drawn.
+//
+// It also asks the site what this token can do here: until that answers, every
+// capability-gated view is hidden with nothing to say about why.
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{tea.RequestBackgroundColor}
+	cmds := []tea.Cmd{tea.RequestBackgroundColor, m.probeAt(m.capsSeq)}
 	if len(m.stack) > 0 {
 		cmds = append(cmds, m.top().view.Init())
 	}
@@ -287,10 +302,24 @@ func (m Model) route(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.bindQuery(msg)
 
 	case CapabilitiesMsg:
-		m.deps.Caps = msg.Caps
-		m.roots = Views()
-		m.capsGen++
-		return m.forwardAll(msg)
+		return m.applyCaps(msg.Caps)
+
+	case capsProbedMsg:
+		if msg.seq != m.capsSeq {
+			return m, nil
+		}
+		return m.settle(msg.seq, msg.caps)
+
+	case capsFailedMsg:
+		if msg.seq != m.capsSeq {
+			return m, nil
+		}
+		text, _ := jira.Reason(msg.err)
+		m.status, m.statusLevel = text, LevelError
+		return m, nil
+
+	case ProjectMsg:
+		return m.setProject(msg.Project)
 
 	case BroadcastMsg:
 		return m.forwardAll(msg.Msg)
@@ -366,7 +395,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.forwardTop(RefreshMsg{})
 
 	case Matches(msg, m.keys.Purge):
-		return m.forwardTopWith(RefreshMsg{Purge: true}, m.probeCaps())
+		next, probe := m.probeCaps()
+		return next.forwardTopWith(RefreshMsg{Purge: true}, probe)
 	}
 	m.status = ""
 	return m.forwardTop(msg)
@@ -529,10 +559,7 @@ func (m Model) open(id string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if !m.available(spec) {
-		m.status, m.statusLevel = m.deps.Caps.Capability(spec.Requires).Reason, LevelWarn
-		if m.status == "" {
-			m.status = fmt.Sprintf("%s is not available on this site", spec.Title)
-		}
+		m.status, m.statusLevel = m.unavailable(spec), LevelWarn
 		return m, nil
 	}
 	if len(m.stack) == 1 && m.stack[0].spec.ID == id {
@@ -556,6 +583,19 @@ func (m Model) open(id string) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, view.Init())
 	}
 	return m, tea.Batch(cmds...)
+}
+
+// unavailable is why a view cannot be opened. A session that has probed nothing
+// knows nothing about this site, which is a different answer from a probe that
+// came back without the capability.
+func (m Model) unavailable(spec ViewSpec) string {
+	if reason := m.deps.Caps.Capability(spec.Requires).Reason; reason != "" {
+		return reason
+	}
+	if !m.capsProbed {
+		return fmt.Sprintf("nothing has been checked on this site yet, so whether %s works here is unknown", spec.Title)
+	}
+	return fmt.Sprintf("%s is not available on this site", spec.Title)
 }
 
 func (m Model) push(msg PushMsg) (tea.Model, tea.Cmd) {
@@ -691,9 +731,97 @@ func (m Model) forwardAll(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// ProjectMsg carries the project the session is scoped to after a switch. An
+// empty key is the whole site, which is a scope of its own rather than the
+// absence of one.
+type ProjectMsg struct{ Project string }
+
+// SetProject returns a command that re-scopes the session to a project key, or
+// to the whole site when the key is empty.
+func SetProject(key string) tea.Cmd {
+	return func() tea.Msg { return ProjectMsg{Project: key} }
+}
+
+// capsProbedMsg is a probe answer tagged with the request that asked for it. Two
+// project switches in quick succession put two probes in flight, and without the
+// tag the slower one wins whichever project it was asked about.
+type capsProbedMsg struct {
+	seq  int
+	caps jira.Capabilities
+}
+
+// capsFailedMsg is a probe that never answered, tagged the same way.
+type capsFailedMsg struct {
+	seq int
+	err error
+}
+
+// setProject re-scopes the session. Every view hears it, including the roots
+// parked off screen, and the probe runs again because boards, Move and Delete
+// are per-project answers. What the last project answered stands until the new
+// answer lands, rather than the zero Capabilities standing in for it.
+func (m Model) setProject(key string) (tea.Model, tea.Cmd) {
+	key = strings.TrimSpace(key)
+	if key == m.deps.Project {
+		return m, nil
+	}
+	m.deps.Project = key
+	next, probe := m.probeCaps()
+	next.scopeSeq = next.capsSeq
+	told, cmd := next.forwardAll(ProjectMsg{Project: key})
+	model, ok := told.(Model)
+	if !ok {
+		return told, tea.Batch(cmd, probe)
+	}
+	model.status, model.statusLevel = scopeNote(key, probe != nil), LevelInfo
+	return model, tea.Batch(cmd, probe)
+}
+
+// scopeNote says what the session is scoped to now, and whether anything is
+// still being asked about it.
+func scopeNote(key string, probing bool) string {
+	note := "no project is selected, so per-project answers stay unknown"
+	if key != "" {
+		note = "this session is scoped to " + key
+	}
+	if !probing {
+		return note
+	}
+	return note + ", and Saral is re-checking what this token can do"
+}
+
+// settle installs a probe result and, when it is the one a switch was waiting
+// for, replaces the note that said it was still being checked.
+func (m Model) settle(seq int, caps jira.Capabilities) (tea.Model, tea.Cmd) {
+	awaited := m.scopeSeq != 0 && seq == m.scopeSeq
+	next, cmd := m.applyCaps(caps)
+	model, ok := next.(Model)
+	if !ok || !awaited {
+		return next, cmd
+	}
+	model.status, model.statusLevel = scopeNote(model.deps.Project, false), LevelInfo
+	return model, cmd
+}
+
+// applyCaps installs a probe result. Views hear one message whichever probe
+// answered, so a view has a single case to write.
+func (m Model) applyCaps(caps jira.Capabilities) (tea.Model, tea.Cmd) {
+	m.deps.Caps, m.capsProbed = caps, true
+	m.roots = Views()
+	m.capsGen++
+	return m.forwardAll(CapabilitiesMsg{Caps: caps})
+}
+
 // probeCaps re-runs the capability probe, which is what R means beyond a
-// refetch: permissions and instance settings can change under a session.
-func (m Model) probeCaps() tea.Cmd {
+// refetch: permissions and instance settings can change under a session, and a
+// project switch changes the answer outright. Only the newest question's answer
+// is applied.
+func (m Model) probeCaps() (Model, tea.Cmd) {
+	m.capsSeq++
+	return m, m.probeAt(m.capsSeq)
+}
+
+func (m Model) probeAt(seq int) tea.Cmd {
 	client, project := m.deps.Jira, m.deps.Project
 	if client == nil {
 		return nil
@@ -703,10 +831,9 @@ func (m Model) probeCaps() tea.Cmd {
 		defer cancel()
 		caps, err := client.Capabilities(ctx, project)
 		if err != nil {
-			text, _ := jira.Reason(err)
-			return StatusMsg{Text: text, Level: LevelError}
+			return capsFailedMsg{seq: seq, err: err}
 		}
-		return CapabilitiesMsg{Caps: caps}
+		return capsProbedMsg{seq: seq, caps: caps}
 	}
 }
 
@@ -755,7 +882,8 @@ func (m Model) chromeFor() (header, footer string) {
 	_, palette := LookupView(PaletteViewID)
 	key := chromeKey{
 		width: m.width, themeGen: m.deps.Theme.Gen, capsGen: m.capsGen,
-		savedGen: m.savedGen, status: m.status, help: m.showHelp,
+		savedGen: m.savedGen, project: m.deps.Project,
+		status: m.status, help: m.showHelp,
 		depth: len(m.stack), palette: palette,
 		capturing: m.capturing(), prefixed: m.prefixSet,
 	}
@@ -780,13 +908,26 @@ func (m Model) header() string {
 	if len(m.stack) > 0 && m.top().spec.Title != "" {
 		title = "saral " + t.Glyphs.Separator + " " + m.top().spec.Title
 	}
-	right := m.deps.Site
+	right := m.headerRight()
 	gap := m.width - lipgloss.Width(title) - lipgloss.Width(right) - 2
 	if gap < 1 {
 		gap = 1
 		right = ""
 	}
 	return t.Header.Width(m.width).Render(oneLine(title+strings.Repeat(" ", gap)+right, m.width-2, t.Glyphs.Ellipsis))
+}
+
+// headerRight names what the session is pointed at: the project it is scoped
+// to, when there is one, and the site it is talking to.
+func (m Model) headerRight() string {
+	switch {
+	case m.deps.Project == "":
+		return m.deps.Site
+	case m.deps.Site == "":
+		return m.deps.Project
+	default:
+		return m.deps.Project + " " + m.deps.Theme.Glyphs.Separator + " " + m.deps.Site
+	}
 }
 
 func (m Model) body() string {
