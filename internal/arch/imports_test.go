@@ -86,6 +86,50 @@ func brokenRules(pkgDir, importPath string) []importRule {
 	return out
 }
 
+func TestImportRules_AreWellFormed(t *testing.T) {
+	t.Parallel()
+
+	if len(importRules) == 0 {
+		t.Fatal("the rule table is empty, so the layering test proves nothing")
+	}
+
+	root := moduleRoot(t)
+	at := make(map[string]int, len(importRules))
+	for i, rule := range importRules {
+		switch {
+		case rule.name == "":
+			t.Errorf("rule %d has no name, which is what its failure message and the table below key on", i)
+		case at[rule.name] > 0:
+			t.Errorf("rules %d and %d are both named %q", at[rule.name]-1, i, rule.name)
+		}
+		at[rule.name] = i + 1
+
+		if rule.forbid == "" {
+			t.Errorf("rule %q forbids nothing, so it breaks on every module-local import", rule.name)
+		}
+		if rule.why == "" {
+			t.Errorf("rule %q does not say why, and the why is the half of the failure a reader acts on", rule.name)
+		}
+
+		for _, exempt := range rule.except {
+			if !underPath(exempt, rule.from) {
+				t.Errorf("rule %q exempts %q, which is not under %q: no package the rule covers can match it",
+					rule.name, exempt, rule.from)
+			}
+			if underPath(rule.from, exempt) {
+				t.Errorf("rule %q exempts %q, which covers the whole of %q: the rule can never fire",
+					rule.name, exempt, rule.from)
+			}
+			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(exempt))); err != nil {
+				t.Errorf("rule %q exempts %q, which is not a directory here: %v\n"+
+					"an exemption naming nothing is misspelt or left behind, and either way nobody finds out "+
+					"until the package it meant to name imports %q",
+					rule.name, exempt, err, rule.forbid)
+			}
+		}
+	}
+}
+
 func TestImports_ObeyTheLayeringInTheArchitectureDoc(t *testing.T) {
 	t.Parallel()
 
