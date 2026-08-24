@@ -67,7 +67,7 @@ instance from day one.
 - [x] **P1.6 — First-run onboarding** · [#7](https://github.com/varijkapil13/saral/issues/7) · **owns** `internal/ui/onboarding/**`
   Site, email, token, project picker; writes the profile; explains what the probe found.
 
-## Batch 1.5 — Corrections · **PC.1 serial, then parallel ×4** · blocks Batch 2
+## Batch 1.5 — Corrections · **PC.1 serial, then parallel ×4; PC.6 blocked** · blocks Batch 2
 
 Batch 1 shipped and left the project asserting several things that are not true. None of them is a
 feature and none was worth stopping Batch 1 for; all of them are load-bearing for **Batch 2, which is
@@ -80,9 +80,27 @@ enforced; that `Capabilities` gives a reason for every negative; that an `Issue`
 values say; that the session knows its project; that the fixture server replays the right shape; and
 that the number keys have exactly one owner.
 
-**PC.1 lands first and alone** — it amends the port, which `docs/PARALLEL.md` makes a serial change
-because it unblocks or blocks everyone. The other four run in parallel behind it.
+PC.6 adds the largest of them: that a build of Saral can reach a Jira site at all. Recon proved that
+one cannot be paid off in this batch, and its row says why — it changes what Batch 1.5 can close on.
 
+**PC.1 lands first and alone** — it amends the port, which `docs/PARALLEL.md` makes a serial change
+because it unblocks or blocks everyone. The other four run in parallel behind it. PC.6 is listed
+first because everything else here is only observable once it lands, and blocked for the reason its
+row gives.
+
+- [ ] **PC.6 — Wire the Jira adapter into the composition root** · [#52](https://github.com/varijkapil13/saral/issues/52) · **owns** `cmd/saral/main.go`, `cmd/saral/main_test.go`, `docs/ROADMAP.md`
+  Nothing in the shipped binary constructs the Cloud adapter, so it cannot talk to Jira at all — and
+  it says something else instead: onboarding answers three typed-in credentials with "nothing wired an
+  adapter", every capability-gated view is hidden by a probe that never ran, and the list has nothing
+  to read from. `build()` sets `Site`, `Project` and `Theme` and never `deps.Jira`.
+  **Blocked, and not by anything in its own paths:** `pkg/jira/cloud` implements 2 of the port's 34
+  methods — `Capabilities` and `Search` — so `*cloud.Client` is not a `jira.Client`, and neither
+  `onboarding.SetConnector` nor `kernel.Deps.Jira` will take it. The only type in the tree that
+  implements the port is `jiratest.Fake`. Unblocking it is a `contract` decision with a human's name
+  on it — grow the adapter (Batch 2 work, which this batch gates) or narrow the port to what each
+  caller needs: [#55](https://github.com/varijkapil13/saral/issues/55).
+  Goes before **PC.3**, which edits the same `build()`, and PC.3's probe scope fix is unobservable
+  until it lands.
 - [ ] **PC.1 — Port amendments** · [#46](https://github.com/varijkapil13/saral/issues/46), [#37](https://github.com/varijkapil13/saral/issues/37) · **owns** `pkg/jira/{port,types}.go`, `pkg/jira/cloud/{caps,search}.go`, `pkg/jira/jiratest/jiratest.go`
   Two additive amendments, one PR, because two agents editing the frozen port is the one guaranteed
   conflict. `Capabilities` gains a way to say the timezone probe failed, instead of leaving
