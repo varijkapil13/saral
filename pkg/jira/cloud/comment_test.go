@@ -17,13 +17,13 @@ import (
 )
 
 const (
-	testIssueKey     = "EX-1"
 	testCommentID    = "10701"
 	testCommentsPath = "/rest/api/3/issue/{key}/comment"
 	// One comment is routed by its literal path: Go's mux rejects
 	// /issue/{key}/comment/{id} as ambiguous against the createmeta route the
 	// fixture server already carries, and neither pattern is more specific.
 	testCommentPath = "/rest/api/3/issue/" + testIssueKey + "/comment/" + testCommentID
+	testThreadPath  = "/rest/api/3/issue/" + testIssueKey + "/comment"
 )
 
 // paragraph is the smallest document a comment can be: one line of prose.
@@ -95,20 +95,6 @@ func commentClient(t *testing.T, opts ...jiratest.ServerOption) (*Client, *jirat
 	t.Cleanup(s.Close)
 	c, _ := testClient(t, s.URL(), WithRetry(RetryPolicy{Attempts: 1}))
 	return c, s
-}
-
-// sentTo returns the last request the server took on a path, which is what a
-// write assertion reads: an edit sends two requests and only the second is a PUT.
-func sentTo(t *testing.T, s *jiratest.Server, method string) jiratest.Request {
-	t.Helper()
-
-	for _, r := range s.Requests() {
-		if r.Method == method {
-			return r
-		}
-	}
-	t.Fatalf("the client sent no %s; it sent %v", method, s.Requests())
-	return jiratest.Request{}
 }
 
 func TestComments_ReadsAThreadOldestFirstWithWhateverRestrictsIt(t *testing.T) {
@@ -235,7 +221,7 @@ func TestAddComment_SendsTheDocumentAndNothingThatWouldRestrictIt(t *testing.T) 
 		t.Errorf("a comment nobody restricted came back restricted: %+v", *got.Visibility)
 	}
 
-	sent := sentBody(t, sentTo(t, s, http.MethodPost))
+	sent := sentBody(t, sentTo(t, s, http.MethodPost, testThreadPath))
 	if _, ok := sent["visibility"]; ok {
 		t.Error("a new comment sent a visibility key, which restricts it to whatever that names")
 	}
@@ -289,7 +275,7 @@ func TestEditComment_KeepsTheRestrictionTheCommentAlreadyHad(t *testing.T) {
 		t.Fatalf("the edited comment came back as %+v", got.Visibility)
 	}
 
-	sent := sentBody(t, sentTo(t, s, http.MethodPut))
+	sent := sentBody(t, sentTo(t, s, http.MethodPut, testCommentPath))
 	vis, ok := sent["visibility"].(map[string]any)
 	if !ok {
 		t.Fatalf("the edit sent no visibility, which publishes a comment one role could see: %v", sent)
@@ -313,7 +299,7 @@ func TestEditComment_LeavesAnUnrestrictedCommentUnrestricted(t *testing.T) {
 	if _, err := c.EditComment(t.Context(), testIssueKey, testCommentID, paragraph("Reworded.")); err != nil {
 		t.Fatalf("editing: %v", err)
 	}
-	sent := sentBody(t, sentTo(t, s, http.MethodPut))
+	sent := sentBody(t, sentTo(t, s, http.MethodPut, testCommentPath))
 	if _, ok := sent["visibility"]; ok {
 		t.Errorf("the edit invented a restriction on a comment that had none: %v", sent)
 	}
@@ -364,7 +350,7 @@ func TestDeleteComment_AcceptsTheEmptyAnswerTheEndpointGives(t *testing.T) {
 	if err := c.DeleteComment(t.Context(), testIssueKey, testCommentID); err != nil {
 		t.Fatalf("deleting: %v", err)
 	}
-	sent := sentTo(t, s, http.MethodDelete)
+	sent := sentTo(t, s, http.MethodDelete, testCommentPath)
 	if want := "/rest/api/3/issue/EX-1/comment/10701"; sent.Path != want {
 		t.Errorf("deleted %q, want %q", sent.Path, want)
 	}
