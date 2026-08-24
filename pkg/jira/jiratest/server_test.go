@@ -88,13 +88,13 @@ func TestServer_ServesEveryDefaultRouteWithItsFixture(t *testing.T) {
 		{"the account", http.MethodGet, "/rest/api/3/myself", http.StatusOK, "myself.json"},
 		{"site configuration", http.MethodGet, "/rest/api/3/configuration", http.StatusOK, "configuration.json"},
 		{"permissions", http.MethodGet, "/rest/api/3/mypermissions?permissions=BULK_CHANGE", http.StatusOK, "mypermissions_admin.json"},
-		{"project versions", http.MethodGet, "/rest/api/3/project/EX/versions", http.StatusOK, "versions.json"},
+		{"project versions", http.MethodGet, "/rest/api/3/project/EX/version", http.StatusOK, "versions.json"},
 		{"boards", http.MethodGet, "/rest/agile/1.0/board?projectKeyOrId=EX", http.StatusOK, "board.json"},
 		{"board configuration", http.MethodGet, "/rest/agile/1.0/board/10/configuration", http.StatusOK, "board_config_estimation.json"},
 		{"board sprints", http.MethodGet, "/rest/agile/1.0/board/10/sprint", http.StatusOK, "sprint_page.json"},
 		{"plans refused", http.MethodGet, "/rest/api/3/plans/plan", http.StatusForbidden, "plans_403.json"},
 		{"bulk move submitted", http.MethodPost, "/rest/api/3/bulk/issues/move", http.StatusCreated, "bulkmove_submit.json"},
-		{"generic task", http.MethodGet, "/rest/api/3/task/10641", http.StatusOK, "bulkmove_task_complete.json"},
+		{"generic task", http.MethodGet, "/rest/api/3/task/11072", http.StatusOK, "task_complete.json"},
 		{"bulk queue task", http.MethodGet, "/rest/api/3/bulk/queue/10641", http.StatusOK, "bulkmove_task_complete.json"},
 	}
 
