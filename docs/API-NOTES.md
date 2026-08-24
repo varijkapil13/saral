@@ -80,6 +80,10 @@ here cost time to find out; read this before writing an adapter method.
 | The validator *repairs* rather than rejects: unknown `attrs` keys are deleted and an `unsupportedNodeAttribute` mark is appended | Sending a document you rebuilt from a partial model is lossy even when it validates. Send back what you were given wherever you did not edit. |
 | `text` on a text node has `minLength: 1` | An empty text node is invalid. Drop it; never emit `"text": ""`. |
 | A node's permitted marks depend on where it sits — the schema encodes this with `_with_no_marks` / `_with_alignment` / `_root_only` variants | A paragraph at the root may carry `alignment`; the same paragraph inside a list item may carry none. |
+| `mention` carries an account id, `status` carries a colour, `date` carries epoch millis, `media` carries a collection, and a `taskItem` carries a `localId` the editor generated | None of them has a markdown spelling, so ADF → markdown → ADF cannot rebuild any of them: a mention comes back as its display text and a lozenge as bracketed text. Editing a document means reconciling against the one you were given — `adf.ParseMarkdownInto` reuses the original node for every block the author did not touch, which is the only way the ids survive. Never invent a `localId`: a made-up one is a *new* item, not the one that was there. |
+| `orderedList` numbers from **one** — `order` is a positive integer | A list stored with `order: 0` is displayed from 1, so reading a "0." back as a list starting at zero invents a document Jira does not have. |
+| ADF has **no nested tables**, and no `table`, `heading` or `rule` inside a `blockquote` or a `listItem` | Markdown can ask for every one of those. Refuse with a typed error rather than sending something the validator will silently repair into a shape nobody wrote. |
+| ADF's content model for a task or decision list is `(item | list)+` | Indenting an action item in the editor stores a sibling `taskList` *inside* the parent list, not inside the item above it. Treating that child as an item loses every checkbox under it. |
 
 ## Localisation, which breaks resolution by name
 
