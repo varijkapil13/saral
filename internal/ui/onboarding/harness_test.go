@@ -68,8 +68,8 @@ func newDriver(t *testing.T, client jira.Client, opts ...func(*kernel.Deps)) *dr
 	return newDriverWith(t, connectorFor(client), opts...)
 }
 
-func connectorFor(client jira.Client) Connector {
-	return func(string, string, string) (jira.Client, error) { return client, nil }
+func connectorFor(client jira.SessionClient) Connector {
+	return func(string, string, string) (jira.SessionClient, error) { return client, nil }
 }
 
 func newDriverWith(t *testing.T, connect Connector, opts ...func(*kernel.Deps)) *driver {

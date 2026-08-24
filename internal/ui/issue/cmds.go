@@ -51,7 +51,7 @@ func load(ctx context.Context, search *app.Search, key string, gen int) tea.Cmd 
 	}
 }
 
-func comments(ctx context.Context, client jira.Client, key string, gen int) tea.Cmd {
+func comments(ctx context.Context, client jira.CommentReader, key string, gen int) tea.Cmd {
 	return func() tea.Msg {
 		page, err := client.Comments(ctx, key)
 		if err != nil {

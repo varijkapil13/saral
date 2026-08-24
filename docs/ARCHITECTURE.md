@@ -109,6 +109,44 @@ Rules for the port:
 - **Every method takes `context.Context`** and must honour cancellation — views cancel in-flight
   work when they close.
 
+### Roles: what a caller asks for
+
+`Client` is what an adapter grows into. It is **not** what a caller takes. A view that runs a search
+needs a search, and an adapter that cannot yet do the other thirty-three should not have to pretend —
+the reasoning `internal/app.Counter` was already written with, generalised.
+
+So `pkg/jira/roles.go` declares one interface per job, and callers take those:
+
+```go
+type Prober         interface{ Capabilities(ctx, projectKey) (Capabilities, error) }
+type Identifier     interface{ Me(ctx) (User, error) }
+type Searcher       interface{ Search(ctx, Query) (Page[Issue], error) }
+type FieldCatalogue interface{ Fields(ctx) ([]Field, error) }
+// … SchemaReader, IssueWriter, Mover, CommentReader, Commenter
+
+// SessionClient is the union of every role the views in this build call.
+type SessionClient interface { Prober; Identifier; Searcher; … }
+```
+
+`kernel.Deps.Jira` and `onboarding.Connector` take `SessionClient`. A batch that lands the adapter
+method its own view needs adds that role to the union in the same PR; nothing that already compiled
+stops compiling, and the diff says which capability the batch added.
+
+A role restates a signature `Client` already carries, which is drift a reader cannot see. The
+compiler can: one type cannot hold two methods of a name, so a role that drifts from the port makes
+the assertions in `pkg/jira/jiratest` fail to build.
+
+**Every adapter states what it satisfies, in its own built source:**
+
+```go
+var _ jira.Prober = (*Client)(nil)
+```
+
+Not in a `_test.go` file — an assertion there fails `go test` and not `go build`. `internal/arch`
+fails an adapter package under `pkg/jira/**` that carries none at all. Their absence is exactly how
+`pkg/jira/cloud` implemented 12 of 34 methods for two batches while passing CI, lint, race and a
+cross-build: nothing outside the package ever assigned a `*Client` to anything, so nothing asked.
+
 ## Two pagination models, one type
 
 The platform API pages by opaque cursor and returns no total; the Agile API pages by `startAt` and

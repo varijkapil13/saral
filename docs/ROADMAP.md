@@ -67,7 +67,7 @@ instance from day one.
 - [x] **P1.6 — First-run onboarding** · [#7](https://github.com/varijkapil13/saral/issues/7) · **owns** `internal/ui/onboarding/**`
   Site, email, token, project picker; writes the profile; explains what the probe found.
 
-## Batch 1.5 — Corrections · **PC.1 serial, then parallel ×4** · blocks Batch 2
+## Batch 1.5 — Corrections · **PC.1 serial, then parallel ×4, then PC.6 serial** · blocks Batch 2
 
 Batch 1 shipped and left the project asserting several things that are not true. None of them is a
 feature and none was worth stopping Batch 1 for; all of them are load-bearing for **Batch 2, which is
@@ -77,11 +77,15 @@ someone's ticket.
 
 The claims being made good on: that CI keeps tests off the network; that the layer diagram is
 enforced; that `Capabilities` gives a reason for every negative; that an `Issue` means what its zero
-values say; that the session knows its project; that the fixture server replays the right shape; and
-that the number keys have exactly one owner.
+values say; that the session knows its project; that the fixture server replays the right shape; that
+the number keys have exactly one owner; and — the largest of them, found while doing PC.6 and settled
+on [#55](https://github.com/varijkapil13/saral/issues/55) — that the shipped binary can talk to a Jira
+site at all.
 
 **PC.1 lands first and alone** — it amends the port, which `docs/PARALLEL.md` makes a serial change
-because it unblocks or blocks everyone. The other four run in parallel behind it.
+because it unblocks or blocks everyone. PC.2 to PC.5 run in parallel behind it. **PC.6 lands last and
+alone**, because it narrows what every view asks of the port and holds the composition root, which
+PC.2 and PC.3 also edit.
 
 - [x] **PC.1 — Port amendments** · [#46](https://github.com/varijkapil13/saral/issues/46), [#37](https://github.com/varijkapil13/saral/issues/37) · **owns** `pkg/jira/{port,types}.go`, `pkg/jira/cloud/{caps,search}.go`, `pkg/jira/jiratest/{jiratest,fake}.go`, `internal/ui/onboarding/render.go`, `docs/{ARCHITECTURE,API-NOTES}.md`
   Two additive amendments, one PR, because two agents editing the frozen port is the one guaranteed
@@ -142,6 +146,30 @@ because it unblocks or blocks everyone. The other four run in parallel behind it
   found one more: the paged `versions.json` was served at `/project/{key}/versions`, which answers a
   bare array, so the route moved to the paged `/project/{key}/version` the capture script already
   used.
+- [x] **PC.6 — Make the Cloud adapter constructible, and construct it** · [#55](https://github.com/varijkapil13/saral/issues/55), [#52](https://github.com/varijkapil13/saral/issues/52) · **owns** `pkg/jira/roles.go`, `pkg/jira/port.go` (package doc), `pkg/jira/cloud/{me,field,assert}.go` and their tests, `pkg/jira/jiratest/jiratest.go` (assertions), `internal/ui/kernel/view.go`, `internal/ui/onboarding/{onboarding,commands}.go` and their tests, `internal/app/search.go`, `internal/ui/{issue,form,comment}/*cmds.go` (parameter types), `cmd/saral/main.go`, `internal/arch/**`, `docs/{ARCHITECTURE,ROADMAP,TESTING}.md`
+  Nothing in the shipped binary ever built a Cloud client, and it could not have: `pkg/jira/cloud`
+  implemented 12 of the port's 34 methods, so `*cloud.Client` was not a `jira.Client` and nothing that
+  wanted one — `kernel.Deps.Jira`, `onboarding.Connector`, `app.NewSearch` — could hold it. The only
+  type in the tree that satisfied the port was `jiratest.Fake`. Everything Batches 1 and 2 shipped
+  worked, against the fake.
+  Settled on #55 as **role interfaces**, generalising `app.Counter`'s existing "a client that cannot
+  make it should not have to pretend". `jira.Client` is untouched and stays the whole port; callers
+  now take a role named for their job — `Prober`, `Identifier`, `Searcher`, `FieldCatalogue`,
+  `SchemaReader`, `IssueWriter`, `Mover`, `CommentReader`, `Commenter` — and `Deps.Jira` takes
+  `SessionClient`, the union of exactly what the views in this build call. Later batches widen that
+  union as they land the adapter methods their own views need, which is additive.
+  Two of the thirteen methods in the union were missing, not one. `Me` was known. `Fields` was not:
+  `app.Search` has called it since P1.2 to resolve a field named in configuration to this site's ID
+  for it, and no packet owned the adapter half. Both are implemented here rather than stubbed.
+  Both adapters now assert what they satisfy in a non-test file, and `internal/arch` fails an adapter
+  package under `pkg/jira/**` that never says. That absence is why a package implementing a minority
+  of the port passed CI, lint, race and a cross-build for two whole batches.
+  `cmd/saral` registers the connector unconditionally — a first run is exactly the path with no token
+  — and resolves the profile's token under a 20s bound when there is one. A resolution failure is not
+  fatal: `deps.Jira` stays nil, the program opens, and the resolver's own sentence reaches the status
+  line through `kernel.StatusMsg`, applied to the model before the program starts because the alt
+  screen wipes anything printed ahead of it. No probe runs before the first frame; PC.3's `Init`
+  probe does it once a client exists.
 
 ## Batch 2 — Change your work · parallel ×4
 

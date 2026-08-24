@@ -29,6 +29,15 @@ type Counter interface {
 	ApproximateCount(ctx context.Context, jql string) (int, error)
 }
 
+// SearchClient is what a search runs on: JQL, and the field catalogue that turns
+// a field named in a profile into the ID to ask this site for. It is the pair of
+// port roles this use case needs, and asking for the pair rather than for the
+// whole port is what lets an adapter run a list before it can do anything else.
+type SearchClient interface {
+	jira.Searcher
+	jira.FieldCatalogue
+}
+
 // Projection is the narrow set of fields one view needs.
 //
 // It is split in two because only half of it can be written down. IDs are the
@@ -114,7 +123,7 @@ type Result struct {
 // collapsing of identical searches that a cursor moving down a list produces.
 // A Search is safe to share between goroutines.
 type Search struct {
-	client jira.Client
+	client SearchClient
 	saved  SavedQueries
 
 	flight singleflight.Group
@@ -134,7 +143,7 @@ func WithSavedQueries(q SavedQueries) Option {
 }
 
 // NewSearch builds the search use case over a Jira client.
-func NewSearch(client jira.Client, opts ...Option) *Search {
+func NewSearch(client SearchClient, opts ...Option) *Search {
 	s := &Search{client: client}
 	for _, o := range opts {
 		if o != nil {

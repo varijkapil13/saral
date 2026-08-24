@@ -28,7 +28,7 @@ func TestKernel_RunsTheWholeFlowThroughTheRegisteredView(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", dir)
 
 	fake := testFake()
-	SetConnector(func(string, string, string) (jira.Client, error) { return fake, nil })
+	SetConnector(func(string, string, string) (jira.SessionClient, error) { return fake, nil })
 	t.Cleanup(func() { SetConnector(nil) })
 
 	if errs := kernel.RegistrationErrors(); len(errs) > 0 {
@@ -85,7 +85,7 @@ func TestKernel_RunsTheWholeFlowThroughTheRegisteredView(t *testing.T) {
 // re-enter one that was already correct.
 func TestKernel_TheFormReceivesEveryCharacterOfACredential(t *testing.T) {
 	var got struct{ site, email, token string }
-	SetConnector(func(site, email, token string) (jira.Client, error) {
+	SetConnector(func(site, email, token string) (jira.SessionClient, error) {
 		got.site, got.email, got.token = site, email, token
 		return testFake(), nil
 	})
@@ -128,7 +128,7 @@ func TestKernel_TheFormReceivesEveryCharacterOfACredential(t *testing.T) {
 // A view holding the keyboard must still be quittable by the one key that always
 // means it.
 func TestKernel_CtrlCStillQuitsWhileTheFormHasTheKeyboard(t *testing.T) {
-	SetConnector(func(string, string, string) (jira.Client, error) { return testFake(), nil })
+	SetConnector(func(string, string, string) (jira.SessionClient, error) { return testFake(), nil })
 	t.Cleanup(func() { SetConnector(nil) })
 
 	root, err := kernel.New(testDeps(), kernel.WithSize(100, 30), kernel.WithInitialView(ViewID), kernel.WithMouse(false))

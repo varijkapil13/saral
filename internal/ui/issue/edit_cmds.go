@@ -69,7 +69,7 @@ func loadForEdit(ctx context.Context, search *app.Search, key string, gen int) t
 	}
 }
 
-func loadEditSchema(ctx context.Context, client jira.Client, project, issueTypeID string, gen int) tea.Cmd {
+func loadEditSchema(ctx context.Context, client jira.SchemaReader, project, issueTypeID string, gen int) tea.Cmd {
 	return func() tea.Msg {
 		schema, err := client.CreateMeta(ctx, project, issueTypeID)
 		if err != nil {
@@ -79,7 +79,7 @@ func loadEditSchema(ctx context.Context, client jira.Client, project, issueTypeI
 	}
 }
 
-func saveEdit(ctx context.Context, client jira.Client, key string, patch jira.IssuePatch, gen int) tea.Cmd {
+func saveEdit(ctx context.Context, client jira.IssueWriter, key string, patch jira.IssuePatch, gen int) tea.Cmd {
 	return func() tea.Msg {
 		if err := client.UpdateIssue(ctx, key, patch); err != nil {
 			return editFailedMsg{gen: gen, err: err}
@@ -91,7 +91,7 @@ func saveEdit(ctx context.Context, client jira.Client, key string, patch jira.Is
 // loadMoves reads the transitions this issue can make right now. They are never
 // cached: which ones exist depends on the status the issue is in at the moment
 // of asking, and on conditions the workflow evaluates against this issue.
-func loadMoves(ctx context.Context, client jira.Client, key string, gen int) tea.Cmd {
+func loadMoves(ctx context.Context, client jira.Mover, key string, gen int) tea.Cmd {
 	return func() tea.Msg {
 		moves, err := client.Transitions(ctx, key)
 		if err != nil {
@@ -101,7 +101,7 @@ func loadMoves(ctx context.Context, client jira.Client, key string, gen int) tea
 	}
 }
 
-func applyMove(ctx context.Context, client jira.Client, key, transitionID string, patch jira.IssuePatch, gen int) tea.Cmd {
+func applyMove(ctx context.Context, client jira.Mover, key, transitionID string, patch jira.IssuePatch, gen int) tea.Cmd {
 	return func() tea.Msg {
 		if err := client.Transition(ctx, key, transitionID, patch); err != nil {
 			return editFailedMsg{gen: gen, err: err}

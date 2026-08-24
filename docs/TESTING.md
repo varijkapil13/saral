@@ -117,3 +117,18 @@ The rules only see imports within this module. "No IO libs in `internal/app`" is
 can check this way — a `net/http` import there is invisible to the walk.
 
 This catches the most common way a modular design quietly stops being modular.
+
+## Adapters say what they satisfy
+
+A third test in `internal/arch` fails any package under `pkg/jira/**` that adapts the port and never
+writes down which of its interfaces it satisfies:
+
+```go
+var _ jira.Prober = (*Client)(nil)
+```
+
+The test only checks the line exists, in a file that is part of the build rather than in a `_test.go`
+— the compiler checks that it is *true*, and does so at `go build` time. Nobody had written one for
+`pkg/jira/cloud`, so it implemented 12 of the port's 34 methods for two whole batches while passing
+lint, vet, race and a cross-build. Nothing outside the package assigned a `*Client` to anything, so
+nothing ever asked.

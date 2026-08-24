@@ -31,7 +31,26 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-var _ jira.Client = (*Fake)(nil)
+// What the fake can be asked for.
+//
+// Both the port and the roles are named on purpose. A role restates a signature
+// Client already carries, and one type cannot hold two methods of a name, so a
+// role that drifts from the port makes these lines stop compiling. Nothing else
+// catches that drift.
+var (
+	_ jira.Client = (*Fake)(nil)
+
+	_ jira.Prober         = (*Fake)(nil)
+	_ jira.Identifier     = (*Fake)(nil)
+	_ jira.Searcher       = (*Fake)(nil)
+	_ jira.FieldCatalogue = (*Fake)(nil)
+	_ jira.SchemaReader   = (*Fake)(nil)
+	_ jira.IssueWriter    = (*Fake)(nil)
+	_ jira.Mover          = (*Fake)(nil)
+	_ jira.CommentReader  = (*Fake)(nil)
+	_ jira.Commenter      = (*Fake)(nil)
+	_ jira.SessionClient  = (*Fake)(nil)
+)
 
 // BoardKind is what WithProject builds alongside a project.
 type BoardKind int

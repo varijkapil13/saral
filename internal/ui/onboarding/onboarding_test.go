@@ -132,7 +132,7 @@ func TestFlow_AnUnreachableSiteReturnsToTheSiteFieldAndSaysWhichProblemItIs(t *t
 func TestFlow_AConnectorThatCannotBuildAClientIsReportedOnTheTokenStep(t *testing.T) {
 	t.Parallel()
 
-	d := newDriverWith(t, func(string, string, string) (jira.Client, error) {
+	d := newDriverWith(t, func(string, string, string) (jira.SessionClient, error) {
 		return nil, errors.New("cloud: an API token is required")
 	})
 	d.credentials()

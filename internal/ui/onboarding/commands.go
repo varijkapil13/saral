@@ -45,7 +45,7 @@ type configLoadedMsg struct {
 
 type connectedMsg struct {
 	seq     int
-	client  jira.Client
+	client  jira.SessionClient
 	account jira.User
 }
 
