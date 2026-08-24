@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -63,6 +64,10 @@ func msgName(msg tea.Msg) string {
 			return "focus"
 		}
 		return "blur"
+	case RunQueryMsg:
+		return "query:" + m.JQL
+	case SavedQueriesMsg:
+		return "saved:" + strconv.Itoa(m.Queries.Len())
 	case tea.KeyPressMsg:
 		return "key:" + m.String()
 	default:

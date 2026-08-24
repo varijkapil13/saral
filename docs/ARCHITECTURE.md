@@ -175,7 +175,7 @@ func init() {
 	kernel.RegisterView(kernel.ViewSpec{
 		ID:       "board",
 		Title:    "Board",
-		Slot:     1,                       // footer position
+		Slot:     2,                       // footer position, reached with g2
 		Requires: kernel.CapBoards,        // hidden when absent
 		New:      func(d kernel.Deps) kernel.View { return New(d) },
 	})
@@ -189,6 +189,11 @@ Three registries, all with the same conflict-free property:
 | `RegisterView` | each view package's `register.go` | footer, view stack, `saral <view>` |
 | `RegisterCommand` | any package | command palette (`ctrl+k`) |
 | `RegisterKeys` | each view, scoped to itself | help overlay, footer hints |
+
+Slots are allocated, not picked: the table in `docs/UX.md` says which view holds which digit, and
+`RegisterView` refuses a second claim on one at startup. A bare digit runs a saved query in a root
+view, so a slot is reached with `g` and its digit; the kernel buffers that `g` rather than forwarding
+it, because two views already spend `g` on gestures of their own.
 
 A view that is taking typing — a filter, a form field, the command palette — implements
 `kernel.KeyCapturer` and answers `WantsRawKeys() true` while it is. The kernel then hands it every
@@ -319,7 +324,16 @@ token = { keychain = "saral:work" }   # or { env = "JIRA_TOKEN" } / { command = 
 [profiles.work.timeline]
 start = ["Target start", "Start date"]   # resolved by name to field IDs at runtime
 end   = ["Target end", "Due date"]
+
+[[profiles.work.queries]]
+name = "Blockers"
+jql  = "priority = Highest AND resolution = EMPTY ORDER BY updated DESC"
+key  = 2                                 # the number key that runs it; omit for none
 ```
+
+The queries are held by `app.SavedQueries` and validated by its rules rather than a second copy of
+them, so a file and a keypress cannot disagree about what a saved query is. The file refuses the two
+things a keyboard cannot express: two queries under one name, and two on one key.
 
 ## Decisions recorded separately
 

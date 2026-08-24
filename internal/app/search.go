@@ -471,6 +471,19 @@ func (q SavedQueries) ByName(name string) (SavedQuery, bool) {
 	return SavedQuery{}, false
 }
 
+// Slots lists the number keys that have a query bound, in ascending order. It
+// is what a footer showing only the keys that work right now is built from.
+func (q SavedQueries) Slots() []int {
+	out := make([]int, 0, len(q.items))
+	for _, item := range q.items {
+		if item.Slot > 0 {
+			out = append(out, item.Slot)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // BySlot finds the query bound to a number key.
 func (q SavedQueries) BySlot(slot int) (SavedQuery, bool) {
 	if slot <= 0 {

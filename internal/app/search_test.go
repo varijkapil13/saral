@@ -503,6 +503,25 @@ func TestSavedQueries_KeepsTheOrderAddedAndFindsAQueryByNameOrKey(t *testing.T) 
 	}
 }
 
+func TestSavedQueries_ListsTheKeysThatActuallyRunSomething(t *testing.T) {
+	t.Parallel()
+
+	saved, err := NewSavedQueries(
+		SavedQuery{Name: "Third", JQL: testJQL, Slot: 3},
+		SavedQuery{Name: "Unbound", JQL: testJQL},
+		SavedQuery{Name: "First", JQL: testJQL, Slot: 1},
+	)
+	if err != nil {
+		t.Fatalf("saving: %v", err)
+	}
+	if got := saved.Slots(); !slices.Equal(got, []int{1, 3}) {
+		t.Errorf("the bound keys are %v, want [1 3] in that order", got)
+	}
+	if got := (SavedQueries{}).Slots(); len(got) != 0 {
+		t.Errorf("an empty set reports keys %v", got)
+	}
+}
+
 func TestSavedQueries_RebindingAKeyTakesItFromWhicheverQueryHadIt(t *testing.T) {
 	t.Parallel()
 

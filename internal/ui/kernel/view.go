@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -29,9 +30,14 @@ type ViewSpec struct {
 	ID string
 	// Title is the footer label.
 	Title string
-	// Slot is the footer position, 1-9. Zero means the view is reachable only
-	// by being pushed or opened by name.
+	// Slot is the footer position, 1-9, reached with g and the digit. Zero means
+	// the view is reachable only by being pushed or opened by name. The
+	// allocation is written down in docs/UX.md; the registry rejects a duplicate.
 	Slot int
+	// RunsQueries marks the view a saved query opens into. The kernel switches
+	// to it and hands it a RunQueryMsg, which is as much as the kernel knows
+	// about what a search is.
+	RunsQueries bool
 	// Requires names the capability this view needs. An empty key means the
 	// view is always available; an absent capability hides it and its reason is
 	// what the user sees instead.
@@ -73,6 +79,12 @@ type Deps struct {
 	Site string
 	// Now is the clock. Tests inject a fixed one.
 	Now func() time.Time
+	// Saved are the queries the number keys run, as the profile last had them.
+	Saved app.SavedQueries
+	// SaveQueries persists a changed set. A session with nowhere to write them —
+	// no profile yet — leaves it nil, and the kernel says so rather than
+	// pretending the binding survived.
+	SaveQueries func(app.SavedQueries) error
 }
 
 // KeySet is a view's keys, scoped to itself. Short is the footer hint line, in

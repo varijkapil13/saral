@@ -30,7 +30,7 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 | First hour | The footer teaches the six keys that matter here. Mouse works, so nothing is blocked on learning. |
 | First week | Frecency: projects, assignees, versions and labels reorder so your usual choices are first. |
 | | Hints: after you reach an action through the palette three times, the status line notes its key. |
-| Ongoing | JQL history with fuzzy recall; saved queries bound to `1`–`9`. |
+| Ongoing | JQL history with fuzzy recall; saved queries bound to `1`–`9` and kept in the profile. |
 | | Local fuzzy index — typing a key or a few words of a summary finds it with no round trip. |
 | | Session resume: reopening lands exactly where you left, including scroll and filter. |
 | Fluent | `saral PROJ-142`, `saral board PROJ`, piping a JQL query in, scriptable subcommands for the rest. |
@@ -43,23 +43,55 @@ telemetry leaves the machine, ever.
 A stack, not a graph — so "back" always means something.
 
 ```
-views (footer 1–6)     board · backlog · sprints · releases · timeline · plans   ← contested, see #49
+run a saved query      1 – 9          in a root view; the profile's own searches
+switch view            g then 1–9     from anywhere, including a pushed view
 push                   enter          open the thing under the cursor
 pop                    esc            back, never quits from a pushed view
 quit                   q / ctrl+c     only from a root view, and only when no draft is open
-switch pane            tab            focus moves, selection does not
 palette                ctrl+k         everything, fuzzy
 search in view         /              filter rows live
-jump to key            g then key     or paste a Jira URL anywhere
+save this search       s              bind the query on screen to a number key
 refresh                r / R          current view / purge and refetch
 ```
 
 Vim keys and arrows are both always bound. `j/k` and `↑/↓` are not a preference to configure.
 
-The footer row above is **not yet true and not yet decided**: the issue list holds slot 1, `board`
-does not exist until P6.3, and `app.SavedQuery` claims the same nine digits from the other direction.
-PC.2 ([#49](https://github.com/varijkapil13/saral/issues/49)) settles who owns them and rewrites this
-line. Do not register a slot against it until then.
+### Who owns the number keys
+
+Settled in PC.2 ([#49](https://github.com/varijkapil13/saral/issues/49)): **the digits are
+contextual.** In a root view a bare digit runs the saved query bound to it — the searches the profile
+keeps, which is what makes the keys worth having on the first day rather than the first month. A view
+is reached with `g` and its digit, from anywhere. `ctrl+k` still reaches everything.
+
+`g` is a prefix the kernel **buffers**: it forwards nothing when you press it, and on the next key
+either takes a digit for itself or hands the view both keys in the order they were typed. That is why
+`gg` and `ge` inside a list still go to the first and last row. `esc` throws a half-typed gesture
+away, and a view that is taking typing gets the keys before any of this happens.
+
+The footer advertises only what works: the digits that actually have a query bound, named after the
+query, and the view slots as `g1`–`g9`.
+
+| Slot | View | Arrives with |
+|---|---|---|
+| 1 | issues | P1.5 — shipped |
+| 2 | board | P6.3 ([#24](https://github.com/varijkapil13/saral/issues/24)) |
+| 3 | backlog | P6.3 |
+| 4 | sprints | P6.3 |
+| 5 | releases | P5.1 ([#20](https://github.com/varijkapil13/saral/issues/20)) |
+| 6 | timeline | P8.2 ([#27](https://github.com/varijkapil13/saral/issues/27)) |
+| 7 | plans | P8.3 ([#28](https://github.com/varijkapil13/saral/issues/28)) |
+| 8, 9 | free | — |
+
+Everything else registers `Slot: 0` and is reached by being pushed, by name or from the palette:
+issue detail, onboarding, the palette itself, forms, comments, attachment preview and the move
+wizard. `kernel.RegisterView` refuses a second claim on a slot at startup, so the table above is
+enforced rather than merely written down — but it is written down so that six later packets do not
+each pick a number.
+
+Two things this table does not promise. There is no `tab`: no view has two panes yet, and the gesture
+that moves focus between them belongs to the first one that grows a second pane. And jumping to an
+issue by key — typing `PROJ-142`, or pasting a Jira URL — is not built; it is
+[#62](https://github.com/varijkapil13/saral/issues/62).
 
 ## Mouse
 

@@ -93,11 +93,19 @@ because it unblocks or blocks everyone. The other four run in parallel behind it
   cannot blank a field nobody touched. The owned paths grew by the fake's field masking and the one
   line in onboarding that names a timezone, which are the only consumers either amendment has:
   without them the packet adds two things nobody uses.
-- [ ] **PC.2 — One owner for the number keys** · [#49](https://github.com/varijkapil13/saral/issues/49) · **owns** `internal/ui/kernel/{view,keys}.go`, `internal/ui/list/register.go`, `internal/app/search.go`, `docs/UX.md`
-  Three claimants on `1`–`9`: kernel view slots, the six root views `docs/UX.md` promises, and
-  `SavedQuery.Slot`, which P1.2 built and tested and nothing calls. Pick one, give the others a
-  prefix, and write down the slot allocation so six later packets do not each guess.
-  **A product decision, not a defect — it wants a human answer.**
+- [x] **PC.2 — One owner for the number keys** · [#49](https://github.com/varijkapil13/saral/issues/49) · **owns** `internal/ui/kernel/**`, `internal/ui/list/**`, `internal/app/search.go`, `internal/config/**`, `cmd/saral/main.go`, `docs/{UX,ARCHITECTURE,ROADMAP}.md`
+  Three claimants on `1`–`9`, settled by the owner on the issue: **the digits are contextual.** A
+  bare `1`–`9` in a root view runs the saved query bound to it; a view is reached with `g` and its
+  digit from anywhere. The kernel *buffers* that `g` rather than forwarding it, so the `gg` and `ge`
+  that two views already hardcode keep working and no view is left holding half a gesture the kernel
+  finished. The slot allocation is written down in `docs/UX.md` and the registry rejects a second
+  claim on one, so six later packets no longer each guess.
+  Saved queries were built, tested and unreachable, so making the digits alive on day one was the
+  other half: a `[[profiles.x.queries]]` schema held to `app.SavedQueries`' own rules rather than a
+  second copy of them, `s` in the issue list — and a palette command — to bind the query on screen to
+  a key with a confirmation when it is taking one, and the injection through `kernel.Deps` and
+  `cmd/saral/main.go`. The owned paths grew to match: the digit dispatch, the footer and the memo key
+  are all in `kernel.go`, and saved-query persistence was owned by nobody at all.
 - [ ] **PC.3 — Session project scope** · [#50](https://github.com/varijkapil13/saral/issues/50) · **owns** `cmd/saral/main.go`, `internal/ui/kernel/kernel.go`, `internal/ui/list/list.go`
   Onboarding asks which project you work in, validates it, writes it to the profile, and nothing ever
   reads it back: `deps.Project` comes only from `--project`. So the capability probe resolves

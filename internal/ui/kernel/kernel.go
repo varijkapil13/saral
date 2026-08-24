@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -62,6 +63,7 @@ type chromeKey struct {
 	width     int
 	themeGen  int
 	capsGen   int
+	savedGen  int
 	rootID    string
 	topID     string
 	title     string
@@ -70,6 +72,7 @@ type chromeKey struct {
 	depth     int
 	palette   bool
 	capturing bool
+	prefixed  bool
 }
 
 type chromeCache struct {
@@ -102,8 +105,16 @@ type Model struct {
 	// every frame and would put a few hundred allocations under every scroll.
 	chrome *chromeCache
 
+	// prefix holds the go-to key while it waits for the one that completes it.
+	// It is buffered rather than forwarded, because a view that spends g on its
+	// own gestures must not be left half way through one when the kernel takes
+	// the digit that follows.
+	prefix    tea.KeyPressMsg
+	prefixSet bool
+
 	width, height int
 	capsGen       int
+	savedGen      int
 	status        string
 	statusLevel   StatusLevel
 	showHelp      bool
@@ -272,6 +283,9 @@ func (m Model) route(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status, m.statusLevel = msg.Text, msg.Level
 		return m, nil
 
+	case BindQueryMsg:
+		return m.bindQuery(msg)
+
 	case CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.roots = Views()
@@ -303,6 +317,13 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if m.prefixSet {
+		return m.resolvePrefix(msg)
+	}
+	if Matches(msg, m.keys.Go) {
+		m.prefix, m.prefixSet = msg, true
+		return m, nil
+	}
 
 	switch {
 	case Matches(msg, m.keys.Help):
@@ -312,12 +333,17 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case Matches(msg, m.keys.Palette):
 		return m.open(PaletteViewID)
 
-	case Matches(msg, m.keys.Slot):
+	case Matches(msg, m.keys.Saved):
+		// A pushed view keeps its own digits: a saved query belongs to the root,
+		// and a view switch is g and the digit from anywhere.
+		if len(m.stack) != 1 {
+			break
+		}
 		slot, err := strconv.Atoi(msg.String())
 		if err != nil {
 			break
 		}
-		return m.openSlot(slot)
+		return m.runSaved(slot)
 
 	case Matches(msg, m.keys.Quit):
 		if len(m.stack) > 1 {
@@ -394,6 +420,106 @@ func (m Model) openSlot(slot int) (tea.Model, tea.Cmd) {
 	}
 	m.status, m.statusLevel = fmt.Sprintf("nothing is bound to %d yet", slot), LevelInfo
 	return m, nil
+}
+
+// resolvePrefix spends the buffered go-to key on whatever followed it. A digit
+// is the kernel's; esc throws the gesture away; anything else was meant for the
+// view, which then sees both keys in the order they were typed.
+func (m Model) resolvePrefix(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	buffered := m.prefix
+	m.prefix, m.prefixSet = tea.KeyPressMsg{}, false
+	switch {
+	case Matches(msg, m.keys.Back):
+		return m, nil
+	case Matches(msg, m.keys.Slot):
+		if slot, err := strconv.Atoi(msg.String()); err == nil {
+			return m.openSlot(slot)
+		}
+	}
+	first, cmd := m.forwardTop(buffered)
+	model, ok := first.(Model)
+	if !ok {
+		return first, cmd
+	}
+	next, follow := model.forwardTop(msg)
+	return next, tea.Batch(cmd, follow)
+}
+
+// runSaved opens the view that runs searches and hands it the query bound to a
+// number key.
+func (m Model) runSaved(slot int) (tea.Model, tea.Cmd) {
+	query, bound := m.deps.Saved.BySlot(slot)
+	if !bound {
+		m.status, m.statusLevel = fmt.Sprintf("no saved query is bound to %d yet", slot), LevelInfo
+		return m, nil
+	}
+	spec, ok := m.queryView()
+	if !ok {
+		m.status, m.statusLevel = "nothing in this build can run a saved query", LevelWarn
+		return m, nil
+	}
+	opened, cmd := m.open(spec.ID)
+	model, ok := opened.(Model)
+	if !ok || len(model.stack) == 0 || model.top().spec.ID != spec.ID {
+		return opened, cmd
+	}
+	next, follow := model.forwardTop(RunQueryMsg{JQL: query.JQL, Title: query.Name})
+	return next, tea.Batch(cmd, follow)
+}
+
+func (m Model) queryView() (ViewSpec, bool) {
+	for _, spec := range m.roots {
+		if spec.RunsQueries && m.available(spec) {
+			return spec, true
+		}
+	}
+	return ViewSpec{}, false
+}
+
+// bindQuery puts a query on a number key and writes it back to the profile. The
+// set is the kernel's because the keypress is: a view holding a copy of its own
+// would dispatch a key the kernel no longer agrees about.
+func (m Model) bindQuery(msg BindQueryMsg) (tea.Model, tea.Cmd) {
+	replaced, taken := m.deps.Saved.BySlot(msg.Slot)
+	saved, err := m.deps.Saved.Add(app.SavedQuery{Name: msg.Name, JQL: msg.JQL, Slot: msg.Slot})
+	if err != nil {
+		m.status, m.statusLevel = err.Error(), LevelWarn
+		return m, nil
+	}
+	m.deps.Saved = saved
+	m.savedGen++
+	told, cmd := m.forwardAll(SavedQueriesMsg{Queries: saved})
+	model, ok := told.(Model)
+	if !ok {
+		return told, cmd
+	}
+	note := fmt.Sprintf("%d runs %q", msg.Slot, msg.Name)
+	switch {
+	case msg.Slot == 0:
+		note = fmt.Sprintf("%q is saved, on no key", msg.Name)
+	case taken && !strings.EqualFold(replaced.Name, msg.Name):
+		note = fmt.Sprintf("%d runs %q instead of %q", msg.Slot, msg.Name, replaced.Name)
+	}
+	if model.deps.SaveQueries == nil {
+		note += ", for this session; there is no profile to save it to"
+	}
+	model.status, model.statusLevel = note, LevelInfo
+	return model, tea.Batch(cmd, model.persistQueries(saved))
+}
+
+// persistQueries writes the set back where it came from. The key already works
+// when this runs, so a failure is reported without taking the binding away.
+func (m Model) persistQueries(saved app.SavedQueries) tea.Cmd {
+	save := m.deps.SaveQueries
+	if save == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		if err := save(saved); err != nil {
+			return StatusMsg{Text: "the key works for this session, but saving it failed: " + err.Error(), Level: LevelError}
+		}
+		return nil
+	}
 }
 
 func (m Model) open(id string) (tea.Model, tea.Cmd) {
@@ -629,8 +755,9 @@ func (m Model) chromeFor() (header, footer string) {
 	_, palette := LookupView(PaletteViewID)
 	key := chromeKey{
 		width: m.width, themeGen: m.deps.Theme.Gen, capsGen: m.capsGen,
-		status: m.status, help: m.showHelp, depth: len(m.stack), palette: palette,
-		capturing: m.capturing(),
+		savedGen: m.savedGen, status: m.status, help: m.showHelp,
+		depth: len(m.stack), palette: palette,
+		capturing: m.capturing(), prefixed: m.prefixSet,
 	}
 	if len(m.stack) > 0 {
 		key.rootID = m.stack[0].spec.ID
@@ -745,7 +872,7 @@ func (m Model) footer() string {
 		if len(m.stack) > 0 && m.stack[0].spec.ID == spec.ID {
 			style = t.SlotOn
 		}
-		label := strconv.Itoa(spec.Slot) + " " + spec.Title
+		label := m.keys.Go.Keys()[0] + strconv.Itoa(spec.Slot) + " " + spec.Title
 		slots = append(slots, m.deps.Zones.Mark(m.zonePrefix+"slot:"+spec.ID, style.Render(label)))
 	}
 	left := strings.Join(slots, "")
@@ -772,6 +899,14 @@ func (m Model) hintLine(width int) string {
 	if m.showHelp {
 		return h.View(keyMap{short: []Binding{Bind([]string{"?", "esc", "q"}, "?", "close help")}})
 	}
+	if m.prefixSet {
+		// The globals are unreachable until the gesture finishes, so the line
+		// shows what can finish it rather than what it has taken away.
+		return h.View(keyMap{short: []Binding{
+			Bind(m.keys.Slot.Keys(), "1-9", "switch view"),
+			Bind(m.keys.Back.Keys(), "esc", "cancel"),
+		}})
+	}
 	set := KeySet{}
 	if len(m.stack) > 0 {
 		set = KeysFor(m.top().spec.ID)
@@ -789,7 +924,11 @@ func (m Model) hintLine(width int) string {
 // the only way that stays true is to derive it rather than write it down.
 func (m Model) liveGlobals() KeySet {
 	g := m.keys
-	set := KeySet{Short: make([]Binding, 0, 3)}
+	set := KeySet{Short: make([]Binding, 0, 4)}
+	bound := m.boundQueries()
+	if len(bound) > 0 {
+		set.Short = append(set.Short, savedHint(bound))
+	}
 	set.Short = append(set.Short, g.Help)
 	if _, ok := LookupView(PaletteViewID); ok {
 		set.Short = append(set.Short, g.Palette)
@@ -799,6 +938,39 @@ func (m Model) liveGlobals() KeySet {
 	} else {
 		set.Short = append(set.Short, g.Quit)
 	}
-	set.Full = [][]Binding{{g.Slot, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}}
+	set.Full = [][]Binding{{g.Saved, g.Slot, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}}
+	if len(bound) > 0 {
+		set.Full = append([][]Binding{bound}, set.Full...)
+	}
 	return set
+}
+
+// boundQueries is one binding per saved query that has a number key, named
+// after the query. It is empty in a pushed view, where the digits are the
+// view's own.
+func (m Model) boundQueries() []Binding {
+	if len(m.stack) != 1 {
+		return nil
+	}
+	slots := m.deps.Saved.Slots()
+	out := make([]Binding, 0, len(slots))
+	for _, slot := range slots {
+		query, ok := m.deps.Saved.BySlot(slot)
+		if !ok {
+			continue
+		}
+		digit := strconv.Itoa(slot)
+		out = append(out, Bind([]string{digit}, digit, query.Name))
+	}
+	return out
+}
+
+// savedHint collapses the bound digits into the one entry the footer has room
+// for; the help overlay is where they are listed by name.
+func savedHint(bound []Binding) Binding {
+	keys := make([]string, 0, len(bound))
+	for _, b := range bound {
+		keys = append(keys, b.Keys()...)
+	}
+	return Bind(keys, strings.Join(keys, "/"), "saved query")
 }

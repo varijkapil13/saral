@@ -79,6 +79,13 @@ type Model struct {
 	filter    textinput.Model
 	query     string
 
+	// saved is the kernel's set of saved queries, as this view was built and as
+	// the kernel last changed it, kept so that binding a key can name what that
+	// key already runs.
+	saved    app.SavedQueries
+	bind     bindStep
+	bindSlot int
+
 	pendingGo bool
 
 	loading bool
@@ -89,10 +96,22 @@ type Model struct {
 	zonePrefix string
 }
 
-// WantsRawKeys is true while the filter is open. Without it the kernel matches
-// its own bindings first, so a query loses every digit, r triggers a refetch,
-// esc cannot cancel, and q quits the program out from under the typing.
-func (m *Model) WantsRawKeys() bool { return m.filtering }
+// bindStep is how far the gesture that binds this query to a number key has
+// got.
+type bindStep uint8
+
+const (
+	bindNone bindStep = iota
+	bindPick
+	bindConfirm
+)
+
+// WantsRawKeys is true while the filter is open, and while a number key is
+// being picked. Without it the kernel matches its own bindings first, so a
+// query loses every digit, r triggers a refetch, esc cannot cancel, and q quits
+// the program out from under the typing — and the digit that was meant to bind
+// a key would run whatever is already on it instead.
+func (m *Model) WantsRawKeys() bool { return m.filtering || m.bind != bindNone }
 
 // New builds the issue list. The query it opens on is the user's own work,
 // narrowed to the session's project when there is one; both halves are resolved
@@ -103,6 +122,7 @@ func New(d kernel.Deps) kernel.View {
 		styles: newStyles(d.Theme),
 		rows:   newRowCache(rowCacheLimit),
 		filter: newFilterInput(),
+		saved:  d.Saved,
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
@@ -147,6 +167,11 @@ type QueryMsg struct {
 	Title string
 }
 
+// SaveQueryMsg starts the gesture that binds the query on screen to a number
+// key. It is exported so that the palette reaches the same gesture the key
+// does, rather than a second implementation of it.
+type SaveQueryMsg struct{}
+
 // Init runs the opening search.
 func (m *Model) Init() tea.Cmd { return m.load() }
 
@@ -175,6 +200,15 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case QueryMsg:
 		cmd = m.retarget(msg)
+
+	case kernel.RunQueryMsg:
+		cmd = m.retarget(QueryMsg{JQL: msg.JQL, Title: msg.Title})
+
+	case kernel.SavedQueriesMsg:
+		m.saved = msg.Queries
+
+	case SaveQueryMsg:
+		m.startBind()
 
 	case loadedMsg:
 		cmd = m.loadedPage(msg)
@@ -250,7 +284,7 @@ func (m *Model) widestKey() int {
 // column captions and the filter prompt when one is open.
 func (m *Model) rowsHeight() int {
 	h := m.height - 2
-	if m.filtering {
+	if m.filtering || m.bind != bindNone {
 		h--
 	}
 	return max(h, 1)
@@ -509,6 +543,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.filtering {
 		return m.filterKey(msg, stroke)
 	}
+	if m.bind != bindNone {
+		return m.bindKey(stroke)
+	}
 	if m.pendingGo {
 		m.pendingGo = false
 		switch stroke {
@@ -541,6 +578,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.open()
 	case actFilter:
 		return m.startFilter()
+	case actSave:
+		m.startBind()
 	case actNone, actAccept, actClear:
 	}
 	return nil
@@ -582,6 +621,65 @@ func (m *Model) startFilter() tea.Cmd {
 	_ = m.filter.Focus()
 	m.clampScroll()
 	return nil
+}
+
+func (m *Model) startBind() {
+	m.bind, m.bindSlot = bindPick, 0
+	m.clampScroll()
+}
+
+// bindKey takes the digit the gesture is waiting for. Anything else ends it,
+// so there is no mode to guess a way out of, and a key another query holds is
+// named in a confirmation before it changes hands.
+func (m *Model) bindKey(stroke string) tea.Cmd {
+	step := m.bind
+	m.bind = bindNone
+	switch step {
+	case bindPick:
+		slot, err := strconv.Atoi(stroke)
+		if err != nil || slot < 1 || slot > app.MaxSavedSlot {
+			m.clampScroll()
+			return nil
+		}
+		held, taken := m.saved.BySlot(slot)
+		if taken && !strings.EqualFold(held.Name, m.title) {
+			m.bind, m.bindSlot = bindConfirm, slot
+			return nil
+		}
+		return m.commitBind(slot)
+	case bindConfirm:
+		slot := m.bindSlot
+		m.bindSlot = 0
+		if stroke != "y" {
+			m.clampScroll()
+			return nil
+		}
+		return m.commitBind(slot)
+	case bindNone:
+	}
+	return nil
+}
+
+func (m *Model) commitBind(slot int) tea.Cmd {
+	m.bind, m.bindSlot = bindNone, 0
+	m.clampScroll()
+	return kernel.BindQuery(m.title, m.jql, slot)
+}
+
+// bindPrompt is the line the gesture puts under the rows: what is being bound,
+// and what will be lost if it goes ahead. The name is what gives way on a
+// narrow terminal, never the keys that answer.
+func (m *Model) bindPrompt() string {
+	label := "bind " + strconv.Quote(m.title) + " to a key"
+	hint := "  1-" + strconv.Itoa(app.MaxSavedSlot) + ", any other key cancels"
+	if m.bind == bindConfirm {
+		held, _ := m.saved.BySlot(m.bindSlot)
+		label = strconv.Itoa(m.bindSlot) + " runs " + strconv.Quote(held.Name)
+		hint = "  y replaces it, any other key cancels"
+	}
+	room := max(m.width-ansi.StringWidth(hint), 8)
+	return m.styles.prompt.Render(ansi.Truncate(label, room, m.deps.Theme.Glyphs.Ellipsis)) +
+		m.styles.muted.Render(hint)
 }
 
 func (m *Model) open() tea.Cmd {
@@ -654,6 +752,9 @@ func (m *Model) View() string {
 	}
 	if m.filtering {
 		lines = append(lines, m.filter.View())
+	}
+	if m.bind != bindNone {
+		lines = append(lines, m.bindPrompt())
 	}
 	m.lines = lines
 	return strings.Join(lines, "\n")
