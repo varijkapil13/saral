@@ -135,8 +135,12 @@ because it unblocks or blocks everyone. The other four run in parallel behind it
 issue. This is the first batch that mutates a real instance, and every one of PC.1, PC.3 and PC.5 is
 a thing Batch 2 would otherwise get quietly wrong.
 
-- [ ] **P2.1 — Markdown to ADF** · [#8](https://github.com/varijkapil13/saral/issues/8) · **owns** `pkg/adf/parse*.go`
-  The inverse of P1.4, with round-trip property tests asserting byte-stability on untouched docs.
+- [x] **P2.1 — Markdown to ADF** · [#8](https://github.com/varijkapil13/saral/issues/8) · **owns** `pkg/adf/parse*.go` and their tests, `pkg/adf/testdata/**` (new files only), `docs/API-NOTES.md`
+  The inverse of P1.4. `ParseMarkdownInto` reconciles edited markdown against the document it was
+  rendered from and reuses the original node for every block nobody touched, which is what makes an
+  untouched document come back byte-identical — markdown alone carries no account id, no lozenge
+  colour and none of an unknown node's attributes. Landed ahead of the Batch 1.5 gate on purpose:
+  PC.1, PC.3 and PC.5 are all outside `pkg/adf`.
 - [ ] **P2.2 — Schema-driven forms** · [#9](https://github.com/varijkapil13/saral/issues/9) · **owns** `internal/ui/form/**`, `pkg/jira/cloud/meta.go`
   `createmeta` → widgets, required-field validation, `ValidationError` mapped to fields.
   Needs PC.3 (`createmeta` is keyed by project and issue type) and PC.5 (the issue-type list page).
