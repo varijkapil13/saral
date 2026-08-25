@@ -240,7 +240,7 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
 - [ ] **P3.1 — Command palette** · [#12](https://github.com/varijkapil13/saral/issues/12) · **owns** `internal/ui/palette/**`
   `ctrl+k`, fuzzy over the command registry, frecency ranking, shows the keybinding for what you ran.
   Wires up `app.SavedQuery`, whose number-key binding PC.2 settles.
-- [ ] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`, `internal/app/cache.go`, `go.mod`, `cmd/saral/main.go` (opening the cache and putting it on `Deps` — nothing else)
+- [ ] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`, `internal/app/cache.go`, `go.mod`, `cmd/saral/main.go` and `internal/ui/kernel/view.go` (opening the cache and adding the one `Deps` field that carries it — nothing else)
   Adds the bbolt dependency, in its own commit ahead of the code that needs it. bbolt buckets, TTLs,
   stale-while-revalidate, cursor-preserving row patching, stale badge. Row patching is the other
   consumer of PC.1's field-presence answer. **Adds the `internal/store` must-not-import-`internal/ui`

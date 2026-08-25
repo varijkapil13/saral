@@ -261,9 +261,14 @@ A view that is taking typing — a filter, a form field, the command palette —
 `kernel.KeyCapturer` and answers `WantsRawKeys() true` while it is. The kernel then hands it every
 key except `ctrl+c` and `ctrl+k`, and the footer drops the globals it is swallowing while keeping the
 one it cannot. Without it a global keymap makes the letters `q` and `r`, and the escape key,
-unreachable inside any text input. The two exceptions are chords rather than characters — nobody types either into a field —
-and a program that cannot be interrupted, or whose palette cannot be opened from the editor it is
-most wanted in, is broken whatever it is doing.
+unreachable inside any text input.
+
+The two exceptions are not equally free. `ctrl+c` costs nothing to reserve. `ctrl+k` costs
+kill-to-end-of-line: `bubbles` binds it to delete-after-cursor in both `textinput` and `textarea`, and
+no view here overrides that, so reserving it takes the gesture out of every field in the program
+([#80](https://github.com/varijkapil13/saral/issues/80)). It is reserved anyway, because a palette that
+cannot be opened from the editor it is most wanted in is worse than a field that cannot kill a line —
+but it is a real loss rather than a free one, and the views owe it a replacement binding.
 
 A view holding something unsaved implements `kernel.Blocker`. Going back asks the view being popped;
 quitting and switching root view ask **every** entry on the stack, because both throw all of it away
