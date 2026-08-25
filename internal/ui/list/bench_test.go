@@ -257,9 +257,15 @@ func TestScrolling_CostsTheSameWithTheMouseOn(t *testing.T) {
 func TestScrolling_CostsTheSameUnderTermsInForce(t *testing.T) {
 	t.Parallel()
 
+	// Held against a scroll with nothing under the rows rather than against a
+	// number: the race detector moves what escapes to the heap, so an absolute
+	// allocation count measures the detector on the build CI runs and this
+	// comparison measures the memo either way.
 	termed := testing.Benchmark(BenchmarkListSteadyScrollTermed10k)
-	if got := termed.AllocsPerOp(); got > 1 {
-		t.Errorf("a steady-state frame under two terms allocates %d times, want the frame string and nothing else", got)
+	plain := testing.Benchmark(BenchmarkListSteadyScroll10k)
+	if termed.AllocsPerOp() > plain.AllocsPerOp() {
+		t.Errorf("a steady-state frame under two terms allocates %d times against %d with no line under the rows; "+
+			"the line naming them is being rebuilt per frame", termed.AllocsPerOp(), plain.AllocsPerOp())
 	}
 }
 
