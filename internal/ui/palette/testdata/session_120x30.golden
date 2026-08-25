@@ -1,6 +1,6 @@
  saral | Commands                                                                          PROJ | example.atlassian.net 
 > what do you want to do?                                                                                               
------------------------------------------------------------------------------------------------------------- 19 commands
+------------------------------------------------------------------------------------------------------------ 20 commands
 > Follow the terminal's own colours             Appearance                                                              
   Turn colour off                               Appearance                                                              
   Use the dark theme                            Appearance                                                              
@@ -12,6 +12,7 @@
   Change this issue's status                    Issue                                                                  t
   Comment on this issue                         Issue                                                                  c
   Edit this issue                               Issue                                                                  e
+  Clear the filter on these rows                Search                                                                  
   Issues I reported                             Search                                                                  
   My issues                                     Search                                                                  
   Save this query to a number key               Search                                                                 s
@@ -20,7 +21,6 @@
   Show only rows with this row's status         Search                                                                  
   Show only rows with this row's type           Search                                                                  
   Unassigned issues                             Search                                                                  
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         
