@@ -126,7 +126,7 @@ type Search struct {
 	client SearchClient
 	saved  SavedQueries
 
-	flight singleflight.Group
+	flight flights
 
 	mu        sync.Mutex
 	catalogue []jira.Field
@@ -319,6 +319,15 @@ const coalesceAttempts = 3
 // say on its own.
 var errLeaderLeft = errors.New("app: the caller that started this request left")
 
+// flights is the group identical calls collapse into.
+type flights struct {
+	group singleflight.Group
+	// joined fires on a caller's own goroutine the moment that caller is
+	// registered in the group, which is the first instant it is certain to share
+	// a call rather than start one. Nothing outside a test sets it.
+	joined func(key string)
+}
+
 // coalesce runs one call for however many callers ask for it at the same
 // moment.
 //
@@ -326,22 +335,25 @@ var errLeaderLeft = errors.New("app: the caller that started this request left")
 // the only caller really does cancel the work. When that caller leaves while
 // others are still waiting, one of them starts the call again rather than
 // inheriting a cancellation it did not ask for.
-func coalesce[T any](ctx context.Context, group *singleflight.Group, key string, fn func(context.Context) (T, error)) (T, error) {
+func coalesce[T any](ctx context.Context, in *flights, key string, fn func(context.Context) (T, error)) (T, error) {
 	var zero T
 	for range coalesceAttempts {
 		if err := ctx.Err(); err != nil {
 			return zero, err
 		}
-		shared := group.DoChan(key, func() (any, error) {
+		shared := in.group.DoChan(key, func() (any, error) {
 			out, err := fn(ctx)
 			if ctx.Err() != nil {
 				return nil, errLeaderLeft
 			}
 			return out, err
 		})
+		if in.joined != nil {
+			in.joined(key)
+		}
 		select {
 		case <-ctx.Done():
-			group.Forget(key)
+			in.group.Forget(key)
 			return zero, ctx.Err()
 		case res := <-shared:
 			if errors.Is(res.Err, errLeaderLeft) {
