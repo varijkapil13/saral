@@ -3,6 +3,7 @@ package list
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -23,6 +24,15 @@ func init() {
 		Group: "Go to",
 		Keys:  []string{kernel.SlotGesture(slot)},
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
+	})
+	kernel.RegisterCommand(kernel.Command{
+		ID:    "issues.filter-by",
+		Title: "Filter these issues by a person, a status or a label",
+		Group: "Search",
+		Keys:  []string{keys.FilterBy.Help().Key},
+		Run: func(kernel.Deps) tea.Cmd {
+			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(OpenFilterMsg{}))
+		},
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:    "issues.edit-query",
@@ -52,16 +62,17 @@ func init() {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(ClearFilterMsg{}))
 		},
 	})
-	// The cells a click narrows the rows by, reachable without a pointer. There
-	// is no key for them: every letter left is one somebody types into a filter.
+	// The cells a click narrows by, reachable without a pointer. There is no key
+	// for them: f opens the picker, which reaches every value rather than only
+	// the ones a loaded row happens to carry.
 	for _, f := range []struct {
 		id, title string
-		kind      Facet
+		kind      filter.Facet
 	}{
-		{"issues.only-status", "Show only rows with this row's status", FacetStatus},
-		{"issues.only-type", "Show only rows with this row's type", FacetType},
-		{"issues.only-assignee", "Show only rows with this row's assignee", FacetAssignee},
-		{"issues.show-all", "Show every row again", FacetNone},
+		{"issues.only-status", "Filter by this row's status", filter.FacetStatus},
+		{"issues.only-type", "Filter by this row's type", filter.FacetType},
+		{"issues.only-assignee", "Filter by this row's assignee", filter.FacetAssignee},
+		{"issues.show-all", "Drop every filter on these issues", filter.FacetNone},
 	} {
 		kind := f.kind
 		kernel.RegisterCommand(kernel.Command{

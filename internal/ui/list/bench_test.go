@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -84,6 +85,27 @@ func BenchmarkListSteadyScrollMarked10k(b *testing.B) { scroll(b, markedList(b, 
 // has been accepted, which draws a line naming it under the rows.
 func BenchmarkListSteadyScrollFiltered10k(b *testing.B) {
 	scroll(b, narrowed(b, 10000, 120, 40))
+}
+
+// BenchmarkListSteadyScrollTermed10k is the same scroll with two terms in
+// force, which draws the line naming them under the rows.
+func BenchmarkListSteadyScrollTermed10k(b *testing.B) {
+	scroll(b, termed(b, 10000, 120, 40))
+}
+
+// termed is a list narrowed by two chosen values, which is what a user browses
+// in after the picker. The terms arrive as the message the picker sends, so the
+// search behind them is never run.
+func termed(tb testing.TB, n, w, h int) *Model {
+	tb.Helper()
+	m := loaded(tb, n, w, h)
+	m.terms = filter.Terms{
+		{Facet: filter.FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"},
+		{Facet: filter.FacetStatus, ID: "10203", Label: "Shipped"},
+	}
+	m.termsGen++
+	_ = m.View()
+	return m
 }
 
 // narrowed is a list with a filter typed and accepted, which is what a user
@@ -227,6 +249,17 @@ func TestScrolling_CostsTheSameWithTheMouseOn(t *testing.T) {
 	marked := testing.Benchmark(BenchmarkListSteadyScrollMarked10k)
 	if got := marked.AllocsPerOp(); got > 1 {
 		t.Errorf("a steady-state frame with the mouse on allocates %d times, want the memo to carry all but the frame itself", got)
+	}
+}
+
+// The line that names the terms is on every frame they are in force, so it is
+// memoized the way the summary is.
+func TestScrolling_CostsTheSameUnderTermsInForce(t *testing.T) {
+	t.Parallel()
+
+	termed := testing.Benchmark(BenchmarkListSteadyScrollTermed10k)
+	if got := termed.AllocsPerOp(); got > 1 {
+		t.Errorf("a steady-state frame under two terms allocates %d times, want the frame string and nothing else", got)
 	}
 }
 

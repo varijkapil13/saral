@@ -26,6 +26,7 @@ var keyOwners = map[string]string{
 	"issue.split.sidebar":     issue.ViewID,
 	"issue.split.description": issue.ViewID,
 	"issue.split.reset":       issue.ViewID,
+	"issues.filter-by":        list.ViewID,
 	"issues.save-query":       list.ViewID,
 	"issues.edit-query":       list.ViewID,
 	"issues.all":              list.ViewID,

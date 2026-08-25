@@ -1,0 +1,19 @@
+  assignee Ada Lovelace and status Shipped
+------------------------------------------------------------------------------------------------------ what to filter by
+> + assignee                                      1 in force                                                            
+    reporter                                                                                                            
+  + status                                        1 in force                                                            
+    type                                                                                                                
+    priority                                                                                                            
+    label                                                                                                               
+
+
+
+
+
+
+
+
+
+
+

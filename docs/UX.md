@@ -122,7 +122,9 @@ palette                ctrl+k         everything, fuzzy; opens over what you wer
                                       the one global a view taking typing cannot swallow
 search in view         /              filter rows live
 clear that filter      ctrl+g         from the browsing state; esc does it while still typing
-every issue here       a              widen the search to the whole of the session's project
+filter by a value      f              pick a facet, then one of the values this site holds
+every issue here       a              widen the search to the whole of the session's project;
+                                      also the state with no filter values in force
 edit this search       e              show the JQL on screen and run an edited one
 save this search       s              bind the query on screen to a number key
 refresh                r / R          current view / purge and refetch. both say what came back
@@ -260,7 +262,8 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 |---|---|
 | click a row | select it |
 | double-click a row | open it, same as `enter` — and only when both clicks are one gesture |
-| click a status, type or assignee cell | show only the rows with that value; click it again to show them all |
+| click a status, type or assignee cell | filter by that value; click it again to drop it |
+| click one of the chips under the rows | drop that filter |
 | wheel | scroll the pane under the pointer, not the focused one |
 | drag the column between two panes | move the boundary; the panes follow the pointer and the ratio is kept |
 | click the line that names the search | show its JQL and offer to change it, the same as `e` |
@@ -277,12 +280,13 @@ deliberate clicks a minute apart, so pointing at an issue and then pointing at i
 `widget.Clicks` times the pair against `Deps.Now` — the clock a test injects — over a 400 ms window,
 and a slower second click only re-selects.
 
-**Narrowing by a cell is the one filter with no key**, and that is deliberate: every letter left is
-one somebody types into `/`, and `esc` in a root view never reaches the view at all. So the rows the
-narrowing leaves out are named in a line under the list, the same cell clears it, and the palette
-carries *show only rows with this row's status / type / assignee* and *show every row again* for
-anyone without a pointer. It composes with `/`: both are things being left out, and a row has to
-survive both.
+**Narrowing by a cell is one gesture of the filter picker below**, not a mechanism of its own. A
+click on a status, type or assignee cell puts that value in force by the id the row carries; the same
+cell again takes it off; the chips under the list say what is in force and a click on one drops it.
+The palette carries *filter by this row's status / type / assignee* and *drop every filter on these
+issues* for anyone without a pointer, and `f` reaches every value rather than only the ones a loaded
+row happens to carry. It composes with `/`: a term is what the site was asked and the filter is what
+is kept of the answer, so a row has to survive both.
 
 **And `/`'s own filter is named the same way once it has been accepted.** `esc` closes the prompt and
 keeps the filter, and after that `esc` belongs to the kernel, so the count reading `1 of 3` was the
@@ -315,6 +319,61 @@ selection. Off means off all the way down: the zone manager is disabled with it,
 are never written into the frame in the first place and there is nothing left for a selection to
 pick up — and a view asks `Zones.Enabled()` before telling anybody to click something. Nothing from
 the mouse — click, wheel, drag or release — reaches the view while the help overlay is covering it.
+
+## Filtering by a person, without writing JQL
+
+The owner, after a week against a real site: *"From all views there is no easy way to go back to
+filter by person. I do not want to write JQL queries — this should also belong to the speed and ease
+of use."*
+
+`f` in the issue list opens a picker in two states: **choose a facet, then choose a value.** `esc`
+goes value → facet → closed. The facets are assignee, reporter, status, type, priority and label.
+`ctrl+k` reaches it from anywhere, including the issue pane, where `f` belongs to the viewport and is
+not taken away from it.
+
+**Version, component and sprint are not offered.** Not an oversight: none of the three can be read
+through the port role a session holds, so a row for one would be a facet with nowhere to get its
+values from. When the port grows a way to read them, they join the list.
+
+**A value is a query, not a pass over the rows in hand.** A chosen value composes into the JQL and
+the search runs again, so it reaches an issue this session never fetched — which a local narrow
+cannot — and it matches on the id the site gave the value rather than on a display name, which is
+localised, is not unique on one site, and which one account answered to two of within a minute.
+
+**Terms compose, and the screen says what is in force.** Two facets narrow together; two values of
+one facet widen it — a person *and* a status, either of two people. Every term is a chip under the
+rows and a click on one drops it. `a` — every issue in this project — is the no-terms state, so
+dropping the last term lands exactly on it and there is no second way to clear a filter to learn.
+A project switch takes the terms with it and says so: a status and an issue type are minted per
+project, so the ids in force name values the new project has never heard of.
+
+**Where the values come from decides whether it feels fast.** Statuses and types come from the
+project's workflows, priorities and labels from the site. All four are read once when the facet is
+opened, and typing then ranks what is held with no round trip at all.
+
+Accounts are the exception, and the port explains why: Jira's user matching is neither substring nor
+fuzzy and is documented nowhere — `ap` finds nobody though a surname on the site contains it, and
+`vk` finds a person by initials — so a needle two letters longer can match what a shorter one did
+not. The picker therefore asks the site once when the facet opens, ranks what came back locally with
+the same scorer the palette uses, and goes back to the site only when what it holds stops answering:
+never while the first search returned the whole directory, and never twice for one needle. A request
+per keystroke is slower than typing the JQL this replaces.
+
+The assignee search is scoped to the project, which switches Jira to the assignable endpoint and
+drops the app accounts for free — ten of the eleven accounts on the measured site. A **reporter** need
+not be assignable, so that search is site-wide, and what it drags in is badged (*app*, *customer*,
+*inactive*) and sunk below the people rather than hidden: an app account is assigned work and reports
+issues exactly as a person does, so hiding one loses rows.
+
+**Nobody is a value like any other.** *unassigned* is the first row of the assignee facet and
+composes with the rest — it is the empty account id, so `assignee IS EMPTY` is what it writes and it
+ORs with a named person rather than needing a filter of its own.
+
+**A facet the site refuses says so and points at the way round.** *Browse users and groups* is
+site-wide and an ordinary token can lack it; a session with no project cannot be told what statuses
+exist. Either way the facet stays on the list with the reason beside it in the site's own words, and
+choosing it repeats the reason and names `e`, which shows the search on screen and runs an edited
+one. A facet that disappeared would be one nobody could find out about.
 
 ## Rendering rules for modern terminals
 
