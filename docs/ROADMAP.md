@@ -221,10 +221,26 @@ a thing Batch 2 would otherwise get quietly wrong.
 
 This is the batch that earns the habit. Deliberately ahead of the remaining features.
 
+- [x] **W0-b — The kernel seams this batch codes against** · **owns** `internal/ui/kernel/**`,
+  `internal/ui/keys_test.go`, the `Keys:` lines in the five `register.go` files, the `internal/ui`
+  import rule in `internal/arch`, `docs/{UX,ARCHITECTURE,ROADMAP}.md`
+  Four of the five packets below need something from the kernel, so all of it lands once and the
+  kernel is then closed for the batch. `ctrl+k` pushes the palette instead of switching root view and
+  reaches it from a view that is taking typing; `kernel.RunCommandMsg` is the one way a command runs,
+  so the deps it gets are the kernel's, the capability check happens once, the palette closes itself,
+  and a `CommandRanMsg` says what ran; `kernel.Command` grows `Keys`, spelt the way the view's footer
+  spells them; and `mouse = false` disables the zone manager, so a view's markers stop being written
+  into frames nothing scans.
+  **The cache interface was withdrawn from this packet.** It was frozen with no implementation and no
+  consumer, and verification found the shape already wrong for one of the two packets meant to use
+  it: P3.4 needs to know when the cache changed, and `Get`/`Put`/`Each`/`Purge` offers no generation,
+  no watch and no message, so an index built from `Each` goes stale the moment anything writes. Three
+  interfaces have already shipped here that nobody implemented. P3.2 defines this one alongside the
+  code that exercises it.
 - [ ] **P3.1 — Command palette** · [#12](https://github.com/varijkapil13/saral/issues/12) · **owns** `internal/ui/palette/**`
   `ctrl+k`, fuzzy over the command registry, frecency ranking, shows the keybinding for what you ran.
   Wires up `app.SavedQuery`, whose number-key binding PC.2 settles.
-- [ ] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`, `go.mod`
+- [ ] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`, `internal/app/cache.go`, `go.mod`, `cmd/saral/main.go` and `internal/ui/kernel/view.go` (opening the cache and adding the one `Deps` field that carries it — nothing else)
   Adds the bbolt dependency, in its own commit ahead of the code that needs it. bbolt buckets, TTLs,
   stale-while-revalidate, cursor-preserving row patching, stale badge. Row patching is the other
   consumer of PC.1's field-presence answer. **Adds the `internal/store` must-not-import-`internal/ui`
@@ -233,11 +249,19 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   The dependency landed first and on its own, alongside the smallest `internal/store` that keeps it —
   opening the file, closing it, naming buckets — and the import rule. CI runs `go mod tidy` before
   anything else and that strips a `require` line nothing imports, so the package is what makes the
-  dependency real. The cache is what is left.
+  dependency real. The cache is what is left: `internal/app/cache.go` declaring the interface —
+  declared here because a view may not import the store — the bbolt implementation of it, the
+  `kernel.Deps` field that carries it, and `build()` opening it from `config.CacheDir()` and the
+  profile. **Interface and implementation land in the same PR**, and the interface answers to what
+  P3.4 needs to read as well as to what a view needs: knowing that the cache changed, not only what
+  is in it. A session with nowhere to cache carries a nil one and every caller copes.
 - [ ] **P3.3 — Mouse** · [#14](https://github.com/varijkapil13/saral/issues/14) · **owns** `internal/ui/widget/zone*.go` + zone wiring in own files
   Click, double-click, wheel-under-pointer, drag-to-resize, clickable chips and footer.
-- [ ] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/index.go`
+- [ ] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/index.go` · **after P3.2**
   Instant search over cached issues with no round trip; the thing that makes it feel faster than the web.
+  It reads through the cache P3.2 defines, so it follows P3.2 rather than running beside it: two
+  packets agreeing out of band on the kinds, the key format and the value codec is how the shape
+  comes out wrong.
 - [ ] **P3.5 — Help, hints and theming** · [#16](https://github.com/varijkapil13/saral/issues/16) · **owns** `internal/ui/help/**`, `internal/ui/theme/**`
   Contextual footer showing only valid keys, `?` overlay from the key registry, "you could have
   pressed `s`" hints after a menu path is used repeatedly, light/dark/no-color themes.

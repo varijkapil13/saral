@@ -61,6 +61,12 @@ var importRules = []importRule{
 		forbid: "internal/ui",
 		why:    "the cache is written to and read by the layers above it and never renders anything",
 	},
+	{
+		name:   "ui-must-not-import-the-store",
+		from:   "internal/ui",
+		forbid: "internal/store",
+		why:    "a view takes what it needs as an interface declared above the store, so it can be driven by a fake",
+	},
 }
 
 func underPath(p, prefix string) bool {
@@ -305,6 +311,18 @@ func TestBrokenRules_MatchTheOffendingPackagesAndNothingElse(t *testing.T) {
 			name:    "the store taking the port",
 			pkgDir:  "internal/store",
 			imports: "pkg/jira",
+			want:    nil,
+		},
+		{
+			name:    "a view reaching down into the store",
+			pkgDir:  "internal/ui/list",
+			imports: "internal/store",
+			want:    []string{"ui-must-not-import-the-store"},
+		},
+		{
+			name:    "the composition root wiring the store into a view",
+			pkgDir:  "cmd/saral",
+			imports: "internal/store",
 			want:    nil,
 		},
 		{

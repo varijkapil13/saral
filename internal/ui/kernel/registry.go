@@ -132,6 +132,14 @@ func Commands() []Command {
 	return out
 }
 
+// LookupCommand returns one registered command by ID.
+func LookupCommand(id string) (Command, bool) {
+	reg.mu.RLock()
+	defer reg.mu.RUnlock()
+	cmd, ok := reg.commands[id]
+	return cmd, ok
+}
+
 // KeysFor returns the keys registered for a view.
 func KeysFor(viewID string) KeySet {
 	reg.mu.RLock()

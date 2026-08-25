@@ -56,6 +56,16 @@ type Command struct {
 	Group string
 	// Requires names the capability the command needs, if any.
 	Requires jira.CapabilityKey
+	// Keys are the ways to reach this same action without the palette, each
+	// spelt the way the view's own footer spells it: the help label of the
+	// binding, not the list of strokes it matches. "a", not "a c"; "g1", not
+	// "1". Two answers to one question in the same frame is what carrying the
+	// match list gives.
+	//
+	// Empty means there is no key and nothing may guess one — an ID says nothing
+	// about a keybinding, and one command's is byte-identical to a view ID whose
+	// keys belong to something else entirely.
+	Keys []string
 	// Run performs the command.
 	Run func(Deps) tea.Cmd
 }
@@ -76,7 +86,10 @@ type Deps struct {
 	Project string
 	// Theme holds the styles, built once per theme generation.
 	Theme *Theme
-	// Zones resolves mouse clicks to the element that was rendered there.
+	// Zones resolves mouse clicks to the element that was rendered there. It is
+	// also how a view learns whether the mouse is on at all: a session started
+	// with mouse = false disables the manager, so Zones.Enabled() answers that
+	// question and Mark writes nothing into the frame.
 	Zones *zone.Manager
 	// Site is the host this session is talking to, for display only.
 	Site string

@@ -26,12 +26,14 @@ func init() {
 		ID:    "issue.edit",
 		Title: "Edit this issue",
 		Group: "Issue",
+		Keys:  []string{editBinding().Help().Key},
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Broadcast(EditIssueMsg{}) },
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:    "issue.transition",
 		Title: "Change this issue's status",
 		Group: "Issue",
+		Keys:  []string{moveBinding().Help().Key},
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Broadcast(MoveIssueMsg{}) },
 	})
 }
