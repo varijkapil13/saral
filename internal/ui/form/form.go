@@ -23,6 +23,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -75,8 +76,10 @@ type Model struct {
 	inChoose map[string]action
 	rows     *rowCache
 
-	project    string
-	zonePrefix string
+	project string
+
+	zones  widget.Zoner
+	clicks *widget.Clicks
 
 	stage stage
 
@@ -160,9 +163,8 @@ func newWith(d kernel.Deps, cache *schemaCache, store *draftStore) *Model {
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
-	if d.Zones != nil {
-		m.zonePrefix = d.Zones.NewPrefix()
-	}
+	m.zones = widget.NewZoner(d.Zones)
+	m.clicks = widget.NewClicks(d.Now)
 	m.relayout()
 	return m
 }
@@ -1087,7 +1089,7 @@ func (m *Model) createFailed(msg createFailedMsg) tea.Cmd {
 // --- mouse ------------------------------------------------------------------
 
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
-	if msg.Button != tea.MouseLeft || m.deps.Zones == nil {
+	if msg.Button != tea.MouseLeft {
 		return nil
 	}
 	if m.stage == stageTypes {
@@ -1100,10 +1102,12 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.index)); i++ {
-		if !m.deps.Zones.Get(m.rowZone(i)).InBounds(msg) {
+		zone := m.rowZone(i)
+		if !m.zones.Hit(zone, msg) {
 			continue
 		}
-		if i == m.cursor {
+		if m.clicks.Double(zone) {
+			m.moveTo(i)
 			return m.activate()
 		}
 		m.moveTo(i)
@@ -1114,10 +1118,12 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 
 func (m *Model) clickType(msg tea.MouseClickMsg) tea.Cmd {
 	for i := m.typeTop; i < min(m.typeTop+max(m.height-2, 1), len(m.types)); i++ {
-		if !m.deps.Zones.Get(m.typeZone(i)).InBounds(msg) {
+		zone := m.typeZone(i)
+		if !m.zones.Hit(zone, msg) {
 			continue
 		}
-		if i == m.typeCursor {
+		if m.clicks.Double(zone) {
+			m.typeCursor = i
 			return m.openType(m.types[i])
 		}
 		m.typeCursor = i
@@ -1130,10 +1136,12 @@ func (m *Model) clickType(msg tea.MouseClickMsg) tea.Cmd {
 func (m *Model) clickChoice(msg tea.MouseClickMsg) tea.Cmd {
 	visible := m.visibleChoices()
 	for i := m.pickTop; i < min(m.pickTop+m.chooserHeight(), len(visible)); i++ {
-		if !m.deps.Zones.Get(m.choiceZone(i)).InBounds(msg) {
+		zone := m.choiceZone(i)
+		if !m.zones.Hit(zone, msg) {
 			continue
 		}
-		if i == m.pick {
+		if m.clicks.Double(zone) {
+			m.pick = i
 			return m.chooseKey(tea.KeyPressMsg{Code: tea.KeyEnter}, "enter")
 		}
 		m.pick = i

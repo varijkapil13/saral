@@ -17,7 +17,7 @@ func clickOn(t *testing.T, d kernel.Deps, dr *driver, name string) {
 	t.Helper()
 
 	_ = d.Zones.Scan(dr.m.View())
-	id := dr.m.zonePrefix + name
+	id := dr.m.zones.ID(name)
 	eventually(t, "the zone "+id+" to be recorded", func() bool {
 		return !d.Zones.Get(id).IsZero()
 	})
@@ -126,5 +126,38 @@ func TestThread_ClickingTheEditorsOwnActionsSendsAndPutsAside(t *testing.T) {
 	dr.key("a")
 	if got := dr.m.editor.Value(); got != "Put aside with the mouse." {
 		t.Errorf("the draft did not survive the click: %q", got)
+	}
+}
+
+// threadClock is the clock the double-click is timed against, wound forward
+// rather than slept on.
+type threadClock struct{ at time.Time }
+
+func (c *threadClock) now() time.Time        { return c.at }
+func (c *threadClock) after(d time.Duration) { c.at = c.at.Add(d) }
+
+// Two clicks a second apart are two decisions rather than one gesture. Bubble
+// Tea reports no click count, so the clock is the only thing that tells them
+// apart.
+func TestThread_TwoDeliberateClicksOnACommentDoNotOpenTheEditor(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(3)
+	first := comment(t, f, "PROJ-1", "The older one.")
+	comment(t, f, "PROJ-1", "The newer one.")
+	clock := &threadClock{at: time.Date(2026, time.March, 5, 9, 0, 0, 0, time.UTC)}
+	d := testDeps(t, f)
+	d.Now = clock.now
+	dr := newDriver(t, d, "PROJ-1", 100, 24)
+
+	clickOn(t, d, dr, zoneComment+first.ID)
+	if dr.m.cursor != 0 {
+		t.Fatalf("the click left the cursor on %d, want the comment that was clicked", dr.m.cursor)
+	}
+	clock.after(time.Second)
+	clickOn(t, d, dr, zoneComment+first.ID)
+
+	if dr.m.mode == writing {
+		t.Error("two clicks a second apart opened the editor, so a second look reads as a double-click")
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
 // editLabelWidth is the field-name column. Wide enough for the longest label
@@ -41,19 +42,51 @@ func newEditStyles(t *kernel.Theme) *editStyles {
 }
 
 // View draws the fields, then whatever the pane is waiting for an answer about.
+//
+// The title stays put and the footer keeps its lines; what scrolls is the field
+// rows between them, so a pane with more fields than the terminal has rows can
+// still reach the last one.
 func (m *editModel) View() string {
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
+	tail := flatten(append([]string{""}, m.footerLines()...))
+	body, under := m.fieldLinesAndCursor()
+	height := max(m.height-1-len(tail), 1)
+	rows, top := widget.Window(body, m.top, height, m.keep(under))
+	m.top, m.follow, m.reach = top, false, max(len(body)-height, 0)
+
 	lines := make([]string, 0, m.height)
 	lines = append(lines, m.editTitle())
-	for i := range m.rows {
-		lines = append(lines, m.rowLines(i)...)
-	}
-	lines = append(lines, "")
-	lines = append(lines, m.footerLines()...)
+	lines = append(lines, rows...)
+	lines = append(lines, tail...)
 	return strings.Join(fit(lines, m.height), "\n")
 }
+
+// fieldLinesAndCursor draws every field row and says which line the row under
+// the cursor starts on, which is what keeps it on screen as the cursor moves.
+func (m *editModel) fieldLinesAndCursor() (lines []string, under int) {
+	lines = make([]string, 0, len(m.rows)+4)
+	under = -1
+	for i := range m.rows {
+		if i == m.cursor {
+			under = len(lines)
+		}
+		lines = append(lines, flatten(m.rowLines(i))...)
+	}
+	return lines, under
+}
+
+// keep is the line the window may not scroll away from: the row under the
+// cursor, and only just after the cursor has moved.
+func (m *editModel) keep(under int) int {
+	if m.follow {
+		return under
+	}
+	return -1
+}
+
+func editRowZone(id string) string { return "row:" + id }
 
 func (m *editModel) editTitle() string {
 	ell := m.deps.Theme.Glyphs.Ellipsis
@@ -89,9 +122,7 @@ func (m *editModel) rowLines(at int) []string {
 	}
 
 	line := prefix + label + value
-	if m.deps.Zones != nil && m.zonePrefix != "" {
-		line = m.deps.Zones.Mark(m.zonePrefix+"row:"+row.id, line)
-	}
+	line = m.zones.Mark(editRowZone(row.id), line)
 	out := []string{line}
 	if reason, blocked := row.blocked(); blocked {
 		out = append(out, m.styles.warn.Render(indentWrap(reason, m.width)))
@@ -266,15 +297,22 @@ func wrapTo(s string, width int) []string {
 // draws fewer lines than it was allotted leaves the previous frame's rows on
 // screen, and one that draws more pushes the footer off it.
 func fit(lines []string, height int) []string {
-	flat := make([]string, 0, height)
-	for _, line := range lines {
-		flat = append(flat, strings.Split(line, "\n")...)
-	}
+	flat := flatten(lines)
 	if len(flat) > height {
 		return flat[:height]
 	}
 	for len(flat) < height {
 		flat = append(flat, "")
+	}
+	return flat
+}
+
+// flatten splits out every embedded newline, so that a wrapped sentence counts
+// as the rows it will actually take up rather than as one.
+func flatten(lines []string) []string {
+	flat := make([]string, 0, len(lines)+4)
+	for _, line := range lines {
+		flat = append(flat, strings.Split(line, "\n")...)
 	}
 	return flat
 }

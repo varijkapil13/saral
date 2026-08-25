@@ -155,7 +155,7 @@ func TestKernel_ClickingASuggestionAndACompletedStepWorks(t *testing.T) {
 	d.press("enter")
 	d.atStep(stepProject)
 
-	prefix := d.model().zone
+	prefix := d.model().zones.ID("")
 	scan(t, zones, d.view.View())
 	eventually(t, func() bool { return !zones.Get(prefix + "project:PROJ").IsZero() })
 
@@ -183,7 +183,7 @@ func TestKernel_ClickingATokenStoreChoosesIt(t *testing.T) {
 	d.credentials()
 	d.atStep(stepStorage)
 
-	prefix := d.model().zone
+	prefix := d.model().zones.ID("")
 	scan(t, zones, d.view.View())
 	eventually(t, func() bool { return !zones.Get(prefix + "store:command").IsZero() })
 

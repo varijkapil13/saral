@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -50,7 +51,17 @@ type moveModel struct {
 	fail string
 
 	width, height int
-	zonePrefix    string
+	// top is the first move on screen: an issue with more transitions than the
+	// terminal has rows is what the wheel is for. follow is set while the window
+	// still has to catch up with a cursor that moved.
+	top    int
+	follow bool
+	// reach is how far the last frame could scroll, which is what the wheel
+	// clamps against so that a notch back always moves.
+	reach int
+
+	zones  widget.Zoner
+	clicks *widget.Clicks
 
 	gen    int
 	cancel context.CancelFunc
@@ -88,9 +99,8 @@ func NewMove(d kernel.Deps, iss jira.Issue) kernel.View {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
 	m.styles = newEditStyles(m.deps.Theme)
-	if d.Zones != nil {
-		m.zonePrefix = d.Zones.NewPrefix()
-	}
+	m.zones = widget.NewZoner(d.Zones)
+	m.clicks = widget.NewClicks(d.Now)
 	return m
 }
 
@@ -126,6 +136,7 @@ func (m *moveModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case movesLoadedMsg:
 		if m.current(msg.gen) {
 			m.moves, m.loaded, m.cursor = msg.moves, true, 0
+			m.top, m.follow = 0, true
 		}
 
 	case moveDoneMsg:
@@ -145,6 +156,9 @@ func (m *moveModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case tea.MouseClickMsg:
 		cmd = m.click(msg)
+
+	case tea.MouseWheelMsg:
+		m.wheel(msg)
 	}
 	return m, cmd
 }
@@ -195,6 +209,7 @@ func (m *moveModel) moveTo(at int) {
 		return
 	}
 	m.cursor = min(max(at, 0), len(m.moves)-1)
+	m.follow = true
 	m.fail = ""
 }
 
@@ -327,14 +342,16 @@ func (m *moveModel) done() tea.Cmd {
 }
 
 func (m *moveModel) click(msg tea.MouseClickMsg) tea.Cmd {
-	if msg.Button != tea.MouseLeft || m.deps.Zones == nil || m.stage != moveList {
+	if msg.Button != tea.MouseLeft || m.stage != moveList {
 		return nil
 	}
 	for i := range m.moves {
-		if !m.deps.Zones.Get(m.zonePrefix + "move:" + m.moves[i].ID).InBounds(msg) {
+		zone := moveZone(m.moves[i].ID)
+		if !m.zones.Hit(zone, msg) {
 			continue
 		}
-		if i == m.cursor {
+		if m.clicks.Double(zone) {
+			m.moveTo(i)
 			return m.choose()
 		}
 		m.moveTo(i)
@@ -342,6 +359,24 @@ func (m *moveModel) click(msg tea.MouseClickMsg) tea.Cmd {
 	}
 	return nil
 }
+
+// wheel scrolls the list of moves. There is nothing to scroll on a transition
+// screen: it holds the fields that move needs and they all fit.
+func (m *moveModel) wheel(msg tea.MouseWheelMsg) {
+	if m.stage != moveList {
+		return
+	}
+	switch msg.Button {
+	case tea.MouseWheelUp:
+		m.top -= widget.WheelStep
+	case tea.MouseWheelDown:
+		m.top += widget.WheelStep
+	default:
+	}
+	m.top = min(max(m.top, 0), m.reach)
+}
+
+func moveZone(id string) string { return "move:" + id }
 
 // View draws the moves, or the screen one of them needs.
 func (m *moveModel) View() string {
@@ -354,23 +389,44 @@ func (m *moveModel) View() string {
 	case moveScreen, moveConfirm, moveDoing:
 		lines = append(lines, m.screenLines()...)
 	case moveList:
-		lines = append(lines, m.listLines()...)
+		tail := flatten(m.listTail())
+		moves, under := m.moveLinesAndCursor()
+		if !m.follow {
+			under = -1
+		}
+		height := max(m.height-1-len(tail), 1)
+		window, top := widget.Window(moves, m.top, height, under)
+		m.top, m.follow, m.reach = top, false, max(len(moves)-height, 0)
+		lines = append(lines, window...)
+		lines = append(lines, tail...)
 	}
 	return strings.Join(fit(lines, m.height), "\n")
 }
 
-func (m *moveModel) listLines() []string {
+// moveLinesAndCursor draws the moves and says which line the one under the
+// cursor is on, so that a cursor moved by a key comes back into view.
+func (m *moveModel) moveLinesAndCursor() (lines []string, under int) {
 	t := m.deps.Theme
-	out := make([]string, 0, len(m.moves)+3)
+	lines = make([]string, 0, len(m.moves)+1)
 	switch {
 	case !m.loaded:
-		out = append(out, m.styles.muted.Render(indentWrap("reading what this issue can do"+t.Glyphs.Ellipsis, m.width)))
+		lines = append(lines, m.styles.muted.Render(indentWrap("reading what this issue can do"+t.Glyphs.Ellipsis, m.width)))
 	case len(m.moves) == 0:
-		out = append(out, m.styles.muted.Render(indentWrap("this issue has no move available to you right now", m.width)))
+		lines = append(lines, m.styles.muted.Render(indentWrap("this issue has no move available to you right now", m.width)))
 	}
+	under = -1
 	for i := range m.moves {
-		out = append(out, m.moveLine(i))
+		if i == m.cursor {
+			under = len(lines)
+		}
+		lines = append(lines, m.moveLine(i))
 	}
+	return lines, under
+}
+
+// listTail is what stays below the moves however far they are scrolled.
+func (m *moveModel) listTail() []string {
+	out := make([]string, 0, 3)
 	out = append(out, "")
 	if m.fail != "" {
 		out = append(out, m.styles.fail.Render(wrapped(m.fail, m.width)))
@@ -392,10 +448,7 @@ func (m *moveModel) moveLine(at int) string {
 	room := max(m.width-editMarker, 8)
 	body := ansi.Truncate(padTo(move.Name, editLabelWidth+8)+move.To.Name+trailing, room, t.Glyphs.Ellipsis)
 	line := prefix + m.styles.value.Render(body)
-	if m.deps.Zones != nil && m.zonePrefix != "" {
-		line = m.deps.Zones.Mark(m.zonePrefix+"move:"+move.ID, line)
-	}
-	return line
+	return m.zones.Mark(moveZone(move.ID), line)
 }
 
 func (m *moveModel) screenLines() []string {

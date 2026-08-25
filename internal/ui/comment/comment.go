@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -133,7 +134,9 @@ type Model struct {
 	width, height int
 	gen           int
 	cancel        context.CancelFunc
-	zonePrefix    string
+
+	zones  widget.Zoner
+	clicks *widget.Clicks
 }
 
 // New builds the thread with no issue yet. It is the registry's constructor:
@@ -164,9 +167,8 @@ func build(d kernel.Deps, key string) *Model {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
 	m.styles = newStyles(m.deps.Theme)
-	if d.Zones != nil {
-		m.zonePrefix = d.Zones.NewPrefix()
-	}
+	m.zones = widget.NewZoner(d.Zones)
+	m.clicks = widget.NewClicks(d.Now)
 	m.browse, m.confirm = m.keys.tables()
 	return m
 }
@@ -625,13 +627,7 @@ func (m *Model) blockLines(at int) []string {
 		return lines
 	}
 	lines := renderBlock(c, m.width, at == m.cursor, m.styles, m.deps.Theme, m.location())
-	if m.deps.Zones != nil && len(lines) > 0 {
-		// Marking the joined block and splitting it again puts the zone's start
-		// on the first line and its end on the last, so the rectangle the
-		// manager records is the whole comment rather than one line of it.
-		marked := m.deps.Zones.Mark(m.zonePrefix+zoneComment+c.ID, strings.Join(lines, "\n"))
-		lines = strings.Split(marked, "\n")
-	}
+	lines = m.zones.MarkLines(zoneComment+c.ID, lines)
 	lines = append(lines, "")
 	m.blocks.put(k, lines)
 	return lines
@@ -846,10 +842,10 @@ func (m *Model) confirmKey(stroke string) tea.Cmd {
 }
 
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
-	if msg.Button != tea.MouseLeft || m.deps.Zones == nil {
+	if msg.Button != tea.MouseLeft {
 		return nil
 	}
-	hit := func(name string) bool { return m.deps.Zones.Get(m.zonePrefix + name).InBounds(msg) }
+	hit := func(name string) bool { return m.zones.Hit(name, msg) }
 	switch m.mode {
 	case confirming:
 		switch {
@@ -878,10 +874,12 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		return m.askToDelete()
 	}
 	for i := m.top; i < len(m.comments); i++ {
-		if !hit(zoneComment + m.comments[i].ID) {
+		id := zoneComment + m.comments[i].ID
+		if !hit(id) {
 			continue
 		}
-		if i == m.cursor {
+		if m.clicks.Double(id) {
+			m.cursor = i
 			return m.editSelected()
 		}
 		return m.moveTo(i)
@@ -905,12 +903,7 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) tea.Cmd {
 
 // --- rendering --------------------------------------------------------------
 
-func (m *Model) mark(name, s string) string {
-	if m.deps.Zones == nil {
-		return s
-	}
-	return m.deps.Zones.Mark(m.zonePrefix+name, s)
-}
+func (m *Model) mark(name, s string) string { return m.zones.Mark(name, s) }
 
 // View draws the window and nothing else: a thread of a thousand comments and a
 // thread of ten do the same work here.

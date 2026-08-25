@@ -25,6 +25,7 @@ import (
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -77,9 +78,7 @@ func NewWith(d kernel.Deps, connect Connector) kernel.View {
 		cfg:     config.Config{Mouse: true},
 		cache:   &renderCache{},
 	}
-	if d.Zones != nil {
-		m.zone = d.Zones.NewPrefix()
-	}
+	m.zones = widget.NewZoner(d.Zones)
 	m.restyle()
 	m.spin = spinner.New(spinner.WithSpinner(spinner.Spinner{
 		Frames: d.Theme.Glyphs.Spinner,
@@ -105,7 +104,7 @@ var _ kernel.KeyCapturer = Model{}
 type Model struct {
 	deps    kernel.Deps
 	connect Connector
-	zone    string
+	zones   widget.Zoner
 
 	width, height int
 
@@ -388,20 +387,20 @@ func (m *Model) cycleSuggestion(down bool) tea.Cmd {
 }
 
 func (m Model) click(msg tea.MouseClickMsg) (kernel.View, tea.Cmd) {
-	if m.zone == "" || m.deps.Zones == nil || msg.Button != tea.MouseLeft {
+	if msg.Button != tea.MouseLeft {
 		return m, nil
 	}
 	switch m.step {
 	case stepStorage:
 		for kind := storeKind(0); kind < storeCount; kind++ {
-			if m.deps.Zones.Get(m.zone + "store:" + kind.String()).InBounds(msg) {
+			if m.zones.Hit("store:"+kind.String(), msg) {
 				cmd := m.setStore(kind)
 				return m, cmd
 			}
 		}
 	case stepProject:
 		for _, key := range m.suggested {
-			if m.deps.Zones.Get(m.zone + "project:" + key).InBounds(msg) {
+			if m.zones.Hit("project:"+key, msg) {
 				m.setValue(fieldProject, key)
 				return m, nil
 			}
@@ -409,7 +408,7 @@ func (m Model) click(msg tea.MouseClickMsg) (kernel.View, tea.Cmd) {
 	case stepSite, stepEmail, stepToken, stepReview, stepDone:
 	}
 	for s := stepSite; s < m.step; s++ {
-		if m.deps.Zones.Get(m.zone + "step:" + s.String()).InBounds(msg) {
+		if m.zones.Hit("step:"+s.String(), msg) {
 			cmd := m.goTo(s)
 			return m, cmd
 		}

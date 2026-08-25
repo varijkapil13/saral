@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -161,7 +162,12 @@ func (c *rowCache) put(k rowKey, s string) {
 func (c *rowCache) reset() { clear(c.rows) }
 
 // renderRow draws one row to exactly lay.width columns.
-func renderRow(iss *jira.Issue, lay layout, sel bool, st *styles, t *kernel.Theme, loc *time.Location, now time.Time) string {
+//
+// The three cells that name a facet carry a zone of their own, inside the row's,
+// so that a click can mean "narrow to this status" rather than only "this row".
+// They are marked here, inside what the memo holds, so that a marked cell costs
+// its id once per issue and nothing per frame.
+func renderRow(iss *jira.Issue, lay layout, sel bool, st *styles, t *kernel.Theme, loc *time.Location, now time.Time, z widget.Zoner) string {
 	ell := t.Glyphs.Ellipsis
 	var b strings.Builder
 	b.Grow(lay.width + 32)
@@ -177,20 +183,19 @@ func renderRow(iss *jira.Issue, lay layout, sel bool, st *styles, t *kernel.Them
 	writeCell(&b, iss.Summary, lay.summary, ell)
 	if lay.typ > 0 {
 		writeGap(&b)
-		writeCell(&b, iss.Type.Name, lay.typ, ell)
+		b.WriteString(z.Mark(typeZone(iss.Key), padTruncate(iss.Type.Name, lay.typ, ell)))
 	}
 	if lay.status > 0 {
 		writeGap(&b)
 		cell := padTruncate(iss.Status.Name, lay.status, ell)
-		if sel {
-			b.WriteString(cell)
-		} else {
-			b.WriteString(st.categories[categoryIndex(iss.Status.Category)].Render(cell))
+		if !sel {
+			cell = st.categories[categoryIndex(iss.Status.Category)].Render(cell)
 		}
+		b.WriteString(z.Mark(statusZone(iss.Key), cell))
 	}
 	if lay.assignee > 0 {
 		writeGap(&b)
-		writeCell(&b, assigneeName(iss, "unassigned"), lay.assignee, ell)
+		b.WriteString(z.Mark(whoZone(iss.Key), padTruncate(assigneeName(iss, unassigned), lay.assignee, ell)))
 	}
 	if lay.updated > 0 {
 		writeGap(&b)
@@ -210,9 +215,9 @@ func categoryIndex(c jira.StatusCategory) int {
 	return int(c)
 }
 
-func assigneeName(iss *jira.Issue, unassigned string) string {
+func assigneeName(iss *jira.Issue, fallback string) string {
 	if iss.Assignee == nil || strings.TrimSpace(iss.Assignee.DisplayName) == "" {
-		return unassigned
+		return fallback
 	}
 	return iss.Assignee.DisplayName
 }

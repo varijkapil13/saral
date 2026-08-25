@@ -20,7 +20,7 @@ Three constraints drive every decision below:
 │  internal/ui          Bubble Tea models — one per view      │
 │    kernel/            root model, view stack, registries    │
 │    board/ issue/ ...  self-contained views                  │
-│    widget/            shared table, form, pager, zones      │
+│    widget/            zones, click timing, drag, scrolling  │
 ├─────────────────────────────────────────────────────────────┤
 │  internal/app         use cases — orchestration, no IO libs │
 │                       cache policy: kinds, TTLs, the codec  │
@@ -445,9 +445,30 @@ func (m Model) View() tea.View {
 
 Hit-testing uses [bubblezone](https://github.com/lrstanley/bubblezone): each interactive element
 wraps its rendered string in a zone ID, and a click is resolved by lookup rather than by arithmetic
-on coordinates. Required interactions: click to focus a pane, click to select a row, double-click to
-open, wheel to scroll the pane under the pointer, drag the pane divider to resize, click a status
-chip or label to filter by it, click the footer entries to switch views.
+on coordinates. There is no "what is at this point" in bubblezone and there is not meant to be — the
+view that minted the ids is the only thing that knows what they mean, so the hit test lives there.
+`docs/UX.md` has the gestures the program answers.
+
+`internal/ui/widget` holds the parts every view would otherwise write again:
+
+- **`widget.Zoner`** — one view instance's prefix plus `Mark`, `MarkLines` and `Hit`. The zero value
+  and a disabled manager behave identically: nothing is written into the frame and every hit misses,
+  so `mouse = false` needs no branch in any view. `Enabled()` is how a view asks whether to tell
+  anybody to click something.
+- **`widget.Clicks`** — the double-click, timed against `Deps.Now`. `tea.MouseClickMsg` carries no
+  click count and no timestamp, so a view cannot recognise one without a clock.
+- **`widget.Window`** — the slice of rendered lines a scrolled pane draws, with the one line that has
+  to stay visible. It slices rather than copies, so a scrolled pane costs no allocation per frame.
+- **`widget.Drag`** — press, move, release, bound to nothing yet
+  ([#75](https://github.com/varijkapil13/saral/issues/75)).
+
+**Zone ids are never freed.** `Mark` fills a permanent id map in the manager, and nothing evicts from
+it. Every id in this tree is minted from a per-instance prefix and a stable name, so redrawing an
+element reuses its id and the map grows only when something new is drawn: a bounded number of entries
+for the panes keyed by row index, and one per clickable cell per issue for the list, which grows with
+the rows a user actually scrolls past rather than with the size of the project. A pushed view mints a
+fresh prefix every time it is pushed, so opening the same issue twice leaves two sets behind. Nothing
+here needs the memory back yet; a view that draws a marked element per frame under a fresh id would.
 
 ## Errors
 

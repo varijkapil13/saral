@@ -5,8 +5,10 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -14,12 +16,30 @@ import (
 // loaded builds a list holding n issues at a given size without touching the
 // network: the page arrives as the message a search would have produced.
 func loaded(tb testing.TB, n, w, h int) *Model {
-	tb.Helper()
-	d := kernel.Deps{
+	return listOf(tb, kernel.Deps{
 		Caps:  jira.Capabilities{TimeZone: time.UTC},
 		Theme: kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
 		Now:   func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
-	}
+	}, n, w, h)
+}
+
+// markedList is the same list a running program has: one with a zone manager, so
+// every row and every clickable cell in it carries a marker. It is the shape the
+// steady-state budget has to hold in, since a real session always has one.
+func markedList(tb testing.TB, n, w, h int) *Model {
+	tb.Helper()
+	mgr := zone.New()
+	tb.Cleanup(mgr.Close)
+	return listOf(tb, kernel.Deps{
+		Caps:  jira.Capabilities{TimeZone: time.UTC},
+		Theme: kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
+		Now:   func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
+		Zones: mgr,
+	}, n, w, h)
+}
+
+func listOf(tb testing.TB, d kernel.Deps, n, w, h int) *Model {
+	tb.Helper()
 	view, ok := New(d).(*Model)
 	if !ok {
 		tb.Fatal("New did not return a *Model")
@@ -54,6 +74,11 @@ func scroll(b *testing.B, m *Model) {
 func BenchmarkListSteadyScroll10k(b *testing.B) { scroll(b, loaded(b, 10000, 120, 40)) }
 
 func BenchmarkListSteadyScroll20(b *testing.B) { scroll(b, loaded(b, 20, 120, 40)) }
+
+// BenchmarkListSteadyScrollMarked10k is the same scroll with the mouse on. The
+// markers live inside the memoized row, so a frame that hits the memo costs what
+// it did before there were any.
+func BenchmarkListSteadyScrollMarked10k(b *testing.B) { scroll(b, markedList(b, 10000, 120, 40)) }
 
 // BenchmarkListWalk10k walks a fresh row into view on every frame, which is the
 // worst case: every frame misses the memo by construction.
@@ -96,7 +121,23 @@ func BenchmarkRowRender(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := range b.N {
-		_ = renderRow(&issues[i%len(issues)], lay, i%7 == 0, st, theme, time.UTC, now)
+		_ = renderRow(&issues[i%len(issues)], lay, i%7 == 0, st, theme, time.UTC, now, widget.Zoner{})
+	}
+}
+
+func BenchmarkRowRenderMarked(b *testing.B) {
+	issues := jiratest.Gen(64)
+	theme := kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs())
+	st := newStyles(theme)
+	lay := planLayout(120, 8)
+	now := time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC)
+	mgr := zone.New()
+	b.Cleanup(mgr.Close)
+	z := widget.NewZoner(mgr)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		_ = renderRow(&issues[i%len(issues)], lay, i%7 == 0, st, theme, time.UTC, now, z)
 	}
 }
 
@@ -134,6 +175,18 @@ func TestScrolling_CostsTheSameOnTenThousandRowsAsOnTwenty(t *testing.T) {
 	// return; everything behind it is memoized.
 	if bigAllocs > 1 {
 		t.Errorf("a steady-state frame allocates %d times, want the memo to carry all but the frame itself", bigAllocs)
+	}
+}
+
+// The clickable cells are the reason to check this twice: a marked row is a
+// longer string built out of more pieces, and if the marks were applied outside
+// the memo the whole window would be rebuilt on every frame.
+func TestScrolling_CostsTheSameWithTheMouseOn(t *testing.T) {
+	t.Parallel()
+
+	marked := testing.Benchmark(BenchmarkListSteadyScrollMarked10k)
+	if got := marked.AllocsPerOp(); got > 1 {
+		t.Errorf("a steady-state frame with the mouse on allocates %d times, want the memo to carry all but the frame itself", got)
 	}
 }
 

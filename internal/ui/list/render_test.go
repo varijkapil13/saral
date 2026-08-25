@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -72,10 +73,15 @@ func TestRenderRow_IsExactlyAsWideAsTheLayoutWhateverTheContent(t *testing.T) {
 				t.Parallel()
 
 				lay := planLayout(width, 8)
-				for _, sel := range []bool{false, true} {
-					got := ansi.StringWidth(renderRow(&iss, lay, sel, st, theme, time.UTC, now))
-					if got != lay.width {
-						t.Errorf("row is %d columns at width %d (selected=%t), want %d", got, width, sel, lay.width)
+				// Marked and unmarked, because the clickable cells put private
+				// escape sequences inside the row and a marker that measured as
+				// a column would shift everything to its right.
+				for zname, z := range map[string]widget.Zoner{"unmarked": {}, "marked": markingZoner(t)} {
+					for _, sel := range []bool{false, true} {
+						got := ansi.StringWidth(renderRow(&iss, lay, sel, st, theme, time.UTC, now, z))
+						if got != lay.width {
+							t.Errorf("a %s row is %d columns at width %d (selected=%t), want %d", zname, got, width, sel, lay.width)
+						}
 					}
 				}
 			})
