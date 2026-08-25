@@ -1,6 +1,6 @@
  saral | Commands                                                                          PROJ | example.atlassian.net 
 > what do you want to do?                                                                                               
------------------------------------------------------------------------------------------------------------- 20 commands
+------------------------------------------------------------------------------------------------------------ 22 commands
 > Follow the terminal's own colours             Appearance                                                              
   Turn colour off                               Appearance                                                              
   Use the dark theme                            Appearance                                                              
@@ -13,6 +13,8 @@
   Comment on this issue                         Issue                                                                  c
   Edit this issue                               Issue                                                                  e
   Clear the filter on these rows                Search                                                                  
+  Edit this search                              Search                                                                 e
+  Every issue in this project                   Search                                                                 a
   Issues I reported                             Search                                                                  
   My issues                                     Search                                                                  
   Save this query to a number key               Search                                                                 s
@@ -21,8 +23,6 @@
   Show only rows with this row's status         Search                                                                  
   Show only rows with this row's type           Search                                                                  
   Unassigned issues                             Search                                                                  
-                                                                                                                        
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

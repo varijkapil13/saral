@@ -1,18 +1,9 @@
  saral | Issues                                                                            PROJ | example.atlassian.net 
-All issues                                                                                      checked 09:00  12 issues
-  KEY      SUMMARY                                               TYPE       STATUS        ASSIGNEE          UPDATED     
-> PROJ-1   Add the nightly export                                Epic       Building      Grace Hopper      02 Mar 12:00
-  PROJ-2   Rework webhook retries                                Chore      Shipped       Alan Turing       02 Mar 14:00
-  PROJ-3   Investigate the onboarding wizard                     Story      Triage        Ada Lovelace      02 Mar 16:00
-  PROJ-4   Document CSV import                                   Defect     Building      unassigned        02 Mar 18:00
-  PROJ-5   Retire the audit trail                                Chore      Shipped       Alan Turing       02 Mar 20:00
-  PROJ-6   Speed up session expiry                               Story      Triage        Ada Lovelace      02 Mar 22:00
-  PROJ-7   Fix the search index                                  Defect     Building      Grace Hopper      03 Mar 00:00
-  PROJ-8   Add invoice rounding                                  Chore      Shipped       unassigned        03 Mar 02:00
-  PROJ-9   Rework the mobile layout                              Story      Triage        Ada Lovelace      03 Mar 04:00
-  PROJ-10  Investigate the release checklist                     Defect     Building      Grace Hopper      03 Mar 06:00
-  PROJ-11  Document the login flow                               Epic       Shipped       Alan Turing       03 Mar 08:00
-  PROJ-12  Retire the nightly export                             Story      Triage        unassigned        03 Mar 10:00
+My issues in PROJ                                                                                checked 09:00  3 issues
+  KEY     SUMMARY                                                TYPE       STATUS        ASSIGNEE          UPDATED     
+> PROJ-9  Rework the mobile layout                               Story      Triage        Ada Lovelace      03 Mar 04:00
+  PROJ-6  Speed up session expiry                                Story      Triage        Ada Lovelace      02 Mar 22:00
+  PROJ-3  Investigate the onboarding wizard                      Story      Triage        Ada Lovelace      02 Mar 16:00
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -35,6 +26,5 @@ All issues                                                                      
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                                                                                                                        
- nothing in PROJ is assigned to you, so this is every issue in it                                                       
+ refreshed: nothing has changed, still 3 issues                                                                         
  g1 Issues                                                   ↓/j down | ↑/k up | enter open | / filter | ? help | q quit

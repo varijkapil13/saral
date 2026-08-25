@@ -47,7 +47,7 @@ func (m *Model) pollTick() tea.Cmd {
 // polled acts on a tick: re-read what is on screen, which patches the rows and
 // leaves the cursor, the scroll and the filter alone.
 //
-// A poll while the user is typing into the filter or picking a number key is
+// A poll while the user is typing into either prompt or picking a number key is
 // dropped rather than run: the rows would move under a gesture that is half
 // finished. The next tick is lined up anyway, so the poller does not stop
 // because somebody paused over a keystroke.
@@ -56,8 +56,8 @@ func (m *Model) polled(msg pollMsg) tea.Cmd {
 	switch {
 	case m.pollPaused || !m.focused:
 		return nil
-	case !m.current(msg.gen) || m.loading || m.filtering || m.bind != bindNone:
+	case !m.current(msg.gen) || m.loading || m.filtering || m.asking || m.bind != bindNone:
 		return m.pollTick()
 	}
-	return m.refresh(false)
+	return m.refetch(whyBackground)
 }

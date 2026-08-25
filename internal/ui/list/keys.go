@@ -16,6 +16,8 @@ type keyMap struct {
 	Bottom   kernel.Binding
 	Open     kernel.Binding
 	Filter   kernel.Binding
+	All      kernel.Binding
+	Edit     kernel.Binding
 	Save     kernel.Binding
 	Accept   kernel.Binding
 	Clear    kernel.Binding
@@ -23,6 +25,10 @@ type keyMap struct {
 	// one of its keys: the kernel keeps that for itself in a root view, so naming
 	// it here would advertise a stroke that never arrives.
 	Unfilter kernel.Binding
+	// Run and Keep answer the prompt that shows the search on screen: one runs
+	// what has been typed into it, the other leaves the search alone.
+	Run  kernel.Binding
+	Keep kernel.Binding
 	// Slot, Take and Drop answer the gesture that binds the search on screen to
 	// a number key. bindKey reads the digit and the y itself, because every other
 	// key ends the gesture and a table would have to enumerate the alphabet to
@@ -45,10 +51,14 @@ func defaultKeys() keyMap {
 		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "last row"),
 		Open:     kernel.Bind([]string{"enter"}, "enter", "open"),
 		Filter:   kernel.Bind([]string{"/"}, "/", "filter"),
+		All:      kernel.Bind([]string{"a"}, "a", "all issues"),
+		Edit:     kernel.Bind([]string{"e"}, "e", "edit this search"),
 		Save:     kernel.Bind([]string{"s"}, "s", "save this query to a key"),
 		Accept:   kernel.Bind([]string{"enter"}, "enter", "keep filter"),
 		Clear:    kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "clear filter"),
 		Unfilter: kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter"),
+		Run:      kernel.Bind([]string{"enter"}, "enter", "run this search"),
+		Keep:     kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "keep the one on screen"),
 		Slot:     kernel.Bind(digits, "1-9", "the key to bind it to"),
 		Take:     kernel.Bind([]string{"y"}, "y", "take the key"),
 		Drop:     kernel.Bind([]string{"esc"}, "esc", "leave it alone"),
@@ -64,12 +74,16 @@ func (k keyMap) keySet() kernel.KeySet { return k.browsing(false) }
 
 // browsing is the resting state, with or without a filter already narrowing the
 // rows. The narrowed one offers the key that clears it.
+//
+// The two that reach another search are in the overlay and not the hint line: a
+// fifth entry there is enough to push the whole line past what an eighty-column
+// footer holds, and the kernel drops the line rather than shortening it.
 func (k keyMap) browsing(narrowed bool) kernel.KeySet {
 	short := []kernel.Binding{k.Down, k.Up, k.Open, k.Filter}
-	actions := []kernel.Binding{k.Open, k.Filter, k.Save}
+	actions := []kernel.Binding{k.Open, k.Filter, k.All, k.Edit, k.Save}
 	if narrowed {
 		short = []kernel.Binding{k.Down, k.Up, k.Open, k.Unfilter}
-		actions = []kernel.Binding{k.Open, k.Filter, k.Unfilter, k.Save}
+		actions = []kernel.Binding{k.Open, k.Filter, k.Unfilter, k.All, k.Edit, k.Save}
 	}
 	return kernel.KeySet{
 		Short: short,
@@ -81,9 +95,9 @@ func (k keyMap) browsing(narrowed bool) kernel.KeySet {
 	}
 }
 
-// keyState is which of the view's four states the keys belong to. It doubles as
-// the generation the chrome memoizes on, so a state that is added has to be
-// added here to be drawn.
+// keyState is which of the view's states the keys belong to. It doubles as the
+// generation the chrome memoizes on, so a state that is added has to be added
+// here to be drawn.
 type keyState int
 
 const (
@@ -92,6 +106,7 @@ const (
 	keysFiltering
 	keysPickingSlot
 	keysConfirmingSlot
+	keysAsking
 	keyStates
 )
 
@@ -114,18 +129,25 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Short: []kernel.Binding{k.Take, k.Drop},
 		Full:  [][]kernel.Binding{{k.Take, k.Drop}},
 	}
+	sets[keysAsking] = kernel.KeySet{
+		Short: []kernel.Binding{k.Run, k.Keep},
+		Full:  [][]kernel.Binding{{k.Run, k.Keep}},
+	}
 	return sets
 }()
 
 // LiveKeys reports the keys that work in the state the list is actually in. An
-// open filter answers enter and esc and nothing else; the gesture that binds a
-// number key answers a digit, then a y; a list already narrowed by a filter
-// offers the key that widens it again.
+// open filter answers enter and esc and nothing else; the prompt holding the
+// search answers the same two strokes for two other things; the gesture that
+// binds a number key answers a digit, then a y; a list already narrowed by a
+// filter offers the key that widens it again.
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	state := keysBrowsing
 	switch {
 	case m.filtering:
 		state = keysFiltering
+	case m.asking:
+		state = keysAsking
 	case m.bind == bindPick:
 		state = keysPickingSlot
 	case m.bind == bindConfirm:
@@ -151,26 +173,33 @@ const (
 	actBottom
 	actOpen
 	actFilter
+	actAll
+	actEdit
 	actSave
 	actAccept
 	actClear
+	actRun
+	actKeep
 )
 
 // tables turn the bindings into a keystroke lookup, built once. The bindings
 // stay the single source of truth for what a key does and for what the footer
 // says it does, and a keystroke costs one map probe rather than a walk over
 // every binding — which on this path is per keypress, at ten thousand rows.
-func (k keyMap) tables() (normal, filtering map[string]action) {
+func (k keyMap) tables() (normal, filtering, asking map[string]action) {
 	normal = table(
 		binding{k.Down, actDown}, binding{k.Up, actUp},
 		binding{k.PageDown, actPageDown}, binding{k.PageUp, actPageUp},
 		binding{k.HalfDown, actHalfDown}, binding{k.HalfUp, actHalfUp},
 		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
 		binding{k.Open, actOpen}, binding{k.Filter, actFilter},
-		binding{k.Unfilter, actClear}, binding{k.Save, actSave},
+		binding{k.Unfilter, actClear},
+		binding{k.All, actAll}, binding{k.Edit, actEdit},
+		binding{k.Save, actSave},
 	)
 	filtering = table(binding{k.Accept, actAccept}, binding{k.Clear, actClear})
-	return normal, filtering
+	asking = table(binding{k.Run, actRun}, binding{k.Keep, actKeep})
+	return normal, filtering, asking
 }
 
 type binding struct {

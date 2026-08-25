@@ -1,8 +1,6 @@
 package list
 
 import (
-	"strings"
-
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -10,6 +8,7 @@ import (
 
 func init() {
 	const slot = 1
+	keys := defaultKeys()
 	kernel.RegisterView(kernel.ViewSpec{
 		ID:          ViewID,
 		Title:       "Issues",
@@ -17,7 +16,7 @@ func init() {
 		RunsQueries: true,
 		New:         New,
 	})
-	kernel.RegisterKeys(ViewID, defaultKeys().keySet())
+	kernel.RegisterKeys(ViewID, keys.keySet())
 	kernel.RegisterCommand(kernel.Command{
 		ID:    "issues.open",
 		Title: "Issues",
@@ -26,10 +25,19 @@ func init() {
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
 	})
 	kernel.RegisterCommand(kernel.Command{
+		ID:    "issues.edit-query",
+		Title: "Edit this search",
+		Group: "Search",
+		Keys:  []string{keys.Edit.Help().Key},
+		Run: func(kernel.Deps) tea.Cmd {
+			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(EditQueryMsg{}))
+		},
+	})
+	kernel.RegisterCommand(kernel.Command{
 		ID:    "issues.save-query",
 		Title: "Save this query to a number key",
 		Group: "Search",
-		Keys:  []string{defaultKeys().Save.Help().Key},
+		Keys:  []string{keys.Save.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SaveQueryMsg{}))
 		},
@@ -65,30 +73,22 @@ func init() {
 			},
 		})
 	}
-	for _, q := range []struct{ id, title, jql string }{
-		{"issues.mine", "My issues", "assignee = currentUser() ORDER BY updated DESC"},
-		{"issues.reported", "Issues I reported", "reporter = currentUser() ORDER BY created DESC"},
-		{"issues.unassigned", "Unassigned issues", "assignee IS EMPTY ORDER BY created DESC"},
-	} {
+	// The searches themselves. Each is composed against the project the session
+	// is on at the moment it runs, and titled after what it is about to show.
+	bound := map[string][]string{everyIssue.id: {keys.All.Help().Key}}
+	for _, s := range searches {
 		kernel.RegisterCommand(kernel.Command{
-			ID:    q.id,
-			Title: q.title,
+			ID:    s.id,
+			Title: s.palette(),
 			Group: "Search",
+			Keys:  bound[s.id],
 			Run: func(d kernel.Deps) tea.Cmd {
+				jql, title := s.at(d.Project)
 				return tea.Sequence(
 					kernel.Open(ViewID),
-					kernel.Broadcast(QueryMsg{JQL: scoped(d.Project, q.jql), Title: q.title}),
+					kernel.Broadcast(QueryMsg{JQL: jql, Title: title}),
 				)
 			},
 		})
 	}
-}
-
-// scoped narrows a query to the session's project when there is one. The key is
-// whatever the session was opened against; nothing about it is written down.
-func scoped(project, jql string) string {
-	if strings.TrimSpace(project) == "" {
-		return jql
-	}
-	return "project = " + quote(project) + " AND " + jql
 }

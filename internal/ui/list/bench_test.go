@@ -182,6 +182,23 @@ func BenchmarkFilterKeystroke10k(b *testing.B) {
 	}
 }
 
+// BenchmarkQueryPromptKeystroke10k is the other prompt this view draws under
+// the rows. It costs what the filter does not: nothing is re-matched, so the
+// rows behind it are a memo hit and the line itself is all that is rebuilt.
+func BenchmarkQueryPromptKeystroke10k(b *testing.B) {
+	m := loaded(b, 10000, 120, 40)
+	next, _ := m.Update(keyPress("e"))
+	m, _ = next.(*Model)
+	keys := []tea.Msg{tea.KeyPressMsg{Code: 'x', Text: "x"}, tea.KeyPressMsg{Code: tea.KeyBackspace}}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		next, _ := m.Update(keys[i%2])
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
 func TestScrolling_CostsTheSameOnTenThousandRowsAsOnTwenty(t *testing.T) {
 	t.Parallel()
 
