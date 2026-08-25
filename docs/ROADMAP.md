@@ -502,6 +502,17 @@ of headroom under the 15 MiB binary gate. So the display renderer is written her
   Lines are not padded to `Width` — padding belongs to the pane — and `Widths` is reported so a pane
   can clamp panning without measuring. Code is neither wrapped nor cut and a grid wraps inside its
   columns, so the two constructs allowed past the width are the only ones that go past it.
+- [x] **R2 — The custom fields the detail read never asked for** · **owns** `internal/app/search.go`,
+  `internal/app/search_test.go`, this row
+  `app.DetailProjection()` asked for twenty platform fields and none of the site's own, so story
+  points, the sprint, the epic link and the acceptance criteria were missing from the answer before
+  any view had the chance to draw them. `Projection.Custom` expands into every `Field.Custom` ID in
+  the catalogue `Search` already fetches and caches, and the answer carries `app.FieldLabels` — field
+  ID to the name this site displays — because `customfield_13401` is not a name a person can read and
+  the label is translated, so it has to be resolved at runtime rather than written down.
+  Deliberately not `jira.FieldsNavigable`: a wildcard returns a value per field per issue with
+  nothing to label any of them by, and it reports itself as a read of everything, which is how a
+  narrow cached row starts looking wide. `Issue.Requested` still names exactly what was asked for.
 
 ## Batch 4 — Attachments · parallel ×3
 
