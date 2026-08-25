@@ -96,23 +96,34 @@ func TestMouse_TheZoneManagerIsToldWhichWayTheSessionIs(t *testing.T) {
 	}
 }
 
-func TestClick_DoesNothingBehindTheHelpOverlay(t *testing.T) {
-	resetRegistry()
-	t.Cleanup(resetRegistry)
-	board := &stubView{id: "board"}
-	RegisterView(spec("board", 1, "", board))
+// The overlay has to stop every kind, not the click alone: a wheel scrolls a
+// view nobody can see, and it arrives at route() as its own message type.
+func TestMouse_NoneOfItReachesTheViewBehindTheHelpOverlay(t *testing.T) {
+	for name, msg := range map[string]tea.Msg{
+		"click":   tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: 4},
+		"wheel":   tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 4, Y: 4},
+		"motion":  tea.MouseMotionMsg{Button: tea.MouseLeft, X: 5, Y: 5},
+		"release": tea.MouseReleaseMsg{Button: tea.MouseLeft, X: 4, Y: 4},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resetRegistry()
+			t.Cleanup(resetRegistry)
+			board := &stubView{id: "board"}
+			RegisterView(spec("board", 1, "", board))
 
-	m := newAt(t, testDeps(), 120, 30)
-	next, _ := m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: 4})
-	m = next.(Model)
-	if !saw(board, "click") {
-		t.Fatalf("a click never reached the view at all: %v", board.seen)
-	}
+			m := newAt(t, testDeps(), 120, 30)
+			next, _ := m.Update(msg)
+			m = next.(Model)
+			if !saw(board, name) {
+				t.Fatalf("a %s never reached the view at all: %v", name, board.seen)
+			}
 
-	m, _ = press(m, "?")
-	board.seen = nil
-	if _, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: 4}); saw(board, "click") {
-		t.Errorf("a click reached the view the help overlay is covering: %v", board.seen)
+			m, _ = press(m, "?")
+			board.seen = nil
+			if _, _ = m.Update(msg); saw(board, name) {
+				t.Errorf("a %s reached the view the help overlay is covering: %v", name, board.seen)
+			}
+		})
 	}
 }
 

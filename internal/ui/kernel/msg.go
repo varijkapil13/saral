@@ -25,6 +25,20 @@ type OpenMsg struct{ ID string }
 // view tells another that something changed without holding a pointer to it.
 type BroadcastMsg struct{ Msg tea.Msg }
 
+// RunCommandMsg asks the kernel to run a registered command, named by ID. It is
+// how the palette runs one: the kernel holds the deps a command is given, so
+// they are current as of the keypress rather than as of whenever the palette was
+// built, and one place decides whether a capability allows the command at all.
+type RunCommandMsg struct{ ID string }
+
+// CommandRanMsg says which command just ran and which keys reach it without the
+// palette, so that a view can count what gets used and another can offer the key
+// for it.
+type CommandRanMsg struct {
+	ID   string
+	Keys []string
+}
+
 // RunQueryMsg carries a search to the view that registered RunsQueries. The
 // kernel sends it when a number key runs a saved query; the view turns it into
 // whatever retargeting means for it.
@@ -90,6 +104,11 @@ func Pop() tea.Cmd { return func() tea.Msg { return PopMsg{} } }
 
 // Open returns a command that switches to a registered root view.
 func Open(id string) tea.Cmd { return func() tea.Msg { return OpenMsg{ID: id} } }
+
+// RunCommand returns a command that runs a registered command by ID.
+func RunCommand(id string) tea.Cmd {
+	return func() tea.Msg { return RunCommandMsg{ID: id} }
+}
 
 // Broadcast returns a command that delivers a message to every view on the
 // stack.

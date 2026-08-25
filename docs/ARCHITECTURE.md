@@ -234,21 +234,41 @@ view, so a slot is reached with `g` and its digit; the kernel buffers that `g` r
 it, because two views already spend `g` on gestures of their own.
 
 A command carries the ways to reach the same action without the palette, in `Command.Keys`, each
-written as it is typed — `"e"`, or a whole gesture like `"g1"` — so that running one through the
-palette can teach the key for it. The registrar writes them down because nothing can work them out: a
+spelt the way the owning view's footer spells it — the help label of the binding, so `"a"` and not
+the `"a c"` it also answers to. The registrar writes them down because nothing can work them out: a
 command ID says nothing about a keybinding, and `issue.edit` is both a command and a view whose keys
-belong to the editor pane rather than to the command. An empty set means there is no key, and the
-palette then shows none rather than guessing.
+belong to the editor pane rather than to the command. A command that opens a view by its footer slot
+asks `kernel.SlotGesture` for the key rather than spelling it, so that moving a view between slots
+cannot leave a command teaching the key of a different one. An empty set means there is no key, and
+the palette then shows none rather than guessing. `internal/ui` holds the sweep that checks each
+command's key against what its view renders; the kernel cannot, because it may not import a view.
+
+Nothing calls `Command.Run` itself. A `RunCommandMsg` names a command by ID and the kernel does the
+rest: it refuses one the site does not allow in the capability's own words, closes the palette if
+that is what is on top, and runs `Run` against the deps the kernel holds — current as of the
+keypress, rather than as of whenever the palette was built. A command scoping a search to
+`Deps.Project` from a stale copy searches the whole site and looks like it worked. Afterwards every
+view hears a `CommandRanMsg` carrying the ID and the keys, which is where counting what gets used and
+offering the key for it hang.
 
 `ctrl+k` **pushes** the palette rather than switching to it. Opening it as a root view would discard
 whatever it was pressed from — an editor, a form, a comment thread — leave `esc` with nothing to pop
 back to, and silence every command that reaches a view by broadcast. It is built fresh each time, so
-a command is offered the session as it is rather than as it was the first time the palette opened.
+a command is offered the session as it is rather than as it was the first time the palette opened,
+and pressing it again while it is up does nothing rather than stacking a second one.
 
 A view that is taking typing — a filter, a form field, the command palette — implements
 `kernel.KeyCapturer` and answers `WantsRawKeys() true` while it is. The kernel then hands it every
-key except `ctrl+c`, and the footer stops advertising the globals it is swallowing. Without it a
-global keymap makes the letters `q` and `r`, and the escape key, unreachable inside any text input.
+key except `ctrl+c` and `ctrl+k`, and the footer drops the globals it is swallowing while keeping the
+one it cannot. Without it a global keymap makes the letters `q` and `r`, and the escape key,
+unreachable inside any text input. The two exceptions are chords rather than characters — nobody types either into a field —
+and a program that cannot be interrupted, or whose palette cannot be opened from the editor it is
+most wanted in, is broken whatever it is doing.
+
+A view holding something unsaved implements `kernel.Blocker`. Going back asks the view being popped;
+quitting and switching root view ask **every** entry on the stack, because both throw all of it away
+and the entry holding the draft is usually not the top one — the palette is pushed over whatever it
+was opened from and holds nothing itself.
 
 Because every registration lives in a file that exactly one packet owns, two agents adding two views
 never touch the same line. This is the single most important structural decision for parallel work.
@@ -311,13 +331,9 @@ TTLs by kind: fields and createmeta 24h, board config 1h, versions 10m, issue de
 results 30s. All refreshable on demand. The cache is keyed by site + account so profiles cannot
 bleed into each other.
 
-A view reaches it through `kernel.Deps.Cache`, which is the `app.Cache` interface — `Get`, `Put`,
-`Each` and `Purge` over bytes under a kind and a key, plus the time each entry was written. The
-interface is declared in `internal/app` rather than in the kernel because `internal/ui` sits above
-`internal/store` and must not import it; the store implements it, the local index reads through it,
-and neither has to know the other exists. **It is nil whenever this session has nowhere to cache** —
-a first run, another copy of Saral holding the file, a home directory that cannot be written — so
-every caller works without one and asks the site instead.
+The interface a view reaches it through is declared with the implementation that exercises it, in
+`internal/app`, so that its shape is answerable to a caller rather than guessed at. `internal/ui`
+sits above `internal/store` and must not import it, which `internal/arch` now enforces.
 
 ## Rendering and performance
 

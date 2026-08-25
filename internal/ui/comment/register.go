@@ -28,9 +28,9 @@ func init() {
 		keys      []string
 		msg       tea.Msg
 	}{
-		{id: "comments.write", title: "Write a comment", keys: keys.Write.Keys(), msg: WriteMsg{}},
-		{id: "comments.edit", title: "Edit the comment you are on", keys: keys.Edit.Keys(), msg: EditMsg{}},
-		{id: "comments.delete", title: "Delete the comment you are on", keys: keys.Delete.Keys(), msg: DeleteMsg{}},
+		{id: "comments.write", title: "Write a comment", keys: shown(keys.Write), msg: WriteMsg{}},
+		{id: "comments.edit", title: "Edit the comment you are on", keys: shown(keys.Edit), msg: EditMsg{}},
+		{id: "comments.delete", title: "Delete the comment you are on", keys: shown(keys.Delete), msg: DeleteMsg{}},
 	} {
 		kernel.RegisterCommand(kernel.Command{
 			ID:    c.id,
@@ -41,3 +41,7 @@ func init() {
 		})
 	}
 }
+
+// shown is the key a binding tells the user to press, which is the half of it a
+// command carries: the footer shows "a" while the binding also matches "c".
+func shown(b kernel.Binding) []string { return []string{b.Help().Key} }

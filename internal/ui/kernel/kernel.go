@@ -50,6 +50,10 @@ type KeyCapturer interface {
 // something the user would lose — a draft, an in-flight write. The kernel asks
 // before anything that would discard the view: quitting, going back, and
 // switching to another view. It shows the reason instead.
+//
+// Going back asks the view being popped. Quitting and switching root view ask
+// every entry on the stack, because both throw all of it away and the one
+// holding a draft is often underneath.
 type Blocker interface {
 	BlocksClose() (reason string, blocked bool)
 }
@@ -285,8 +289,8 @@ func (m Model) route(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 
-	case tea.MouseClickMsg:
-		return m.handleClick(msg)
+	case RunCommandMsg:
+		return m.runCommand(msg.ID)
 
 	case PushMsg:
 		return m.push(msg)
@@ -326,6 +330,11 @@ func (m Model) route(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case BroadcastMsg:
 		return m.forwardAll(msg.Msg)
+
+	// Every kind, not just the click: a wheel or a drag reaching the view under
+	// the help overlay scrolls something nobody can see.
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
 	}
 	return m.forwardTop(msg)
 }
@@ -335,10 +344,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	}
-	// A view taking typing gets the keys first. ctrl+c above is the exception,
-	// because a terminal program that cannot be interrupted is broken whatever
-	// it is doing.
+	// A view taking typing gets the keys first. ctrl+c above and the palette key
+	// here are the only exceptions: neither is a character anybody types into a
+	// field, and a palette that cannot be opened from a filter, a form or an
+	// editor cannot be opened from most of the program.
 	if m.capturing() {
+		if Matches(msg, m.keys.Palette) {
+			return m.openPalette()
+		}
 		return m.forwardTop(msg)
 	}
 	if m.showHelp {
@@ -405,18 +418,19 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m.forwardTop(msg)
 }
 
-func (m Model) handleClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
-	// The overlay covers the view, so a click reaching it acts on something the
-	// user cannot see.
+// handleMouse routes one mouse message. A session with mouse = false still
+// forwards them: nothing is reporting, so nothing arrives, and a view handed one
+// anyway looks its zones up in a manager that is disabled and misses.
+func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.showHelp {
 		return m, nil
 	}
-	if m.mouse && msg.Button == tea.MouseLeft {
+	if click, ok := msg.(tea.MouseClickMsg); ok && m.mouse && click.Button == tea.MouseLeft {
 		for _, spec := range m.roots {
 			if spec.Slot == 0 || !m.available(spec) {
 				continue
 			}
-			if m.deps.Zones.Get(m.zonePrefix + "slot:" + spec.ID).InBounds(msg) {
+			if m.deps.Zones.Get(m.zonePrefix + "slot:" + spec.ID).InBounds(click) {
 				return m.open(spec.ID)
 			}
 		}
@@ -433,14 +447,34 @@ func (m Model) capturing() bool {
 	return ok && c.WantsRawKeys()
 }
 
+// blocked is the first entry anywhere on the stack that is holding something,
+// in that entry's own words. The whole stack is asked because quitting and
+// switching root view discard all of it, and the entry with the draft is often
+// not the top one — the palette is pushed over whatever it was opened from and
+// holds nothing itself.
 func (m Model) blocked() (string, bool) {
+	for _, entry := range m.stack {
+		if reason, yes := blocks(entry.view); yes {
+			return reason, true
+		}
+	}
+	return "", false
+}
+
+// blockedOnTop asks only the view a pop would discard.
+func (m Model) blockedOnTop() (string, bool) {
 	if len(m.stack) == 0 {
 		return "", false
 	}
-	if b, ok := m.top().view.(Blocker); ok {
-		return b.BlocksClose()
+	return blocks(m.top().view)
+}
+
+func blocks(v View) (string, bool) {
+	b, ok := v.(Blocker)
+	if !ok {
+		return "", false
 	}
-	return "", false
+	return b.BlocksClose()
 }
 
 // refuse puts the reason a view gave for staying open into the status line.
@@ -600,6 +634,10 @@ func (m Model) open(id string) (tea.Model, tea.Cmd) {
 // nothing, and it is built fresh each time so that a command is offered the
 // session as it is rather than as it was the first time ctrl+k was pressed.
 func (m Model) openPalette() (tea.Model, tea.Cmd) {
+	// The key reaches here from inside the palette too, which takes typing.
+	if len(m.stack) > 0 && m.top().spec.ID == PaletteViewID {
+		return m, nil
+	}
 	spec, ok := LookupView(PaletteViewID)
 	if !ok {
 		m.status, m.statusLevel = fmt.Sprintf("%s is not available in this build", PaletteViewID), LevelWarn
@@ -616,13 +654,47 @@ func (m Model) openPalette() (tea.Model, tea.Cmd) {
 // knows nothing about this site, which is a different answer from a probe that
 // came back without the capability.
 func (m Model) unavailable(spec ViewSpec) string {
-	if reason := m.deps.Caps.Capability(spec.Requires).Reason; reason != "" {
+	return m.refusal(spec.Requires, spec.Title)
+}
+
+func (m Model) refusal(needs jira.CapabilityKey, what string) string {
+	if reason := m.deps.Caps.Capability(needs).Reason; reason != "" {
 		return reason
 	}
 	if !m.capsProbed {
-		return fmt.Sprintf("nothing has been checked on this site yet, so whether %s works here is unknown", spec.Title)
+		return fmt.Sprintf("nothing has been checked on this site yet, so whether %s works here is unknown", what)
 	}
-	return fmt.Sprintf("%s is not available on this site", spec.Title)
+	return fmt.Sprintf("%s is not available on this site", what)
+}
+
+// runCommand runs a registered command by ID, which is the only way anything
+// runs one. The palette knows which command was chosen and nothing else: the
+// deps a command needs are the kernel's, current as of this keypress rather than
+// as of whenever the palette was built, and whether a capability allows it is
+// answered here rather than once per caller.
+func (m Model) runCommand(id string) (tea.Model, tea.Cmd) {
+	command, ok := LookupCommand(id)
+	if !ok {
+		m.status, m.statusLevel = fmt.Sprintf("%s is not available in this build", id), LevelWarn
+		return m, nil
+	}
+	if command.Requires != "" && !m.deps.Caps.Allows(command.Requires) {
+		return m.refuse(m.refusal(command.Requires, command.Title))
+	}
+	// The run goes out before the palette is popped, because the palette is the
+	// view most likely to be counting them and it is the one about to go.
+	told, cmd := m.forwardAll(CommandRanMsg{ID: command.ID, Keys: command.Keys})
+	next, ok := told.(Model)
+	if !ok {
+		return told, cmd
+	}
+	if len(next.stack) > 1 && next.top().spec.ID == PaletteViewID {
+		popped, back := next.pop()
+		if model, isModel := popped.(Model); isModel {
+			next, cmd = model, tea.Batch(cmd, back)
+		}
+	}
+	return next, tea.Batch(cmd, command.Run(next.deps))
 }
 
 func (m Model) push(msg PushMsg) (tea.Model, tea.Cmd) {
@@ -643,7 +715,7 @@ func (m Model) pop() (tea.Model, tea.Cmd) {
 	if len(m.stack) <= 1 {
 		return m, nil
 	}
-	if reason, blocked := m.blocked(); blocked {
+	if reason, blocked := m.blockedOnTop(); blocked {
 		return m.refuse(reason)
 	}
 	blurred := m.blur()
@@ -1040,7 +1112,7 @@ func (m Model) footer() string {
 		if len(m.stack) > 0 && m.stack[0].spec.ID == spec.ID {
 			style = t.SlotOn
 		}
-		label := m.keys.Go.Keys()[0] + strconv.Itoa(spec.Slot) + " " + spec.Title
+		label := slotGesture(m.keys, spec.Slot) + " " + spec.Title
 		slots = append(slots, m.deps.Zones.Mark(m.zonePrefix+"slot:"+spec.ID, style.Render(label)))
 	}
 	left := strings.Join(slots, "")
@@ -1052,6 +1124,19 @@ func (m Model) footer() string {
 		hints = ""
 	}
 	return t.Footer.MaxWidth(m.width).Render(left + strings.Repeat(" ", gap) + hints)
+}
+
+// SlotGesture is the gesture that reaches a footer slot, spelt the way the
+// footer spells it. A registrar naming the key for a command that opens a view
+// derives it from the view's slot with this, so that moving a view between slots
+// cannot leave a command teaching the key of a different one.
+//
+// It answers for the default keymap, which is the only one an init() can know
+// about; the footer asks for the keymap the session is actually running.
+func SlotGesture(slot int) string { return slotGesture(DefaultGlobalKeys(), slot) }
+
+func slotGesture(g GlobalKeys, slot int) string {
+	return g.Go.Keys()[0] + strconv.Itoa(slot)
 }
 
 // hintLine shows only the keys that work right now, in the space the footer
@@ -1080,9 +1165,14 @@ func (m Model) hintLine(width int) string {
 		set = KeysFor(m.top().spec.ID)
 	}
 	if m.capturing() {
-		// The globals are unreachable while the view has the keyboard, and
-		// docs/UX.md asks the footer to show only what works right now.
-		return h.View(keyMap{short: set.Short})
+		// The globals are unreachable while the view has the keyboard, bar the
+		// one key it is not allowed to swallow, and docs/UX.md asks the footer to
+		// show only what works right now — which cuts both ways.
+		short := set.Short
+		if _, ok := LookupView(PaletteViewID); ok {
+			short = append(append([]Binding(nil), short...), m.keys.Palette)
+		}
+		return h.View(keyMap{short: short})
 	}
 	return h.View(mergeKeys(set, m.liveGlobals()))
 }

@@ -9,10 +9,11 @@ import (
 )
 
 func init() {
+	const slot = 1
 	kernel.RegisterView(kernel.ViewSpec{
 		ID:          ViewID,
 		Title:       "Issues",
-		Slot:        1,
+		Slot:        slot,
 		RunsQueries: true,
 		New:         New,
 	})
@@ -21,14 +22,14 @@ func init() {
 		ID:    "issues.open",
 		Title: "Issues",
 		Group: "Go to",
-		Keys:  []string{"g1"},
+		Keys:  []string{kernel.SlotGesture(slot)},
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:    "issues.save-query",
 		Title: "Save this query to a number key",
 		Group: "Search",
-		Keys:  defaultKeys().Save.Keys(),
+		Keys:  []string{defaultKeys().Save.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SaveQueryMsg{}))
 		},

@@ -83,16 +83,97 @@ func TestPalette_OpensOverAViewHoldingSomethingUnsaved(t *testing.T) {
 func TestPalette_ACommandThatBroadcastsStillReachesTheViewUnderneath(t *testing.T) {
 	resetRegistry()
 	t.Cleanup(resetRegistry)
-	board := &stubView{id: "board"}
-	RegisterView(spec("board", 1, "", board))
+	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
+	RegisterView(spec(PaletteViewID, 0, "", &stubView{id: PaletteViewID}))
+
+	// The view underneath is a pushed one, not the root. A root the palette
+	// replaced is still live and still hears a broadcast, so it says nothing
+	// about whether the stack survived.
+	detail := &stubView{id: "detail", content: "PROJ-1 detail"}
+	m := newAt(t, testDeps(), 120, 30)
+	next, _ := m.Update(PushMsg{View: detail, ID: "issue", Title: "PROJ-1"})
+	m = next.(Model)
+
+	m, _ = press(m, "ctrl+k")
+	detail.seen = nil
+
+	if _, _ = m.Update(BroadcastMsg{Msg: RefreshMsg{Purge: true}}); !saw(detail, "refresh:purge") {
+		t.Errorf("a broadcast sent from the palette never reached the view it was for: %v", detail.seen)
+	}
+}
+
+func TestPalette_CtrlKTwiceLeavesOnePaletteAndOneEscape(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
 	RegisterView(spec(PaletteViewID, 0, "", &stubView{id: PaletteViewID}))
 
 	m := newAt(t, testDeps(), 120, 30)
-	m, _ = press(m, "ctrl+k")
-	board.seen = nil
+	m, _ = press(m, "ctrl+k", "ctrl+k", "ctrl+k")
+	if len(m.stack) != 2 {
+		t.Fatalf("three ctrl+k left a stack %d deep, want 2: each one stacked another palette to escape", len(m.stack))
+	}
 
-	if _, _ = m.Update(BroadcastMsg{Msg: RefreshMsg{Purge: true}}); !saw(board, "refresh:purge") {
-		t.Errorf("a broadcast sent from the palette never reached the view it was for: %v", board.seen)
+	m, _ = press(m, "esc")
+	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "board body") {
+		t.Errorf("one esc did not put the palette away:\n%s", got)
+	}
+}
+
+func TestPalette_OpensFromAViewThatIsTakingTyping(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	typing := &stubView{id: "board", capturing: true}
+	RegisterView(spec("board", 1, "", typing))
+	RegisterView(spec(PaletteViewID, 0, "", &stubView{id: PaletteViewID}))
+
+	m := newAt(t, testDeps(), 120, 30)
+	typing.seen = nil
+	m, _ = press(m, "ctrl+k")
+
+	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "palette body") {
+		t.Errorf("ctrl+k did nothing from a filter, a form field or an editor, which is most of the program:\n%s", got)
+	}
+	if saw(typing, "key:ctrl+k") {
+		t.Errorf("the view swallowed the palette key: %v", typing.seen)
+	}
+}
+
+func TestPalette_ADraftUnderItStillRefusesAViewSwitch(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
+	RegisterView(spec("backlog", 2, "", &stubView{id: "backlog"}))
+	RegisterView(spec(PaletteViewID, 0, "", &stubView{id: PaletteViewID}))
+
+	m := newAt(t, testDeps(), 120, 30)
+	next, _ := m.Update(PushMsg{
+		View:  &stubView{id: "editor", content: "editor body", blocks: "PROJ-1 has unsaved changes"},
+		ID:    "issue.edit",
+		Title: "PROJ-1",
+	})
+	m = next.(Model)
+	m, _ = press(m, "ctrl+k")
+
+	after, _ := m.Update(OpenMsg{ID: "backlog"})
+	frame := ansi.Strip(after.(Model).Frame())
+	if !strings.Contains(frame, "unsaved changes") {
+		t.Errorf("a switch away threw the draft out without a word, because it asked the palette on top of it:\n%s", frame)
+	}
+	if strings.Contains(frame, "backlog body") {
+		t.Errorf("the switch happened anyway:\n%s", frame)
+	}
+}
+
+func TestSlotGesture_IsSpeltTheWayTheFooterSpellsIt(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	RegisterView(spec("board", 3, "", &stubView{id: "board"}))
+
+	m := newAt(t, testDeps(), 120, 30)
+	gesture := SlotGesture(3)
+	if got := lastLine(ansi.Strip(m.Frame())); !strings.Contains(got, gesture+" Board") {
+		t.Errorf("the footer does not show %q, so a command teaching it teaches a key nothing shows:\n%s", gesture, got)
 	}
 }
 
@@ -115,5 +196,23 @@ func TestCommand_CarriesTheKeyItsRegistrarNamedAndNeverGuessesOne(t *testing.T) 
 	}
 	if got := keys["issue.create"]; len(got) != 0 {
 		t.Errorf("a command nothing binds carries %v; an empty set is the palette showing no key at all", got)
+	}
+}
+
+func TestFooter_StillOffersThePaletteToAViewThatIsTakingTyping(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	typing := &stubView{id: "board", capturing: true}
+	RegisterView(spec("board", 1, "", typing))
+	RegisterView(spec(PaletteViewID, 0, "", &stubView{id: PaletteViewID}))
+	RegisterKeys("board", KeySet{Short: []Binding{Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter")}})
+
+	m := newAt(t, testDeps(), 140, 30)
+	got := lastLine(ansi.Strip(m.Frame()))
+	if !strings.Contains(got, "commands") {
+		t.Errorf("the one global that still works while typing is not offered, so nobody finds it there:\n%s", got)
+	}
+	if strings.Contains(got, "quit") || strings.Contains(got, "help") {
+		t.Errorf("the footer advertises globals the view is swallowing:\n%s", got)
 	}
 }
