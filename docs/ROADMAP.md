@@ -388,6 +388,27 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   counter, the call site and the frecency table that packet already owns, and W0-b landed
   `CommandRanMsg{ID, Keys}` as the signal. A second counter in the chrome would be a second answer.
 
+## First-run corrections · found by running against a site
+
+The first end-to-end run — the real Cloud adapter against a Jira on loopback, driving the real kernel
+and views — found the spine works and turned up defects that would dead-end a testing session. They
+are filed and fixed here rather than in a batch, because Batch 3 is closed and none of them is a
+feature. Each is one PR, small and tested, in the paths it names.
+
+- [x] **F1 — A failed search must not look like a hang** · [#94](https://github.com/varijkapil13/saral/issues/94) · **owns** `internal/ui/list/**` including its `testdata/**`, the transport sentence in `pkg/jira/cloud/client.go`, `docs/{UX,ROADMAP}.md`
+  `appendEmpty` drew "Searching…" whenever `!m.loaded` and `failed()` never touched `loaded`, so a
+  wrong project key, a bad JQL, a dead host and a rate limit were one screen that looked hung — and
+  the status line carrying the reason was wiped by the next keypress. An empty pane now names which
+  of five kinds of empty it is and keeps naming it; the failed one carries the reason in the error's
+  own words, the JQL it was asked about, and the key that runs it again. Both ways in are the same
+  line: a first load, and any retarget, which drops the rows before the new search is issued.
+  The transport sentence lost the URL it repeated after the method and path `TransportError.Op`
+  already carries, which is what truncated it before "connection refused". No error type and no
+  classification moved; the cause still satisfies `errors.Is`.
+  Adjacent, in the same path: a filter accepted with `enter` had the count reading `1 of 3` as its
+  only trace and no way off it, since `esc` in a root view belongs to the kernel. It is named under
+  the rows the way a clicked cell is, `ctrl+g` clears it, and the palette carries the same gesture.
+
 ## Batch 4 — Attachments · parallel ×3
 
 - [ ] **P4.1 — List and download** · [#17](https://github.com/varijkapil13/saral/issues/17) · **owns** `pkg/jira/cloud/attachment.go`

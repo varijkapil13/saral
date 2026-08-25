@@ -100,6 +100,7 @@ type styles struct {
 	title      lipgloss.Style
 	count      lipgloss.Style
 	prompt     lipgloss.Style
+	danger     lipgloss.Style
 	categories [4]lipgloss.Style
 }
 
@@ -112,6 +113,7 @@ func newStyles(t *kernel.Theme) *styles {
 		title:    t.Title,
 		count:    t.Muted,
 		prompt:   t.Accent,
+		danger:   t.Danger,
 	}
 	s.categories = [4]lipgloss.Style{
 		jira.CategoryUnknown:    t.Muted,

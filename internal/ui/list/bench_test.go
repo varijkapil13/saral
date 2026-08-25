@@ -80,6 +80,29 @@ func BenchmarkListSteadyScroll20(b *testing.B) { scroll(b, loaded(b, 20, 120, 40
 // it did before there were any.
 func BenchmarkListSteadyScrollMarked10k(b *testing.B) { scroll(b, markedList(b, 10000, 120, 40)) }
 
+// BenchmarkListSteadyScrollFiltered10k is the same scroll under a filter that
+// has been accepted, which draws a line naming it under the rows.
+func BenchmarkListSteadyScrollFiltered10k(b *testing.B) {
+	scroll(b, narrowed(b, 10000, 120, 40))
+}
+
+// narrowed is a list with a filter typed and accepted, which is what a user
+// browses in after pressing enter.
+func narrowed(tb testing.TB, n, w, h int) *Model {
+	tb.Helper()
+	m := loaded(tb, n, w, h)
+	for _, key := range []tea.Msg{keyPress("/"), tea.KeyPressMsg{Code: 'l', Text: "l"},
+		tea.KeyPressMsg{Code: 'o', Text: "o"}, tea.KeyPressMsg{Code: 'g', Text: "g"}, keyPress("enter")} {
+		next, _ := m.Update(key)
+		m, _ = next.(*Model)
+	}
+	if m.query == "" || len(m.view) == len(m.issues) {
+		tb.Fatalf("the filter left %d of %d rows, so this is not the narrowed state", len(m.view), len(m.issues))
+	}
+	_ = m.View()
+	return m
+}
+
 // BenchmarkListWalk10k walks a fresh row into view on every frame, which is the
 // worst case: every frame misses the memo by construction.
 func BenchmarkListWalk10k(b *testing.B) {
@@ -187,6 +210,17 @@ func TestScrolling_CostsTheSameWithTheMouseOn(t *testing.T) {
 	marked := testing.Benchmark(BenchmarkListSteadyScrollMarked10k)
 	if got := marked.AllocsPerOp(); got > 1 {
 		t.Errorf("a steady-state frame with the mouse on allocates %d times, want the memo to carry all but the frame itself", got)
+	}
+}
+
+// The line that names an accepted filter is on every frame it is on, so it is
+// memoized the way the summary is.
+func TestScrolling_CostsTheSameUnderAFilterThatHasBeenAccepted(t *testing.T) {
+	t.Parallel()
+
+	narrow := testing.Benchmark(BenchmarkListSteadyScrollFiltered10k)
+	if got := narrow.AllocsPerOp(); got > 1 {
+		t.Errorf("a steady-state frame under a kept filter allocates %d times, want the frame string and nothing else", got)
 	}
 }
 

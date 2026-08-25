@@ -34,6 +34,16 @@ func init() {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SaveQueryMsg{}))
 		},
 	})
+	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that
+	// clears a filter is shown only by the state that has one to clear.
+	kernel.RegisterCommand(kernel.Command{
+		ID:    "issues.clear-filter",
+		Title: "Clear the filter on these rows",
+		Group: "Search",
+		Run: func(kernel.Deps) tea.Cmd {
+			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(ClearFilterMsg{}))
+		},
+	})
 	// The cells a click narrows the rows by, reachable without a pointer. There
 	// is no key for them: every letter left is one somebody types into a filter.
 	for _, f := range []struct {

@@ -77,6 +77,8 @@ type Model struct {
 	lines   []string
 	summary string
 	sumKey  summaryKey
+	chip    string
+	chipKey chipKey
 
 	filtering bool
 	filter    textinput.Model
@@ -104,6 +106,11 @@ type Model struct {
 	loaded  bool
 	gen     int
 	cancel  context.CancelFunc
+
+	// failure is why the search on screen brought back no rows. The status line
+	// kernel.Fail writes is replaced by the next keypress, so the pane keeps its
+	// own copy of the reason for as long as it is empty.
+	failure error
 
 	// stale marks the rows on screen as older than they should be: they came off
 	// disk past their TTL, or the refresh that would have replaced them failed.
@@ -226,6 +233,10 @@ type QueryMsg struct {
 // does, rather than a second implementation of it.
 type SaveQueryMsg struct{}
 
+// ClearFilterMsg drops the filter narrowing the rows. It is exported for the
+// same reason FacetMsg is: the palette has to reach the gesture the key does.
+type ClearFilterMsg struct{}
+
 // Init asks the site for what the first frame could not draw from disk.
 func (m *Model) Init() tea.Cmd {
 	if m.loaded {
@@ -284,6 +295,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case FacetMsg:
 		cmd = m.facetMsg(msg)
+
+	case ClearFilterMsg:
+		cmd = m.clearFilter()
 
 	case loadedMsg:
 		cmd = m.loadedPage(msg)
@@ -364,10 +378,13 @@ func (m *Model) widestKey() int {
 }
 
 // rowsHeight is how many issue rows fit: the box, less the summary line, the
-// column captions and the filter prompt when one is open.
+// column captions and whichever of the four lines below the rows are drawn.
 func (m *Model) rowsHeight() int {
 	h := m.height - 2
 	if m.facet.on() {
+		h--
+	}
+	if m.keptFilter() {
 		h--
 	}
 	if m.filtering || m.bind != bindNone {
@@ -387,7 +404,7 @@ func (m *Model) begin() (ctx context.Context, gen int) {
 	m.gen++
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	m.loading = true
+	m.loading, m.failure = true, nil
 	return ctx, m.gen
 }
 
@@ -459,7 +476,7 @@ func (m *Model) setQuery(jql, title string, byDefault bool) tea.Cmd {
 	}
 	m.issues, m.page, m.missing, m.view, m.needles = nil, jira.Page[jira.Issue]{}, nil, nil, nil
 	m.cursor, m.top, m.loaded = 0, 0, false
-	m.cachedMore, m.stale = false, false
+	m.cachedMore, m.stale, m.failure = false, false, nil
 	m.facet = facet{}
 	m.rows.reset()
 	m.refilter()
@@ -527,6 +544,10 @@ func (m *Model) patch(msg patchedMsg) tea.Cmd {
 // failed keeps whatever is on screen. Rows that are already drawn are the last
 // true answer this session had, so a refusal badges them rather than clearing
 // them (docs/UX.md — stale data is badged, not hidden).
+//
+// With no rows to badge the refusal is all there is, so it is kept. A retarget
+// reaches that state as well as a first load: it drops the rows it had before
+// the search that replaces them is issued.
 func (m *Model) failed(msg failedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
@@ -534,6 +555,8 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	m.loading = false
 	if len(m.issues) > 0 {
 		m.stale = true
+	} else {
+		m.failure = msg.err
 	}
 	var limit *jira.RateLimitError
 	if errors.As(msg.err, &limit) {
@@ -730,9 +753,11 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.open()
 	case actFilter:
 		return m.startFilter()
+	case actClear:
+		return m.clearFilter()
 	case actSave:
 		m.startBind()
-	case actNone, actAccept, actClear:
+	case actNone, actAccept:
 	}
 	return nil
 }
@@ -747,10 +772,7 @@ func (m *Model) filterKey(msg tea.KeyPressMsg, stroke string) tea.Cmd {
 	case actClear:
 		m.filtering = false
 		m.filter.Blur()
-		m.filter.Reset()
-		m.query, m.needles = "", nil
-		m.refilter()
-		m.scrollToCursor()
+		m.dropFilter()
 		return nil
 	default:
 	}
@@ -765,6 +787,25 @@ func (m *Model) filterKey(msg tea.KeyPressMsg, stroke string) tea.Cmd {
 		return m.pageAheadIfNeeded()
 	}
 	return nil
+}
+
+// clearFilter drops a filter that has already been accepted. The kernel takes
+// esc in a root view and never forwards it, so without this a filter put on with
+// / and enter comes off only by opening it again.
+func (m *Model) clearFilter() tea.Cmd {
+	if m.query == "" {
+		return nil
+	}
+	m.dropFilter()
+	return nil
+}
+
+// dropFilter forgets the query and the haystacks that were built to match it.
+func (m *Model) dropFilter() {
+	m.filter.Reset()
+	m.query, m.needles = "", nil
+	m.refilter()
+	m.scrollToCursor()
 }
 
 func (m *Model) startFilter() tea.Cmd {
@@ -911,6 +952,9 @@ func (m *Model) View() string {
 	if m.facet.on() {
 		lines = append(lines, m.facetPrompt())
 	}
+	if m.keptFilter() {
+		lines = append(lines, m.filterChip())
+	}
 	if m.filtering {
 		lines = append(lines, m.filter.View())
 	}
@@ -961,6 +1005,7 @@ type summaryKey struct {
 	loading, loaded bool
 	filtered        bool
 	stale           bool
+	failed          bool
 }
 
 func (m *Model) summaryKey() summaryKey {
@@ -968,7 +1013,7 @@ func (m *Model) summaryKey() summaryKey {
 		title: m.title, width: m.width, gen: m.styles.gen,
 		issues: len(m.issues), visible: len(m.view), more: m.hasMore(),
 		loading: m.loading, loaded: m.loaded, filtered: m.filtered(),
-		stale: m.stale,
+		stale: m.stale, failed: m.failure != nil,
 	}
 }
 
@@ -1003,6 +1048,9 @@ func (m *Model) countLabel() string {
 	switch {
 	case !m.loaded && m.loading:
 		b.WriteString("searching")
+	case m.failure != nil:
+		// "0 issues" here would be a count of an answer nobody got.
+		b.WriteString("no answer")
 	case m.filtered():
 		b.WriteString(strconv.Itoa(len(m.view)))
 		b.WriteString(" of ")
@@ -1026,13 +1074,20 @@ func (m *Model) total() string {
 	return n
 }
 
+// appendEmpty says which kind of empty this is. Five of them are told apart
+// here, and the one that failed is the only one that also has to say what to do
+// about it.
 func (m *Model) appendEmpty(lines []string, h int) []string {
 	at := len(lines)
 	switch {
 	case m.search == nil:
 		lines = append(lines, m.styles.muted.Render("  No Jira connection in this session yet."))
-	case !m.loaded:
+	case m.loading && !m.loaded:
 		lines = append(lines, m.styles.muted.Render("  Searching"+m.deps.Theme.Glyphs.Ellipsis))
+	case m.failure != nil:
+		lines = m.appendFailure(lines, h)
+	case !m.loaded:
+		lines = append(lines, m.styles.muted.Render("  Nothing has been asked of Jira yet."))
 	case m.filtered():
 		lines = append(lines, m.styles.muted.Render("  No loaded row matches "+m.filterWords()+"."))
 	default:
@@ -1044,3 +1099,56 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 	}
 	return lines[:at+h]
 }
+
+// appendFailure is what the pane says instead of rows: the reason in the error's
+// own words, the query it was asked about, and the key that runs it again. The
+// reason is wrapped rather than cut, since a transport failure names a host and a
+// port before it says what is wrong with them.
+func (m *Model) appendFailure(lines []string, h int) []string {
+	reason, _ := jira.Reason(m.failure)
+	lines = append(lines, m.styles.danger.Render("  The search failed."))
+	room := max(m.width-2, 8)
+	said := strings.Split(ansi.Wrap(reason, room, ""), "\n")
+	for _, line := range said[:min(len(said), max(h-3, 1))] {
+		lines = append(lines, m.styles.muted.Render("  "+line))
+	}
+	return append(lines,
+		m.styles.muted.Render("  "+ansi.Truncate(m.jql, room, m.deps.Theme.Glyphs.Ellipsis)),
+		"",
+		m.styles.muted.Render("  "+retryHint))
+}
+
+// keptFilter reports that a filter is narrowing the rows while nothing is being
+// typed into it, which is the state with no prompt of its own to show it.
+func (m *Model) keptFilter() bool { return m.query != "" && !m.filtering }
+
+// chipKey is everything the accepted-filter line is built from, so that
+// scrolling under one costs what scrolling without one costs.
+type chipKey struct {
+	query      string
+	width, gen int
+}
+
+// filterChip names the filter the rows are being narrowed by, and the key that
+// takes it off — the same answer facetPrompt gives for a clicked cell, and for
+// the same reason.
+func (m *Model) filterChip() string {
+	key := chipKey{query: m.query, width: m.width, gen: m.styles.gen}
+	if m.chip != "" && key == m.chipKey {
+		return m.chip
+	}
+	label := "only rows matching " + strconv.Quote(m.query)
+	room := max(m.width-ansi.StringWidth(clearHint), 8)
+	m.chip = m.styles.prompt.Render(ansi.Truncate(label, room, m.deps.Theme.Glyphs.Ellipsis)) +
+		m.styles.muted.Render(clearHint)
+	m.chipKey = key
+	return m.chip
+}
+
+// The two sentences that name a key, spelt from the binding rather than written
+// out. The retry names the kernel's own refresh, which this view registers
+// nothing for.
+var (
+	retryHint = kernel.DefaultGlobalKeys().Refresh.Help().Key + " tries the search again."
+	clearHint = "  " + defaultKeys().Unfilter.Help().Key + " clears it"
+)

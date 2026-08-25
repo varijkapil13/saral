@@ -431,9 +431,20 @@ func (c *Client) endpoint(r request) string {
 // failure turns whatever went wrong into the taxonomy in pkg/jira.
 func (c *Client) failure(r request, resp *response, err error) error {
 	if err != nil {
-		return &jira.TransportError{Op: r.op(), Err: err}
+		return &jira.TransportError{Op: r.op(), Err: cause(err)}
 	}
 	return c.apiError(r, resp)
+}
+
+// cause drops the wrapper net/http puts around a failed request. It repeats the
+// method and the whole URL, which Op already carries, and what a status line then
+// runs out of room for is the reason.
+func cause(err error) error {
+	var sent *url.Error
+	if errors.As(err, &sent) && sent.Err != nil {
+		return sent.Err
+	}
+	return err
 }
 
 // apiError maps a response Jira refused. The status is the authority: a body

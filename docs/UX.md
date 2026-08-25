@@ -80,6 +80,7 @@ quit                   q / ctrl+c     only from a root view, and only when nothi
 palette                ctrl+k         everything, fuzzy; opens over what you were in, esc returns.
                                       the one global a view taking typing cannot swallow
 search in view         /              filter rows live
+clear that filter      ctrl+g         from the browsing state; esc does it while still typing
 save this search       s              bind the query on screen to a number key
 refresh                r / R          current view / purge and refetch
 ```
@@ -192,6 +193,13 @@ carries *show only rows with this row's status / type / assignee* and *show ever
 anyone without a pointer. It composes with `/`: both are things being left out, and a row has to
 survive both.
 
+**And `/`'s own filter is named the same way once it has been accepted.** `esc` closes the prompt and
+keeps the filter, and after that `esc` belongs to the kernel, so the count reading `1 of 3` was the
+only trace a filter was on at all and the only way off it was to open it again. So a kept filter gets
+the line under the rows too, `ctrl+g` clears it — the stroke `esc` already answers to while the
+prompt is open, which is why it is not a new key to learn — and the palette carries *clear the filter
+on these rows*. The footer offers `ctrl+g` only while there is a filter to clear.
+
 Two gestures this table used to promise are not built, and are not being built here:
 
 - **Drag a divider to resize panes** — [#75](https://github.com/varijkapil13/saral/issues/75). There
@@ -242,3 +250,16 @@ the mouse — click, wheel, drag or release — reaches the view while the help 
 - Stale data is badged rather than hidden. Seeing yesterday's board beats seeing nothing.
 - Errors state what failed and what to do. `403` becomes "You need the Bulk Change permission to move
   issues between projects", which is the capability `Reason` verbatim.
+- **The status line is transient, so nothing that has to persist may live only there.** It is one
+  line, it is overwritten by the next thing that happens, and a keypress clears it. Anything that is
+  still true after that keypress belongs in the pane as well: a stale badge, a refusal, a count.
+- **An empty pane says which kind of empty it is, in words, and keeps saying it.** There are five,
+  and a user cannot act on the difference unless the screen names it: no site in this session,
+  nothing asked of it yet, a search in flight, an answer with no rows in it — worth naming the JQL —
+  and a search that failed, which also carries the reason and the key that tries again. All of them
+  drew "Searching…" once, so a wrong project key, a bad JQL, a dead host and a rate limit were one
+  screen that looked like a hang.
+- **A message the user has to read must fit the terminal they have.** A sentence that leads with a
+  method, a path and then the same URL again is truncated before it says what went wrong, which is
+  worse than saying less: the endpoint is worth one mention, and the reason goes where it survives a
+  narrow window. Where the reason cannot be shortened, the pane wraps it rather than cutting it.

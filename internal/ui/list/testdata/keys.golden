@@ -3,6 +3,11 @@ browsing
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
   full   [enter open, / filter, s save this query to a key]
+a filter kept on the rows
+  short  ↓/j down · ↑/k up · enter open · ctrl+g clear filter
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
+  full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
+  full   [enter open, / filter, ctrl+g clear filter, s save this query to a key]
 filter open
   short  enter keep filter · esc clear filter
   full   [enter keep filter, esc clear filter]
