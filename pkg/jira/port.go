@@ -119,4 +119,23 @@ type Client interface {
 	Plans(ctx context.Context) ([]Plan, error)
 	// Me returns the authenticated account, including its timezone.
 	Me(ctx context.Context) (User, error)
+
+	// FindPeople searches the site's accounts. The site decides what matches and
+	// in what order; see PeopleQuery, whose documentation is the contract.
+	FindPeople(ctx context.Context, q PeopleQuery) ([]User, error)
+	// People resolves account ids to accounts, which is how an id written into a
+	// saved filter becomes a name to draw. An id this site does not know is
+	// absent from the answer rather than a blank row in it, so the result is
+	// keyed by AccountID and never by position.
+	People(ctx context.Context, accountIDs []string) ([]User, error)
+	// IssueTypeStatuses lists each of a project's issue types with the statuses
+	// its workflow can put an issue in.
+	IssueTypeStatuses(ctx context.Context, projectKey string) ([]IssueTypeStatuses, error)
+	// Priorities lists the site's priorities, in the site's own order — which is
+	// the order they rank in, and is not alphabetical.
+	Priorities(ctx context.Context) ([]Priority, error)
+	// Labels lists every label in use on the site. It pages, because a busy site
+	// has thousands, and it cannot be narrowed: the endpoint takes no query and
+	// ignores one sent anyway, so a caller filters what it walked.
+	Labels(ctx context.Context) (Page[string], error)
 }

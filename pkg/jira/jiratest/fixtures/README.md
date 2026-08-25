@@ -45,6 +45,27 @@ decoder that reads only the common one comes back empty rather than failing:
 envelope, and its issues carry an Agile `self` (`/rest/agile/1.0/issue/{id}`) with `/rest/api/2`
 links inside them, which is what that endpoint really sends.
 
+## Accounts, and the words a filter narrows by
+
+Five more shapes, none of them the shape beside it:
+
+| fixture | shape | what it is there to catch |
+|---|---|---|
+| `user_search.json` | a **bare array**, no envelope at all | neither paginator here reads it; it also holds all three `accountType`s, an inactive account, an id with a **colon** in it, and an app whose `emailAddress` is `""` |
+| `user_assignable.json` | the same bare array, people only | the assignable endpoint drops app accounts without being asked, which is the difference between a readable picker and a page of robots |
+| `user_bulk.json` / `user_bulk_page2.json` | the Agile offset envelope, on a platform endpoint | `values` carries a **JSON `null`** for an id the site does not know, and `total` counts the ids asked for — so the null has to be counted for the walk and dropped for the caller |
+| `project_statuses.json` | a bare array of issue types, each with its own `statuses` | two types in one project run different workflows, and **two distinct ids share the display name `In Review`**, which is what a team-managed project mints |
+| `priority_search.json` | the paged envelope, in ranking order | the order is not alphabetical, and `isDefault` is not always set on one of them |
+| `labels.json` / `labels_page2.json` | a paged envelope whose `values` are **bare strings** | one label is not ASCII, because a label is whatever anybody typed and a width taken with `len()` over one is wrong |
+
+`forbidden_browse_users.json` is the 403 a token without *Browse users and groups* is expected to
+get. It is hand-authored: the testbed account held the permission, so the refusal has never been seen
+and its wording is invented rather than corrected from a capture.
+
+The account ids here are the older opaque form plus one that carries a colon. A real colon id is a
+numeric prefix and a UUID, which is exactly the shape `TestFixtures_CarryNoRealAccountID` refuses, so
+the one here keeps the prefix and the colon and is visibly not a UUID.
+
 ## A site refuses in two different envelopes
 
 `not_found_board.json` is the Agile one: `errorMessages` empty, and the sentence in `errors` under

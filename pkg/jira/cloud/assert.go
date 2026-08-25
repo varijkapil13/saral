@@ -21,6 +21,9 @@ var (
 	_ jira.Mover          = (*Client)(nil)
 	_ jira.CommentReader  = (*Client)(nil)
 	_ jira.Commenter      = (*Client)(nil)
+	_ jira.PeopleFinder   = (*Client)(nil)
+
+	_ jira.FilterVocabulary = (*Client)(nil)
 
 	// The composite a session is built with.
 	_ jira.SessionClient = (*Client)(nil)

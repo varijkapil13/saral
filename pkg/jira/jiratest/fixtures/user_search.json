@@ -1,0 +1,80 @@
+[
+  {
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g",
+    "accountId": "5b10a2844c20165700ede21g",
+    "accountType": "atlassian",
+    "emailAddress": "user@example.com",
+    "avatarUrls": {
+      "48x48": "https://example.atlassian.net/secure/useravatar?ownerId=5b10a2844c20165700ede21g&avatarId=10345",
+      "24x24": "https://example.atlassian.net/secure/useravatar?size=small&ownerId=5b10a2844c20165700ede21g&avatarId=10345",
+      "16x16": "https://example.atlassian.net/secure/useravatar?size=xsmall&ownerId=5b10a2844c20165700ede21g&avatarId=10345",
+      "32x32": "https://example.atlassian.net/secure/useravatar?size=medium&ownerId=5b10a2844c20165700ede21g&avatarId=10345"
+    },
+    "displayName": "Example User",
+    "active": true,
+    "timeZone": "Europe/Berlin",
+    "locale": "en_GB",
+    "guest": false
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+    "accountId": "5b10ac8d82e05b22cc7d4ef5",
+    "accountType": "atlassian",
+    "emailAddress": "",
+    "avatarUrls": {
+      "48x48": "https://example.atlassian.net/secure/useravatar?ownerId=5b10ac8d82e05b22cc7d4ef5&avatarId=10346",
+      "24x24": "https://example.atlassian.net/secure/useravatar?size=small&ownerId=5b10ac8d82e05b22cc7d4ef5&avatarId=10346",
+      "16x16": "https://example.atlassian.net/secure/useravatar?size=xsmall&ownerId=5b10ac8d82e05b22cc7d4ef5&avatarId=10346",
+      "32x32": "https://example.atlassian.net/secure/useravatar?size=medium&ownerId=5b10ac8d82e05b22cc7d4ef5&avatarId=10346"
+    },
+    "displayName": "Second Example",
+    "active": true,
+    "timeZone": "Europe/Berlin",
+    "locale": "en_GB",
+    "guest": false
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4a10",
+    "accountId": "5b10ac8d82e05b22cc7d4a10",
+    "accountType": "atlassian",
+    "avatarUrls": {
+      "48x48": "https://example.atlassian.net/secure/useravatar?ownerId=5b10ac8d82e05b22cc7d4a10&avatarId=10347",
+      "32x32": "https://example.atlassian.net/secure/useravatar?size=medium&ownerId=5b10ac8d82e05b22cc7d4a10&avatarId=10347"
+    },
+    "displayName": "Retired Example",
+    "active": false,
+    "timeZone": "Europe/Berlin",
+    "locale": "en_GB",
+    "guest": false
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=140022%3Aexample-app-0001",
+    "accountId": "140022:example-app-0001",
+    "accountType": "app",
+    "emailAddress": "",
+    "avatarUrls": {
+      "48x48": "https://example.atlassian.net/secure/useravatar?ownerId=140022&avatarId=10350",
+      "32x32": "https://example.atlassian.net/secure/useravatar?size=medium&ownerId=140022&avatarId=10350"
+    },
+    "displayName": "Nightly Runner",
+    "active": true,
+    "timeZone": "Europe/Berlin",
+    "locale": "en_GB",
+    "guest": false
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4b20",
+    "accountId": "5b10ac8d82e05b22cc7d4b20",
+    "accountType": "customer",
+    "emailAddress": "",
+    "avatarUrls": {
+      "48x48": "https://example.atlassian.net/secure/useravatar?ownerId=5b10ac8d82e05b22cc7d4b20&avatarId=10351",
+      "32x32": "https://example.atlassian.net/secure/useravatar?size=medium&ownerId=5b10ac8d82e05b22cc7d4b20&avatarId=10351"
+    },
+    "displayName": "Portal Visitor",
+    "active": true,
+    "timeZone": "Europe/Berlin",
+    "locale": "en_GB",
+    "guest": true
+  }
+]

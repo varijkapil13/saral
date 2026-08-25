@@ -540,6 +540,7 @@ func capsWithout(t *testing.T, absent jira.CapabilityKey, reason string) jira.Ca
 		Boards:       jira.Capability{OK: true},
 		Attachments:  jira.Capability{OK: true},
 		DeleteIssues: jira.Capability{OK: true},
+		People:       jira.Capability{OK: true},
 	}
 	missing := jira.Capability{Reason: reason}
 	switch absent {
@@ -553,6 +554,8 @@ func capsWithout(t *testing.T, absent jira.CapabilityKey, reason string) jira.Ca
 		caps.Attachments = missing
 	case jira.CapDeleteIssues:
 		caps.DeleteIssues = missing
+	case jira.CapPeople:
+		caps.People = missing
 	default:
 		t.Fatalf("capsWithout does not know the capability %q", absent)
 	}
@@ -568,6 +571,7 @@ func TestCapabilities_AnswerForEveryProbedKey(t *testing.T) {
 		jira.CapBoards,
 		jira.CapAttachments,
 		jira.CapDeleteIssues,
+		jira.CapPeople,
 	}
 
 	for _, absent := range keys {
@@ -710,6 +714,49 @@ func TestCapabilities_StaysComparable(t *testing.T) {
 	withReason := jira.Capabilities{TimeZoneReason: "Jira did not say what timezone this account is in"}
 	if withReason == unprobed {
 		t.Error("a value carrying a timezone reason compares equal to an unprobed one")
+	}
+}
+
+func TestParseAccountKind_ReadsTheEnumAndNotADisplayName(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]jira.AccountKind{
+		"atlassian":  jira.AccountPerson,
+		"ATLASSIAN":  jira.AccountPerson,
+		" customer ": jira.AccountCustomer,
+		"app":        jira.AccountApp,
+		// A read that did not say. Several endpoints send no accountType at all,
+		// and an absence is not a fourth kind of account.
+		"":            jira.AccountUnknown,
+		"   ":         jira.AccountUnknown,
+		"service":     jira.AccountUnknown,
+		"Atlassianer": jira.AccountUnknown,
+	}
+
+	for in, want := range tests {
+		if got := jira.ParseAccountKind(in); got != want {
+			t.Errorf("ParseAccountKind(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+// A badge draws the kind beside a row, and a picker on an endpoint that states
+// none would otherwise put the word "unknown" beside every account on screen.
+func TestAccountKind_NamesOnlyWhatTheReadStated(t *testing.T) {
+	t.Parallel()
+
+	tests := map[jira.AccountKind]string{
+		jira.AccountPerson:   "person",
+		jira.AccountApp:      "app",
+		jira.AccountCustomer: "customer",
+		jira.AccountUnknown:  "",
+		jira.AccountKind(99): "",
+	}
+
+	for kind, want := range tests {
+		if got := kind.String(); got != want {
+			t.Errorf("AccountKind(%d).String() = %q, want %q", kind, got, want)
+		}
 	}
 }
 

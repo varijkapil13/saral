@@ -99,6 +99,12 @@ func TestServer_ServesEveryDefaultRouteWithItsFixture(t *testing.T) {
 		{"bulk move submitted", http.MethodPost, "/rest/api/3/bulk/issues/move", http.StatusCreated, "bulkmove_submit.json"},
 		{"generic task", http.MethodGet, "/rest/api/3/task/11072", http.StatusOK, "task_complete.json"},
 		{"bulk queue task", http.MethodGet, "/rest/api/3/bulk/queue/10641", http.StatusOK, "bulkmove_task_complete.json"},
+		{"a site-wide account search", http.MethodGet, "/rest/api/3/user/search?query=ex", http.StatusOK, "user_search.json"},
+		{"an assignable account search", http.MethodGet, "/rest/api/3/user/assignable/search?project=EX&query=", http.StatusOK, "user_assignable.json"},
+		{"accounts by id", http.MethodGet, "/rest/api/3/user/bulk?accountId=5b10a2844c20165700ede21g", http.StatusOK, "user_bulk.json"},
+		{"a project's statuses", http.MethodGet, "/rest/api/3/project/EX/statuses", http.StatusOK, "project_statuses.json"},
+		{"the site's priorities", http.MethodGet, "/rest/api/3/priority/search", http.StatusOK, "priority_search.json"},
+		{"the site's labels", http.MethodGet, "/rest/api/3/label", http.StatusOK, "labels.json"},
 	}
 
 	for _, tc := range cases {

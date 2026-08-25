@@ -1,0 +1,6 @@
+{
+  "errorMessages": [
+    "You do not have the Browse users and groups global permission, which is required to search for users."
+  ],
+  "errors": {}
+}

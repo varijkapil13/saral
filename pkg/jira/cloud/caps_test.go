@@ -91,14 +91,62 @@ func TestCapabilities_AnswersEveryCapabilityForATokenThatMayDoEverything(t *test
 		{name: "Boards", got: got.Boards, wantOK: true},
 		{name: "BulkMove", got: got.BulkMove, wantOK: true},
 		{name: "DeleteIssues", got: got.DeleteIssues, wantOK: true},
+		{name: "People", got: got.People, wantOK: true},
 		{name: "Plans", got: got.Plans, reason: capsPlansReason},
 	}
 	for _, tt := range tests {
 		capsAssert(t, tt.name, tt.got, tt.wantOK, tt.reason)
 	}
 
-	if served := len(s.Requests()); served != 5 {
+	if served := len(s.Requests()); served != 6 {
 		t.Errorf("the site served %d requests, want one per probe", served)
+	}
+}
+
+func TestCapabilities_SaysWhenThisTokenMayNotLookAccountsUp(t *testing.T) {
+	t.Parallel()
+
+	s := jiratest.NewServer(jiratest.WithStatus(http.MethodGet, peopleSearchPath,
+		http.StatusForbidden, "forbidden_browse_users.json"))
+	defer s.Close()
+
+	c, _ := testClient(t, s.URL())
+	got, err := c.Capabilities(t.Context(), capsProject)
+	if err != nil {
+		t.Fatalf("probing %s: %v", capsProject, err)
+	}
+	capsAssert(t, "People", got.People, false,
+		"You do not have the Browse users and groups global permission, which is required to search for users.")
+}
+
+// Browse users and groups is site-wide, so the answer does not depend on a
+// project and the probe still runs when there is none. It also asks with an
+// empty query rather than none: none is a 400, and empty matches everybody.
+func TestCapabilities_ProbesPeopleWithNoProjectAndAnEmptyQuery(t *testing.T) {
+	t.Parallel()
+
+	s := jiratest.NewServer()
+	defer s.Close()
+
+	c, _ := testClient(t, s.URL())
+	got, err := c.Capabilities(t.Context(), "")
+	if err != nil {
+		t.Fatalf("probing with no project: %v", err)
+	}
+	capsAssert(t, "People", got.People, true, "")
+
+	asked, err := url.ParseQuery(capsServed(t, s, peopleSearchPath).Query)
+	if err != nil {
+		t.Fatalf("reading the account query: %v", err)
+	}
+	if _, sent := asked["query"]; !sent {
+		t.Errorf("the probe sent no query parameter (%q), which is a 400 rather than an answer", asked.Encode())
+	}
+	if asked.Get("query") != "" {
+		t.Errorf("query = %q, want the empty one that matches every account", asked.Get("query"))
+	}
+	if asked.Get("maxResults") != "1" {
+		t.Errorf("maxResults = %q, want the one account that answers the question", asked.Get("maxResults"))
 	}
 }
 
@@ -548,6 +596,7 @@ func TestCapabilities_ProbesEachEndpointOnce(t *testing.T) {
 
 	for _, path := range []string{
 		capsPermissionsPath, capsConfigurationPath, capsMyselfPath, capsPlansPath, capsBoardsPath,
+		peopleSearchPath,
 	} {
 		if n := capsCount(s, path); n != 1 {
 			t.Errorf("%s was requested %d times, want once", path, n)
