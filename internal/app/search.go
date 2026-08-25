@@ -40,9 +40,9 @@ type SearchClient interface {
 
 // Projection is the narrow set of fields one view needs.
 //
-// It is split in two because only half of it can be written down. IDs are the
-// platform's own field identifiers, which are the same on every site; Names are
-// display names resolved against the site's field catalogue at runtime, which
+// It is in three parts because only one of them can be written down. IDs are
+// the platform's own field identifiers, which are the same on every site; Names
+// and Custom are resolved against the site's field catalogue at runtime, which
 // is the only way to ask for a custom field without writing a customfield_NNNNN
 // into the source. A name the site has no field for is reported, never guessed.
 type Projection struct {
@@ -50,6 +50,16 @@ type Projection struct {
 	Name  string
 	IDs   []string
 	Names []string
+	// Custom asks for every custom field this site defines, by taking their IDs
+	// from the catalogue Search already holds. It is how story points, the
+	// sprint, the epic link and the acceptance criteria — most of what an issue
+	// is on a configured site — arrive without a customfield_NNNNN anywhere in
+	// the source and without a name having to be written down first.
+	//
+	// It belongs on a read of one issue. A site with two hundred custom fields
+	// turns a page of fifty rows into ten thousand values nothing renders, so a
+	// list projection leaves it off.
+	Custom bool
 }
 
 // With returns a copy of the projection asking for more field IDs, which is how
@@ -66,6 +76,13 @@ func (p Projection) WithNames(names ...string) Projection {
 	return p
 }
 
+// WithCustom returns a copy of the projection asking for this site's custom
+// fields as well.
+func (p Projection) WithCustom() Projection {
+	p.Custom = true
+	return p
+}
+
 // ListProjection is what a row in a list needs and nothing else. Six fields,
 // not sixty: a bare issue read returns every field on the site, and on a site
 // with ninety custom fields that is ninety nulls per row.
@@ -76,11 +93,14 @@ func ListProjection() Projection {
 	}
 }
 
-// DetailProjection is what one open issue needs. It is wider than a list row
-// and still narrower than everything.
+// DetailProjection is what one open issue needs: the platform fields an issue
+// screen draws, plus whatever custom fields this site defines. It is wider than
+// a list row and still narrower than a wildcard, whose values arrive with
+// nothing to label them by.
 func DetailProjection() Projection {
 	return Projection{
-		Name: "issue detail",
+		Name:   "issue detail",
+		Custom: true,
 		IDs: []string{
 			"summary", "status", "assignee", "priority", "updated", "issuetype",
 			"description", "project", "reporter", "labels", "components",
@@ -96,7 +116,72 @@ type Resolved struct {
 	// Missing names the fields this site has none of, so that a view can say so
 	// instead of rendering an empty column.
 	Missing []string
+	// Labels is what this site calls the fields that were asked for. It is
+	// filled whenever resolving needed the catalogue and empty otherwise, so
+	// that a list of six platform IDs still resolves without a fetch.
+	Labels FieldLabels
 }
+
+// FieldLabels is what a site calls the fields one read asked for, keyed by
+// field ID.
+//
+// The two halves are not interchangeable. An ID identifies a field: it is what
+// a value arrives under, what the cache is keyed by and what a write names. A
+// name only displays one, and customfield_13401 is not a name anyone can read.
+// A name is also translated, is not the spelling the same field answers to in
+// JQL, and has been seen changing between two reads in one session — so it
+// travels beside the answer it was read with and is never written down as
+// though it identified anything.
+//
+// It is immutable for the reason jira.FieldSet is: it travels by value out of a
+// search that several callers may be sharing.
+type FieldLabels struct {
+	refs map[string]jira.FieldRef
+}
+
+// NewFieldLabels labels the field IDs a read asked for, taking each name from
+// the catalogue as this site spells it now. An ID the catalogue has no field
+// for is left unlabelled rather than handed its own ID as a name: whether to
+// show a raw ID is the caller's decision.
+func NewFieldLabels(catalogue []jira.Field, ids []string) FieldLabels {
+	if len(catalogue) == 0 || len(ids) == 0 {
+		return FieldLabels{}
+	}
+	refs := make(map[string]jira.FieldRef, len(ids))
+	for i := range catalogue {
+		if slices.Contains(ids, catalogue[i].ID) {
+			refs[catalogue[i].ID] = catalogue[i].Ref()
+		}
+	}
+	if len(refs) == 0 {
+		return FieldLabels{}
+	}
+	return FieldLabels{refs: refs}
+}
+
+// Name returns what this site calls a field, or the empty string when the read
+// carried no label for it.
+func (l FieldLabels) Name(id string) string { return l.refs[id].Name }
+
+// Field returns the reference for a field ID: the name to put on screen and the
+// schema that says what its value is.
+func (l FieldLabels) Field(id string) (jira.FieldRef, bool) {
+	ref, ok := l.refs[id]
+	return ref, ok
+}
+
+// IDs returns the labelled field IDs, sorted, so that iteration is stable.
+func (l FieldLabels) IDs() []string {
+	out := make([]string, 0, len(l.refs))
+	for id := range l.refs {
+		out = append(out, id)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// Len reports how many fields are labelled.
+func (l FieldLabels) Len() int { return len(l.refs) }
 
 // Request is one search to run.
 type Request struct {
@@ -114,6 +199,10 @@ type Request struct {
 type Result struct {
 	Page    jira.Page[jira.Issue]
 	Missing []string
+	// Labels names the fields the page's issues carry values for, for the
+	// reason Resolved carries them: a value keyed by customfield_13401 cannot
+	// be rendered on its own.
+	Labels FieldLabels
 }
 
 // Search is the use case behind every issue list.
@@ -156,10 +245,23 @@ func NewSearch(client SearchClient, opts ...Option) *Search {
 var errNoClient = errors.New("app: this search has no Jira client to run against")
 
 // Fields returns the site's field catalogue, fetched once and kept until
-// Invalidate drops it. Resolving a field name is the only reason anything above
-// the adapter needs it, and it changes about as often as the site's
-// configuration does.
+// Invalidate drops it. Resolving a field is the only reason anything above the
+// adapter needs it — a name into the ID to ask for, an ID into the name to show
+// — and it changes about as often as the site's configuration does.
 func (s *Search) Fields(ctx context.Context) ([]jira.Field, error) {
+	fields, err := s.fields(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return cloneFields(fields), nil
+}
+
+// fields is the catalogue itself rather than a copy of it, for the readers
+// inside this package that only read. It stays unexported because a caller that
+// wrote to what it returns would be writing into the cache — and copying a
+// hundred field definitions to resolve one projection is a cost every issue a
+// user opens would pay.
+func (s *Search) fields(ctx context.Context) ([]jira.Field, error) {
 	if s.client == nil {
 		return nil, errNoClient
 	}
@@ -179,7 +281,7 @@ func (s *Search) Fields(ctx context.Context) ([]jira.Field, error) {
 	s.mu.Lock()
 	s.catalogue, s.loaded = fields, true
 	s.mu.Unlock()
-	return cloneFields(fields), nil
+	return fields, nil
 }
 
 // Invalidate drops the cached field catalogue, which is what a refresh that
@@ -196,24 +298,30 @@ func (s *Search) cached() ([]jira.Field, bool) {
 	if !s.loaded {
 		return nil, false
 	}
-	return cloneFields(s.catalogue), true
+	return s.catalogue, true
 }
 
-// Resolve turns a projection into the field IDs to ask for.
+// Resolve turns a projection into the field IDs to ask for, and into what this
+// site calls each of them.
 //
-// The catalogue is fetched only when the projection names a field, so the list
-// view — six platform field IDs and no names — resolves without touching the
-// network at all.
+// The catalogue is fetched only when the projection names a field or asks for
+// the custom ones, so the list view — six platform field IDs and no names —
+// resolves without touching the network at all.
+//
+// Custom fields are taken from the catalogue by ID rather than asked for with
+// jira.FieldsNavigable. The wildcard is both wider and less useful: it returns
+// a value per field per issue, and it returns them keyed by IDs the answer
+// carries no names for, which is a screen of customfield_13401.
 func (s *Search) Resolve(ctx context.Context, p Projection) (Resolved, error) {
 	out := Resolved{IDs: make([]string, 0, len(p.IDs)+len(p.Names))}
 	for _, id := range p.IDs {
 		out.IDs = appendUnique(out.IDs, id)
 	}
 	names := trimmed(p.Names)
-	if len(names) == 0 {
+	if len(names) == 0 && !p.Custom {
 		return out, nil
 	}
-	catalogue, err := s.Fields(ctx)
+	catalogue, err := s.fields(ctx)
 	if err != nil {
 		return Resolved{}, err
 	}
@@ -225,6 +333,14 @@ func (s *Search) Resolve(ctx context.Context, p Projection) (Resolved, error) {
 		}
 		out.IDs = appendUnique(out.IDs, field.ID)
 	}
+	if p.Custom {
+		for i := range catalogue {
+			if catalogue[i].Custom {
+				out.IDs = appendUnique(out.IDs, catalogue[i].ID)
+			}
+		}
+	}
+	out.Labels = NewFieldLabels(catalogue, out.IDs)
 	return out, nil
 }
 
@@ -254,7 +370,7 @@ func (s *Search) Run(ctx context.Context, r Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Page: page, Missing: resolved.Missing}, nil
+	return Result{Page: page, Missing: resolved.Missing, Labels: resolved.Labels}, nil
 }
 
 // Count reports roughly how many issues a query matches, and whether this
@@ -410,7 +526,7 @@ type SavedQuery struct {
 }
 
 func (q SavedQuery) projection() Projection {
-	if len(q.Projection.IDs) == 0 && len(q.Projection.Names) == 0 {
+	if len(q.Projection.IDs) == 0 && len(q.Projection.Names) == 0 && !q.Projection.Custom {
 		return ListProjection()
 	}
 	return q.Projection
