@@ -2,6 +2,8 @@ package comment
 
 import "github.com/varijkapil13/saral/internal/ui/kernel"
 
+var _ kernel.KeyReporter = (*Model)(nil)
+
 type keyMap struct {
 	Up       kernel.Binding
 	Down     kernel.Binding
@@ -18,6 +20,10 @@ type keyMap struct {
 	Send     kernel.Binding
 	Cancel   kernel.Binding
 	Confirm  kernel.Binding
+	// Keep is the same key as Cancel and means something else: while a deletion
+	// waits, esc is the answer that leaves the comment where it is rather than a
+	// way out of an editor.
+	Keep kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -37,10 +43,11 @@ func defaultKeys() keyMap {
 		Send:     kernel.Bind([]string{"ctrl+s"}, "ctrl+s", "send"),
 		Cancel:   kernel.Bind([]string{"esc"}, "esc", "put it aside"),
 		Confirm:  kernel.Bind([]string{"y"}, "y", "delete it"),
+		Keep:     kernel.Bind([]string{"esc"}, "esc", "keep it"),
 	}
 }
 
-// keySet is what the footer and the help overlay show. It is derived from the
+// keySet is the resting state: a thread being read. It is derived from the
 // bindings above rather than written twice, so a key that moves cannot leave a
 // stale hint behind.
 func (k keyMap) keySet() kernel.KeySet {
@@ -49,9 +56,33 @@ func (k keyMap) keySet() kernel.KeySet {
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.HalfDown, k.HalfUp, k.Top, k.Bottom},
-			{k.Write, k.Edit, k.Delete, k.Send, k.Cancel},
+			{k.Write, k.Edit, k.Delete},
 		},
 	}
+}
+
+// liveSets is one set per mode, built once at start-up. LiveKeys is called on
+// every frame, so it hands back a stored value rather than assembling one.
+var liveSets = func() [3]kernel.KeySet {
+	k := defaultKeys()
+	return [3]kernel.KeySet{
+		browsing: k.keySet(),
+		writing: {
+			Short: []kernel.Binding{k.Send, k.Cancel},
+			Full:  [][]kernel.Binding{{k.Send, k.Cancel}},
+		},
+		confirming: {
+			Short: []kernel.Binding{k.Confirm, k.Keep},
+			Full:  [][]kernel.Binding{{k.Confirm, k.Keep}},
+		},
+	}
+}()
+
+// LiveKeys reports the keys that work in the mode the thread is actually in.
+// Reading it, writing into it and answering for a deletion have no key in
+// common, and the mode is the generation because it is what changes them.
+func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
+	return liveSets[m.mode], int(m.mode)
 }
 
 type action uint8

@@ -16,18 +16,7 @@ func init() {
 		New:   New,
 	})
 
-	kernel.RegisterKeys(ViewID, kernel.KeySet{
-		Short: []kernel.Binding{
-			kernel.Bind([]string{"enter"}, "enter", "continue"),
-			kernel.Bind([]string{"shift+tab"}, "shift+tab", "back a step"),
-		},
-		Full: [][]kernel.Binding{{
-			kernel.Bind([]string{"enter", "tab"}, "enter", "continue"),
-			kernel.Bind([]string{"shift+tab"}, "shift+tab", "back a step"),
-			kernel.Bind([]string{"up", "down"}, "up/down", "choose"),
-			kernel.Bind([]string{"ctrl+r"}, "ctrl+r", "try that again"),
-		}},
-	})
+	kernel.RegisterKeys(ViewID, defaultKeys().keySet())
 
 	kernel.RegisterCommand(kernel.Command{
 		ID:    "onboarding.run",

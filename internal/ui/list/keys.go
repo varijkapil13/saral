@@ -2,6 +2,8 @@ package list
 
 import "github.com/varijkapil13/saral/internal/ui/kernel"
 
+var _ kernel.KeyReporter = (*Model)(nil)
+
 type keyMap struct {
 	Up       kernel.Binding
 	Down     kernel.Binding
@@ -17,6 +19,13 @@ type keyMap struct {
 	Save     kernel.Binding
 	Accept   kernel.Binding
 	Clear    kernel.Binding
+	// Slot, Take and Drop answer the gesture that binds the search on screen to
+	// a number key. bindKey reads the digit and the y itself, because every other
+	// key ends the gesture and a table would have to enumerate the alphabet to
+	// say so.
+	Slot kernel.Binding
+	Take kernel.Binding
+	Drop kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -35,21 +44,76 @@ func defaultKeys() keyMap {
 		Save:     kernel.Bind([]string{"s"}, "s", "save this query to a key"),
 		Accept:   kernel.Bind([]string{"enter"}, "enter", "keep filter"),
 		Clear:    kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "clear filter"),
+		Slot:     kernel.Bind(digits, "1-9", "the key to bind it to"),
+		Take:     kernel.Bind([]string{"y"}, "y", "take the key"),
+		Drop:     kernel.Bind([]string{"esc"}, "esc", "leave it alone"),
 	}
 }
 
-// keySet is what the footer and the help overlay show. Nothing here is a second
-// copy of the bindings above: both come from the same value, so a key that
-// moves cannot leave a stale hint behind.
+var digits = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
+
+// keySet is the resting state: a list nobody is typing into. Nothing here is a
+// second copy of the bindings above — both come from the same value, so a key
+// that moves cannot leave a stale hint behind.
 func (k keyMap) keySet() kernel.KeySet {
 	return kernel.KeySet{
 		Short: []kernel.Binding{k.Down, k.Up, k.Open, k.Filter},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.HalfDown, k.HalfUp, k.Top, k.Bottom},
-			{k.Open, k.Filter, k.Save, k.Accept, k.Clear},
+			{k.Open, k.Filter, k.Save},
 		},
 	}
+}
+
+// keyState is which of the view's four states the keys belong to. It doubles as
+// the generation the chrome memoizes on, so a state that is added has to be
+// added here to be drawn.
+type keyState int
+
+const (
+	keysBrowsing keyState = iota
+	keysFiltering
+	keysPickingSlot
+	keysConfirmingSlot
+	keyStates
+)
+
+// liveSets is one set per state, built once at start-up. LiveKeys is called on
+// every frame, so it hands back a stored value rather than assembling one.
+var liveSets = func() [keyStates]kernel.KeySet {
+	k := defaultKeys()
+	var sets [keyStates]kernel.KeySet
+	sets[keysBrowsing] = k.keySet()
+	sets[keysFiltering] = kernel.KeySet{
+		Short: []kernel.Binding{k.Accept, k.Clear},
+		Full:  [][]kernel.Binding{{k.Accept, k.Clear}},
+	}
+	sets[keysPickingSlot] = kernel.KeySet{
+		Short: []kernel.Binding{k.Slot, k.Drop},
+		Full:  [][]kernel.Binding{{k.Slot, k.Drop}},
+	}
+	sets[keysConfirmingSlot] = kernel.KeySet{
+		Short: []kernel.Binding{k.Take, k.Drop},
+		Full:  [][]kernel.Binding{{k.Take, k.Drop}},
+	}
+	return sets
+}()
+
+// LiveKeys reports the keys that work in the state the list is actually in. An
+// open filter answers enter and esc and nothing else; the gesture that binds a
+// number key answers a digit, then a y.
+func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
+	state := keysBrowsing
+	switch {
+	case m.filtering:
+		state = keysFiltering
+	case m.bind == bindPick:
+		state = keysPickingSlot
+	case m.bind == bindConfirm:
+		state = keysConfirmingSlot
+	}
+	return liveSets[state], int(state)
 }
 
 type action uint8

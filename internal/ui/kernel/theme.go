@@ -1,12 +1,17 @@
 package kernel
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync/atomic"
 
 	"charm.land/bubbles/v2/help"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/varijkapil13/saral/internal/config"
 )
 
 // ThemeMode is how colours are chosen.
@@ -281,4 +286,133 @@ func (t *Theme) colored() {
 		FullDesc:       t.Muted,
 		FullSeparator:  t.Muted,
 	}
+}
+
+// The theme is switchable while the program runs. It registers commands rather
+// than keys: there is no letter left that would not also be a letter somebody
+// types into a field, and docs/UX.md points at the palette for everything that
+// has no key of its own.
+func init() { registerThemeCommands() }
+
+func registerThemeCommands() {
+	for _, mode := range []ThemeMode{ThemeAuto, ThemeDark, ThemeLight, ThemeNoColor} {
+		RegisterCommand(Command{
+			ID:    "theme." + mode.String(),
+			Title: mode.title(),
+			Group: "Appearance",
+			Run:   func(d Deps) tea.Cmd { return SwitchTheme(d, mode) },
+		})
+	}
+}
+
+// title is how the palette offers the mode.
+func (m ThemeMode) title() string {
+	switch m {
+	case ThemeDark:
+		return "Use the dark theme"
+	case ThemeLight:
+		return "Use the light theme"
+	case ThemeNoColor:
+		return "Turn colour off"
+	default:
+		return "Follow the terminal's own colours"
+	}
+}
+
+// SwitchTheme rebuilds the styles in a new mode and keeps the choice. The glyph
+// set comes along unchanged: it answers a question about the font rather than
+// about colour, and a session that fell back to ASCII must not quietly get box
+// drawing back.
+//
+// Auto asks the terminal for its background again rather than reusing the answer
+// the old theme settled on, because that is the whole of what auto means and a
+// terminal that has been changed since is the likely reason for switching to it.
+func SwitchTheme(d Deps, mode ThemeMode) tea.Cmd {
+	if forced, why := noColorForced(); forced && mode != ThemeNoColor {
+		return func() tea.Msg { return StatusMsg{Text: why, Level: LevelWarn} }
+	}
+	dark, glyphs := true, UnicodeGlyphs()
+	if d.Theme != nil {
+		dark, glyphs = d.Theme.Dark, d.Theme.Glyphs
+	}
+	next := NewTheme(mode, dark, glyphs)
+	cmds := []tea.Cmd{
+		func() tea.Msg { return ThemeMsg{Theme: next} },
+		saveTheme(d.Site, mode),
+	}
+	if mode == ThemeAuto {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
+	return tea.Batch(cmds...)
+}
+
+// noColorForced reports whether the environment has already said no colour, in
+// which case a mode with colour in it is refused rather than quietly overriding
+// what the user exported. ThemeModeFromEnv is asked with nothing configured, so
+// only the environment can answer no-colour here.
+func noColorForced() (forced bool, why string) {
+	if ThemeModeFromEnv(os.Environ(), "") != ThemeNoColor {
+		return false, ""
+	}
+	return true, "this environment asks for no colour — NO_COLOR or TERM says so, and that beats a theme"
+}
+
+// saveTheme writes the mode into the profile it came from. The theme has already
+// changed by the time this runs, so a failure is reported rather than undoing
+// the switch.
+func saveTheme(site string, mode ThemeMode) tea.Cmd {
+	return func() tea.Msg {
+		switch err := writeTheme(site, mode); {
+		case err == nil:
+			return nil
+		case errors.Is(err, config.ErrNoConfig), errors.Is(err, config.ErrNoProfile):
+			return StatusMsg{
+				Text:  "the theme changed for this session; there is no profile to save it to",
+				Level: LevelInfo,
+			}
+		default:
+			return StatusMsg{
+				Text:  "the theme changed for this session, but saving it failed: " + err.Error(),
+				Level: LevelWarn,
+			}
+		}
+	}
+}
+
+// writeTheme reads the whole file and writes it back with one field changed.
+// Save writes the profile it is handed and nothing else, so a fresh Profile
+// built from what is on screen would drop the saved queries, the timeline field
+// names and the glyph set.
+func writeTheme(site string, mode ThemeMode) error {
+	path, err := config.Path()
+	if err != nil {
+		return err
+	}
+	cfg, err := config.LoadFile(path)
+	if err != nil {
+		return err
+	}
+	profile, err := cfg.Current()
+	if err != nil {
+		return err
+	}
+	// The kernel is told which site it is talking to and never which profile was
+	// named on the command line, so a session started with --profile would
+	// otherwise write the choice onto whichever profile is active instead.
+	if site != "" && profile.Site != site {
+		return fmt.Errorf("this session is on %s and the active profile %q is on %s, so nothing was written",
+			site, profile.Name, profile.Site)
+	}
+	// Auto is the absence of a theme in the file rather than a value, so that a
+	// profile that never chose and a profile that chose auto read the same.
+	value := mode.String()
+	if mode == ThemeAuto {
+		value = ""
+	}
+	if profile.Theme == value {
+		return nil
+	}
+	profile.Theme = value
+	cfg.Profiles[profile.Name] = profile
+	return cfg.Save(path)
 }

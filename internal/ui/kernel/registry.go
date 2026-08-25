@@ -140,11 +140,26 @@ func LookupCommand(id string) (Command, bool) {
 	return cmd, ok
 }
 
-// KeysFor returns the keys registered for a view.
+// KeysFor returns the keys registered for a view: its resting state, and the
+// whole answer for a view that does not implement KeyReporter.
 func KeysFor(viewID string) KeySet {
 	reg.mu.RLock()
 	defer reg.mu.RUnlock()
 	return reg.keys[viewID]
+}
+
+// KeyScopes names every view that registered keys, sorted. It is how the sweep
+// above the views checks that each of them was held to the same rule: the kernel
+// cannot, because it may not import one.
+func KeyScopes() []string {
+	reg.mu.RLock()
+	defer reg.mu.RUnlock()
+	out := make([]string, 0, len(reg.keys))
+	for id := range reg.keys {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // RegistrationErrors returns everything wrong with the registrations that ran.

@@ -270,9 +270,24 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   It reads through the cache P3.2 defines, so it follows P3.2 rather than running beside it: two
   packets agreeing out of band on the kinds, the key format and the value codec is how the shape
   comes out wrong.
-- [ ] **P3.5 — Help, hints and theming** · [#16](https://github.com/varijkapil13/saral/issues/16) · **owns** `internal/ui/help/**`, `internal/ui/theme/**`
-  Contextual footer showing only valid keys, `?` overlay from the key registry, "you could have
-  pressed `s`" hints after a menu path is used repeatedly, light/dark/no-color themes.
+- [x] **P3.5a — The contextual footer, the `?` overlay and the theme switch** · [#16](https://github.com/varijkapil13/saral/issues/16) · **owns** `internal/ui/kernel/{theme,chrome_test,theme_test}.go`, the chrome functions in `internal/ui/kernel/kernel.go`, the `KeyReporter` lines in `internal/ui/kernel/{view,registry}.go`, `internal/ui/kernel/testdata/**`, the `keys*.go` and `testdata/keys.golden` of `internal/ui/{list,issue,form,comment,onboarding}`, `internal/ui/livekeys_test.go`, `docs/{UX,ARCHITECTURE,ROADMAP}.md`
+  Contextual footer showing only valid keys, `?` overlay from the key registry, light/dark/no-color
+  themes switchable while the program runs.
+  **This row used to claim `internal/ui/help/**` and `internal/ui/theme/**`.** Neither directory
+  exists and neither was created: the footer and the `?` overlay are chrome functions in `kernel.go`,
+  and the themes are `internal/ui/kernel/theme.go`. Lifting theming out of the kernel would touch ~25
+  files across six packages and is a refactor packet, not this one.
+  What was missing was not the rendering. `RegisterKeys` is init-time and refuses a second call, so
+  `KeysFor` returned one static set however the view's state changed, and six views were advertising
+  keys that do nothing in the state the user was in. `kernel.KeyReporter` is how a view answers for
+  the state it is in, and all six implement it. `ThemeMsg` existed and nothing sent it; there are now
+  four palette commands and the choice is written back without dropping the rest of the profile
+  ([#63](https://github.com/varijkapil13/saral/issues/63)). Colour stepping down to 256 and 16 was
+  never missing — bubbletea's renderer does it — so that was a doc correction.
+  **The hints bullet moved to P3.1** ([#12](https://github.com/varijkapil13/saral/issues/12)): "after
+  you reach an action through the palette three times, the status line notes its key" needs the
+  counter, the call site and the frecency table that packet already owns, and W0-b landed
+  `CommandRanMsg{ID, Keys}` as the signal. A second counter in the chrome would be a second answer.
 
 ## Batch 4 — Attachments · parallel ×3
 

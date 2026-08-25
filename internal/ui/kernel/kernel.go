@@ -64,10 +64,14 @@ type stackEntry struct {
 }
 
 type chromeKey struct {
-	width     int
-	themeGen  int
-	capsGen   int
-	savedGen  int
+	width    int
+	themeGen int
+	capsGen  int
+	savedGen int
+	// keysGen is what the focused view answers when asked which of its keys work
+	// right now. It is a number rather than the set because this key is compared
+	// with ==, and a KeySet holds slices.
+	keysGen   int
 	rootID    string
 	topID     string
 	title     string
@@ -979,9 +983,10 @@ func (m Model) Frame() string {
 // they depend on has changed.
 func (m Model) chromeFor() (header, footer string) {
 	_, palette := LookupView(PaletteViewID)
+	_, keysGen := m.viewKeys()
 	key := chromeKey{
 		width: m.width, themeGen: m.deps.Theme.Gen, capsGen: m.capsGen,
-		savedGen: m.savedGen, project: m.deps.Project,
+		savedGen: m.savedGen, keysGen: keysGen, project: m.deps.Project,
 		status: m.status, help: m.showHelp,
 		depth: len(m.stack), palette: palette,
 		capturing: m.capturing(), prefixed: m.prefixSet,
@@ -1063,11 +1068,23 @@ func (m Model) emptyState() string {
 		"Views self-register from their own package; see docs/ARCHITECTURE.md.")
 }
 
-func (m Model) helpView() string {
-	view := KeySet{}
-	if len(m.stack) > 0 {
-		view = KeysFor(m.top().spec.ID)
+// viewKeys is what the focused view says works right now, and a number that
+// changes when that changes. A view whose keys move with its state implements
+// KeyReporter; one whose keys never move is answered from the registry, which
+// costs it nothing.
+func (m Model) viewKeys() (set KeySet, gen int) {
+	if len(m.stack) == 0 {
+		return KeySet{}, 0
 	}
+	top := m.top()
+	if reporter, ok := top.view.(KeyReporter); ok {
+		return reporter.LiveKeys()
+	}
+	return KeysFor(top.spec.ID), 0
+}
+
+func (m Model) helpView() string {
+	view, _ := m.viewKeys()
 	h := m.deps.Theme.HelpModel
 	h.ShowAll = true
 	h.SetWidth(m.width)
@@ -1160,10 +1177,7 @@ func (m Model) hintLine(width int) string {
 			Bind(m.keys.Back.Keys(), "esc", "cancel"),
 		}})
 	}
-	set := KeySet{}
-	if len(m.stack) > 0 {
-		set = KeysFor(m.top().spec.ID)
-	}
+	set, _ := m.viewKeys()
 	if m.capturing() {
 		// The globals are unreachable while the view has the keyboard, bar the
 		// one key it is not allowed to swallow, and docs/UX.md asks the footer to

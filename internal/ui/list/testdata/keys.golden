@@ -1,0 +1,14 @@
+browsing
+  short  ↓/j down · ↑/k up · enter open · / filter
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
+  full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
+  full   [enter open, / filter, s save this query to a key]
+filter open
+  short  enter keep filter · esc clear filter
+  full   [enter keep filter, esc clear filter]
+picking the number key
+  short  1-9 the key to bind it to · esc leave it alone
+  full   [1-9 the key to bind it to, esc leave it alone]
+confirming a number key that is taken
+  short  y take the key · esc leave it alone
+  full   [y take the key, esc leave it alone]

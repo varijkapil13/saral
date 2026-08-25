@@ -42,3 +42,8 @@ func (k keyMap) keySet() kernel.KeySet {
 		},
 	}
 }
+
+// The detail pane implements no kernel.KeyReporter: it scrolls a document, and
+// every one of its keys works whatever it is showing, so the registry's answer
+// is already the live one. The two panes it opens are a different matter, and
+// answer for themselves in edit_keys.go.
