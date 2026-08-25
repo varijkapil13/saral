@@ -237,9 +237,64 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   no watch and no message, so an index built from `Each` goes stale the moment anything writes. Three
   interfaces have already shipped here that nobody implemented. P3.2 defines this one alongside the
   code that exercises it.
-- [ ] **P3.1 — Command palette** · [#12](https://github.com/varijkapil13/saral/issues/12) · **owns** `internal/ui/palette/**`
-  `ctrl+k`, fuzzy over the command registry, frecency ranking, shows the keybinding for what you ran.
-  Wires up `app.SavedQuery`, whose number-key binding PC.2 settles.
+- [x] **P3.1 — Command palette** · [#12](https://github.com/varijkapil13/saral/issues/12) · **owns** `internal/ui/palette/**` including its `testdata/**`, this packet's one blank import line in `internal/ui/views.go`, `docs/{UX,ROADMAP}.md`
+  `ctrl+k`, fuzzy over the command registry *and* over every issue the cache already holds, frecency
+  ranking, the keybinding for what you ran, and the hints P3.5a moved here.
+  **This row's `owns` line named only the package.** It is corrected above to the import line every
+  view packet adds — the one shared edit `docs/ARCHITECTURE.md` allows, one line, alphabetical — and
+  to the two docs this packet had to correct.
+  **The claim about `app.SavedQuery` was stale and is gone.** PC.2 settled the digits and W0-b left the
+  kernel owning `BindQueryMsg`, `Deps.Saved` and the footer's account of what a digit runs; the palette
+  neither binds a query nor reads one. What the row did not say is what this packet actually owns:
+  filtering on capability, because the registry deliberately does none and letting it would make the
+  registry its own client, and the frecency table, which is the same `(id, count, lastUsed)` data the
+  hints count from.
+  Reachability was already W0-b's: registering under `kernel.PaletteViewID` with `Slot: 0` is the whole
+  of it. `enter` sends `kernel.RunCommand(id)` and nothing else — no `Run` call, no `Pop`, no
+  capability check before running — so a search reaches `Run` with the kernel's live deps and is scoped
+  to the project the session is on now. There is a test for exactly that, because a stale copy searches
+  the whole site and looks like it worked.
+  It registers **no keys**. `RegisterKeys` records a view's resting state and the palette has none: it
+  takes typing from the moment it opens, so `kernel.KeyReporter` answers for each of its states — one
+  with a command to run, one with an issue to open, one with nothing — and a registry entry would
+  never be read. That also leaves `internal/ui/livekeys_test.go`, which is P3.5a's file, correct as it
+  stands.
+  The frecency table is a file of the palette's own under `config.CacheDir()`, beside where
+  `internal/ui/comment` keeps drafts. `Deps.Cache` was the other candidate and cannot hold it:
+  `app.Cache` is `Rows`/`PutRows`/`Forget`/`EachIssue`/`Generation`, so a `(id, count, lastUsed)` table
+  there means widening P3.2's interface, and it is nil exactly when a first run would most want to
+  start learning. `config.toml` was the third and must stay safe to share. A session with nowhere to
+  write ranks in memory for as long as it runs.
+  **Not built here:** the "Switch project" command from the PC.3 note on
+  [#12](https://github.com/varijkapil13/saral/issues/12). It needs a source of project keys — a fetch,
+  or a walk over the cached issues — and a second pane with a frecency table of its own, which is a
+  packet beside this one rather than a corner of it. It is
+  [#87](https://github.com/varijkapil13/saral/issues/87), filed with the three places the project keys
+  could come from and how each behaves on a first run.
+  **There is one fuzzy scorer, and it is `app.Pattern`.** This packet wrote its own because P3.4's
+  ([#86](https://github.com/varijkapil13/saral/pull/86)) did not exist on any commit it could branch
+  from, and `internal/app` must not import `internal/ui`, so neither packet could consume the other.
+  `app.Pattern` is on `main` now, `internal/ui/palette/score.go` and its tests are gone, and
+  [#88](https://github.com/varijkapil13/saral/issues/88) is closed. What stayed here is the arithmetic
+  that is the palette's own and not a scorer's: score the title, the group and the ID, penalise the two
+  that are not on the row, take the best. The penalty is calibrated rather than carried over, because a
+  command ID is dotted — almost any short pattern is a prefix of one, and `app.Pattern` pays a prefix
+  twice what it pays a word start further into a title, so unpenalised the text nobody can see would
+  order the rows they can. One ranking moved: `iss` now offers *My issues* above *Edit this issue*,
+  which is where its title matches rather than where its ID does.
+  **`app.Index` has a consumer, and it is the second half of this list.** P3.4 filed
+  [#85](https://github.com/varijkapil13/saral/issues/85) against itself because nothing constructed
+  one, which left "instant search over cached issues" shipping as no behaviour at all. Anything typed
+  is now ranked against the commands and against every issue on disk, commands first, one cursor
+  through both, `enter` running or opening depending on the row it is over and the footer saying which.
+  No prefix and no second keystroke: `docs/UX.md` asks the palette to be everything and fuzzy, and
+  typing `PROJ-142` matches no command anyway. The rows are honest about being copies — the age of
+  each, badged past the age the cache stops calling an issue current, and *(no title stored)* where a
+  narrow read never asked for one, which PC.1's field mask makes different from an empty title. A nil
+  `Deps.Cache` is a first run, another copy holding the file or an unwritable home: the half is absent,
+  the filter does not offer to search issues in the first place, and the empty state says which of the
+  two it is. Bounded to twenty hits, so a keystroke over a full cache is 1.2 ms of the 16 ms budget at
+  66 allocations.
 - [x] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`, `internal/app/cache.go`, `cmd/saral/main.go`, `internal/ui/kernel/view.go` (the one `Deps` field that carries the cache — nothing else), `internal/ui/list/**` including its `testdata/**`, `internal/arch/imports_test.go`, `docs/{ARCHITECTURE,TESTING,ROADMAP}.md`
   The bbolt dependency and the smallest `internal/store` that keeps it landed first and on their own,
   in [#78](https://github.com/varijkapil13/saral/pull/78), with the `internal/store`

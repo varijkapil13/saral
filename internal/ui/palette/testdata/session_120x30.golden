@@ -1,0 +1,30 @@
+ saral | Commands                                                                          PROJ | example.atlassian.net 
+> what do you want to do?                                                                                               
+------------------------------------------------------------------------------------------------------------ 15 commands
+> Follow the terminal's own colours             Appearance                                                              
+  Turn colour off                               Appearance                                                              
+  Use the dark theme                            Appearance                                                              
+  Use the light theme                           Appearance                                                              
+  Issues                                        Go to                                                                 g1
+  Change this issue's status                    Issue                                                                  t
+  Edit this issue                               Issue                                                                  e
+  Issues I reported                             Search                                                                  
+  My issues                                     Search                                                                  
+  Save this query to a number key               Search                                                                 s
+  Show every row again                          Search                                                                  
+  Show only rows with this row's assignee       Search                                                                  
+  Show only rows with this row's status         Search                                                                  
+  Show only rows with this row's type           Search                                                                  
+  Unassigned issues                             Search                                                                  
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ g1 Issues                                                    ↓ down | ↑ up | enter run it | esc close | ctrl+k commands
