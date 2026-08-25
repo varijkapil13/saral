@@ -1,0 +1,11 @@
+reading the thread
+  short  ↓/j down · ↑/k up · a write a comment · e edit this one · d delete this one
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
+  full   [ctrl+d half page down, ctrl+u half page up, g g oldest, G newest]
+  full   [a write a comment, e edit this one, d delete this one]
+writing a comment
+  short  ctrl+s send · esc put it aside
+  full   [ctrl+s send, esc put it aside]
+confirming a deletion
+  short  y delete it · esc keep it
+  full   [y delete it, esc keep it]

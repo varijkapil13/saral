@@ -29,7 +29,7 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 | First minute | Onboarding writes the profile, then drops you on your own issues. `?` explains the current view only. |
 | First hour | The footer teaches the six keys that matter here. Mouse works, so nothing is blocked on learning. |
 | First week | Frecency: projects, assignees, versions and labels reorder so your usual choices are first. |
-| | Hints: after you reach an action through the palette three times, the status line notes its key. |
+| | Hints: after you reach an action through the palette three times, the status line notes its key. Built in P3.1 ([#12](https://github.com/varijkapil13/saral/issues/12)) rather than with the footer: the count, the call site and the frecency table are one piece of data, and P3.1 already owns it. `kernel.CommandRanMsg{ID, Keys}` is the signal it hangs on. |
 | Ongoing | JQL history with fuzzy recall; saved queries bound to `1`–`9` and kept in the profile. |
 | | Local fuzzy index — typing a key or a few words of a summary finds it with no round trip. |
 | | Session resume: reopening lands exactly where you left, including scroll and filter. |
@@ -37,6 +37,26 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 
 Frecency is a plain local table of `(item, count, lastUsed)` scored `count * decay(lastUsed)`. No
 telemetry leaves the machine, ever.
+
+### What "only the keys that work" costs
+
+Principle 2 is not satisfied by a view registering its keys once. `kernel.RegisterKeys` runs in an
+`init()` and refuses a second call, so what it holds is the view's **resting state** — a list nobody
+is typing into, a thread being read. Half of what a user actually meets is some other state: a filter
+open, an editor over the field list, a deletion waiting for a `y`, an onboarding step with nothing
+behind it. Advertising the resting keys there names strokes that do nothing, which is the failure
+principle 2 describes rather than a smaller version of it.
+
+So a view whose keys move with its state implements `kernel.KeyReporter` and answers for the state it
+is in. `esc` is called *clear filter*, *put it aside*, *do not save yet* and *keep it* in four
+different places, and each of those is the one on screen at the time. A state with nothing of its own
+to offer — a save in flight, a site being asked — says so by advertising nothing, and the footer falls
+back to the globals rather than naming a key that is being refused. `docs/ARCHITECTURE.md` has the
+interface and the generation counter the memoized chrome needs.
+
+The theme is switched from the palette — *use the dark theme*, *follow the terminal's own colours* —
+and the choice is written back into the profile it came from. There is no key for it: every letter
+left is one somebody types into a field.
 
 ## Navigation model
 
@@ -119,7 +139,14 @@ overlay is covering it.
 ## Rendering rules for modern terminals
 
 - **True color when available, 256 and 16 as graceful steps down, and a real no-color mode** driven
-  by `NO_COLOR` and `TERM`.
+  by `NO_COLOR` and `TERM`. **The stepping down is the library's, not ours.** Bubble Tea detects the
+  terminal's colour profile at start-up with `colorprofile` and its renderer downsamples every colour
+  to what the terminal can show, so a theme is written once in true colour and arrives correctly on a
+  16-colour `xterm`. Nothing here quantises a colour, and a packet that adds a mechanism for it is
+  adding a second answer. What *is* ours is the no-colour mode, because that is a decision rather than
+  a capability: `kernel.ThemeModeFromEnv` reads `NO_COLOR` and `TERM`, both beat the configured theme
+  and the runtime switch, and the resulting theme keeps bold, faint and reverse — `NO_COLOR` asks for
+  colour to go away, not for emphasis to.
 - **Never assume a Nerd Font.** Icons come from a glyph set with an ASCII fallback selected by
   config or capability detection; the default set is plain Unicode box-drawing and geometric shapes.
 - **Grapheme-cluster-correct widths.** Emoji, CJK and combining marks must not shift columns. Use a

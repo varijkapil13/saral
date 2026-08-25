@@ -234,7 +234,7 @@ Three registries, all with the same conflict-free property:
 |---|---|---|
 | `RegisterView` | each view package's `register.go` | footer, view stack, `saral <view>` |
 | `RegisterCommand` | any package | command palette (`ctrl+k`) |
-| `RegisterKeys` | each view, scoped to itself | help overlay, footer hints |
+| `RegisterKeys` | each view, scoped to itself | help overlay, footer hints — the view's resting state; `kernel.KeyReporter` is how a view answers for the state it is actually in |
 
 Slots are allocated, not picked: the table in `docs/UX.md` says which view holds which digit, and
 `RegisterView` refuses a second claim on one at startup. A bare digit runs a saved query in a root
@@ -282,6 +282,40 @@ A view holding something unsaved implements `kernel.Blocker`. Going back asks th
 quitting and switching root view ask **every** entry on the stack, because both throw all of it away
 and the entry holding the draft is usually not the top one — the palette is pushed over whatever it
 was opened from and holds nothing itself.
+
+A view whose keys move with its state implements `kernel.KeyReporter`:
+
+```go
+type KeyReporter interface {
+	LiveKeys() (set KeySet, gen int)
+}
+```
+
+`RegisterKeys` is init-time and refuses a second call, so what the registry holds is one set for the
+whole run: the view's resting state, and the whole answer for a view whose keys never move. The footer
+and the `?` overlay ask the focused view first and fall back to the registry, so a static view pays
+nothing. The registry entry stays the thing `internal/ui`'s command sweep holds a palette entry's key
+against, which is why it must not be empty.
+
+Two constraints come with it, and both fail silently:
+
+- **`gen` must change whenever the set does.** The chrome is memoized on a comparable key and a
+  `KeySet` holds slices, so the number is the only thing that can ask for a repaint. Returning the
+  index of the state the set belongs to is enough. A constant one gives a footer that is right on the
+  first frame and stale afterwards — and `capturing` is already in that key, so the states this
+  actually catches are the ones where a view keeps the keyboard on both sides of the change: picking
+  then confirming a number key, typing then confirming a save, one editor pane then another.
+- **The set must be stored, not built.** `chromeFor` asks on every frame. Each view builds one set per
+  state in a package-level `var` at start-up and indexes it; the tests assert `LiveKeys` allocates
+  nothing.
+
+The theme is the kernel's, so switching it is too: `theme.go` registers one palette command per mode,
+`ThemeMsg` rebuilds the styles and every view hears it, and the choice is written back by reading the
+whole config file and changing one field — `Config.Save` writes the profile it is handed and nothing
+else, so building a fresh `Profile` from what is on screen drops the saved queries, the timeline field
+names and the glyph set. The kernel is told the site it is talking to and never which profile was
+named on the command line, so a session whose site is not the active profile's says the choice was not
+saved rather than writing it onto the wrong profile.
 
 Because every registration lives in a file that exactly one packet owns, two agents adding two views
 never touch the same line. This is the single most important structural decision for parallel work.
@@ -389,6 +423,10 @@ Bubble Tea v2's renderer already diffs frames; our job is to not hand it work it
 - **Never style in a loop over all data.** Build `lipgloss` styles once at theme load, not per cell.
 - **No allocation per frame in the steady state.** Reuse row buffers; benchmarks assert `allocs/op`.
 - **Width-aware truncation** with grapheme-cluster awareness, cached per string.
+- **Do not quantise colour.** Bubble Tea detects the terminal's colour profile at start-up and its
+  renderer downsamples true colour to 256 or 16 on the way out, so `internal/ui/kernel/theme.go`
+  writes hex values once and nothing steps them. A no-colour theme is a separate build of the styles
+  rather than a downsample, because it is a decision about what the user asked for.
 
 Budgets and how they are measured live in `docs/PERFORMANCE.md`; CI enforces the binary-size one.
 

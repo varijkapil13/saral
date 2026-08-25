@@ -116,3 +116,21 @@ type KeySet struct {
 
 // IsZero reports whether the set carries no bindings.
 func (k KeySet) IsZero() bool { return len(k.Short) == 0 && len(k.Full) == 0 }
+
+// KeyReporter is the optional interface a view implements when the keys that
+// work in it depend on what it is doing. RegisterKeys is init-time and refuses a
+// second call, so the registry holds one set per view for the whole run: the
+// resting state. A list with its filter open, a comment being written, a
+// transition waiting to be confirmed and an onboarding step all answer
+// differently, and docs/UX.md asks the footer to show only what works right now.
+//
+// Gen must change whenever the set does. The chrome is memoized on a comparable
+// key and a KeySet holds slices, so the number is what tells the footer to
+// repaint; a view that returns a constant one is right on the first frame and
+// stale forever. Returning the index of the state the set belongs to is enough.
+//
+// The set must be stored rather than built: this is called on every frame, and
+// a KeySet assembled per call puts its allocations under every keystroke.
+type KeyReporter interface {
+	LiveKeys() (set KeySet, gen int)
+}

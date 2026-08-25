@@ -1,11 +1,17 @@
 package kernel
 
 import (
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/varijkapil13/saral/internal/config"
 )
 
 func TestParseThemeMode(t *testing.T) {
@@ -112,6 +118,298 @@ func TestGlyphs_ASCIIFallbackIsPlain(t *testing.T) {
 	if GlyphsFor("").Bullet != UnicodeGlyphs().Bullet {
 		t.Error("the default glyph set should be unicode")
 	}
+}
+
+// colourfulEnv puts the environment back to one that allows colour, so that a
+// machine with TERM unset or NO_COLOR exported does not turn a test about
+// switching themes into a test about refusing to.
+func colourfulEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("TERM", "xterm-256color")
+	t.Setenv("NO_COLOR", "")
+}
+
+// writeConfig puts a config file where config.Path will find it and returns the
+// path.
+func writeConfig(t *testing.T, body string) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("SARAL_CONFIG_DIR", dir)
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+const profileWithEverything = `active = "work"
+mouse = true
+
+[profiles.work]
+site   = "example.atlassian.net"
+email  = "you@example.com"
+glyphs = "ascii"
+token  = { env = "JIRA_TOKEN" }
+
+[profiles.work.timeline]
+start = ["Target start"]
+end   = ["Target end"]
+
+[[profiles.work.queries]]
+name = "Blockers"
+jql  = "resolution = EMPTY ORDER BY updated DESC"
+key  = 2
+`
+
+func TestThemeCommands_AreInThePaletteOnePerMode(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	registerThemeCommands()
+
+	want := map[string]bool{"theme.auto": false, "theme.dark": false, "theme.light": false, "theme.no-color": false}
+	for _, cmd := range Commands() {
+		if _, ours := want[cmd.ID]; !ours {
+			continue
+		}
+		want[cmd.ID] = true
+		if cmd.Title == "" || cmd.Run == nil {
+			t.Errorf("%s is registered with nothing to show or nothing to run", cmd.ID)
+		}
+		if len(cmd.Keys) != 0 {
+			t.Errorf("%s teaches keys %v; no view shows a key for the theme, so the palette must not claim one",
+				cmd.ID, cmd.Keys)
+		}
+	}
+	for id, found := range want {
+		if !found {
+			t.Errorf("%s is not registered, so the palette cannot reach it", id)
+		}
+	}
+}
+
+func TestSwitchTheme_RebuildsTheStylesAndKeepsTheGlyphSet(t *testing.T) {
+	colourfulEnv(t)
+	writeConfig(t, profileWithEverything)
+
+	d := Deps{Theme: NewTheme(ThemeNoColor, true, ASCIIGlyphs()), Site: "example.atlassian.net"}
+	msg := firstMsgOfType[ThemeMsg](t, SwitchTheme(d, ThemeLight))
+	switch {
+	case msg.Theme == nil:
+		t.Fatal("no theme came back")
+	case msg.Theme.Mode != ThemeLight:
+		t.Errorf("got mode %v want light", msg.Theme.Mode)
+	case msg.Theme.Dark:
+		t.Error("the light theme reports itself dark")
+	case msg.Theme.Glyphs.Bullet != ASCIIGlyphs().Bullet:
+		t.Error("the glyph set was replaced; it answers a question about the font, not about colour")
+	case !hasColour(msg.Theme.Accent.Render("x")):
+		t.Error("switching away from no-color left the styles colourless")
+	}
+}
+
+func TestSwitchTheme_AsksTheTerminalAgainWhenItIsToldToFollowIt(t *testing.T) {
+	colourfulEnv(t)
+	writeConfig(t, profileWithEverything)
+
+	d := Deps{Theme: NewTheme(ThemeDark, true, UnicodeGlyphs()), Site: "example.atlassian.net"}
+	if !asksBackgroundColour(SwitchTheme(d, ThemeAuto)) {
+		t.Error("auto did not ask the terminal for its background, so it would follow the old answer")
+	}
+	if asksBackgroundColour(SwitchTheme(d, ThemeLight)) {
+		t.Error("an explicit theme asked the terminal for its background, which cannot change it")
+	}
+}
+
+func TestSwitchTheme_RefusesColourWhenTheEnvironmentAlreadySaidNo(t *testing.T) {
+	for name, env := range map[string][2]string{
+		"NO_COLOR is set":         {"NO_COLOR", "1"},
+		"the terminal is dumb":    {"TERM", "dumb"},
+		"there is no TERM at all": {"TERM", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TERM", "xterm-256color")
+			t.Setenv("NO_COLOR", "")
+			t.Setenv(env[0], env[1])
+
+			d := Deps{Theme: NewTheme(ThemeNoColor, true, UnicodeGlyphs())}
+			status := firstMsgOfType[StatusMsg](t, SwitchTheme(d, ThemeDark))
+			if !strings.Contains(status.Text, "no colour") {
+				t.Errorf("unhelpful refusal: %q", status.Text)
+			}
+			if got := collect(SwitchTheme(d, ThemeDark)); len(got) != 1 {
+				t.Errorf("the refusal still did other things: %#v", got)
+			}
+			if _, ok := firstOfType[ThemeMsg](collect(SwitchTheme(d, ThemeNoColor))); !ok {
+				t.Error("no-color was refused in an environment that asked for exactly that")
+			}
+		})
+	}
+}
+
+func TestWriteTheme_ChangesTheThemeAndNothingElseInTheProfile(t *testing.T) {
+	path := writeConfig(t, profileWithEverything)
+
+	if err := writeTheme("example.atlassian.net", ThemeDark); err != nil {
+		t.Fatalf("writeTheme: %v", err)
+	}
+	cfg, err := config.LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := cfg.Get("work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	switch {
+	case got.Theme != "dark":
+		t.Errorf("theme is %q, want dark", got.Theme)
+	case got.Glyphs != "ascii":
+		t.Errorf("the glyph set went from ascii to %q", got.Glyphs)
+	case len(got.Queries) != 1 || got.Queries[0].Slot != 2:
+		t.Errorf("the saved queries did not survive: %+v", got.Queries)
+	case len(got.Timeline.Start) != 1 || len(got.Timeline.End) != 1:
+		t.Errorf("the timeline fields did not survive: %+v", got.Timeline)
+	case got.Token.Env != "JIRA_TOKEN":
+		t.Errorf("the token source changed to %+v", got.Token)
+	case cfg.Active != "work" || !cfg.Mouse:
+		t.Errorf("the file's own settings changed: active=%q mouse=%v", cfg.Active, cfg.Mouse)
+	}
+}
+
+func TestWriteTheme_WritesAutoAsNoThemeAtAll(t *testing.T) {
+	path := writeConfig(t, strings.Replace(profileWithEverything, `glyphs = "ascii"`, `theme = "dark"`, 1))
+
+	if err := writeTheme("example.atlassian.net", ThemeAuto); err != nil {
+		t.Fatalf("writeTheme: %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "theme") {
+		t.Errorf("auto was written as a value rather than as an absence:\n%s", body)
+	}
+}
+
+func TestWriteTheme_RefusesWhenTheSessionIsNotOnTheActiveProfilesSite(t *testing.T) {
+	writeConfig(t, profileWithEverything)
+
+	err := writeTheme("other.atlassian.net", ThemeDark)
+	if err == nil {
+		t.Fatal("the theme was written onto a profile this session is not running as")
+	}
+	if !strings.Contains(err.Error(), "other.atlassian.net") || !strings.Contains(err.Error(), "work") {
+		t.Errorf("the refusal does not say which session and which profile: %v", err)
+	}
+}
+
+func TestSaveTheme_SaysSoWhenThereIsNoProfileToSaveTo(t *testing.T) {
+	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+
+	status := firstMsgOfType[StatusMsg](t, saveTheme("example.atlassian.net", ThemeDark))
+	if !strings.Contains(status.Text, "no profile") {
+		t.Errorf("unhelpful message with nowhere to save: %q", status.Text)
+	}
+	if status.Level != LevelInfo {
+		t.Errorf("a first run with no profile is reported at level %v, which reads as a failure", status.Level)
+	}
+}
+
+func TestRunCommand_ThemeSwitchReachesTheFrameAndTheProfile(t *testing.T) {
+	colourfulEnv(t)
+	path := writeConfig(t, profileWithEverything)
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	registerThemeCommands()
+	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
+
+	d := testDeps()
+	d.Site = "example.atlassian.net"
+	m := newAt(t, d, 120, 30)
+	if hasColour(m.Frame()) {
+		t.Fatal("the test session did not start colourless, so this proves nothing")
+	}
+
+	next, cmd := m.Update(RunCommandMsg{ID: "theme.dark"})
+	m = next.(Model)
+	theme, ok := firstOfType[ThemeMsg](collect(cmd))
+	if !ok {
+		t.Fatal("running the command produced no theme")
+	}
+	next, _ = m.Update(theme)
+	m = next.(Model)
+
+	if m.deps.Theme.Mode != ThemeDark {
+		t.Errorf("the kernel is on %v after switching to dark", m.deps.Theme.Mode)
+	}
+	if !hasColour(m.Frame()) {
+		t.Error("the frame is still colourless after switching to the dark theme")
+	}
+	if saw := ansi.Strip(m.Frame()); !strings.Contains(saw, "board body") {
+		t.Errorf("the view stopped drawing after a theme switch:\n%s", saw)
+	}
+
+	eventually(t, func() bool {
+		cfg, err := config.LoadFile(path)
+		if err != nil {
+			return false
+		}
+		p, err := cfg.Get("work")
+		return err == nil && p.Theme == "dark"
+	})
+}
+
+// collect runs a command and flattens whatever it produced, because tea.Batch
+// hands back a message holding more commands rather than a list of messages.
+func collect(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	switch msg := cmd().(type) {
+	case nil:
+		return nil
+	case tea.BatchMsg:
+		var out []tea.Msg
+		for _, c := range msg {
+			out = append(out, collect(c)...)
+		}
+		return out
+	default:
+		return []tea.Msg{msg}
+	}
+}
+
+func firstOfType[T tea.Msg](msgs []tea.Msg) (T, bool) {
+	for _, msg := range msgs {
+		if want, ok := msg.(T); ok {
+			return want, true
+		}
+	}
+	var zero T
+	return zero, false
+}
+
+func firstMsgOfType[T tea.Msg](t *testing.T, cmd tea.Cmd) T {
+	t.Helper()
+	got, ok := firstOfType[T](collect(cmd))
+	if !ok {
+		var zero T
+		t.Fatalf("no %T came back", zero)
+	}
+	return got
+}
+
+// asksBackgroundColour reports whether the command asks the terminal what colour
+// it is. bubbletea keeps the request message unexported, so it is recognised by
+// comparing against what the request command itself produces.
+func asksBackgroundColour(cmd tea.Cmd) bool {
+	want := tea.RequestBackgroundColor()
+	for _, msg := range collect(cmd) {
+		if msg == want {
+			return true
+		}
+	}
+	return false
 }
 
 // hasColour reports whether a rendered string carries an SGR colour parameter.
