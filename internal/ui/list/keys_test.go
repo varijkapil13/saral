@@ -61,7 +61,7 @@ func TestLiveKeys_FollowWhatTheListIsDoing(t *testing.T) {
 				tc.name, other, gen)
 		}
 		seen[gen] = tc.name
-		if len(set.Short) == 0 {
+		if len(set.Acts) == 0 {
 			t.Errorf("%s advertises nothing at all", tc.name)
 		}
 	}
@@ -78,11 +78,11 @@ func TestLiveKeys_TheFilterKeyChangesWhatIsAdvertised(t *testing.T) {
 	if gen != int(keysFiltering) {
 		t.Fatalf("pressing / left the keys in state %d", gen)
 	}
-	if shortOf(before) == shortOf(after) {
-		t.Errorf("the same keys are advertised with the filter open and closed: %s", shortOf(after))
+	if actsOf(before) == actsOf(after) {
+		t.Errorf("the same keys are advertised with the filter open and closed: %s", actsOf(after))
 	}
-	if !strings.Contains(shortOf(after), "clear filter") {
-		t.Errorf("an open filter does not advertise the key that closes it: %s", shortOf(after))
+	if !strings.Contains(actsOf(after), "clear filter") {
+		t.Errorf("an open filter does not advertise the key that closes it: %s", actsOf(after))
 	}
 }
 
@@ -104,8 +104,8 @@ func newModel(t *testing.T) *Model {
 	return m
 }
 
-func shortOf(set kernel.KeySet) string {
-	return strings.Join(labels(set.Short), " · ")
+func actsOf(set kernel.KeySet) string {
+	return strings.Join(labels(set.Acts), " · ")
 }
 
 func labels(bindings []kernel.Binding) []string {
@@ -117,7 +117,7 @@ func labels(bindings []kernel.Binding) []string {
 }
 
 func writeKeySet(b *strings.Builder, set kernel.KeySet) {
-	fmt.Fprintf(b, "  short  %s\n", shortOf(set))
+	fmt.Fprintf(b, "  acts   %s\n", actsOf(set))
 	for _, column := range set.Full {
 		fmt.Fprintf(b, "  full   [%s]\n", strings.Join(labels(column), ", "))
 	}

@@ -54,7 +54,7 @@ func TestLiveKeys_FollowTheModeTheThreadIsIn(t *testing.T) {
 				tc.name, other, gen)
 		}
 		seen[gen] = tc.name
-		if len(set.Short) == 0 {
+		if len(set.Acts) == 0 {
 			t.Errorf("%s advertises nothing at all", tc.name)
 		}
 	}
@@ -64,9 +64,9 @@ func TestLiveKeys_FollowTheModeTheThreadIsIn(t *testing.T) {
 // appear while the thread is being read, and the other way round.
 func TestLiveKeys_TheModesShareNoAdvertisedKey(t *testing.T) {
 	t.Parallel()
-	read := shortOf(liveSets[browsing])
-	write := shortOf(liveSets[writing])
-	confirm := shortOf(liveSets[confirming])
+	read := actsOf(liveSets[browsing])
+	write := actsOf(liveSets[writing])
+	confirm := actsOf(liveSets[confirming])
 	for _, pair := range [][2]string{{read, write}, {read, confirm}, {write, confirm}} {
 		for _, label := range strings.Split(pair[0], " · ") {
 			if strings.Contains(pair[1], label) {
@@ -85,8 +85,8 @@ func TestLiveKeys_CostNothingToAskFor(t *testing.T) {
 	}
 }
 
-func shortOf(set kernel.KeySet) string {
-	return strings.Join(labels(set.Short), " · ")
+func actsOf(set kernel.KeySet) string {
+	return strings.Join(labels(set.Acts), " · ")
 }
 
 func labels(bindings []kernel.Binding) []string {
@@ -98,7 +98,7 @@ func labels(bindings []kernel.Binding) []string {
 }
 
 func writeKeySet(b *strings.Builder, set kernel.KeySet) {
-	fmt.Fprintf(b, "  short  %s\n", shortOf(set))
+	fmt.Fprintf(b, "  acts   %s\n", actsOf(set))
 	for _, column := range set.Full {
 		fmt.Fprintf(b, "  full   [%s]\n", strings.Join(labels(column), ", "))
 	}

@@ -56,7 +56,12 @@ func defaultEditKeys() editKeyMap {
 // waiting to be answered.
 func (k editKeyMap) keySet() kernel.KeySet {
 	return kernel.KeySet{
-		Short: []kernel.Binding{k.Down, k.Up, k.Act, k.Save},
+		Acts: []kernel.Binding{
+			kernel.Terse(k.Act, "change"),
+			kernel.Terse(k.Clear, "empty"),
+			k.Save,
+			kernel.Terse(k.Discard, "discard"),
+		},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.Act, k.Clear},
 			{k.Prev, k.Next},
@@ -74,22 +79,25 @@ var editLiveSets = func() [5]kernel.KeySet {
 	reread := kernel.Bind([]string{"y"}, "y", "re-read it and put your edits back on top")
 	notYet := kernel.Bind([]string{"esc"}, "esc", "do not save yet")
 	asItIs := kernel.Bind([]string{"esc"}, "esc", "leave it as it is for now")
+	// A prompt keeps its words. The row is over capacity when a view offers a
+	// list of things to do; two answers to one question always fit, and the
+	// wording is the whole point of asking.
 	return [5]kernel.KeySet{
 		stageBrowse: k.keySet(),
 		stageTyping: {
-			Short: []kernel.Binding{k.Accept, k.Cancel},
-			Full:  [][]kernel.Binding{{k.Accept, k.Cancel}},
+			Acts: []kernel.Binding{k.Accept, k.Cancel},
+			Full: [][]kernel.Binding{{k.Accept, k.Cancel}},
 		},
 		stageConfirm: {
-			Short: []kernel.Binding{k.Yes, notYet},
-			Full:  [][]kernel.Binding{{k.Yes, notYet}},
+			Acts: []kernel.Binding{k.Yes, notYet},
+			Full: [][]kernel.Binding{{k.Yes, notYet}},
 		},
 		// A save in flight answers nothing of its own, and the footer then shows
 		// the globals alone, which is the truth.
 		stageSaving: {},
 		stageConflict: {
-			Short: []kernel.Binding{reread, asItIs},
-			Full:  [][]kernel.Binding{{reread, asItIs}},
+			Acts: []kernel.Binding{reread, asItIs},
+			Full: [][]kernel.Binding{{reread, asItIs}},
 		},
 	}
 }()
@@ -127,8 +135,8 @@ func defaultMoveKeys() moveKeyMap {
 // keySet is the resting state: the list of moves this issue can make from here.
 func (k moveKeyMap) keySet() kernel.KeySet {
 	return kernel.KeySet{
-		Short: []kernel.Binding{k.Down, k.Up, k.Act},
-		Full:  [][]kernel.Binding{{k.Down, k.Up, k.Act}},
+		Acts: []kernel.Binding{k.Act},
+		Full: [][]kernel.Binding{{k.Down, k.Up, k.Act}},
 	}
 }
 
@@ -141,12 +149,16 @@ var moveLiveSets = func() [4]kernel.KeySet {
 	return [4]kernel.KeySet{
 		moveList: k.keySet(),
 		moveScreen: {
-			Short: []kernel.Binding{k.Down, k.Up, k.Prev, k.Next, filled},
-			Full:  [][]kernel.Binding{{k.Down, k.Up, k.Prev, k.Next}, {filled, k.Cancel}},
+			Acts: []kernel.Binding{
+				kernel.Terse(k.Prev, "previous"),
+				kernel.Terse(k.Next, "next"),
+				filled,
+			},
+			Full: [][]kernel.Binding{{k.Down, k.Up, k.Prev, k.Next}, {filled, k.Cancel}},
 		},
 		moveConfirm: {
-			Short: []kernel.Binding{k.Yes, k.Cancel},
-			Full:  [][]kernel.Binding{{k.Yes, k.Cancel}},
+			Acts: []kernel.Binding{k.Yes, k.Cancel},
+			Full: [][]kernel.Binding{{k.Yes, k.Cancel}},
 		},
 		moveDoing: {},
 	}

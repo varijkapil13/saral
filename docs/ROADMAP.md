@@ -407,6 +407,27 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   you reach an action through the palette three times, the status line notes its key" needs the
   counter, the call site and the frecency table that packet already owns, and W0-b landed
   `CommandRanMsg{ID, Keys}` as the signal. A second counter in the chrome would be a second answer.
+- [x] **P3.6 — An inventory of what you can do to the thing in front of you** · [#96](https://github.com/varijkapil13/saral/issues/96), [#16](https://github.com/varijkapil13/saral/issues/16) · **owns** `internal/ui/kernel/{view,kernel,keys,external}.go`, `internal/ui/kernel/{chrome_test,kernel_test,mouse_test,footer_test,external_test}.go` and `internal/ui/kernel/testdata/**`, `internal/ui/{keys_test,livekeys_test,footer_test}.go` and `internal/ui/testdata/**`, the `keys*.go` and `testdata/keys.golden` of `internal/ui/{list,issue,comment,form,onboarding,palette}`, `docs/{UX,ARCHITECTURE,ROADMAP}.md`
+  The footer was over capacity and dropped the ways out. Seven reserved view slots cost 81 columns
+  against the 80 this program documents as its minimum, so `? help`, `esc back` and `ctrl+k commands`
+  were past the ellipsis — and at 100 columns the help component overflowed by one column and the
+  kernel threw the whole row away, which a committed golden had encoded as twelve bytes. The row is now
+  three cells — the root you are in, what can be done here, and the globals — given up in a fixed order
+  that never reaches the globals: actions fold into a `+N` from the right, then the root cell goes, then
+  the actions lose their descriptions.
+  `KeySet` gains `Acts`, filled in all seven key scopes with the actions those views already had, terse,
+  most-used first; the motions moved to `?`, which now leads with the actions, spelt out, and lists
+  every key exactly once. **No new keys** — a pure re-partition. Every entry is a zone and a click on one is fed back through the
+  kernel's own key handling as the binding's first stroke, so key, palette and pointer are one
+  implementation.
+  **Two claims the pane made were false, in opposite directions.** `ctrl+f` and `ctrl+b` were
+  advertised on the issue detail pane and bound by nothing — `m.key()` never matched its own
+  PageUp/PageDown, which worked only because the widget happened to bind the same strokes — while the
+  viewport's bare `f`, `b`, `u` and `d` worked and were named nowhere at all. The keymap now says what
+  the widget answers to.
+  Also landed for P3.7–P3.11: `kernel.{Copy,OpenURL,IssueURL}`. An OSC 52 write cannot be confirmed, so
+  `Copy` names what it copied rather than trusting a caller to; and `Deps.Site` may carry a scheme, a
+  port or a context path, so `IssueURL` parses rather than concatenating and refuses what is not a site.
 
 ## First-run corrections · found by running against a site
 

@@ -31,8 +31,8 @@ func defaultKeys() keyMap {
 // keySet is the resting state: a step with a field in it, part way through.
 func (k keyMap) keySet() kernel.KeySet {
 	return kernel.KeySet{
-		Short: []kernel.Binding{k.Continue, k.Back},
-		Full:  [][]kernel.Binding{{k.Continue, k.Back, k.Retry}},
+		Acts: []kernel.Binding{k.Continue, k.Back},
+		Full: [][]kernel.Binding{{k.Continue, k.Back, k.Retry}},
 	}
 }
 
@@ -61,31 +61,33 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// The first step has nowhere to go back to, and back() knows it, so the
 	// footer says so by leaving the key out.
 	sets[keysFirstStep] = kernel.KeySet{
-		Short: []kernel.Binding{k.Continue},
-		Full:  [][]kernel.Binding{{k.Continue}},
+		Acts: []kernel.Binding{k.Continue},
+		Full: [][]kernel.Binding{{k.Continue}},
 	}
 	// A site that could not be reached is the commonest way this flow fails, and
 	// it fails on the one step with nothing behind it.
 	sets[keysFirstStepFailed] = kernel.KeySet{
-		Short: []kernel.Binding{k.Retry, k.Continue},
-		Full:  [][]kernel.Binding{{k.Retry, k.Continue}},
+		Acts: []kernel.Binding{k.Retry, k.Continue},
+		Full: [][]kernel.Binding{{k.Retry, k.Continue}},
 	}
 	sets[keysTyping] = k.keySet()
+	// The arrows are the action on this step rather than a way of moving around
+	// it: they are how the option is picked, on the first screen anybody sees.
 	sets[keysChoosing] = kernel.KeySet{
-		Short: []kernel.Binding{k.Choose, k.Continue, k.Back},
-		Full:  [][]kernel.Binding{{k.Choose, k.Continue, k.Back, k.Retry}},
+		Acts: []kernel.Binding{k.Choose, k.Continue, k.Back},
+		Full: [][]kernel.Binding{{k.Choose, k.Continue, k.Back, k.Retry}},
 	}
 	sets[keysReview] = kernel.KeySet{
-		Short: []kernel.Binding{k.Write, k.Back},
-		Full:  [][]kernel.Binding{{k.Write, k.Back}},
+		Acts: []kernel.Binding{k.Write, k.Back},
+		Full: [][]kernel.Binding{{k.Write, k.Back}},
 	}
 	sets[keysDone] = kernel.KeySet{
-		Short: []kernel.Binding{k.Finish},
-		Full:  [][]kernel.Binding{{k.Finish}},
+		Acts: []kernel.Binding{k.Finish},
+		Full: [][]kernel.Binding{{k.Finish}},
 	}
 	sets[keysFailed] = kernel.KeySet{
-		Short: []kernel.Binding{k.Retry, k.Back},
-		Full:  [][]kernel.Binding{{k.Retry, k.Back, k.Continue}},
+		Acts: []kernel.Binding{k.Retry, k.Back},
+		Full: [][]kernel.Binding{{k.Retry, k.Back, k.Continue}},
 	}
 	// Nothing this view offers works while it is waiting on a site: enter and
 	// shift+tab are both refused until the answer comes back, so the footer

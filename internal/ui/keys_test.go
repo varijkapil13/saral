@@ -76,10 +76,17 @@ func checkKey(t *testing.T, id, owner, k string) {
 
 // labelsOf splits a key set into what it tells the user to press and what it
 // merely answers to. "a c" is one binding whose label is "a".
+//
+// Acts is walked as well as Short and Full, and it is the half that matters: it
+// is the footer, so a command teaching a key nothing in Acts shows is teaching a
+// key the row the user is looking at does not carry.
 func labelsOf(set kernel.KeySet) (shown, matched []string) {
 	each := func(b kernel.Binding) {
 		shown = append(shown, b.Help().Key)
 		matched = append(matched, b.Keys()...)
+	}
+	for _, b := range set.Acts {
+		each(b)
 	}
 	for _, b := range set.Short {
 		each(b)

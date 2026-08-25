@@ -50,11 +50,11 @@ func TestLiveKeys_FollowWhetherThereIsAnythingToRun(t *testing.T) {
 	if emptyGen == gen {
 		t.Errorf("both states report generation %d, so the footer will not repaint between them", gen)
 	}
-	if shortOf(empty) == shortOf(set) {
-		t.Errorf("the same keys are advertised with and without a match: %s", shortOf(empty))
+	if actsOf(empty) == actsOf(set) {
+		t.Errorf("the same keys are advertised with and without a match: %s", actsOf(empty))
 	}
-	if !strings.Contains(shortOf(empty), "close") {
-		t.Errorf("nothing matching leaves no key advertised at all: %s", shortOf(empty))
+	if !strings.Contains(actsOf(empty), "close") {
+		t.Errorf("nothing matching leaves no key advertised at all: %s", actsOf(empty))
 	}
 }
 
@@ -89,7 +89,7 @@ func TestKeys_TheDispatcherAnswersExactlyWhatTheBindingsSay(t *testing.T) {
 }
 
 func writeKeySet(b *strings.Builder, set kernel.KeySet) {
-	fmt.Fprintf(b, "  short  %s\n", shortOf(set))
+	fmt.Fprintf(b, "  acts   %s\n", actsOf(set))
 	for _, column := range set.Full {
 		labels := make([]string, 0, len(column))
 		for _, binding := range column {

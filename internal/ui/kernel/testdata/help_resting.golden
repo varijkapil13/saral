@@ -1,9 +1,9 @@
  saral | Board                                                                                    example.atlassian.net 
-enter open      1-9   saved query           ctrl+k commands                                                             
-/     filter    g 1-9 switch view           ?      help                                                                 
-                esc   back                  q      quit                                                                 
-                r     refresh                                                                                           
-                R     refetch everything                                                                                
+enter open the row under the cursor    ↓/j down    1-9   saved query           ctrl+k commands                          
+/     filter these rows                ↑/k up      g 1-9 switch view           ?      help                              
+                                                   esc   back                  q      quit                              
+                                                   r     refresh                                                        
+                                                   R     refetch everything                                             
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -27,4 +27,4 @@ enter open      1-9   saved query           ctrl+k commands
                                                                                                                         
                                                                                                                         
                                                                                                                         
- g1 Board                                                                                                   ? close help
+ Board  ? close help

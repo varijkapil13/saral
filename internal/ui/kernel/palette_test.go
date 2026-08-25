@@ -165,15 +165,33 @@ func TestPalette_ADraftUnderItStillRefusesAViewSwitch(t *testing.T) {
 	}
 }
 
-func TestSlotGesture_IsSpeltTheWayTheFooterSpellsIt(t *testing.T) {
+// The footer names one destination and spends the rest of its row on actions, so
+// the gesture is now taught by the overlay and by the palette row carrying it.
+// What still has to hold is that the gesture works and reaches the view whose
+// slot it was built from — a command teaching g3 must not open something else.
+func TestSlotGesture_ReachesTheViewWhoseSlotItWasBuiltFrom(t *testing.T) {
 	resetRegistry()
 	t.Cleanup(resetRegistry)
 	RegisterView(spec("board", 3, "", &stubView{id: "board"}))
+	RegisterView(spec("backlog", 4, "", &stubView{id: "backlog"}))
+
+	gesture := SlotGesture(3)
+	if gesture != "g3" {
+		t.Fatalf("SlotGesture(3) is %q; the keymap the kernel runs spells it g3", gesture)
+	}
 
 	m := newAt(t, testDeps(), 120, 30)
-	gesture := SlotGesture(3)
-	if got := lastLine(ansi.Strip(m.Frame())); !strings.Contains(got, gesture+" Board") {
-		t.Errorf("the footer does not show %q, so a command teaching it teaches a key nothing shows:\n%s", gesture, got)
+	m, _ = press(m, "g", "4")
+	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "backlog body") {
+		t.Fatalf("g4 did not reach slot 4:\n%s", got)
+	}
+	m, _ = press(m, gesture[:1], gesture[1:])
+	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "board body") {
+		t.Errorf("%q does not reach the view holding slot 3:\n%s", gesture, got)
+	}
+	m, _ = press(m, "?")
+	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "switch view") {
+		t.Errorf("the overlay does not teach the digits the footer stopped spelling out:\n%s", got)
 	}
 }
 
@@ -209,10 +227,10 @@ func TestFooter_StillOffersThePaletteToAViewThatIsTakingTyping(t *testing.T) {
 
 	m := newAt(t, testDeps(), 140, 30)
 	got := lastLine(ansi.Strip(m.Frame()))
-	if !strings.Contains(got, "commands") {
+	if !strings.HasSuffix(got, "ctrl+k") {
 		t.Errorf("the one global that still works while typing is not offered, so nobody finds it there:\n%s", got)
 	}
-	if strings.Contains(got, "quit") || strings.Contains(got, "help") {
+	if strings.Contains(got, "? ctrl+k") || strings.HasSuffix(got, "q") {
 		t.Errorf("the footer advertises globals the view is swallowing:\n%s", got)
 	}
 }

@@ -1,11 +1,11 @@
 something to run
-  short  ↓ down · ↑ up · enter run it · esc close
+  acts   enter run it · esc close
   full   [↓ down, ↑ up, pgdn page down, pgup page up]
   full   [enter run it, esc close]
 a cached issue under the cursor
-  short  ↓ down · ↑ up · enter open it · esc close
+  acts   enter open it · esc close
   full   [↓ down, ↑ up, pgdn page down, pgup page up]
   full   [enter open it, esc close]
 nothing matches
-  short  esc close
+  acts   esc close
   full   [esc close]

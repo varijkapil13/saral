@@ -326,7 +326,10 @@ func TestTheme_OnlyFollowsTheTerminalWhenTheModeIsAuto(t *testing.T) {
 	}
 }
 
-func TestCapabilities_ARefreshedProbeRebuildsTheFooter(t *testing.T) {
+// The footer names one destination — the root the session is in — so a probe that
+// grants a capability is held to the thing that actually changed: the view can be
+// reached, where before the gesture that reaches it said why it could not.
+func TestCapabilities_ARefreshedProbeMakesItsViewReachable(t *testing.T) {
 	resetRegistry()
 	t.Cleanup(resetRegistry)
 	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
@@ -335,34 +338,44 @@ func TestCapabilities_ARefreshedProbeRebuildsTheFooter(t *testing.T) {
 	d := testDeps()
 	d.Caps.Plans = jira.Capability{Reason: "no"}
 	m := newAt(t, d, 140, 30)
-	if strings.Contains(ansi.Strip(m.Frame()), "Plans") {
-		t.Fatal("Plans should start hidden")
+	m, _ = press(m, "g", "2")
+	if got := ansi.Strip(m.Frame()); strings.Contains(got, "plans body") {
+		t.Fatalf("Plans opened without the capability:\n%s", got)
 	}
 
-	caps := fullCaps()
-	next, _ := m.Update(CapabilitiesMsg{Caps: caps})
-	if !strings.Contains(ansi.Strip(next.(Model).Frame()), "Plans") {
-		t.Error("a granted capability did not bring its view back")
+	next, _ := m.Update(CapabilitiesMsg{Caps: fullCaps()})
+	m, _ = press(next.(Model), "g", "2")
+	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "plans body") {
+		t.Errorf("a granted capability did not bring its view back:\n%s", got)
 	}
 }
 
-func TestMouse_ClickingAFooterSlotSwitchesView(t *testing.T) {
+// The root cell is where esc lands, and clicking it is the same gesture: the
+// footer says which root a pushed view came from, so pointing at it goes back
+// there rather than nowhere.
+func TestMouse_ClickingTheRootCellGoesBackToTheRoot(t *testing.T) {
 	resetRegistry()
 	t.Cleanup(resetRegistry)
 	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
-	RegisterView(spec("backlog", 2, "", &stubView{id: "backlog"}))
 
 	m := newAt(t, testDeps(), 120, 30, WithMouse(true))
-	_ = m.Frame() // registering the zones is a side effect of drawing them
+	next, _ := m.Update(PushMsg{ID: "detail", Title: "PROJ-1", View: &stubView{id: "detail"}})
+	m = next.(Model)
+	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "detail body") {
+		t.Fatalf("the pushed view is not on top:\n%s", got)
+	}
+	if got := lastLine(ansi.Strip(m.Frame())); !strings.Contains(got, "Board") {
+		t.Fatalf("the footer does not name the root a click would go back to:\n%s", got)
+	}
 
 	prefix := m.zonePrefix
-	eventually(t, func() bool { return !m.deps.Zones.Get(prefix + "slot:backlog").IsZero() })
+	eventually(t, func() bool { return !m.deps.Zones.Get(prefix + rootZone).IsZero() })
 
-	info := m.deps.Zones.Get(prefix + "slot:backlog")
+	info := m.deps.Zones.Get(prefix + rootZone)
 	click := tea.MouseClickMsg{X: info.StartX + 1, Y: info.StartY, Button: tea.MouseLeft}
-	next, _ := m.Update(click)
-	if got := ansi.Strip(next.(Model).Frame()); !strings.Contains(got, "backlog body") {
-		t.Errorf("clicking the footer did not switch view:\n%s", got)
+	next, _ = m.Update(click)
+	if got := ansi.Strip(next.(Model).Frame()); !strings.Contains(got, "board body") {
+		t.Errorf("clicking the root cell did not come back to the root:\n%s", got)
 	}
 }
 
@@ -626,7 +639,7 @@ func TestFooter_DoesNotAdvertiseThePaletteWhenItIsNotInTheBuild(t *testing.T) {
 	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
 
 	m := newAt(t, testDeps(), 140, 30)
-	if got := lastLine(ansi.Strip(m.Frame())); strings.Contains(got, "commands") {
+	if got := lastLine(ansi.Strip(m.Frame())); strings.Contains(got, "ctrl+k") {
 		t.Errorf("the palette is advertised but not registered:\n%s", got)
 	}
 
@@ -634,7 +647,7 @@ func TestFooter_DoesNotAdvertiseThePaletteWhenItIsNotInTheBuild(t *testing.T) {
 	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
 	RegisterView(spec(PaletteViewID, 0, "", &stubView{id: PaletteViewID}))
 	m = newAt(t, testDeps(), 140, 30)
-	if got := lastLine(ansi.Strip(m.Frame())); !strings.Contains(got, "commands") {
+	if got := lastLine(ansi.Strip(m.Frame())); !strings.Contains(got, "ctrl+k") {
 		t.Errorf("the palette is registered but not advertised:\n%s", got)
 	}
 }
@@ -778,7 +791,7 @@ func TestFooter_SaysNothingAboutGlobalsAViewIsSwallowing(t *testing.T) {
 	RegisterKeys("board", KeySet{Short: []Binding{Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter")}})
 
 	m := newAt(t, testDeps(), 140, 30)
-	if got := lastLine(ansi.Strip(m.Frame())); !strings.Contains(got, "quit") {
+	if got := lastLine(ansi.Strip(m.Frame())); !strings.HasSuffix(got, "? q") {
 		t.Fatalf("the globals should show while nothing is capturing:\n%s", got)
 	}
 
@@ -787,7 +800,7 @@ func TestFooter_SaysNothingAboutGlobalsAViewIsSwallowing(t *testing.T) {
 	if !strings.Contains(got, "clear filter") {
 		t.Errorf("the view's own keys vanished:\n%s", got)
 	}
-	if strings.Contains(got, "quit") || strings.Contains(got, "help") {
+	if strings.Contains(got, "? ") || strings.HasSuffix(got, "q") {
 		t.Errorf("the footer advertises globals the view is swallowing:\n%s", got)
 	}
 }

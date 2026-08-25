@@ -28,9 +28,10 @@ type ViewSpec struct {
 	// ID is the view's stable name. It is what `saral <id>` opens and what
 	// RegisterKeys scopes keys to.
 	ID string
-	// Title is the footer label.
+	// Title names the view in the header, and in the footer when it is the root
+	// the stack sits on.
 	Title string
-	// Slot is the footer position, 1-9, reached with g and the digit. Zero means
+	// Slot is the digit g reaches this view with, 1-9. Zero means
 	// the view is reachable only by being pushed or opened by name. The
 	// allocation is written down in docs/UX.md; the registry rejects a duplicate.
 	Slot int
@@ -95,7 +96,11 @@ type Deps struct {
 	// has nowhere to keep one. Every view has to draw without it: a first run has
 	// nothing on disk, and another copy of Saral may be holding the file.
 	Cache app.Cache
-	// Site is the host this session is talking to, for display only.
+	// Site is what the profile calls the site this session is talking to. It is
+	// drawn in the header and it is what IssueURL builds a browse link from, so
+	// it is not display-only — but nothing after onboarding checks its shape, so
+	// it may carry a scheme, a port or a context path and anything reading it has
+	// to cope with all three rather than concatenating.
 	Site string
 	// Now is the clock. Tests inject a fixed one.
 	Now func() time.Time
@@ -107,15 +112,32 @@ type Deps struct {
 	SaveQueries func(app.SavedQueries) error
 }
 
-// KeySet is a view's keys, scoped to itself. Short is the footer hint line, in
-// order; Full is the help overlay, one inner slice per column.
+// KeySet is a view's keys, scoped to itself.
+//
+// Acts is the inventory of what can be done to the thing on screen, most-used
+// first, and it is the footer's middle cell. Full is the help overlay, one inner
+// slice per column, and it is where the motions and the whole sentence live.
+//
+// The two are not the same list written twice. The footer is one row shared with
+// the root cell and the globals, so a label there is two or three words — "edit",
+// not "edit fields" — and it names an action rather than a way of moving around.
+// The overlay has the room to say what a key really does, and it leads with Acts
+// so that what a user came to do is above how to scroll.
+//
+// Short is the one-line form bubbles/help renders, and the footer falls back to
+// it for a set that names no Acts. Every view in this build names Acts; the
+// fallback is what keeps a key set that has not been partitioned yet from
+// drawing an empty footer.
 type KeySet struct {
+	Acts  []Binding
 	Short []Binding
 	Full  [][]Binding
 }
 
 // IsZero reports whether the set carries no bindings.
-func (k KeySet) IsZero() bool { return len(k.Short) == 0 && len(k.Full) == 0 }
+func (k KeySet) IsZero() bool {
+	return len(k.Acts) == 0 && len(k.Short) == 0 && len(k.Full) == 0
+}
 
 // KeyReporter is the optional interface a view implements when the keys that
 // work in it depend on what it is doing. RegisterKeys is init-time and refuses a

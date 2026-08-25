@@ -1,0 +1,16 @@
+comment
+ Issues  a write  e edit  d delete                                                      ? ctrl+k esc
+form
+ Issues  enter use this issue type                                                      ? ctrl+k esc
+issue
+ Issues  e edit  t status  c comment                                                    ? ctrl+k esc
+issue.edit
+ Issues  enter change  del empty  ctrl+s save  X discard                                ? ctrl+k esc
+issue.move
+ Issues  enter choose                                                                   ? ctrl+k esc
+list
+ Issues  enter open  / filter  a all  e search  s save                                    ? ctrl+k q
+onboarding
+ Issues  enter continue                                                                       ctrl+k
+palette
+ Issues  enter run it  esc close                                                              ctrl+k

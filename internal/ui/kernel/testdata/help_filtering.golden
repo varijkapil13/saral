@@ -27,4 +27,4 @@ esc   clear filter    g 1-9 switch view           ?      help
                                                                                                                         
                                                                                                                         
                                                                                                                         
- g1 Board                                                                                                   ? close help
+ Board  ? close help

@@ -1,22 +1,22 @@
 browsing
-  short  ↓/j down · ↑/k up · enter open · / filter
+  acts   enter open · / filter · a all · e search · s save
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
   full   [enter open, / filter, a all issues, e edit this search, s save this query to a key]
 a filter kept on the rows
-  short  ↓/j down · ↑/k up · enter open · ctrl+g clear filter
+  acts   enter open · / filter · ctrl+g clear · a all · e search · s save
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
   full   [enter open, / filter, ctrl+g clear filter, a all issues, e edit this search, s save this query to a key]
 filter open
-  short  enter keep filter · esc clear filter
+  acts   enter keep filter · esc clear filter
   full   [enter keep filter, esc clear filter]
 picking the number key
-  short  1-9 the key to bind it to · esc leave it alone
+  acts   1-9 the key to bind it to · esc leave it alone
   full   [1-9 the key to bind it to, esc leave it alone]
 confirming a number key that is taken
-  short  y take the key · esc leave it alone
+  acts   y take the key · esc leave it alone
   full   [y take the key, esc leave it alone]
 editing the search on screen
-  short  enter run this search · esc keep the one on screen
+  acts   enter run this search · esc keep the one on screen
   full   [enter run this search, esc keep the one on screen]

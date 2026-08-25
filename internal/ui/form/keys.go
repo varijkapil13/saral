@@ -62,7 +62,12 @@ func defaultKeys() keyMap {
 // cannot go stale.
 func (k keyMap) keySet() kernel.KeySet {
 	return kernel.KeySet{
-		Short: []kernel.Binding{k.Down, k.Up, k.Edit, k.Submit},
+		Acts: []kernel.Binding{
+			kernel.Terse(k.Edit, "edit"),
+			kernel.Terse(k.Clear, "empty"),
+			kernel.Terse(k.Submit, "create"),
+			kernel.Terse(k.Retype, "type"),
+		},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp, k.Top, k.Bottom},
 			{k.Edit, k.Clear, k.Submit, k.Retype},
@@ -88,22 +93,26 @@ const (
 var liveSets = func() [keyStates]kernel.KeySet {
 	k := defaultKeys()
 	var sets [keyStates]kernel.KeySet
+	// The editors keep their keys terse for the same reason the field list does:
+	// "close the editor, keeping what is typed" is forty-three columns, and a row
+	// that gives that up gives up the way out of the editor with it.
+	keepAndClose := kernel.Terse(k.Done, "keep and close")
 	sets[keysTypes] = kernel.KeySet{
-		Short: []kernel.Binding{k.Down, k.Up, k.Choose},
-		Full:  [][]kernel.Binding{{k.Down, k.Up, k.Top, k.Bottom, k.Choose}},
+		Acts: []kernel.Binding{k.Choose},
+		Full: [][]kernel.Binding{{k.Down, k.Up, k.Top, k.Bottom, k.Choose}},
 	}
 	sets[keysFields] = k.keySet()
 	sets[keysText] = kernel.KeySet{
-		Short: []kernel.Binding{k.Accept, k.Done},
-		Full:  [][]kernel.Binding{{k.Accept, k.Done}},
+		Acts: []kernel.Binding{kernel.Terse(k.Accept, "take it"), keepAndClose},
+		Full: [][]kernel.Binding{{k.Accept, k.Done}},
 	}
 	sets[keysDoc] = kernel.KeySet{
-		Short: []kernel.Binding{k.DocDone, k.Done},
-		Full:  [][]kernel.Binding{{k.DocDone, k.Done}},
+		Acts: []kernel.Binding{kernel.Terse(k.DocDone, "finish"), keepAndClose},
+		Full: [][]kernel.Binding{{k.DocDone, k.Done}},
 	}
 	sets[keysChoosing] = kernel.KeySet{
-		Short: []kernel.Binding{k.Next, k.Prev, k.Toggle, k.Accept, k.Done},
-		Full:  [][]kernel.Binding{{k.Next, k.Prev, k.PageDown, k.PageUp}, {k.Toggle, k.Accept, k.Done}},
+		Acts: []kernel.Binding{kernel.Terse(k.Toggle, "pick"), kernel.Terse(k.Accept, "take it"), keepAndClose},
+		Full: [][]kernel.Binding{{k.Next, k.Prev, k.PageDown, k.PageUp}, {k.Toggle, k.Accept, k.Done}},
 	}
 	return sets
 }()

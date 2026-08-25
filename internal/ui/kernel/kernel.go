@@ -153,7 +153,7 @@ func WithSize(w, h int) Option {
 	return func(m *Model) { m.width, m.height = w, h }
 }
 
-// WithInitialView opens a specific view rather than the first footer slot.
+// WithInitialView opens a specific view rather than the first allocated slot.
 func WithInitialView(id string) Option {
 	return func(m *Model) { m.initialView = id }
 }
@@ -426,20 +426,55 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // forwards them: nothing is reporting, so nothing arrives, and a view handed one
 // anyway looks its zones up in a manager that is disabled and misses.
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if click, ok := msg.(tea.MouseClickMsg); ok && m.mouse && click.Button == tea.MouseLeft {
+		if next, cmd, hit := m.clickFooter(click); hit {
+			return next, cmd
+		}
+	}
 	if m.showHelp {
 		return m, nil
 	}
-	if click, ok := msg.(tea.MouseClickMsg); ok && m.mouse && click.Button == tea.MouseLeft {
-		for _, spec := range m.roots {
-			if spec.Slot == 0 || !m.available(spec) {
-				continue
-			}
-			if m.deps.Zones.Get(m.zonePrefix + "slot:" + spec.ID).InBounds(click) {
-				return m.open(spec.ID)
-			}
+	return m.forwardTop(msg)
+}
+
+// clickFooter resolves a click on the chrome. An action is delivered as the key
+// it advertises rather than as a second way of doing it, which is the only way
+// docs/UX.md's three routes to an action stay one implementation.
+//
+// While the overlay is up the row offers one action — the key that closes it — and
+// the other two cells are left alone: switching root view under an overlay would
+// leave it covering a view nobody asked to see.
+func (m Model) clickFooter(click tea.MouseClickMsg) (tea.Model, tea.Cmd, bool) {
+	if len(m.stack) == 0 {
+		return m, nil, false
+	}
+	if !m.showHelp {
+		if m.deps.Zones.Get(m.zonePrefix + rootZone).InBounds(click) {
+			return withHit(m.open(m.stack[0].spec.ID))
+		}
+		if m.deps.Zones.Get(m.zonePrefix + overflowZone).InBounds(click) {
+			// The overlay is where the actions that did not fit are listed.
+			m.showHelp = true
+			return m, m.resizeAll(), true
 		}
 	}
-	return m.forwardTop(msg)
+	// An action that is not on the row has no zone in the frame just scanned, so
+	// the lookup misses and the click falls through to the view.
+	for _, b := range m.footerActs() {
+		if !m.deps.Zones.Get(m.zonePrefix + actZone + b.Help().Key).InBounds(click) {
+			continue
+		}
+		press, ok := Stroke(b)
+		if !ok {
+			return m, nil, true
+		}
+		return withHit(m.handleKey(press))
+	}
+	return m, nil, false
+}
+
+func withHit(model tea.Model, cmd tea.Cmd) (tea.Model, tea.Cmd, bool) {
+	return model, cmd, true
 }
 
 // capturing reports whether the focused view is taking typing right now.
@@ -1116,79 +1151,248 @@ func oneLine(s string, width int, ellipsis string) string {
 	return ansi.Truncate(s, width, ellipsis)
 }
 
-// footer draws the view slots and the hints for the keys that work right now.
-// Both come from the registries, so neither can drift from what is real.
-func (m Model) footer() string {
-	t := m.deps.Theme
-	slots := make([]string, 0, len(m.roots))
-	for _, spec := range m.roots {
-		if spec.Slot == 0 || !m.available(spec) {
-			continue
-		}
-		style := t.SlotOff
-		if len(m.stack) > 0 && m.stack[0].spec.ID == spec.ID {
-			style = t.SlotOn
-		}
-		label := slotGesture(m.keys, spec.Slot) + " " + spec.Title
-		slots = append(slots, m.deps.Zones.Mark(m.zonePrefix+"slot:"+spec.ID, style.Render(label)))
-	}
-	left := strings.Join(slots, "")
+// footerSep separates two entries in the action cell. The root cell carries its
+// own padding, so whatever follows it takes one space rather than two.
+const footerSep = "  "
 
-	hints := m.hintLine(m.width - lipgloss.Width(left) - 1)
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(hints)
-	if gap < 1 {
-		gap = 1
-		hints = ""
+// The zones the footer mints, under the kernel's own prefix. A click on an action
+// is delivered as the key that action advertises, so the key, the palette and the
+// pointer stay one implementation of the same thing.
+const (
+	rootZone     = "root"
+	actZone      = "act:"
+	overflowZone = "overflow"
+)
+
+// footerLevel is one rung of the ladder the row climbs down when it will not
+// fit: whether the root cell is still drawn, and whether the actions still carry
+// their descriptions.
+type footerLevel struct{ root, terse bool }
+
+// footerLevels is the order things are given up in. Actions fold into a +N at
+// every rung; the root cell goes before the descriptions do, because a row of
+// bare keys with nothing saying where you are is harder to read than a shorter
+// list of named ones. The globals are not on this ladder.
+var footerLevels = [3]footerLevel{{root: true}, {}, {terse: true}}
+
+// footer draws one row in three cells: the root this session is in, what can be
+// done to whatever is in front of you, and the globals.
+//
+// Only the globals are guaranteed a place, and the order the rest are given up in
+// is footerLevels. The inventory a view offers outgrows eighty columns, which is
+// the width docs/UX.md supports, so something has to go; the way out is not it.
+// There is no second row at any width either: the constraint is width rather than
+// height, so another row would be truncated the same way while costing a view one
+// line in thirteen.
+func (m Model) footer() string {
+	globals, globalsW := m.globalCell()
+	acts := m.footerActs()
+	root, rootW := m.rootCell()
+
+	room := m.width - globalsW
+	if globalsW > 0 {
+		room--
 	}
-	return t.Footer.MaxWidth(m.width).Render(left + strings.Repeat(" ", gap) + hints)
+	left, leftW := "", 0
+	for rung, level := range footerLevels {
+		labels := footerLabels(acts, level.terse)
+		// A rung that cannot name a single action has nothing to show for
+		// itself, so the row drops the root cell and then the descriptions
+		// instead. The last rung takes what it gets: at eighty columns that is
+		// unreachable, and a row that cannot be drawn is worse than a count.
+		least := min(1, len(labels))
+		if rung == len(footerLevels)-1 {
+			least = 0
+		}
+		cell, cellW := "", 0
+		if level.root {
+			cell, cellW = root, rootW
+		}
+		fitted := false
+		for named := len(labels); named >= least; named-- {
+			left, leftW = m.drawLeft(cell, cellW, labels, named)
+			if leftW <= room {
+				fitted = true
+				break
+			}
+		}
+		if fitted {
+			break
+		}
+	}
+	line := left
+	if globals != "" {
+		gap := m.width - leftW - globalsW
+		if gap < 1 {
+			gap = 1
+		}
+		line += strings.Repeat(" ", gap) + globals
+	}
+	return m.deps.Theme.Footer.MaxWidth(m.width).Render(line)
 }
 
-// SlotGesture is the gesture that reaches a footer slot, spelt the way the
-// footer spells it. A registrar naming the key for a command that opens a view
-// derives it from the view's slot with this, so that moving a view between slots
-// cannot leave a command teaching the key of a different one.
+// globalCell is the way out, and nothing takes it away. It is bare keys: there is
+// no honest version of this row with room for "help", "commands" and "back" as
+// well, and those sentences are one keystroke away in the overlay ? opens.
+func (m Model) globalCell() (cell string, width int) {
+	// The overlay swallows every global but the one that closes it, and a latched
+	// gesture holds all of them until it is finished or thrown away. Both say so
+	// in the action cell instead.
+	if m.showHelp || m.prefixSet {
+		return "", 0
+	}
+	_, palette := LookupView(PaletteViewID)
+	capturing := m.capturing()
+	keys := make([]string, 0, 3)
+	if !capturing {
+		keys = append(keys, m.keys.Help.Help().Key)
+	}
+	if palette {
+		keys = append(keys, m.keys.Palette.Help().Key)
+	}
+	switch {
+	case capturing:
+		// A view with the keyboard swallows the rest, and docs/UX.md asks the
+		// footer to show only what works right now — which cuts both ways.
+	case len(m.stack) > 1:
+		keys = append(keys, m.keys.Back.Help().Key)
+	default:
+		keys = append(keys, m.keys.Quit.Help().Key)
+	}
+	if len(keys) == 0 {
+		return "", 0
+	}
+	plain := strings.Join(keys, " ")
+	return m.deps.Theme.HintKey.Render(plain), ansi.StringWidth(plain)
+}
+
+// footerActs is the inventory the middle cell names. Two of the kernel's own
+// states answer for themselves, because both have taken the view's keys away;
+// everything else is what the focused view says works right now.
+func (m Model) footerActs() []Binding {
+	switch {
+	case m.showHelp:
+		return []Binding{Bind([]string{"?", "esc", "q"}, "?", "close help")}
+	case m.prefixSet:
+		return []Binding{
+			Bind(m.keys.Slot.Keys(), "1-9", "switch view"),
+			Bind(m.keys.Back.Keys(), "esc", "cancel"),
+		}
+	}
+	set, _ := m.viewKeys()
+	acts := set.Acts
+	if len(acts) == 0 {
+		acts = set.Short
+	}
+	// The digits are the one action a root view has that no view registered: they
+	// run the profile's own searches. A view taking typing is spending them.
+	if bound := m.boundQueries(); len(bound) > 0 && !m.capturing() {
+		return append([]Binding{savedHint(bound)}, acts...)
+	}
+	return acts
+}
+
+// rootCell names the root the session is in: where esc lands, and what a click
+// here goes back to. The header already says what is on top of it, so this is
+// orientation rather than a second copy of that title.
+func (m Model) rootCell() (cell string, width int) {
+	if len(m.stack) == 0 {
+		return "", 0
+	}
+	title := m.stack[0].spec.Title
+	if title == "" {
+		title = m.stack[0].spec.ID
+	}
+	rendered := m.deps.Theme.SlotOn.Render(title)
+	return m.deps.Zones.Mark(m.zonePrefix+rootZone, rendered), lipgloss.Width(rendered)
+}
+
+// footerLabel is one action as the row spells it: the key, what it does unless
+// the row has given descriptions up, and the zone a click resolves through. A
+// terse row keeps the key and drops what it does, which is the last thing given
+// up before a +N — a key with no name is still a key somebody can press and then
+// find in the overlay.
+type footerLabel struct{ key, desc, zone string }
+
+func footerLabels(acts []Binding, terse bool) []footerLabel {
+	out := make([]footerLabel, 0, len(acts))
+	for _, b := range acts {
+		if !b.Enabled() {
+			continue
+		}
+		h := b.Help()
+		label := footerLabel{key: h.Key, desc: h.Desc, zone: actZone + h.Key}
+		if terse {
+			label.desc = ""
+		}
+		out = append(out, label)
+	}
+	return out
+}
+
+func (l footerLabel) width() int {
+	if l.desc == "" {
+		return ansi.StringWidth(l.key)
+	}
+	return ansi.StringWidth(l.key) + 1 + ansi.StringWidth(l.desc)
+}
+
+// drawLeft renders the root cell and the first named actions, folding the rest
+// into a +N the overlay then lists in full. Measuring and drawing are one walk,
+// so the width the caller checks is the width of the row it gets.
+func (m Model) drawLeft(root string, rootW int, labels []footerLabel, named int) (row string, width int) {
+	t := m.deps.Theme
+	var out strings.Builder
+	out.WriteString(root)
+	width, drawn := rootW, 0
+	lead := func() (string, int) {
+		switch {
+		case drawn > 0:
+			return footerSep, len(footerSep)
+		case width > 0:
+			return " ", 1
+		default:
+			return "", 0
+		}
+	}
+	for _, label := range labels[:named] {
+		sep, sepW := lead()
+		entry := t.HintKey.Render(label.key)
+		if label.desc != "" {
+			entry += " " + t.HintDesc.Render(label.desc)
+		}
+		out.WriteString(sep)
+		out.WriteString(m.deps.Zones.Mark(m.zonePrefix+label.zone, entry))
+		width += sepW + label.width()
+		drawn++
+	}
+	if rest := len(labels) - named; rest > 0 {
+		sep, sepW := lead()
+		count := "+" + strconv.Itoa(rest)
+		out.WriteString(sep)
+		out.WriteString(m.deps.Zones.Mark(m.zonePrefix+overflowZone, t.HintKey.Render(count)))
+		width += sepW + len(count)
+	}
+	return out.String(), width
+}
+
+// SlotGesture is the gesture that reaches a footer slot, built from the keymap
+// the kernel runs rather than written down. A registrar naming the key for a
+// command that opens a view derives it from the view's slot with this, so that
+// moving a view between slots cannot leave a command teaching the key of a
+// different one.
+//
+// The footer no longer spells it out. One row cannot hold nine destinations and
+// the actions as well, and the destinations are the half a user needs least
+// often, so the digits are taught by the ? overlay and by the palette rows that
+// carry them.
 //
 // It answers for the default keymap, which is the only one an init() can know
-// about; the footer asks for the keymap the session is actually running.
+// about.
 func SlotGesture(slot int) string { return slotGesture(DefaultGlobalKeys(), slot) }
 
 func slotGesture(g GlobalKeys, slot int) string {
 	return g.Go.Keys()[0] + strconv.Itoa(slot)
-}
-
-// hintLine shows only the keys that work right now, in the space the footer
-// slots left over. The help component truncates with its own ellipsis rather
-// than the line wrapping.
-func (m Model) hintLine(width int) string {
-	if width < 8 {
-		return ""
-	}
-	h := m.deps.Theme.HelpModel
-	h.ShowAll = false
-	h.SetWidth(width)
-	if m.showHelp {
-		return h.View(keyMap{short: []Binding{Bind([]string{"?", "esc", "q"}, "?", "close help")}})
-	}
-	if m.prefixSet {
-		// The globals are unreachable until the gesture finishes, so the line
-		// shows what can finish it rather than what it has taken away.
-		return h.View(keyMap{short: []Binding{
-			Bind(m.keys.Slot.Keys(), "1-9", "switch view"),
-			Bind(m.keys.Back.Keys(), "esc", "cancel"),
-		}})
-	}
-	set, _ := m.viewKeys()
-	if m.capturing() {
-		// The globals are unreachable while the view has the keyboard, bar the
-		// one key it is not allowed to swallow, and docs/UX.md asks the footer to
-		// show only what works right now — which cuts both ways.
-		short := set.Short
-		if _, ok := LookupView(PaletteViewID); ok {
-			short = append(append([]Binding(nil), short...), m.keys.Palette)
-		}
-		return h.View(keyMap{short: short})
-	}
-	return h.View(mergeKeys(set, m.liveGlobals()))
 }
 
 // liveGlobals is the global keymap with the entries that would do nothing right

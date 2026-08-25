@@ -270,8 +270,8 @@ func TestFilter_IsNamedUnderTheRowsAndClearedFromBrowsing(t *testing.T) {
 	if gen != int(keysNarrowed) {
 		t.Errorf("a kept filter reports key state %d, want %d", gen, keysNarrowed)
 	}
-	if !strings.Contains(shortOf(set), "clear filter") {
-		t.Errorf("the footer of a narrowed list does not offer the key that widens it: %s", shortOf(set))
+	if !strings.Contains(actsOf(set), "ctrl+g clear") {
+		t.Errorf("the footer of a narrowed list does not offer the key that widens it: %s", actsOf(set))
 	}
 
 	dr.key("ctrl+g")
@@ -280,8 +280,8 @@ func TestFilter_IsNamedUnderTheRowsAndClearedFromBrowsing(t *testing.T) {
 		t.Errorf("%d of %d rows came back", got, len(dr.m.issues))
 	}
 	mustNotContain(t, dr.view(), "only rows matching")
-	if state, _ := dr.m.LiveKeys(); shortOf(state) != shortOf(liveSets[keysBrowsing]) {
-		t.Errorf("the footer still advertises a filter there is none of: %s", shortOf(state))
+	if state, _ := dr.m.LiveKeys(); actsOf(state) != actsOf(liveSets[keysBrowsing]) {
+		t.Errorf("the footer still advertises a filter there is none of: %s", actsOf(state))
 	}
 }
 
