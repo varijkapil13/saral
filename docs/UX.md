@@ -48,7 +48,7 @@ switch view            g then 1–9     from anywhere, including a pushed view
 push                   enter          open the thing under the cursor
 pop                    esc            back, never quits from a pushed view
 quit                   q / ctrl+c     only from a root view, and only when no draft is open
-palette                ctrl+k         everything, fuzzy
+palette                ctrl+k         everything, fuzzy; opens over what you were in, esc returns
 search in view         /              filter rows live
 save this search       s              bind the query on screen to a number key
 refresh                r / R          current view / purge and refetch
@@ -109,7 +109,9 @@ arithmetic (see `docs/ARCHITECTURE.md`).
 | right-click a row | context menu of the actions valid for it |
 
 Mouse mode must be disableable (`mouse = false` in config) for people who rely on terminal text
-selection.
+selection. Off means off all the way down: the zone manager is disabled with it, so a view's markers
+are never written into the frame in the first place and there is nothing left for a selection to
+pick up. A click never reaches the view while the help overlay is covering it.
 
 ## Rendering rules for modern terminals
 

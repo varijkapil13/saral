@@ -70,6 +70,8 @@ func msgName(msg tea.Msg) string {
 		return "saved:" + strconv.Itoa(m.Queries.Len())
 	case tea.KeyPressMsg:
 		return "key:" + m.String()
+	case tea.MouseClickMsg:
+		return "click"
 	default:
 		return "other"
 	}

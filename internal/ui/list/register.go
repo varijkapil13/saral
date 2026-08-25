@@ -21,12 +21,14 @@ func init() {
 		ID:    "issues.open",
 		Title: "Issues",
 		Group: "Go to",
+		Keys:  []string{"g1"},
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:    "issues.save-query",
 		Title: "Save this query to a number key",
 		Group: "Search",
+		Keys:  defaultKeys().Save.Keys(),
 		Run: func(kernel.Deps) tea.Cmd {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SaveQueryMsg{}))
 		},

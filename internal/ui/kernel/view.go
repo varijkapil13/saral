@@ -56,6 +56,12 @@ type Command struct {
 	Group string
 	// Requires names the capability the command needs, if any.
 	Requires jira.CapabilityKey
+	// Keys are the ways to reach this same action without the palette, each
+	// written as it is typed: one stroke like "e", or a whole gesture like "g1".
+	// Empty means there is none and nothing may guess one — an ID says nothing
+	// about a keybinding, and one command's is byte-identical to a view ID whose
+	// keys belong to something else entirely.
+	Keys []string
 	// Run performs the command.
 	Run func(Deps) tea.Cmd
 }
@@ -80,6 +86,10 @@ type Deps struct {
 	Zones *zone.Manager
 	// Site is the host this session is talking to, for display only.
 	Site string
+	// Cache is what this session has already read from the site, or nil when it
+	// has nowhere to keep one. Every view has to work without it: a first run
+	// has nothing on disk, and another copy of Saral may be holding the file.
+	Cache app.Cache
 	// Now is the clock. Tests inject a fixed one.
 	Now func() time.Time
 	// Saved are the queries the number keys run, as the profile last had them.

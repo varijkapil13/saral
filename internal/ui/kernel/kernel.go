@@ -199,6 +199,9 @@ func New(d Deps, opts ...Option) (Model, error) {
 	if m.deps.Zones == nil {
 		m.deps.Zones = zone.New()
 	}
+	// A manager is enabled from birth, so without this every view still writes
+	// markers into a frame that nothing scans them back out of.
+	m.deps.Zones.SetEnabled(m.mouse)
 	m.zonePrefix = m.deps.Zones.NewPrefix()
 	m.roots = Views()
 
@@ -360,7 +363,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.resizeAll()
 
 	case Matches(msg, m.keys.Palette):
-		return m.open(PaletteViewID)
+		return m.openPalette()
 
 	case Matches(msg, m.keys.Saved):
 		// A pushed view keeps its own digits: a saved query belongs to the root,
@@ -403,6 +406,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	// The overlay covers the view, so a click reaching it acts on something the
+	// user cannot see.
+	if m.showHelp {
+		return m, nil
+	}
 	if m.mouse && msg.Button == tea.MouseLeft {
 		for _, spec := range m.roots {
 			if spec.Slot == 0 || !m.available(spec) {
@@ -583,6 +591,25 @@ func (m Model) open(id string) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, view.Init())
 	}
 	return m, tea.Batch(cmds...)
+}
+
+// openPalette puts the palette over whatever is on screen. Switching to it as a
+// root view would discard the editor, form or thread it was opened from, leave
+// esc with nothing to pop back to, and silence every command that reaches a view
+// by broadcast. A draft does not refuse it, because pushing over one loses
+// nothing, and it is built fresh each time so that a command is offered the
+// session as it is rather than as it was the first time ctrl+k was pressed.
+func (m Model) openPalette() (tea.Model, tea.Cmd) {
+	spec, ok := LookupView(PaletteViewID)
+	if !ok {
+		m.status, m.statusLevel = fmt.Sprintf("%s is not available in this build", PaletteViewID), LevelWarn
+		return m, nil
+	}
+	if !m.available(spec) {
+		m.status, m.statusLevel = m.unavailable(spec), LevelWarn
+		return m, nil
+	}
+	return m.push(PushMsg{View: spec.New(m.deps), ID: spec.ID, Title: spec.Title})
 }
 
 // unavailable is why a view cannot be opened. A session that has probed nothing

@@ -221,10 +221,17 @@ a thing Batch 2 would otherwise get quietly wrong.
 
 This is the batch that earns the habit. Deliberately ahead of the remaining features.
 
+- [x] **W0-b — The kernel seams this batch codes against** · **owns** `internal/ui/kernel/**`,
+  `internal/app/cache.go`, the `Keys:` lines in the five `register.go` files, `docs/{UX,ARCHITECTURE,ROADMAP}.md`
+  Four of the five packets below need something from the kernel, so all of it lands once and the
+  kernel is then closed for the batch. `ctrl+k` pushes the palette instead of switching root view;
+  `kernel.Command` grows `Keys`, filled in at every registrar that has one; `kernel.Deps` grows
+  `Cache`, the `app.Cache` interface P3.2 implements and P3.4 reads through; and `mouse = false`
+  disables the zone manager, so a view's markers stop being written into frames nothing scans.
 - [ ] **P3.1 — Command palette** · [#12](https://github.com/varijkapil13/saral/issues/12) · **owns** `internal/ui/palette/**`
   `ctrl+k`, fuzzy over the command registry, frecency ranking, shows the keybinding for what you ran.
   Wires up `app.SavedQuery`, whose number-key binding PC.2 settles.
-- [ ] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`, `go.mod`
+- [ ] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`, `go.mod`, `cmd/saral/main.go` (opening the cache and putting it on `Deps` — nothing else)
   Adds the bbolt dependency, in its own commit ahead of the code that needs it. bbolt buckets, TTLs,
   stale-while-revalidate, cursor-preserving row patching, stale badge. Row patching is the other
   consumer of PC.1's field-presence answer. **Adds the `internal/store` must-not-import-`internal/ui`
@@ -233,7 +240,9 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   The dependency landed first and on its own, alongside the smallest `internal/store` that keeps it —
   opening the file, closing it, naming buckets — and the import rule. CI runs `go mod tidy` before
   anything else and that strips a `require` line nothing imports, so the package is what makes the
-  dependency real. The cache is what is left.
+  dependency real. The cache is what is left: `app.Cache`, which W0-b froze and `kernel.Deps` already
+  carries, implemented over the buckets and opened in `build()` from `config.CacheDir()` and the
+  profile. Nothing implements it yet, so today every session runs with a nil one.
 - [ ] **P3.3 — Mouse** · [#14](https://github.com/varijkapil13/saral/issues/14) · **owns** `internal/ui/widget/zone*.go` + zone wiring in own files
   Click, double-click, wheel-under-pointer, drag-to-resize, clickable chips and footer.
 - [ ] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/index.go`
