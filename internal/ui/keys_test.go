@@ -20,6 +20,7 @@ var keyOwners = map[string]string{
 	"comments.write":    comment.ViewID,
 	"comments.edit":     comment.ViewID,
 	"comments.delete":   comment.ViewID,
+	"issue.comments":    issue.ViewID,
 	"issue.edit":        issue.ViewID,
 	"issue.transition":  issue.ViewID,
 	"issues.save-query": list.ViewID,

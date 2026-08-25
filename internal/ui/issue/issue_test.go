@@ -26,8 +26,8 @@ func TestIssue_Golden(t *testing.T) {
 			t.Parallel()
 
 			f := newFake(20)
-			comment(t, f, "PROJ-12", "Reproduced on staging, twice.", "The fix is in the shared client.")
-			comment(t, f, "PROJ-12", "Agreed. I will pick this up on Monday.")
+			addComment(t, f, "PROJ-12", "Reproduced on staging, twice.", "The fix is in the shared client.")
+			addComment(t, f, "PROJ-12", "Agreed. I will pick this up on Monday.")
 			dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-12"), size.w, size.h)
 
 			golden(t, "issue_"+name+".golden", dr.view())
@@ -56,8 +56,8 @@ func TestIssue_ShowsTheCommentThreadOldestFirst(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(20)
-	comment(t, f, "PROJ-3", "First thing said.")
-	comment(t, f, "PROJ-3", "Second thing said.")
+	addComment(t, f, "PROJ-3", "First thing said.")
+	addComment(t, f, "PROJ-3", "Second thing said.")
 	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-3"), 120, 40)
 
 	got := dr.view()
@@ -222,7 +222,7 @@ func TestIssue_RendersDatesInTheAccountsTimezoneAndNotTheMachines(t *testing.T) 
 	}
 
 	f := newFake(20)
-	comment(t, f, "PROJ-9", "Said something.")
+	addComment(t, f, "PROJ-9", "Said something.")
 	seed := seedOf(t, f, "PROJ-9")
 
 	utc := newDriver(t, testDeps(f), seed, 120, 40)
@@ -238,7 +238,7 @@ func TestIssue_StillRendersWhenTheCapabilityProbeFoundNothing(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(20)
-	comment(t, f, "PROJ-10", "Still readable.")
+	addComment(t, f, "PROJ-10", "Still readable.")
 	d := testDeps(f)
 	d.Caps = jira.Capabilities{}
 	dr := newDriver(t, d, seedOf(t, f, "PROJ-10"), 120, 30)
@@ -251,7 +251,7 @@ func TestIssue_ScrollsTheBodyAndKeepsTheIdentityLinesPut(t *testing.T) {
 
 	f := newFake(20)
 	for i := range 30 {
-		comment(t, f, "PROJ-11", "Comment number "+strings.Repeat("x", i%5+1))
+		addComment(t, f, "PROJ-11", "Comment number "+strings.Repeat("x", i%5+1))
 	}
 	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-11"), 100, 14)
 
@@ -278,7 +278,7 @@ func TestIssue_AResizeReflowsWithoutLosingThePlace(t *testing.T) {
 
 	f := newFake(20)
 	for range 20 {
-		comment(t, f, "PROJ-13", "Something worth several lines when the pane is narrow.")
+		addComment(t, f, "PROJ-13", "Something worth several lines when the pane is narrow.")
 	}
 	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-13"), 120, 16)
 	dr.key("ctrl+d", "ctrl+d")
@@ -298,7 +298,7 @@ func TestIssue_ARefreshRereadsTheIssueAndTheThread(t *testing.T) {
 
 	f := newFake(20)
 	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-14"), 120, 40)
-	comment(t, f, "PROJ-14", "Added while you were reading.")
+	addComment(t, f, "PROJ-14", "Added while you were reading.")
 
 	dr.send(kernel.RefreshMsg{})
 

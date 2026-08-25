@@ -132,6 +132,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 			cmd = kernel.Fail(msg.err)
 		}
 
+	case CommentsMsg:
+		cmd = m.openComments()
+
 	case tea.KeyPressMsg:
 		cmd = m.key(msg)
 
@@ -200,6 +203,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return cmd
 	}
 	switch {
+	case kernel.Matches(msg, m.keys.Comments):
+		return m.openComments()
 	case kernel.Matches(msg, m.keys.Go):
 		m.pendingGo = true
 		return nil

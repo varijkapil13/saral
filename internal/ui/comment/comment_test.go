@@ -669,12 +669,15 @@ func TestRegistration_PutsTheViewItsKeysAndItsCommandsInTheRegistry(t *testing.T
 		t.Error("the comment view registered no keys, so the footer can say nothing about it")
 	}
 	want := map[string]bool{
-		"comments.open": false, "comments.write": false,
-		"comments.edit": false, "comments.delete": false,
+		"comments.write": false, "comments.edit": false, "comments.delete": false,
 	}
 	for _, cmd := range kernel.Commands() {
 		if _, ours := want[cmd.ID]; ours {
 			want[cmd.ID] = true
+		}
+		if cmd.ID == "comments.open" {
+			t.Error("something registers comments.open again; it switched to this view with no issue " +
+				"behind it, which is a pane nothing can then satisfy")
 		}
 	}
 	for id, found := range want {
