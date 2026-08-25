@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -17,14 +18,18 @@ import (
 // line names the key that reaches it directly. docs/UX.md says three.
 const hintAfter = 3
 
-// The penalties for finding a command by something other than its title. The
-// group is shown beside the title and is shared by every command in it; the ID
-// is not on screen at all, and is matchable because it is where the words a
-// person types often are — "mine" is in issues.mine and not in "My issues".
-const (
-	groupPenalty = 16
-	idPenalty    = 12
-)
+// scoreTier is app.Pattern's ranking step, which it does not export: a whole
+// candidate, a prefix, a word start and a match inside a word are that far
+// apart.
+const scoreTier = 256
+
+// fieldPenalty is what finding a command by something other than its title
+// costs, and it is calibrated rather than picked. A command ID is dotted, so
+// almost any short pattern is a prefix of one, and a prefix is worth twice what
+// a word start further into a title is. Nine tiers puts a title match above a
+// prefix of an ID or a group, and still leaves a whole word found in an ID above
+// a title the letters are only scattered through — "mine" is issues.mine.
+const fieldPenalty = 9 * scoreTier
 
 // zoneRow prefixes the click target on each row.
 const zoneRow = "row:"
@@ -34,13 +39,10 @@ var (
 	_ kernel.KeyCapturer = (*Model)(nil)
 )
 
-// row is one command as the palette holds it: what it can be found by, the key
-// that reaches it without the palette, and why the site does not allow it.
+// row is one command as the palette holds it: the key that reaches it without
+// the palette, and why the site does not allow it.
 type row struct {
 	cmd    kernel.Command
-	title  candidate
-	group  candidate
-	id     candidate
 	keys   string
 	reason string
 }
@@ -49,17 +51,11 @@ func (r *row) offered() bool { return r.reason == "" }
 
 // match is the best of the three ways a command can be found, each answering
 // for itself so that a title match is never beaten by the same word in an ID.
-func (r *row) match(query []rune) (int, bool) {
-	best, ok := r.title.match(query)
-	for _, other := range [...]struct {
-		c       candidate
-		penalty int
-	}{{r.group, groupPenalty}, {r.id, idPenalty}} {
-		if other.c.empty() {
-			continue
-		}
-		if score, hit := other.c.match(query); hit && (!ok || score-other.penalty > best) {
-			best, ok = score-other.penalty, true
+func (r *row) match(p app.Pattern) (int, bool) {
+	best, ok := p.Score(r.cmd.Title)
+	for _, other := range [...]string{r.cmd.Group, r.cmd.ID} {
+		if score, hit := p.Score(other); hit && (!ok || score-fieldPenalty > best) {
+			best, ok = score-fieldPenalty, true
 		}
 	}
 	return best, ok
@@ -153,9 +149,6 @@ func (m *Model) buildRows(cmds []kernel.Command) []row {
 	for _, cmd := range cmds {
 		out = append(out, row{
 			cmd:    cmd,
-			title:  newCandidate(cmd.Title),
-			group:  newCandidate(cmd.Group),
-			id:     newCandidate(cmd.ID),
 			keys:   strings.Join(cmd.Keys, " / "),
 			reason: m.refusal(cmd),
 		})
@@ -355,10 +348,10 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 // typing; typing lands on the best match, which is the point of typing.
 func (m *Model) refilter(keep string) {
 	m.shown, m.refused, m.ranks = m.shown[:0], m.refused[:0], m.ranks[:0]
-	query := []rune(strings.ToLower(strings.TrimSpace(m.query)))
+	pattern := app.NewPattern(strings.TrimSpace(m.query))
 	now := m.now()
 	for i := range m.rows {
-		score, ok := m.rows[i].match(query)
+		score, ok := m.rows[i].match(pattern)
 		if !ok {
 			continue
 		}

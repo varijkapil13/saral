@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -108,13 +109,17 @@ func BenchmarkPaletteRowRender(b *testing.B) {
 	}
 }
 
+// BenchmarkMatch is one command scored against one pattern: the title, the
+// group and the ID, which is what a keystroke pays per row.
 func BenchmarkMatch(b *testing.B) {
-	c := newCandidate("Move issues between projects")
-	query := []rune("mvpr")
+	r := row{cmd: kernel.Command{
+		ID: "issue.move", Title: "Move issues between projects", Group: "Issue",
+	}}
+	pattern := app.NewPattern("mvpr")
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		_, _ = c.match(query)
+		_, _ = r.match(pattern)
 	}
 }
 

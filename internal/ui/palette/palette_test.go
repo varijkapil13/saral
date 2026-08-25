@@ -121,6 +121,48 @@ func TestPalette_FindsACommandByItsTitleItsGroupOrItsID(t *testing.T) {
 	}
 }
 
+// A command is scored on its title, its group and its ID, and the two that are
+// not on the row are penalised. "iss" is a prefix of issues.mine, issue.edit,
+// issue.create and of the group Issues, so without the penalty the text nobody
+// can see would order the rows they can.
+func TestPalette_ATitleMatchOutranksAPrefixOfSomethingTheRowDoesNotShow(t *testing.T) {
+	t.Parallel()
+
+	p := fly(t, paletteDeps(), sample(), memoryTable(), 120, 24)
+	p.typeText("iss")
+
+	got := p.titles()
+	mine := slices.Index(got, "My issues")
+	create := slices.Index(got, "Create an issue")
+	if mine < 0 || create < 0 {
+		t.Fatalf("%q offers %v, which is missing one of the two rows this is about", "iss", got)
+	}
+	if mine > create {
+		t.Errorf("the order is %v: My issues has iss at a word start of its title, and Create an issue "+
+			"is matched by the group it shares with four other commands", got)
+	}
+}
+
+// The penalty is bounded rather than absolute: an ID is where the words a person
+// types often are, and "My issues" does not contain "mine" at all — while a title
+// long enough to scatter the four letters through does.
+func TestPalette_AWholeWordInAnIDOutranksATitleTheLettersAreOnlyScatteredThrough(t *testing.T) {
+	t.Parallel()
+
+	d := paletteDeps()
+	d.Caps = fullCaps()
+	p := fly(t, d, sample(), memoryTable(), 120, 24)
+	p.typeText("mine")
+
+	got := p.titles()
+	if len(got) < 2 {
+		t.Fatalf("%q offers %v, which does not exercise the ordering", "mine", got)
+	}
+	if got[0] != "My issues" {
+		t.Errorf("%q offers %v first; issues.mine is the command that word is in", "mine", got)
+	}
+}
+
 func TestPalette_NothingMatchingSaysSoAndOffersNoKeysThatWouldDoAnything(t *testing.T) {
 	t.Parallel()
 
