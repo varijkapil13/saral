@@ -28,7 +28,8 @@ const (
 	// a wall of text where a list of commands should be.
 	refusalLines = 3
 	// rowMemoLimit holds the visible window and its overscan several relayouts
-	// deep. The registry is smaller than this, so in practice nothing is evicted.
+	// deep. A build's commands are fewer than this; the cached issues a session
+	// types its way through are not, and past it the map is cleared.
 	rowMemoLimit = 256
 )
 
@@ -42,6 +43,7 @@ type styles struct {
 	keys     lipgloss.Style
 	muted    lipgloss.Style
 	rule     lipgloss.Style
+	stale    lipgloss.Style
 }
 
 func newStyles(t *kernel.Theme) *styles {
@@ -53,6 +55,9 @@ func newStyles(t *kernel.Theme) *styles {
 		keys:     t.HintKey,
 		muted:    t.Muted,
 		rule:     t.Muted,
+		// The cell is already padded to the column, and the badge's own padding
+		// would push the row past it.
+		stale: t.StaleBadge.Padding(0, 0),
 	}
 }
 
@@ -109,10 +114,14 @@ func widestKey(rows []row) int {
 	return widest
 }
 
-// rowKey is what makes two renderings of a row the same rendering: the command,
-// the column plan, whether it is selected and the theme it was drawn in.
+// rowKey is what makes two renderings of a row the same rendering: what the row
+// says, the column plan, whether it is selected and the theme it was drawn in. A
+// command's title never moves under its ID, so an ID is the whole of it; an
+// issue's title and the age of the copy it came from both do.
 type rowKey struct {
 	id       string
+	text     string
+	age      string
 	lay      layout
 	selected bool
 	gen      int
@@ -150,12 +159,7 @@ func renderRow(r *row, lay layout, sel bool, st *styles, t *kernel.Theme) string
 	var b strings.Builder
 	b.Grow(lay.width + 32)
 
-	if sel {
-		b.WriteString(t.Glyphs.Collapsed)
-		b.WriteString(strings.Repeat(" ", max(marker-ansi.StringWidth(t.Glyphs.Collapsed), 0)))
-	} else {
-		b.WriteString(strings.Repeat(" ", marker))
-	}
+	writeMarker(&b, sel, t)
 	title := padTruncate(r.cmd.Title, lay.title, ell)
 	if sel {
 		b.WriteString(title)
@@ -189,13 +193,76 @@ func renderRow(r *row, lay layout, sel bool, st *styles, t *kernel.Theme) string
 	return b.String()
 }
 
+// renderHit draws one cached issue in the same columns as a command: its key and
+// what the copy on disk says its title is, then how old that copy is where a
+// command shows its group.
+func renderHit(h *hit, lay layout, sel bool, st *styles, t *kernel.Theme) string {
+	ell := t.Glyphs.Ellipsis
+	var b strings.Builder
+	b.Grow(lay.width + 32)
+
+	writeMarker(&b, sel, t)
+	text := padTruncate(h.text, lay.title, ell)
+	if sel {
+		b.WriteString(text)
+	} else {
+		b.WriteString(st.title.Render(text))
+	}
+	if lay.group > 0 {
+		b.WriteString(strings.Repeat(" ", gap))
+		cell := padTruncate(h.age, lay.group, ell)
+		switch {
+		case sel:
+			b.WriteString(cell)
+		case h.stale:
+			b.WriteString(st.stale.Render(cell))
+		default:
+			b.WriteString(st.group.Render(cell))
+		}
+	}
+	if lay.slack > 0 {
+		b.WriteString(strings.Repeat(" ", lay.slack))
+	}
+	// No key reaches one issue, so the column stays blank rather than moving.
+	if lay.keys > 0 {
+		b.WriteString(strings.Repeat(" ", gap+lay.keys))
+	}
+	if sel {
+		return st.selected.Render(b.String())
+	}
+	return b.String()
+}
+
+func writeMarker(b *strings.Builder, sel bool, t *kernel.Theme) {
+	if !sel {
+		b.WriteString(strings.Repeat(" ", marker))
+		return
+	}
+	b.WriteString(t.Glyphs.Collapsed)
+	b.WriteString(strings.Repeat(" ", max(marker-ansi.StringWidth(t.Glyphs.Collapsed), 0)))
+}
+
 func (m *Model) row(at int) string {
-	r := &m.rows[m.shown[at]]
-	k := rowKey{id: r.cmd.ID, lay: m.lay, selected: at == m.cursor, gen: m.styles.gen}
+	sel := at == m.cursor
+	if row := m.shown[at]; row.issue {
+		h := &m.hits[row.at]
+		k := rowKey{id: h.key, text: h.text, age: h.age, lay: m.lay, selected: sel, gen: m.styles.gen}
+		if s, ok := m.memo.get(k); ok {
+			return s
+		}
+		s := renderHit(h, m.lay, sel, m.styles, m.deps.Theme)
+		if m.deps.Zones != nil {
+			s = m.deps.Zones.Mark(m.zonePrefix+zoneHit+h.key, s)
+		}
+		m.memo.put(k, s)
+		return s
+	}
+	r := &m.rows[m.shown[at].at]
+	k := rowKey{id: r.cmd.ID, lay: m.lay, selected: sel, gen: m.styles.gen}
 	if s, ok := m.memo.get(k); ok {
 		return s
 	}
-	s := renderRow(r, m.lay, at == m.cursor, m.styles, m.deps.Theme)
+	s := renderRow(r, m.lay, sel, m.styles, m.deps.Theme)
 	if m.deps.Zones != nil {
 		s = m.deps.Zones.Mark(m.zonePrefix+zoneRow+r.cmd.ID, s)
 	}
@@ -209,6 +276,7 @@ type headKey struct {
 	width    int
 	gen      int
 	shown    int
+	hits     int
 	total    int
 	filtered bool
 }
@@ -217,7 +285,8 @@ type headKey struct {
 func (m *Model) rule() string {
 	key := headKey{
 		width: m.width, gen: m.styles.gen,
-		shown: len(m.shown), total: m.offered(), filtered: m.query != "",
+		shown: len(m.shown) - len(m.hits), hits: len(m.hits),
+		total: m.offered(), filtered: m.query != "",
 	}
 	if m.head != "" && key == m.headAt {
 		return m.head
@@ -231,6 +300,13 @@ func (m *Model) rule() string {
 }
 
 func (m *Model) countLabel(key headKey) string {
+	if key.hits == 0 {
+		return commandCount(key)
+	}
+	return commandCount(key) + " " + m.deps.Theme.Glyphs.Separator + " " + issueCount(key.hits)
+}
+
+func commandCount(key headKey) string {
 	switch {
 	case key.total == 0:
 		return "nothing registered"
@@ -241,6 +317,18 @@ func (m *Model) countLabel(key headKey) string {
 	default:
 		return strconv.Itoa(key.total) + " commands"
 	}
+}
+
+// issueCount reads 20+ at the bound, because the index was asked for that many
+// and stopped: the cache may hold more matches and there is no number to give.
+func issueCount(hits int) string {
+	if hits >= hitLimit {
+		return strconv.Itoa(hitLimit) + "+ issues"
+	}
+	if hits == 1 {
+		return "1 issue"
+	}
+	return strconv.Itoa(hits) + " issues"
 }
 
 // offered is how many commands this site allows, which is the number the count
@@ -298,6 +386,9 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 	default:
 		lines = append(lines, m.styles.muted.Render(
 			ansi.Truncate("  Nothing matches "+strconv.Quote(m.query)+".", m.width, ell)))
+		if why := m.noIssues(); why != "" {
+			lines = append(lines, "  "+m.styles.muted.Render(ansi.Truncate(why, room, ell)))
+		}
 	}
 	for len(lines)-at < h {
 		lines = append(lines, "")

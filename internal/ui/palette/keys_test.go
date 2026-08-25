@@ -19,6 +19,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		state keyState
 	}{
 		{"something to run", keysOffering},
+		{"a cached issue under the cursor", keysIssue},
 		{"nothing matches", keysNothing},
 	}
 	if len(named) != int(keyStates) {
@@ -73,7 +74,7 @@ func TestKeys_TheDispatcherAnswersExactlyWhatTheBindingsSay(t *testing.T) {
 
 	keys := defaultKeys()
 	acts := keys.table()
-	for _, b := range []kernel.Binding{keys.Up, keys.Down, keys.PageUp, keys.PageDown, keys.Run, keys.Close} {
+	for _, b := range []kernel.Binding{keys.Up, keys.Down, keys.PageUp, keys.PageDown, keys.Run, keys.Open, keys.Close} {
 		for _, stroke := range b.Keys() {
 			if acts[stroke] == actNone {
 				t.Errorf("%q is bound to %q and the dispatcher does nothing with it", stroke, b.Help().Desc)

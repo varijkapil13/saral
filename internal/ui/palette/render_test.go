@@ -3,9 +3,11 @@ package palette
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -36,6 +38,26 @@ func TestView_GoldenWithAFilterTyped(t *testing.T) {
 	p := fly(t, paletteDeps(), sample(), memoryTable(), 120, 28)
 	p.typeText("iss")
 	golden(t, "palette_filter_120x28.golden", p.frame())
+}
+
+// The two halves of the list in one frame: the commands the build registered,
+// then the issues already on disk, each with the age of the copy it came from.
+func TestView_GoldenWithCachedIssues(t *testing.T) {
+	t.Parallel()
+
+	d, _ := cachedDeps()
+	p := fly(t, d, sample(), memoryTable(), 120, 28)
+	p.typeText("r")
+	golden(t, "palette_issues_120x28.golden", p.frame())
+}
+
+func TestView_GoldenWithACachedIssueUnderTheCursor(t *testing.T) {
+	t.Parallel()
+
+	d, _ := cachedDeps()
+	p := fly(t, d, sample(), memoryTable(), 100, 22)
+	p.typeText("login")
+	golden(t, "palette_issue_selected_100x22.golden", p.frame())
 }
 
 func TestView_GoldenWhenTheOnlyMatchIsOneThisSiteRefuses(t *testing.T) {
@@ -76,6 +98,38 @@ func TestRenderRow_IsExactlyAsWideAsTheLayoutWhateverTheContent(t *testing.T) {
 				lay := planLayout(width, widestKey([]row{r}))
 				for _, sel := range []bool{false, true} {
 					if got := ansi.StringWidth(renderRow(&r, lay, sel, st, theme)); got != lay.width {
+						t.Errorf("the row is %d columns at width %d (selected=%t), want %d", got, width, sel, lay.width)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestRenderHit_IsExactlyAsWideAsTheLayoutWhateverTheContent(t *testing.T) {
+	t.Parallel()
+
+	theme := kernel.NewTheme(kernel.ThemeNoColor, true, kernel.UnicodeGlyphs())
+	st := newStyles(theme)
+
+	hits := map[string]hit{
+		"a plain one":           newHit(app.Hit{Key: "PROJ-142", Summary: "Fix the login flow", HasSummary: true, StoredAt: clockAt.Add(-time.Hour)}, clockAt),
+		"no title stored":       newHit(app.Hit{Key: "PROJ-9", StoredAt: clockAt.Add(-90 * time.Hour)}, clockAt),
+		"a title that is empty": newHit(app.Hit{Key: "PROJ-9", HasSummary: true, StoredAt: clockAt}, clockAt),
+		"no stored time at all": newHit(app.Hit{Key: "PROJ-1", Summary: "x", HasSummary: true}, clockAt),
+		"a very long title":     newHit(app.Hit{Key: "PROJ-4242424242", Summary: strings.Repeat("a long issue summary ", 8), HasSummary: true, StoredAt: clockAt.Add(-3 * time.Minute)}, clockAt),
+		"wide graphemes":        newHit(app.Hit{Key: "会議-7", Summary: "会議のサポート体制", HasSummary: true, StoredAt: clockAt.Add(-2 * time.Second)}, clockAt),
+		"an emoji and a ZWJ":    newHit(app.Hit{Key: "PROJ-8", Summary: "🚀 ship it 👩‍💻 today", HasSummary: true, StoredAt: clockAt.Add(-25 * time.Hour)}, clockAt),
+	}
+
+	for _, width := range []int{80, 100, 120, 200} {
+		for name, h := range hits {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+
+				lay := planLayout(width, 4)
+				for _, sel := range []bool{false, true} {
+					if got := ansi.StringWidth(renderHit(&h, lay, sel, st, theme)); got != lay.width {
 						t.Errorf("the row is %d columns at width %d (selected=%t), want %d", got, width, sel, lay.width)
 					}
 				}

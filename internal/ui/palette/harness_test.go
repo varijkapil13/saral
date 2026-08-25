@@ -170,8 +170,33 @@ func (p *pilot) frame() string { return ansi.Strip(p.m.View()) }
 // titles are the commands on offer, in the order they are drawn.
 func (p *pilot) titles() []string {
 	out := make([]string, 0, len(p.m.shown))
-	for _, i := range p.m.shown {
-		out = append(out, p.m.rows[i].cmd.Title)
+	for _, at := range p.m.shown {
+		if !at.issue {
+			out = append(out, p.m.rows[at.at].cmd.Title)
+		}
+	}
+	return out
+}
+
+// keys are the cached issues on offer, in the order they are drawn.
+func (p *pilot) keys() []string {
+	out := make([]string, 0, len(p.m.hits))
+	for _, at := range p.m.shown {
+		if at.issue {
+			out = append(out, p.m.hits[at.at].key)
+		}
+	}
+	return out
+}
+
+// pushed are the views the palette asked the kernel to put over what it was
+// opened from, by the title each was pushed under.
+func (p *pilot) pushed() []string {
+	out := []string{}
+	for _, msg := range p.msgs {
+		if push, ok := msg.(kernel.PushMsg); ok {
+			out = append(out, push.ID+":"+push.Title)
+		}
 	}
 	return out
 }

@@ -94,6 +94,43 @@ func open(b *testing.B, n int) {
 	}
 }
 
+// cachedIssues is a cache holding what the real one is bounded to, so the
+// keystroke measured below is the worst a session can present.
+func cachedIssues(n int) *fakeCache {
+	c := newFakeCache()
+	for i := range n {
+		id := strconv.Itoa(i)
+		c.hold("PROJ-"+id, "Fix the login flow before release "+id, clockAt.Add(-time.Duration(i)*time.Minute))
+	}
+	return c
+}
+
+// BenchmarkPaletteKeystrokeCached is the budgeted path with both halves of the
+// list answering: a character into the filter, every command ranked again, every
+// cached issue ranked against it, then a frame. The pattern matches all of them,
+// which is the worst case rather than the usual one.
+func BenchmarkPaletteKeystrokeCached(b *testing.B) {
+	d := paletteDeps()
+	d.Cache = cachedIssues(app.DefaultIssueBound)
+	m := build(d, manyCommands(64), memoryTable())
+	next, _ := m.Update(kernel.SizeMsg{Width: 120, Height: 40})
+	m, _ = next.(*Model)
+	for _, r := range "releas" {
+		next, _ = m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+		m, _ = next.(*Model)
+	}
+	_ = m.View()
+
+	keys := []tea.Msg{tea.KeyPressMsg{Code: 'e', Text: "e"}, tea.KeyPressMsg{Code: tea.KeyBackspace}}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		next, _ := m.Update(keys[i%2])
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
 func BenchmarkPaletteRowRender(b *testing.B) {
 	theme := kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs())
 	st := newStyles(theme)
@@ -140,6 +177,17 @@ func TestKeystrokeToFrame_StaysUnderTheBudget(t *testing.T) {
 	res := testing.Benchmark(BenchmarkPaletteKeystroke2000)
 	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
 		t.Errorf("a keystroke into the filter took %s over 2000 commands, want under 16ms", per)
+	}
+}
+
+// The cache half of the palette is on the same budget as the command half, and
+// it is the half that grows with what the session has read.
+func TestKeystrokeOverEveryCachedIssue_StaysUnderTheBudget(t *testing.T) {
+	t.Parallel()
+
+	res := testing.Benchmark(BenchmarkPaletteKeystrokeCached)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("a keystroke over %d cached issues took %s, want under 16ms", app.DefaultIssueBound, per)
 	}
 }
 

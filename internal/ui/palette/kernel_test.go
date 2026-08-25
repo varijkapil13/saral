@@ -3,10 +3,12 @@ package palette
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/list"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -84,6 +86,34 @@ func TestSession_TheThirdRunFromThePaletteNamesTheKeyOnTheStatusLine(t *testing.
 	}
 }
 
+// The other half of the palette, through the whole program: a few letters of an
+// issue key, and the detail pane opens over the list the palette was opened from
+// rather than over the palette itself.
+func TestSession_OpensACachedIssueOverTheViewThePaletteWasOpenedFrom(t *testing.T) {
+	resetShared(t)
+
+	cache := newFakeCache()
+	for _, iss := range jiratest.Gen(4) {
+		cache.hold(iss.Key, iss.Summary, clockAt.Add(-time.Minute))
+	}
+	s := bootWith(t, cache, 120, 30)
+	s.press("ctrl+k")
+	s.typeText("proj-3")
+	s.press("enter")
+
+	header := firstLine(ansi.Strip(s.m.Frame()))
+	if !strings.Contains(header, "PROJ-3") {
+		t.Fatalf("the frame is headed %q, want the issue that was chosen", header)
+	}
+	mustNotContain(t, ansi.Strip(s.m.Frame()), "what do you want to do")
+
+	s.press("esc")
+	back := firstLine(ansi.Strip(s.m.Frame()))
+	if strings.Contains(back, "PROJ-3") || !strings.Contains(back, "Issues") {
+		t.Errorf("esc from the issue landed on %q, want the view the palette was opened over", back)
+	}
+}
+
 // resetShared empties the table the running program shares between opens, so
 // that a test asserting an order does not depend on what another test ran. The
 // kernel builds the palette through New, which is the shared table's only user.
@@ -104,10 +134,13 @@ type session struct {
 	msgs []tea.Msg
 }
 
-func boot(t *testing.T, w, h int) *session {
+func boot(t *testing.T, w, h int) *session { return bootWith(t, nil, w, h) }
+
+func bootWith(t *testing.T, cache app.Cache, w, h int) *session {
 	t.Helper()
 	d := paletteDeps()
 	d.Caps = fullCaps()
+	d.Cache = cache
 	d.Jira = jiratest.New(
 		jiratest.WithProject("PROJ", jiratest.Scrum),
 		jiratest.WithIssues(jiratest.Gen(4)),
@@ -200,6 +233,10 @@ func (s *session) queries() []string {
 		}
 	}
 	return out
+}
+
+func firstLine(frame string) string {
+	return strings.SplitN(frame, "\n", 2)[0]
 }
 
 func lastLine(frame string) string {

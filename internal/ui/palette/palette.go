@@ -1,5 +1,6 @@
 // Package palette is the command palette: ctrl+k, a fuzzy filter over every
-// command the build registered, ranked by what this machine actually runs.
+// command the build registered — ranked by what this machine actually runs — and
+// over every issue the cache already holds.
 package palette
 
 import (
@@ -11,7 +12,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 // hintAfter is how many times an action is reached from here before the status
@@ -31,8 +34,12 @@ const scoreTier = 256
 // a title the letters are only scattered through — "mine" is issues.mine.
 const fieldPenalty = 9 * scoreTier
 
-// zoneRow prefixes the click target on each row.
-const zoneRow = "row:"
+// zoneRow and zoneHit prefix the click target on a row. A command ID and an
+// issue key are both strings and are kept apart.
+const (
+	zoneRow = "row:"
+	zoneHit = "hit:"
+)
 
 var (
 	_ kernel.View        = (*Model)(nil)
@@ -50,7 +57,8 @@ type row struct {
 func (r *row) offered() bool { return r.reason == "" }
 
 // match is the best of the three ways a command can be found, each answering
-// for itself so that a title match is never beaten by the same word in an ID.
+// for itself so that a title match is never beaten by a prefix of an ID nobody
+// can see.
 func (r *row) match(p app.Pattern) (int, bool) {
 	best, ok := p.Score(r.cmd.Title)
 	for _, other := range [...]string{r.cmd.Group, r.cmd.ID} {
@@ -68,6 +76,20 @@ type ranked struct {
 	freq  float64
 }
 
+// entry is one row on offer: a command the filter left, or an issue the cache
+// answered with. at indexes rows or hits accordingly.
+type entry struct {
+	issue bool
+	at    int
+}
+
+// mark names the row the selection is on, so that a list rebuilt for a reason
+// other than typing can land on it again.
+type mark struct {
+	issue bool
+	id    string
+}
+
 // Model is the palette. It is built fresh on every ctrl+k, so everything it
 // remembers between opens lives in the frecency table rather than in here.
 type Model struct {
@@ -80,7 +102,9 @@ type Model struct {
 	query string
 
 	rows  []row
-	shown []int
+	index *app.Index
+	hits  []hit
+	shown []entry
 	ranks []ranked
 	// refused are the commands the filter matched that this site does not allow.
 	// They are not offered, and their reason is what the palette says instead of
@@ -110,8 +134,9 @@ func build(d kernel.Deps, cmds []kernel.Command, freq *table) *Model {
 	m := &Model{
 		deps:  d,
 		keys:  defaultKeys(),
-		input: newInput(),
+		input: newInput(d.Cache != nil),
 		freq:  freq,
+		index: app.NewIndex(d.Cache),
 		memo:  newRowCache(rowMemoLimit),
 	}
 	if m.deps.Theme == nil {
@@ -129,14 +154,20 @@ func build(d kernel.Deps, cmds []kernel.Command, freq *table) *Model {
 	m.keyWidth = widestKey(m.rows)
 	m.lay = planLayout(m.width, m.keyWidth)
 	_ = m.input.Focus()
-	m.refilter("")
+	_ = m.refilter(mark{})
 	return m
 }
 
-func newInput() textinput.Model {
+// newInput advertises the cache only when there is one. A session with nowhere
+// to keep issues is normal, and offering to search them there would name
+// something that cannot work.
+func newInput(cached bool) textinput.Model {
 	ti := textinput.New()
 	ti.Prompt = "> "
 	ti.Placeholder = "what do you want to do?"
+	if cached {
+		ti.Placeholder = "what do you want to do, or which issue?"
+	}
 	return ti
 }
 
@@ -198,7 +229,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
-		m.recheck()
+		cmd = m.recheck()
 
 	case kernel.CommandRanMsg:
 		cmd = m.ran(msg)
@@ -238,12 +269,12 @@ func (m *Model) focus(on bool) {
 
 // recheck answers the capability questions again after a probe, keeping the
 // selection on the command it was on.
-func (m *Model) recheck() {
+func (m *Model) recheck() tea.Cmd {
 	for i := range m.rows {
 		m.rows[i].reason = m.refusal(m.rows[i].cmd)
 	}
 	m.memo.reset()
-	m.refilter(m.selectedID())
+	return m.refilter(m.selection())
 }
 
 // ran counts the command that just ran and, on the third time, notes the key
@@ -285,7 +316,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.moveTo(m.cursor + m.rowsHeight())
 		return nil
 	case actRun:
-		return m.run()
+		return m.activate()
 	case actClose:
 		return kernel.Pop()
 	case actNone:
@@ -296,20 +327,35 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	m.input, _ = m.input.Update(msg)
 	if q := m.input.Value(); q != m.query {
 		m.query = q
-		m.refilter("")
+		return m.refilter(mark{})
 	}
 	return nil
 }
 
-// run names what is under the cursor and stops there. Nothing calls Run here:
-// Deps is a value copied when the palette was built, and a search that narrows
-// its JQL with Deps.Project would run against whichever project the session was
-// on then, which is a valid query over the wrong project.
-func (m *Model) run() tea.Cmd {
+// activate does what the row under the cursor is for: a command is named to the
+// kernel, and an issue is opened.
+//
+// Nothing calls a command's Run here: Deps is a value copied when the palette
+// was built, and a search that narrows its JQL with Deps.Project would run
+// against whichever project the session was on then, which is a valid query
+// over the wrong project.
+func (m *Model) activate() tea.Cmd {
 	if len(m.shown) == 0 {
 		return nil
 	}
-	return kernel.RunCommand(m.rows[m.shown[m.cursor]].cmd.ID)
+	at := m.shown[m.cursor]
+	if at.issue {
+		return m.open(&m.hits[at.at])
+	}
+	return kernel.RunCommand(m.rows[at.at].cmd.ID)
+}
+
+// open puts the detail pane over what the palette was opened from rather than
+// over the palette, so that esc from the issue goes back to the view the user
+// was in and not to a filter they have finished with.
+func (m *Model) open(h *hit) tea.Cmd {
+	seed := jira.Issue{Key: h.key, Summary: h.summary}
+	return tea.Sequence(kernel.Pop(), kernel.Push(issue.ViewID, h.key, issue.New(m.deps, seed)))
 }
 
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
@@ -317,16 +363,24 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.shown)); i++ {
-		if !m.deps.Zones.Get(m.zonePrefix + zoneRow + m.rows[m.shown[i]].cmd.ID).InBounds(msg) {
+		if !m.deps.Zones.Get(m.zone(m.shown[i])).InBounds(msg) {
 			continue
 		}
 		if i == m.cursor {
-			return m.run()
+			return m.activate()
 		}
 		m.moveTo(i)
 		return nil
 	}
 	return nil
+}
+
+// zone is the click target a row is marked with.
+func (m *Model) zone(at entry) string {
+	if at.issue {
+		return m.zonePrefix + zoneHit + m.hits[at.at].key
+	}
+	return m.zonePrefix + zoneRow + m.rows[at.at].cmd.ID
 }
 
 // wheel scrolls the rows without moving the selection, which is what a wheel
@@ -343,12 +397,14 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 	m.clampScroll()
 }
 
-// refilter recomputes which commands the filter leaves, and in what order. keep
-// names the command to stay on when the list is rebuilt for a reason other than
-// typing; typing lands on the best match, which is the point of typing.
-func (m *Model) refilter(keep string) {
+// refilter recomputes what the filter leaves and in what order: the commands
+// this build registered, then the issues the cache already holds. keep names the
+// row to stay on when the list is rebuilt for a reason other than typing; typing
+// lands on the best match, which is the point of typing.
+func (m *Model) refilter(keep mark) tea.Cmd {
 	m.shown, m.refused, m.ranks = m.shown[:0], m.refused[:0], m.ranks[:0]
-	pattern := app.NewPattern(strings.TrimSpace(m.query))
+	text := strings.TrimSpace(m.query)
+	pattern := app.NewPattern(text)
 	now := m.now()
 	for i := range m.rows {
 		score, ok := m.rows[i].match(pattern)
@@ -376,22 +432,47 @@ func (m *Model) refilter(keep string) {
 		}
 	})
 	for _, rk := range m.ranks {
-		m.shown = append(m.shown, rk.at)
+		m.shown = append(m.shown, entry{at: rk.at})
 	}
+	cmd := m.search(text, now)
 	m.cursor = 0
-	if keep != "" {
-		if at := slices.IndexFunc(m.shown, func(i int) bool { return m.rows[i].cmd.ID == keep }); at >= 0 {
+	if keep.id != "" {
+		if at := slices.IndexFunc(m.shown, func(e entry) bool { return m.markOf(e) == keep }); at >= 0 {
 			m.cursor = at
 		}
 	}
 	m.scrollToCursor()
+	return cmd
 }
 
-func (m *Model) selectedID() string {
-	if len(m.shown) == 0 || m.cursor >= len(m.shown) {
-		return ""
+// markOf names one row, whichever half of the list it came from.
+func (m *Model) markOf(at entry) mark {
+	if at.issue {
+		return mark{issue: true, id: m.hits[at.at].key}
 	}
-	return m.rows[m.shown[m.cursor]].cmd.ID
+	return mark{id: m.rows[at.at].cmd.ID}
+}
+
+func (m *Model) selection() mark {
+	if len(m.shown) == 0 || m.cursor >= len(m.shown) {
+		return mark{}
+	}
+	return m.markOf(m.shown[m.cursor])
+}
+
+// selectedID is the command under the cursor, and "" when the cursor is on an
+// issue or on nothing.
+func (m *Model) selectedID() string {
+	if at := m.selection(); !at.issue {
+		return at.id
+	}
+	return ""
+}
+
+// onIssue reports whether the row under the cursor is a cached issue, which is
+// what enter does something different with.
+func (m *Model) onIssue() bool {
+	return m.cursor < len(m.shown) && m.shown[m.cursor].issue
 }
 
 func (m *Model) moveTo(at int) {

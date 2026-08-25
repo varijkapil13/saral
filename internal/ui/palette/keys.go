@@ -13,7 +13,11 @@ type keyMap struct {
 	PageUp   kernel.Binding
 	PageDown kernel.Binding
 	Run      kernel.Binding
-	Close    kernel.Binding
+	// Open is enter over a cached issue. One stroke, two labels: what it does
+	// depends on which half of the list the cursor is in, and the footer names
+	// the one on screen.
+	Open  kernel.Binding
+	Close kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -23,17 +27,19 @@ func defaultKeys() keyMap {
 		PageUp:   kernel.Bind([]string{"pgup"}, "pgup", "page up"),
 		PageDown: kernel.Bind([]string{"pgdown"}, "pgdn", "page down"),
 		Run:      kernel.Bind([]string{"enter"}, "enter", "run it"),
+		Open:     kernel.Bind([]string{"enter"}, "enter", "open it"),
 		Close:    kernel.Bind([]string{"esc"}, "esc", "close"),
 	}
 }
 
-// keyState is which of the palette's two states the keys belong to. It doubles
-// as the generation the memoized chrome repaints on, so a state that is added
-// has to be added here to be drawn.
+// keyState is which of the palette's states the keys belong to. It doubles as
+// the generation the memoized chrome repaints on, so a state that is added has
+// to be added here to be drawn.
 type keyState int
 
 const (
 	keysOffering keyState = iota
+	keysIssue
 	keysNothing
 	keyStates
 )
@@ -50,6 +56,13 @@ var liveSets = func() [keyStates]kernel.KeySet {
 			{k.Run, k.Close},
 		},
 	}
+	sets[keysIssue] = kernel.KeySet{
+		Short: []kernel.Binding{k.Down, k.Up, k.Open, k.Close},
+		Full: [][]kernel.Binding{
+			{k.Down, k.Up, k.PageDown, k.PageUp},
+			{k.Open, k.Close},
+		},
+	}
 	sets[keysNothing] = kernel.KeySet{
 		Short: []kernel.Binding{k.Close},
 		Full:  [][]kernel.Binding{{k.Close}},
@@ -59,11 +72,15 @@ var liveSets = func() [keyStates]kernel.KeySet {
 
 // LiveKeys reports the keys that work right now. A filter that matches nothing
 // has nothing to run and nothing to move over, and advertising enter there names
-// a key that is refused.
+// a key that is refused; over a cached issue the same stroke opens rather than
+// runs, and the footer says which.
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	state := keysOffering
-	if len(m.shown) == 0 {
+	switch {
+	case len(m.shown) == 0:
 		state = keysNothing
+	case m.onIssue():
+		state = keysIssue
 	}
 	return liveSets[state], int(state)
 }
@@ -90,7 +107,7 @@ func (k keyMap) table() map[string]action {
 	}{
 		{k.Up, actUp}, {k.Down, actDown},
 		{k.PageUp, actPageUp}, {k.PageDown, actPageDown},
-		{k.Run, actRun}, {k.Close, actClose},
+		{k.Run, actRun}, {k.Open, actRun}, {k.Close, actClose},
 	}
 	out := make(map[string]action, len(entries)*2)
 	for _, e := range entries {
