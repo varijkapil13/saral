@@ -633,7 +633,8 @@ lands first, because `pkg/jira/port.go` blocks everyone while it is open.
 - [x] **FP.2 — The filter picker** · **owns** `internal/ui/filter/**` including `testdata/**`,
   `internal/ui/list/**` including `testdata/**`, the blank import in `internal/ui/views.go`,
   `internal/ui/{keys_test,livekeys_test}.go`, `internal/ui/testdata/{footer,overlay}_*.golden`,
-  `internal/ui/palette/testdata/session_120x30.golden`, `docs/{UX,ROADMAP}.md`
+  `internal/ui/palette/testdata/session_120x30.golden`, the JQL subset in
+  `pkg/jira/jiratest/fake.go` and its tests, `docs/{UX,ROADMAP}.md`
   **The consumer that makes FP.1 real.** `f` in the issue list opens a picker: choose a facet, then
   choose one of the values this site actually holds. All five port methods are called — `FindPeople`,
   `People`, `IssueTypeStatuses`, `Priorities` and `Labels` — along with `PeopleQuery`, `CapPeople` and
@@ -666,6 +667,15 @@ lands first, because `pkg/jira/port.go` blocks everyone while it is open.
   different value, slid the highlight one row, and left `enter` filtering by somebody the user never
   chose, silently. The row is now named before anything reorders the set and restored by id, which is
   what `docs/UX.md` principle 5 asks for.
+  **The fake can run what the picker writes.** `jiratest`'s JQL knew `project`, `key`, `status`,
+  `assignee` and `labels` compared with `=`, `IS EMPTY` and `IS NOT EMPTY` joined by `AND` — so a
+  clause on a reporter, a type or a priority, and every multi-value `IN`, was refused by the fake and
+  could only be tested as a string. It also reads `reporter`, `issuetype`/`type`, `priority`,
+  `IN (a, b)`, `currentUser()` on either account field, and an `OR` **inside one pair of brackets**,
+  which is the whole of what `Terms.Clause()` composes. Nothing else moved: an unbracketed `OR`, `~`,
+  an inequality, `NOT` and a date function are still refused, because a query the fake cannot honour
+  must never pass as one that matched everything. Every facet is now asserted on the issues it
+  selects rather than on the clause it emits.
   Budgets held: the list's steady scroll is 1 allocation a frame with terms in force, `BenchmarkFrame`
   is unchanged at 297, and the picker is virtualized and memoized — 3 allocations a frame scrolling
   two thousand labels, 94µs from keystroke to frame.

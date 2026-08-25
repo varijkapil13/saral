@@ -34,7 +34,7 @@ const allUpdated = `project = "PROJ" ORDER BY updated DESC`
 func fullCaps() jira.Capabilities {
 	ok := jira.Capability{OK: true}
 	return jira.Capabilities{
-		Plans: ok, BulkMove: ok, Boards: ok, Attachments: ok, DeleteIssues: ok,
+		Plans: ok, BulkMove: ok, Boards: ok, Attachments: ok, DeleteIssues: ok, People: ok,
 		TimeZone: time.UTC,
 	}
 }

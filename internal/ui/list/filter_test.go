@@ -1,11 +1,15 @@
 package list
 
 import (
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/pkg/jira"
+	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
 var (
@@ -262,4 +266,136 @@ func TestList_TermsGolden(t *testing.T) {
 	dr.send(filter.ChosenMsg{Term: alan})
 
 	golden(t, "list_two_terms_120x30.golden", dr.view())
+}
+
+// A person chosen in the picker is a query run at the site, driven the way a
+// user drives it: f, down to the reporters, into them, and take the first.
+// Nothing narrows the rows already loaded, so the count under the search is the
+// site's answer and not a pass over what was on screen.
+func TestList_AReporterChosenInThePickerComesBackAsThatPersonsIssues(t *testing.T) {
+	t.Parallel()
+
+	const issues = 30
+	want := matchingKeys(jiratest.Gen(issues), func(iss *jira.Issue) bool {
+		return iss.Reporter != nil && iss.Reporter.DisplayName == "Ada Lovelace"
+	})
+	if len(want) == 0 || len(want) == issues {
+		t.Fatalf("Ada reported %d of %d issues, which would prove nothing", len(want), issues)
+	}
+
+	m := startAll(t, testDeps(newFake(issues)), 120, 40)
+	m = send(t, m, keyPress("f"))
+	m = send(t, m, keyPress("j"))
+	m = send(t, m, keyPress("enter"))
+	mustContain(t, frame(m), "which reporter?", "Ada Lovelace")
+
+	m = send(t, m, keyPress("enter"))
+
+	got := frame(m)
+	mustContain(t, got, `reporter "Ada Lovelace"`, strconv.Itoa(len(want))+" issues")
+	mustNotContain(t, got, "which reporter?", "The search failed.")
+}
+
+// What a term is worth is the rows it brings back, not the string it composes.
+// Every facet the picker offers is chosen here and the answer checked issue by
+// issue against the fixture — including the IN list two values of one facet
+// compose to, and the OR that lets nobody sit beside a named person.
+func TestList_EveryFacetNarrowsToTheIssuesThatMatchIt(t *testing.T) {
+	t.Parallel()
+
+	const issues = 30
+	nobody := filter.Term{Facet: filter.FacetAssignee, Label: unassigned}
+	for name, tc := range map[string]struct {
+		terms []filter.Term
+		match func(iss *jira.Issue) bool
+	}{
+		"an assignee": {
+			terms: []filter.Term{adaTerm},
+			match: func(iss *jira.Issue) bool {
+				return iss.Assignee != nil && iss.Assignee.AccountID == "acct-ada"
+			},
+		},
+		"a reporter": {
+			terms: []filter.Term{{Facet: filter.FacetReporter, ID: "acct-grace", Label: "Grace Hopper"}},
+			match: func(iss *jira.Issue) bool {
+				return iss.Reporter != nil && iss.Reporter.AccountID == "acct-grace"
+			},
+		},
+		"a status": {
+			terms: []filter.Term{shipped},
+			match: func(iss *jira.Issue) bool { return iss.Status.ID == "10203" },
+		},
+		"a type": {
+			terms: []filter.Term{{Facet: filter.FacetType, ID: "10302", Label: "Defect"}},
+			match: func(iss *jira.Issue) bool { return iss.Type.ID == "10302" },
+		},
+		"a priority": {
+			terms: []filter.Term{{Facet: filter.FacetPriority, ID: "10402", Label: "Normal"}},
+			match: func(iss *jira.Issue) bool { return iss.Priority != nil && iss.Priority.ID == "10402" },
+		},
+		"a label": {
+			terms: []filter.Term{{Facet: filter.FacetLabel, ID: "infra", Label: "infra"}},
+			match: func(iss *jira.Issue) bool { return slices.Contains(iss.Labels, "infra") },
+		},
+		"two values of one facet, which widen it": {
+			terms: []filter.Term{triage, shipped},
+			match: func(iss *jira.Issue) bool {
+				return iss.Status.ID == "10201" || iss.Status.ID == "10203"
+			},
+		},
+		"two facets, which narrow together": {
+			terms: []filter.Term{shipped, {Facet: filter.FacetPriority, ID: "10403", Label: "Whenever"}},
+			match: func(iss *jira.Issue) bool {
+				return iss.Status.ID == "10203" && iss.Priority != nil && iss.Priority.ID == "10403"
+			},
+		},
+		"nobody, or a named person": {
+			terms: []filter.Term{nobody, adaTerm},
+			match: func(iss *jira.Issue) bool {
+				return iss.Assignee == nil || iss.Assignee.AccountID == "acct-ada"
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			want := matchingKeys(jiratest.Gen(issues), tc.match)
+			if len(want) == 0 || len(want) == issues {
+				t.Fatalf("the term matches %d of %d issues, so it would pass against a site that filtered nothing",
+					len(want), issues)
+			}
+
+			dr := openAll(t, testDeps(newFake(issues)), 120, 40)
+			for _, term := range tc.terms {
+				dr.send(filter.ChosenMsg{Term: term})
+			}
+
+			mustNotContain(t, dr.view(), "The search failed.")
+			if got := loadedKeys(dr.m); !slices.Equal(got, want) {
+				t.Errorf("%s selected %v, want %v (the search was %q)", name, got, want, dr.m.jql)
+			}
+		})
+	}
+}
+
+// matchingKeys is the keys of the fixture issues a predicate keeps, sorted so
+// that it can be compared with an answer that came back in another order.
+func matchingKeys(all []jira.Issue, match func(iss *jira.Issue) bool) []string {
+	out := make([]string, 0, len(all))
+	for i := range all {
+		if match(&all[i]) {
+			out = append(out, all[i].Key)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+func loadedKeys(m *Model) []string {
+	out := make([]string, 0, len(m.issues))
+	for i := range m.issues {
+		out = append(out, m.issues[i].Key)
+	}
+	slices.Sort(out)
+	return out
 }
