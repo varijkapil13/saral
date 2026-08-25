@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -66,6 +67,42 @@ func newFake(issues int, opts ...jiratest.Option) *jiratest.Fake {
 		jiratest.WithProject("PROJ", jiratest.Scrum),
 		jiratest.WithIssues(jiratest.Gen(issues)),
 	}, opts...)...)
+}
+
+// longDoc is a description with more paragraphs than any pane can show, so that
+// a test about scrolling has something to scroll.
+func longDoc(paragraphs int) adf.Doc {
+	nodes := make([]adf.Node, 0, paragraphs)
+	for i := range paragraphs {
+		nodes = append(nodes, adf.NewNode("paragraph", adf.NewText(
+			"Paragraph "+strconv.Itoa(i+1)+" of something worth several lines when the pane is narrow.")))
+	}
+	return adf.NewDoc(nodes...)
+}
+
+// readIssue is the issue as the detail read hands it over: everything the fake
+// holds, and a mask saying every field was asked for. A seed's mask is empty,
+// which is the other answer and the one the fields tests cover.
+func readIssue(t *testing.T, f *jiratest.Fake, key string) jira.Issue {
+	t.Helper()
+
+	iss, err := f.Issue(t.Context(), key)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	iss.Requested = jira.AllFields()
+	return iss
+}
+
+// pane is the detail pane a panel is driving.
+func (p *panel) pane(t *testing.T) *Model {
+	t.Helper()
+
+	m, ok := p.view.(*Model)
+	if !ok {
+		t.Fatalf("the pane is a %T, not the detail pane", p.view)
+	}
+	return m
 }
 
 // addComment writes a comment onto an issue the way a person would, so the thread
@@ -204,6 +241,14 @@ func keyPress(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}
 	case "ctrl+u":
 		return tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl}
+	case "tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab}
+	case "shift+tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+	case "pgup":
+		return tea.KeyPressMsg{Code: tea.KeyPgUp}
+	case "pgdown":
+		return tea.KeyPressMsg{Code: tea.KeyPgDown}
 	default:
 		r, _ := utf8.DecodeRuneInString(s)
 		return tea.KeyPressMsg{Code: r, Text: s}

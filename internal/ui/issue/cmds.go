@@ -11,19 +11,14 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// commentCap bounds how much of a thread is read. A thread longer than this is
-// a conversation nobody scrolls to the end of, and reading it all would be one
-// request per fifty comments.
-const commentCap = 200
-
+// loadedMsg is one issue read with the detail projection, and what this site
+// calls the fields it came back with. The labels travel with the answer because
+// a custom field's ID differs per site and its name is translated, so neither
+// can be written down here.
 type loadedMsg struct {
-	gen   int
-	issue jira.Issue
-}
-
-type commentsMsg struct {
-	gen      int
-	comments []jira.Comment
+	gen    int
+	issue  jira.Issue
+	labels app.FieldLabels
 }
 
 type failedMsg struct {
@@ -47,20 +42,6 @@ func load(ctx context.Context, search *app.Search, key string, gen int) tea.Cmd 
 		if len(res.Page.Items) == 0 {
 			return failedMsg{gen: gen, err: &jira.NotFoundError{Kind: "issue", ID: key}}
 		}
-		return loadedMsg{gen: gen, issue: res.Page.Items[0]}
-	}
-}
-
-func comments(ctx context.Context, client jira.CommentReader, key string, gen int) tea.Cmd {
-	return func() tea.Msg {
-		page, err := client.Comments(ctx, key)
-		if err != nil {
-			return failedMsg{gen: gen, err: err}
-		}
-		all, err := jira.Collect(ctx, page, commentCap)
-		if err != nil {
-			return failedMsg{gen: gen, err: err}
-		}
-		return commentsMsg{gen: gen, comments: all}
+		return loadedMsg{gen: gen, issue: res.Page.Items[0], labels: res.Labels}
 	}
 }

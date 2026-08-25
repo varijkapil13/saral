@@ -49,7 +49,7 @@ func TestComments_TheKeyOpensTheThreadForTheIssueOnScreen(t *testing.T) {
 	addComment(t, f, "PROJ-5", "Said on an issue nobody opened.")
 	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-4")), 100, 24)
 
-	p.keys("c")
+	p.keys("C")
 
 	thread := threadPanel(t, p, "PROJ-4", 100, 24)
 	mustContain(t, thread.frame(), "PROJ-4", "What we agreed in the end.")
@@ -84,9 +84,9 @@ func TestComments_EachPaneOpensTheThreadOfItsOwnIssue(t *testing.T) {
 	d := testDeps(f)
 
 	first := newPanel(t, New(d, seedOf(t, f, "PROJ-1")), 100, 24)
-	first.keys("c")
+	first.keys("C")
 	second := newPanel(t, New(d, seedOf(t, f, "PROJ-2")), 100, 24)
-	second.keys("c")
+	second.keys("C")
 
 	one := threadPanel(t, first, "PROJ-1", 100, 24)
 	two := threadPanel(t, second, "PROJ-2", 100, 24)
@@ -103,7 +103,7 @@ func TestComments_WriteEditAndDeleteReachTheSiteFromTheDetailPane(t *testing.T) 
 
 	f := newFake(12)
 	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-7")), 100, 24)
-	p.keys("c")
+	p.keys("C")
 	thread := threadPanel(t, p, "PROJ-7", 100, 24)
 
 	thread.keys("a")
@@ -137,7 +137,7 @@ func TestComments_DeletingStillWaitsForTheAnswerItAsksFor(t *testing.T) {
 	f := newFake(12)
 	addComment(t, f, "PROJ-8", "Not going anywhere.")
 	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-8")), 100, 24)
-	p.keys("c")
+	p.keys("C")
 	thread := threadPanel(t, p, "PROJ-8", 100, 24)
 
 	thread.keys("d")
@@ -182,15 +182,19 @@ func TestComments_ReadingTheThreadThatFailsSaysWhyRatherThanShowingAnEmptyOne(t 
 			f := newFake(12)
 			addComment(t, f, "PROJ-3", "Never read.")
 			p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-3")), 100, 24)
-			p.keys("c")
+			p.keys("C")
+			thread := newPanel(t, threadOf(t, p, "PROJ-3"), 100, 24)
 
-			view := threadOf(t, p, "PROJ-3")
+			// A reread is what can fail after the first one worked, and it is the
+			// same read: the thread fetches its own comments now that the pane
+			// holds the thread itself rather than a copy of its rows.
 			f.FailNext(tc.err)
-			thread := newPanel(t, view, 100, 24)
+			thread.send(kernel.RefreshMsg{})
 
 			if got := thread.statusText(); !strings.Contains(got, tc.want) {
 				t.Errorf("the status line says %q, want it to carry %q", got, tc.want)
 			}
+			mustContain(t, thread.frame(), "Never read.")
 			mustNotContain(t, thread.frame(), "Nobody has commented")
 		})
 	}
@@ -203,7 +207,7 @@ func TestComments_APaneWithNoIssueOpensNothing(t *testing.T) {
 
 	p := newPanel(t, New(testDeps(newFake(2)), jira.Issue{}), 100, 24)
 
-	p.keys("c")
+	p.keys("C")
 	p.send(CommentsMsg{})
 
 	if len(p.pushes) != 0 {
@@ -211,30 +215,28 @@ func TestComments_APaneWithNoIssueOpensNothing(t *testing.T) {
 	}
 }
 
-// c had to be free, and taking it must not have cost the pane a gesture it
-// already spends: g g and g e still walk the document.
+// C had to be free, and taking it must not have cost the pane a gesture it
+// already spends: g g and g e still walk the description.
 func TestComments_TakingCLeftTheOtherGesturesAlone(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(12)
-	addComment(t, f, "PROJ-9", strings.Repeat("A long conversation. ", 60))
-	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-9")), 100, 12)
+	seed := seedOf(t, f, "PROJ-9")
+	seed.Description = longDoc(60)
+	p := newPanel(t, New(testDeps(f), seed), 100, 12)
+	p.send(loadedMsg{gen: p.pane(t).gen, issue: seed})
 
 	p.keys("g", "e")
 	if len(p.pushes) != 0 {
 		t.Fatalf("g then e pushed %d views; it is the gesture that goes to the end of the issue", len(p.pushes))
 	}
-	pane, ok := p.view.(*Model)
-	if !ok {
-		t.Fatal("the pane is no longer a *Model")
-	}
-	if pane.pager.YOffset() == 0 {
-		t.Error("g then e did not reach the end of the issue")
+	if p.pane(t).tops[regionDesc] == 0 {
+		t.Error("g then e did not reach the end of the description")
 	}
 
 	p.keys("g", "g")
-	if pane.pager.YOffset() != 0 {
-		t.Error("g then g did not come back to the top of the issue")
+	if p.pane(t).tops[regionDesc] != 0 {
+		t.Error("g then g did not come back to the top of the description")
 	}
 }
 
@@ -252,8 +254,8 @@ func TestComments_RegisterTheKeyTheFooterShowsAndThePaletteEntryThatReachesIt(t 
 			advertised = append(advertised, binding.Help().Key)
 		}
 	}
-	if !slices.Contains(advertised, "c") {
-		t.Errorf("the detail pane does not advertise %q; the footer only shows keys that work: %v", "c", advertised)
+	if !slices.Contains(advertised, "C") {
+		t.Errorf("the detail pane does not advertise %q; the footer only shows keys that work: %v", "C", advertised)
 	}
 
 	cmd, ok := kernel.LookupCommand("issue.comments")
@@ -263,7 +265,7 @@ func TestComments_RegisterTheKeyTheFooterShowsAndThePaletteEntryThatReachesIt(t 
 	if cmd.Group != "Issue" {
 		t.Errorf("issue.comments is grouped under %q, want it beside the other things done to an issue", cmd.Group)
 	}
-	if !slices.Equal(cmd.Keys, []string{"c"}) {
+	if !slices.Equal(cmd.Keys, []string{"C"}) {
 		t.Errorf("issue.comments teaches %v, want the key the detail pane shows", cmd.Keys)
 	}
 
@@ -281,7 +283,7 @@ func bodiesOn(t *testing.T, f *jiratest.Fake, key string) []string {
 	if err != nil {
 		t.Fatalf("Comments: %v", err)
 	}
-	all, err := jira.Collect(t.Context(), page, commentCap)
+	all, err := jira.Collect(t.Context(), page, 200)
 	if err != nil {
 		t.Fatalf("Collect: %v", err)
 	}

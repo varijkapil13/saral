@@ -1,20 +1,20 @@
- saral | PROJ-12                                   PROJ | example.atlassian.net 
-PROJ-12  Retire the nightly export                                              
-Story | Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00        
+PROJ-12  Retire the nightly export
+Story | Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00
 --------------------------------------------------------------------------------
-|Retire the nightly export.                                                     
+|PROJ-12 | 2 comments                                        write  edit  delete
+|-------------------------------------------------------------------------------
+|  Sam Tester | 02 Mar 2026 09:00                                               
+|    Reproduced on staging, twice.                                              
 |                                                                               
-|- Filed against PROJ-12.                                                       
-|- The old ticket for this was closed as cannot reproduce.                      
-|- Waiting on a decision.                                                       
+|    The fix is in the shared client.                                           
 |                                                                               
-|                                                                               
-|                                                                               
-|                                                                               
-|                                                                               
-|                                                                               
+|> Sam Tester | 02 Mar 2026 09:00                                               
+|    Agreed. I will pick this up on Monday.                                     
 |                                                                               
 |                                                                               
 |                                                                               
 |                                                                               
- Issues  tab pane  e edit  t status  C comment                             ? esc
+|                                                                               
+|                                                                               
+|                                                                               
+|                                                                               

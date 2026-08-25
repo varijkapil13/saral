@@ -3,25 +3,29 @@ package issue
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
-	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
+// The four sizes are the smallest terminal docs/UX.md supports, the breakpoint
+// exactly, and one either side of it — and each one is drawn with the keyboard
+// in the description and again with it in the fields, because the gutter rail is
+// the only thing that says which.
 func TestIssue_Golden(t *testing.T) {
 	t.Parallel()
 
-	for name, size := range map[string]struct{ w, h int }{
-		"120x38": {120, 38},
-		"100x28": {100, 28},
-		"80x18":  {80, 18},
-	} {
+	for _, size := range []struct{ w, h int }{{80, 20}, {90, 28}, {100, 28}, {120, 38}} {
+		name := fmt.Sprintf("%dx%d", size.w, size.h)
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
@@ -31,7 +35,40 @@ func TestIssue_Golden(t *testing.T) {
 			dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-12"), size.w, size.h)
 
 			golden(t, "issue_"+name+".golden", dr.view())
+
+			dr.key("tab")
+			golden(t, "issue_fields_"+name+".golden", dr.view())
+
+			dr.key("tab")
+			golden(t, "issue_thread_"+name+".golden", dr.view())
 		})
+	}
+}
+
+// Every frame is exactly as tall as the box the kernel gave it. A pane one line
+// short leaves the previous frame's row on screen and one line long pushes the
+// footer off it.
+func TestIssue_TheFrameIsExactlyAsTallAsItsBox(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(20)
+	for _, size := range []struct{ w, h int }{{80, 20}, {90, 28}, {100, 28}, {120, 38}, {200, 60}} {
+		dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-12"), size.w, size.h)
+		for _, focus := range []string{"", "tab", "tab"} {
+			if focus != "" {
+				dr.key(focus)
+			}
+			lines := strings.Split(dr.view(), "\n")
+			if len(lines) != size.h {
+				t.Errorf("%dx%d draws %d lines, want %d", size.w, size.h, len(lines), size.h)
+			}
+			for i, line := range lines {
+				if got := ansi.StringWidth(line); got > size.w {
+					t.Errorf("%dx%d line %d is %d cells wide, want at most %d: %q",
+						size.w, size.h, i, got, size.w, line)
+				}
+			}
+		}
 	}
 }
 
@@ -61,7 +98,7 @@ func TestIssue_ShowsTheCommentThreadOldestFirst(t *testing.T) {
 	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-3"), 120, 40)
 
 	got := dr.view()
-	mustContain(t, got, "Comments (2)", "Sam Tester", "First thing said.", "Second thing said.")
+	mustContain(t, got, "2 comments", "Sam Tester", "First thing said.", "Second thing said.")
 	if strings.Index(got, "First thing said.") > strings.Index(got, "Second thing said.") {
 		t.Errorf("the thread is not in the order it was written:\n%s", got)
 	}
@@ -73,19 +110,55 @@ func TestIssue_SaysSoWhenNobodyHasCommented(t *testing.T) {
 	f := newFake(20)
 	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-5"), 120, 40)
 
-	mustContain(t, dr.view(), "Comments (0)", "Nobody has commented.")
+	mustContain(t, dr.view(), "Nobody has commented on PROJ-5")
 }
 
-func TestIssue_RendersTheDescriptionThroughTheMarkdownRenderer(t *testing.T) {
+// The description goes through the display renderer, so what is on screen is
+// styled text rather than the markdown pkg/adf serialises for an editor. That
+// markdown is what this pane used to draw, and it put ##, ** and [text](url) in
+// front of the reader.
+func TestIssue_RendersTheDescriptionAsStyledTextRatherThanMarkdown(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(20)
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-4"), 120, 40)
+	seed := seedOf(t, f, "PROJ-4")
+	seed.Description = richDoc()
+	dr := newDriver(t, testDeps(f), seed, 120, 40)
+	dr.send(loadedMsg{gen: dr.m.gen, issue: seed})
 
-	// jiratest.Gen writes every description as a paragraph followed by a bullet
-	// list, so the markers are what prove ADF was rendered rather than dropped.
-	mustContain(t, dr.view(), "- Filed against PROJ-4.")
-	mustNotContain(t, dr.view(), "bulletList", "listItem")
+	// The same document is asserted through the markdown serialisation first, so
+	// that the markers being absent from the frame means something.
+	markdown := adf.Markdown(seed.Description)
+	mustContain(t, markdown, "## ", "**", "](")
+
+	got := dr.view()
+	mustContain(t, got, "What broke", "regressed", "the migration note", "the shared client")
+	mustNotContain(t, got, "## ", "**", "](", "bulletList", "listItem")
+
+	// And it is styled rather than merely stripped: the bold run comes back with
+	// a sequence around it.
+	if raw := dr.m.View(); !strings.Contains(raw, "\x1b[") {
+		t.Error("the description carries no escape sequence at all, so nothing was styled")
+	}
+}
+
+// richDoc is a description with the constructs the markdown serialisation would
+// have spelt out: a heading, a bold run, a link and a code fence.
+func richDoc() adf.Doc {
+	bold := adf.NewText("regressed")
+	bold.Marks = []adf.Mark{{Type: "strong"}}
+	link := adf.NewText("the migration note")
+	link.Marks = []adf.Mark{{Type: "link", Attrs: adf.Attrs{"href": "https://example.atlassian.net/wiki/x/1"}}}
+	code := adf.NewNode("codeBlock", adf.NewText("return c.do(ctx, http.MethodPost, \"/export/\"+tenant, nil)"))
+	code.Attrs = adf.Attrs{"language": "go"}
+	heading := adf.NewNode("heading", adf.NewText("What broke"))
+	heading.Attrs = adf.Attrs{"level": 2}
+	return adf.NewDoc(
+		heading,
+		adf.NewNode("paragraph", adf.NewText("The export "), bold, adf.NewText(" after "), link, adf.NewText(".")),
+		code,
+		adf.NewNode("bulletList", adf.NewNode("listItem", adf.NewNode("paragraph", adf.NewText("It touches the shared client.")))),
+	)
 }
 
 func TestIssue_ReadsTheIssueWithANarrowFieldSetRatherThanTheWholeThing(t *testing.T) {
@@ -176,9 +249,10 @@ func TestIssue_LosingFocusStopsTheWorkAndGettingItBackStartsItAgain(t *testing.T
 	f.Delay(0)
 	dr := &driver{t: t, m: m}
 	dr.send(kernel.FocusMsg{Focused: true})
-	if !dr.m.loadedIssue || !dr.m.loadedComments {
-		t.Error("getting focus back did not start the work again")
+	if !dr.m.loadedIssue {
+		t.Error("getting focus back did not read the issue again")
 	}
+	mustContain(t, dr.view(), seed.Summary)
 }
 
 func collect(cmd tea.Cmd) []tea.Msg {
@@ -200,17 +274,22 @@ func collect(cmd tea.Cmd) []tea.Msg {
 	return out
 }
 
+// allCancelled holds this pane's own read to having been given up. The thread
+// reads its own comments and answers with a message of its own, and whether that
+// one was cancelled is a question for the package that owns it.
 func allCancelled(msgs []tea.Msg) bool {
-	if len(msgs) == 0 {
-		return false
-	}
+	seen := 0
 	for _, msg := range msgs {
 		failed, ok := msg.(failedMsg)
-		if !ok || !errors.Is(failed.err, context.Canceled) {
+		if !ok {
+			continue
+		}
+		seen++
+		if !errors.Is(failed.err, context.Canceled) {
 			return false
 		}
 	}
-	return true
+	return seen > 0
 }
 
 func TestIssue_RendersDatesInTheAccountsTimezoneAndNotTheMachines(t *testing.T) {
@@ -250,26 +329,55 @@ func TestIssue_ScrollsTheBodyAndKeepsTheIdentityLinesPut(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(20)
-	for i := range 30 {
-		addComment(t, f, "PROJ-11", "Comment number "+strings.Repeat("x", i%5+1))
-	}
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-11"), 100, 14)
+	seed := seedOf(t, f, "PROJ-11")
+	seed.Description = longDoc(30)
+	dr := newDriver(t, testDeps(f), seed, 100, 14)
+	dr.send(loadedMsg{gen: dr.m.gen, issue: seed})
 
 	top := dr.view()
 	dr.key("G")
 	bottom := dr.view()
 
 	if top == bottom {
-		t.Error("the pager did not move")
+		t.Error("the description did not move")
 	}
 	head := strings.SplitN(top, "\n", 2)[0]
 	if !strings.HasPrefix(bottom, head) {
-		t.Errorf("the identity line scrolled away with the body:\n%s", bottom)
+		t.Errorf("the identity line scrolled away with the description:\n%s", bottom)
 	}
 
 	dr.key("g", "g")
 	if dr.view() != top {
 		t.Error("g g did not go back to the top")
+	}
+}
+
+// A motion is aimed at the region that has the keyboard, and the thread is a
+// view rather than a list of lines, so it is handed the stroke that means the
+// same thing in its own keymap.
+func TestIssue_AMotionMovesTheRegionThatHasTheKeyboard(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(20)
+	for i := range 12 {
+		addComment(t, f, "PROJ-11", "Comment number "+strconv.Itoa(i+1)+", worth a line or two of somebody's afternoon.")
+	}
+	seed := seedOf(t, f, "PROJ-11")
+	seed.Description = longDoc(30)
+	dr := newDriver(t, testDeps(f), seed, 120, 30)
+	dr.send(loadedMsg{gen: dr.m.gen, issue: seed})
+
+	before := dr.view()
+	dr.key("tab", "tab")
+	if dr.m.focus != regionComments {
+		t.Fatalf("two tabs left the keyboard on region %d, want the thread", dr.m.focus)
+	}
+	dr.key("G")
+	if dr.m.tops[regionDesc] != 0 {
+		t.Error("G moved the description while the thread had the keyboard")
+	}
+	if dr.view() == before {
+		t.Error("G with the thread focused moved nothing at all")
 	}
 }
 
@@ -280,16 +388,19 @@ func TestIssue_AResizeReflowsWithoutLosingThePlace(t *testing.T) {
 	for range 20 {
 		addComment(t, f, "PROJ-13", "Something worth several lines when the pane is narrow.")
 	}
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-13"), 120, 16)
+	seed := seedOf(t, f, "PROJ-13")
+	seed.Description = longDoc(40)
+	dr := newDriver(t, testDeps(f), seed, 120, 16)
+	dr.send(loadedMsg{gen: dr.m.gen, issue: seed})
 	dr.key("ctrl+d", "ctrl+d")
-	at := dr.m.pager.YOffset()
+	at := dr.m.tops[regionDesc]
 	if at == 0 {
-		t.Fatal("the pager never scrolled, so this proves nothing")
+		t.Fatal("the description never scrolled, so this proves nothing")
 	}
 
-	dr.send(kernel.SizeMsg{Width: 70, Height: 16})
-	if got := dr.m.pager.YOffset(); got != at {
-		t.Errorf("the resize moved the pager to line %d, want %d", got, at)
+	dr.send(kernel.SizeMsg{Width: 110, Height: 16})
+	if got := dr.m.tops[regionDesc]; got != at {
+		t.Errorf("the resize moved the description to line %d, want %d", got, at)
 	}
 }
 
@@ -302,7 +413,7 @@ func TestIssue_ARefreshRereadsTheIssueAndTheThread(t *testing.T) {
 
 	dr.send(kernel.RefreshMsg{})
 
-	mustContain(t, dr.view(), "Added while you were reading.", "Comments (1)")
+	mustContain(t, dr.view(), "Added while you were reading.")
 }
 
 func TestIssue_RegistersItsKeysUnderItsOwnScopeAndNoFooterSlot(t *testing.T) {
@@ -313,38 +424,5 @@ func TestIssue_RegistersItsKeysUnderItsOwnScopeAndNoFooterSlot(t *testing.T) {
 	}
 	if _, ok := kernel.LookupView(ViewID); ok {
 		t.Error("the detail pane registered a view spec, but it cannot be built without an issue")
-	}
-}
-
-func BenchmarkIssueView(b *testing.B) {
-	f := jiratest.New(
-		jiratest.WithProject("PROJ", jiratest.Scrum),
-		jiratest.WithIssues(jiratest.Gen(20)),
-	)
-	full, err := f.Issue(b.Context(), "PROJ-12")
-	if err != nil {
-		b.Fatal(err)
-	}
-	d := kernel.Deps{
-		Caps:  jira.Capabilities{TimeZone: time.UTC},
-		Theme: kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
-		Now:   func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
-	}
-	view, ok := New(d, full).(*Model)
-	if !ok {
-		b.Fatal("New did not return a *Model")
-	}
-	next, _ := view.Update(kernel.SizeMsg{Width: 120, Height: 40})
-	m, _ := next.(*Model)
-	next, _ = m.Update(loadedMsg{gen: m.gen, issue: full})
-	m, _ = next.(*Model)
-	next, _ = m.Update(commentsMsg{gen: m.gen})
-	m, _ = next.(*Model)
-	_ = m.View()
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
-		_ = m.View()
 	}
 }

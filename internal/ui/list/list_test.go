@@ -392,7 +392,9 @@ func TestList_ClickingARowSelectsItAndClickingItAgainOpensIt(t *testing.T) {
 
 	m = send(t, m, click)
 	mustContain(t, frame(m), "PROJ-3 ")
-	if !strings.Contains(frame(m), "Comments") {
+	// The detail pane is the only view that draws a sidebar of the issue's own
+	// fields, so that heading is what tells it apart from the rows behind it.
+	if !strings.Contains(frame(m), "Details") {
 		t.Errorf("a second click on the selected row did not open it:\n%s", frame(m))
 	}
 }
