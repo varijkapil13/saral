@@ -214,8 +214,10 @@ a thing Batch 2 would otherwise get quietly wrong.
   through `adf.ParseMarkdownInto`, which is the only way a mention keeps its account id. `EditComment`
   reads the comment before writing it so that a restriction the port cannot carry is echoed back
   rather than dropped. Unsent text is kept on disk per issue and per comment being edited.
-  The thread is reached by being pushed with an issue; the detail pane cannot push it yet
-  ([#67](https://github.com/varijkapil13/saral/issues/67)).
+  The thread is reached by being pushed with an issue. The detail pane does that on `c`
+  ([#67](https://github.com/varijkapil13/saral/issues/67)), which is what makes the whole packet
+  reachable: until then nothing in the program handed the view an issue, so writing, editing and
+  deleting a comment were all dead code.
 
 ## Batch 3 — Make it a daily driver · parallel ×5
 

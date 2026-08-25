@@ -160,6 +160,14 @@ wizard. `kernel.RegisterView` refuses a second claim on a slot at startup, so th
 enforced rather than merely written down — but it is written down so that six later packets do not
 each pick a number.
 
+A view that cannot be built without knowing what it is about is reached from the view that knows.
+The comment thread is the case: `c` on the issue detail pane pushes the thread for the issue on
+screen, so `esc` lands back on that issue, and the palette's *comment on this issue* is the same
+gesture reached without the key — it is a broadcast, because the palette knows which command was run
+and never which issue is on screen. Nothing offers to open the thread with no issue behind it. A
+pane that has to say "open an issue and come back" is a dead end when nothing can come back to it,
+and `kernel.Open` on such a view is how one gets built.
+
 Two things this table does not promise. There is no `tab`: no view has two panes yet, and the gesture
 that moves focus between them belongs to the first one that grows a second pane. And jumping to an
 issue by key — typing `PROJ-142`, or pasting a Jira URL — is not built; it is

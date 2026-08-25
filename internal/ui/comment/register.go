@@ -8,7 +8,11 @@ import (
 
 // The thread claims no footer slot: docs/UX.md keeps the digits for the views a
 // session lives in, and this one is about whichever issue is being read. It is
-// reached by being pushed with an issue, by name, and from the palette.
+// reached by being pushed with an issue, and by name.
+//
+// Nothing here opens it without one: a thread with no issue behind it is a pane
+// nothing can then satisfy. The view that holds an issue carries the key and the
+// palette entry that open this.
 func init() {
 	kernel.RegisterView(kernel.ViewSpec{
 		ID:    ViewID,
@@ -16,12 +20,6 @@ func init() {
 		New:   New,
 	})
 	kernel.RegisterKeys(ViewID, defaultKeys().keySet())
-	kernel.RegisterCommand(kernel.Command{
-		ID:    "comments.open",
-		Title: "Comments",
-		Group: "Go to",
-		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
-	})
 	keys := defaultKeys()
 	for _, c := range []struct {
 		id, title string

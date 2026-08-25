@@ -1,12 +1,16 @@
  saral | Commands                                                                          PROJ | example.atlassian.net 
 > what do you want to do?                                                                                               
------------------------------------------------------------------------------------------------------------- 16 commands
+------------------------------------------------------------------------------------------------------------ 20 commands
 > Follow the terminal's own colours             Appearance                                                              
   Turn colour off                               Appearance                                                              
   Use the dark theme                            Appearance                                                              
   Use the light theme                           Appearance                                                              
+  Delete the comment you are on                 Comments                                                               d
+  Edit the comment you are on                   Comments                                                               e
+  Write a comment                               Comments                                                               a
   Issues                                        Go to                                                                 g1
   Change this issue's status                    Issue                                                                  t
+  Comment on this issue                         Issue                                                                  c
   Edit this issue                               Issue                                                                  e
   Clear the filter on these rows                Search                                                                  
   Issues I reported                             Search                                                                  
@@ -17,10 +21,6 @@
   Show only rows with this row's status         Search                                                                  
   Show only rows with this row's type           Search                                                                  
   Unassigned issues                             Search                                                                  
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

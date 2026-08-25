@@ -2,6 +2,7 @@ package issue
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -21,6 +22,24 @@ import (
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files")
+
+// TestMain points the cache directory at one of this run's own. The comment
+// thread the detail pane opens finds its drafts directory when it is built, and
+// nothing here may reach the cache directory of whoever is running the suite.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "saral-issue-cache")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := os.Setenv("SARAL_CACHE_DIR", dir); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
+}
 
 func fullCaps() jira.Capabilities {
 	ok := jira.Capability{OK: true}
@@ -49,9 +68,9 @@ func newFake(issues int, opts ...jiratest.Option) *jiratest.Fake {
 	}, opts...)...)
 }
 
-// comment writes a comment onto an issue the way a person would, so the thread
+// addComment writes a comment onto an issue the way a person would, so the thread
 // under test is one the fake actually holds.
-func comment(t *testing.T, f *jiratest.Fake, key string, paragraphs ...string) {
+func addComment(t *testing.T, f *jiratest.Fake, key string, paragraphs ...string) {
 	t.Helper()
 	nodes := make([]adf.Node, 0, len(paragraphs))
 	for _, p := range paragraphs {
