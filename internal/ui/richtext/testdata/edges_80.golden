@@ -1,0 +1,64 @@
+Nodes a site keeps but never writes
+
+│ ? unsupported: futureBlock
+
+│ ? unsupported: futureBlock
+│ a node type no schema published
+
+│ ? unsupported: extension roadmap-macro
+
+inline: ? futureInline and ? inlineExtension chart.
+
+Lozenges, in every colour the enum has
+
+[neutral] [blue] [purple] [red] [yellow] [green] [teal] [status]
+
+│ ✓ TIP
+│ a tip is a success panel by another name
+
+│ ◆ SOMETHINGNEW
+│ a panel kind this build has not met
+
+│ ◆ PANEL
+│ a colour that will not parse is no colour
+
+Things wider than the pane
+
+See
+https://example.atlassian.net/wiki/spaces/EX/pages/98304/the-runbook-for-a-baske
+↳ t-that-divides-by-zero first.
+
+│ sql
+│ select key, summary, status from issue where project = 'EX' and status in ('open', 'in review') order by updated desc;
+│     indented with a tab
+
+│ one                │ two                 │ three │ four │ five │ six         │
+│────────────────────│─────────────────────│───────│──────│──────│─────────────│
+│ a sentence long    │ 日本語のセルは二倍  │ c     │ d    │ e    │ ▸ in a cell │
+│ enough to wrap     │ の幅                │       │      │      │             │
+│ inside its own     │                     │       │      │      │             │
+│ column rather than │                     │       │      │      │             │
+│ be cut off         │                     │       │      │      │             │
+
+Media, folds and the half-written
+
+▣ a screenshot (media:3f6b1c72-9d0e-4a55-b1b7-6c6b0a9f2e41)
+
+▣ media:8a0c5d31-1b2e-4f77-9c3a-2d4e6f8a0b1c
+
+inline media ▣ media:1c2b3a49-5d6e-4f80-9a1b-2c3d4e5f6071, a mention with
+nothing to show @5b10a2844c20165700ede21g, an emoji with only a short name
+:sparkles:, a date that will not parse yesterday and a placeholder type
+something
+
+▸ a fold holding another fold
+
+☐ a state this build has not met is not done
+☑ the state is matched without regard to case
+☐
+
+
+
+text carrying an escape [31m and a bell  must not repaint the screen
+
+                                                             pushed to the right

@@ -1,0 +1,136 @@
+Kitchen sink: every ADF node this site
+accepts
+
+A paragraph with strong, emphasis,
+strikethrough, underline, inline code,
+H_2O and x^2, coloured, highlighted, a
+titled link (https://example.com/docs)
+and https://example.com/plain.
+
+A linked code span
+(https://example.com/code) — code and
+link are the one pair of marks that may
+share a text node.
+
+Lists
+
+• first bullet
+  • nested bullet
+    • third level
+• second bullet with bold inside
+
+  │ shell
+  │ saral --help
+
+1. step one
+2. step two
+3. step three
+   1. substep
+
+7. a list that starts at seven
+
+Task and decision lists
+
+☑ probe every node type
+☐ write it up
+  ☐ an indented item is a sibling list,
+    not a child of the item above
+
+◇ keep the original bytes
+
+Code
+
+│ go
+│ func render(d Doc) string {
+│     if d.Version != 1 {
+│         return ""
+│     }
+│     return walk(d.Content)
+│ }
+
+│ a code block with no language attribute
+
+Quote and rule
+
+│ A blockquote holds paragraphs and
+│ lists — never a heading, a rule or a
+│ table.
+│
+│ • a bullet inside the quote
+
+────────────────────────────────────────
+
+Panels
+
+│ ℹ INFO
+│ info panel
+
+│ ✎ NOTE
+│ note panel
+
+│ ⚠ WARNING
+│ warning panel
+
+│ ✓ SUCCESS
+│ success panel
+
+│ ✗ ERROR
+│ error panel with code in it
+
+│ 🚀 PANEL
+│ custom panel — note the colour comes
+│ back upper-cased
+
+Table with a header row and merged cells
+
+│ Node          │ Accepted │ Note      │
+│───────────────│──────────│───────────│
+│ a cell        │          │ colspan 2 │
+│ spanning two  │          │           │
+│ columns       │          │           │
+│ a cell        │ b        │ c         │
+│ spanning two  │          │           │
+│ rows          │          │           │
+│               │ d        │ e         │
+
+Expand, layout and cards
+
+▸ an expand — click to open
+
+left column
+
+right column
+
+https://example.com/browse/ABC-1
+
+https://example.com/a-block-card
+
+https://example.com/an-embed
+
+Inline nodes
+
+A mention of @Example User, an emoji 🎉,
+a date 2026-01-01, a status lozenge
+[NEEDS REVIEW], and a hard break next.
+This text is after the hard break.
+
+a centred paragraph (alignment is a mark
+              on the node)
+
+  an indented paragraph
+
+▣ https://example.com/an-external-image.
+  ↳ png
+
+Non-ASCII
+
+Umlauts: Größe, Übermäßig, Weiß. CJK:
+日本語のテキスト、中文字符. Emoji:
+🚀📊🐛. Combining: été. RTL: עברית.
+
+A wide-rune table cell is the thing that
+breaks a renderer that counts bytes.
+
+│ キー   │ Wert     │
+│────────│──────────│
+│ 日本語 │ Größe 🚀 │

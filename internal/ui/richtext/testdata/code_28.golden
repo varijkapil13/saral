@@ -1,0 +1,9 @@
+│ go
+│ func render(d Doc) string {
+│     if d.Version != 1 {
+│         return ""
+│     }
+│     return walk(d.Content)
+│ }
+
+│ a code block with no language attribute

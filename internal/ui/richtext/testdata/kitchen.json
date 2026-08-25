@@ -1,0 +1,1288 @@
+{
+ "type": "doc",
+ "version": 1,
+ "content": [
+  {
+   "type": "heading",
+   "attrs": {
+    "level": 1
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Kitchen sink: every ADF node this site accepts"
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    {
+     "type": "text",
+     "text": "A paragraph with "
+    },
+    {
+     "type": "text",
+     "text": "strong",
+     "marks": [
+      {
+       "type": "strong"
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": ", "
+    },
+    {
+     "type": "text",
+     "text": "emphasis",
+     "marks": [
+      {
+       "type": "em"
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": ", "
+    },
+    {
+     "type": "text",
+     "text": "strikethrough",
+     "marks": [
+      {
+       "type": "strike"
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": ", "
+    },
+    {
+     "type": "text",
+     "text": "underline",
+     "marks": [
+      {
+       "type": "underline"
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": ", "
+    },
+    {
+     "type": "text",
+     "text": "inline code",
+     "marks": [
+      {
+       "type": "code"
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": ", H"
+    },
+    {
+     "type": "text",
+     "text": "2",
+     "marks": [
+      {
+       "type": "subsup",
+       "attrs": {
+        "type": "sub"
+       }
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": "O and x"
+    },
+    {
+     "type": "text",
+     "text": "2",
+     "marks": [
+      {
+       "type": "subsup",
+       "attrs": {
+        "type": "sup"
+       }
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": ", "
+    },
+    {
+     "type": "text",
+     "text": "coloured",
+     "marks": [
+      {
+       "type": "textColor",
+       "attrs": {
+        "color": "#ff5630"
+       }
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": ", "
+    },
+    {
+     "type": "text",
+     "text": "highlighted",
+     "marks": [
+      {
+       "type": "backgroundColor",
+       "attrs": {
+        "color": "#fedec8"
+       }
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": ", "
+    },
+    {
+     "type": "text",
+     "text": "a titled link",
+     "marks": [
+      {
+       "type": "link",
+       "attrs": {
+        "href": "https://example.com/docs",
+        "title": "the title"
+       }
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": " and "
+    },
+    {
+     "type": "text",
+     "text": "https://example.com/plain",
+     "marks": [
+      {
+       "type": "link",
+       "attrs": {
+        "href": "https://example.com/plain"
+       }
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": "."
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    {
+     "type": "text",
+     "text": "A linked "
+    },
+    {
+     "type": "text",
+     "text": "code span",
+     "marks": [
+      {
+       "type": "code"
+      },
+      {
+       "type": "link",
+       "attrs": {
+        "href": "https://example.com/code"
+       }
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "text": " — code and link are the one pair of marks that may share a text node."
+    }
+   ]
+  },
+  {
+   "type": "heading",
+   "attrs": {
+    "level": 2
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Lists"
+    }
+   ]
+  },
+  {
+   "type": "bulletList",
+   "content": [
+    {
+     "type": "listItem",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "first bullet"
+        }
+       ]
+      },
+      {
+       "type": "bulletList",
+       "content": [
+        {
+         "type": "listItem",
+         "content": [
+          {
+           "type": "paragraph",
+           "content": [
+            {
+             "type": "text",
+             "text": "nested bullet"
+            }
+           ]
+          },
+          {
+           "type": "bulletList",
+           "content": [
+            {
+             "type": "listItem",
+             "content": [
+              {
+               "type": "paragraph",
+               "content": [
+                {
+                 "type": "text",
+                 "text": "third level"
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "listItem",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "second bullet with "
+        },
+        {
+         "type": "text",
+         "text": "bold",
+         "marks": [
+          {
+           "type": "strong"
+          }
+         ]
+        },
+        {
+         "type": "text",
+         "text": " inside"
+        }
+       ]
+      },
+      {
+       "type": "codeBlock",
+       "attrs": {
+        "language": "shell"
+       },
+       "content": [
+        {
+         "type": "text",
+         "text": "saral --help"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "orderedList",
+   "attrs": {
+    "order": 1
+   },
+   "content": [
+    {
+     "type": "listItem",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "step one"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "listItem",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "step two"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "listItem",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "step three"
+        }
+       ]
+      },
+      {
+       "type": "orderedList",
+       "attrs": {
+        "order": 1
+       },
+       "content": [
+        {
+         "type": "listItem",
+         "content": [
+          {
+           "type": "paragraph",
+           "content": [
+            {
+             "type": "text",
+             "text": "substep"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "orderedList",
+   "attrs": {
+    "order": 7
+   },
+   "content": [
+    {
+     "type": "listItem",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "a list that starts at seven"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "heading",
+   "attrs": {
+    "level": 2
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Task and decision lists"
+    }
+   ]
+  },
+  {
+   "type": "taskList",
+   "content": [
+    {
+     "type": "taskItem",
+     "content": [
+      {
+       "type": "text",
+       "text": "probe every node type"
+      }
+     ],
+     "attrs": {
+      "localId": "ks-task-1",
+      "state": "DONE"
+     }
+    },
+    {
+     "type": "taskItem",
+     "content": [
+      {
+       "type": "text",
+       "text": "write it up"
+      }
+     ],
+     "attrs": {
+      "localId": "ks-task-2",
+      "state": "TODO"
+     }
+    },
+    {
+     "type": "taskList",
+     "content": [
+      {
+       "type": "taskItem",
+       "content": [
+        {
+         "type": "text",
+         "text": "an indented item is a sibling list, not a child of the item above"
+        }
+       ],
+       "attrs": {
+        "localId": "ks-task-3",
+        "state": "TODO"
+       }
+      }
+     ],
+     "attrs": {
+      "localId": "ks-tasklist-2"
+     }
+    }
+   ],
+   "attrs": {
+    "localId": "ks-tasklist-1"
+   }
+  },
+  {
+   "type": "decisionList",
+   "content": [
+    {
+     "type": "decisionItem",
+     "content": [
+      {
+       "type": "text",
+       "text": "keep the original bytes"
+      }
+     ],
+     "attrs": {
+      "localId": "ks-decision-1",
+      "state": "DECIDED"
+     }
+    }
+   ],
+   "attrs": {
+    "localId": "ks-decisions"
+   }
+  },
+  {
+   "type": "heading",
+   "attrs": {
+    "level": 2
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Code"
+    }
+   ]
+  },
+  {
+   "type": "codeBlock",
+   "attrs": {
+    "language": "go"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "func render(d Doc) string {\n\tif d.Version != 1 {\n\t\treturn \"\"\n\t}\n\treturn walk(d.Content)\n}"
+    }
+   ]
+  },
+  {
+   "type": "codeBlock",
+   "content": [
+    {
+     "type": "text",
+     "text": "a code block with no language attribute"
+    }
+   ]
+  },
+  {
+   "type": "heading",
+   "attrs": {
+    "level": 2
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Quote and rule"
+    }
+   ]
+  },
+  {
+   "type": "blockquote",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "A blockquote holds paragraphs and lists — never a heading, a rule or a table."
+      }
+     ]
+    },
+    {
+     "type": "bulletList",
+     "content": [
+      {
+       "type": "listItem",
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "a bullet inside the quote"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "rule"
+  },
+  {
+   "type": "heading",
+   "attrs": {
+    "level": 2
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Panels"
+    }
+   ]
+  },
+  {
+   "type": "panel",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "info panel"
+      }
+     ]
+    }
+   ],
+   "attrs": {
+    "panelType": "info"
+   }
+  },
+  {
+   "type": "panel",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "note panel"
+      }
+     ]
+    }
+   ],
+   "attrs": {
+    "panelType": "note"
+   }
+  },
+  {
+   "type": "panel",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "warning panel"
+      }
+     ]
+    }
+   ],
+   "attrs": {
+    "panelType": "warning"
+   }
+  },
+  {
+   "type": "panel",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "success panel"
+      }
+     ]
+    }
+   ],
+   "attrs": {
+    "panelType": "success"
+   }
+  },
+  {
+   "type": "panel",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "error panel with "
+      },
+      {
+       "type": "text",
+       "text": "code",
+       "marks": [
+        {
+         "type": "code"
+        }
+       ]
+      },
+      {
+       "type": "text",
+       "text": " in it"
+      }
+     ]
+    }
+   ],
+   "attrs": {
+    "panelType": "error"
+   }
+  },
+  {
+   "type": "panel",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "custom panel — note the colour comes back upper-cased"
+      }
+     ]
+    }
+   ],
+   "attrs": {
+    "panelType": "custom",
+    "panelColor": "#C9372C",
+    "panelIcon": ":rocket:",
+    "panelIconText": "🚀"
+   }
+  },
+  {
+   "type": "heading",
+   "attrs": {
+    "level": 2
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Table with a header row and merged cells"
+    }
+   ]
+  },
+  {
+   "type": "table",
+   "attrs": {
+    "isNumberColumnEnabled": false,
+    "layout": "default",
+    "displayMode": "default"
+   },
+   "content": [
+    {
+     "type": "tableRow",
+     "content": [
+      {
+       "type": "tableHeader",
+       "attrs": {
+        "colwidth": [
+         180
+        ]
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "Node"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableHeader",
+       "attrs": {
+        "colwidth": [
+         120
+        ]
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "Accepted"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableHeader",
+       "attrs": {
+        "colwidth": [
+         260
+        ]
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "Note"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "tableRow",
+     "content": [
+      {
+       "type": "tableCell",
+       "attrs": {
+        "colspan": 2,
+        "background": "#deebff"
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "a cell spanning two columns"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableCell",
+       "attrs": {},
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "colspan 2"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "tableRow",
+     "content": [
+      {
+       "type": "tableCell",
+       "attrs": {
+        "rowspan": 2
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "a cell spanning two rows"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableCell",
+       "attrs": {},
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "b"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableCell",
+       "attrs": {},
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "c"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "tableRow",
+     "content": [
+      {
+       "type": "tableCell",
+       "attrs": {},
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "d"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableCell",
+       "attrs": {},
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "e"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "heading",
+   "attrs": {
+    "level": 2
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Expand, layout and cards"
+    }
+   ]
+  },
+  {
+   "type": "expand",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "Expands may hold a table, but never another expand."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "content": [
+      {
+       "type": "tableRow",
+       "content": [
+        {
+         "type": "tableHeader",
+         "attrs": {},
+         "content": [
+          {
+           "type": "paragraph",
+           "content": [
+            {
+             "type": "text",
+             "text": "inside an expand"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "type": "tableCell",
+         "attrs": {},
+         "content": [
+          {
+           "type": "paragraph",
+           "content": [
+            {
+             "type": "text",
+             "text": "yes"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "attrs": {
+    "title": "an expand — click to open"
+   }
+  },
+  {
+   "type": "layoutSection",
+   "content": [
+    {
+     "type": "layoutColumn",
+     "attrs": {
+      "width": 50
+     },
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "left column"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "layoutColumn",
+     "attrs": {
+      "width": 50
+     },
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "right column"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    {
+     "type": "inlineCard",
+     "attrs": {
+      "url": "https://example.com/browse/ABC-1"
+     }
+    }
+   ]
+  },
+  {
+   "type": "blockCard",
+   "attrs": {
+    "url": "https://example.com/a-block-card"
+   }
+  },
+  {
+   "type": "embedCard",
+   "attrs": {
+    "layout": "center",
+    "url": "https://example.com/an-embed"
+   }
+  },
+  {
+   "type": "heading",
+   "attrs": {
+    "level": 2
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Inline nodes"
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    {
+     "type": "text",
+     "text": "A mention of "
+    },
+    {
+     "type": "mention",
+     "attrs": {
+      "id": "5b10a2844c20165700ede21g",
+      "text": "@Example User",
+      "accessLevel": ""
+     }
+    },
+    {
+     "type": "text",
+     "text": ", an emoji "
+    },
+    {
+     "type": "emoji",
+     "attrs": {
+      "shortName": ":tada:",
+      "id": "1f389",
+      "text": "🎉"
+     }
+    },
+    {
+     "type": "text",
+     "text": ", a date "
+    },
+    {
+     "type": "date",
+     "attrs": {
+      "timestamp": "1767225600000"
+     }
+    },
+    {
+     "type": "text",
+     "text": ", a status lozenge "
+    },
+    {
+     "type": "status",
+     "attrs": {
+      "text": "NEEDS REVIEW",
+      "color": "yellow",
+      "localId": "ks-status-1",
+      "style": ""
+     }
+    },
+    {
+     "type": "text",
+     "text": ", and a hard break next."
+    },
+    {
+     "type": "hardBreak"
+    },
+    {
+     "type": "text",
+     "text": "This text is after the hard break."
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    {
+     "type": "text",
+     "text": "a centred paragraph (alignment is a mark on the node)"
+    }
+   ],
+   "marks": [
+    {
+     "type": "alignment",
+     "attrs": {
+      "align": "center"
+     }
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    {
+     "type": "text",
+     "text": "an indented paragraph"
+    }
+   ],
+   "marks": [
+    {
+     "type": "indentation",
+     "attrs": {
+      "level": 1
+     }
+    }
+   ]
+  },
+  {
+   "type": "mediaSingle",
+   "attrs": {
+    "layout": "center"
+   },
+   "content": [
+    {
+     "type": "media",
+     "attrs": {
+      "type": "external",
+      "url": "https://example.com/an-external-image.png"
+     }
+    }
+   ]
+  },
+  {
+   "type": "heading",
+   "attrs": {
+    "level": 2
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Non-ASCII"
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    {
+     "type": "text",
+     "text": "Umlauts: Größe, Übermäßig, Weiß. CJK: 日本語のテキスト、中文字符. Emoji: 🚀📊🐛. Combining: été. RTL: עברית."
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    {
+     "type": "text",
+     "text": "A wide-rune table cell is the thing that breaks a renderer that counts bytes."
+    }
+   ]
+  },
+  {
+   "type": "table",
+   "content": [
+    {
+     "type": "tableRow",
+     "content": [
+      {
+       "type": "tableHeader",
+       "attrs": {},
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "キー"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableHeader",
+       "attrs": {},
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "Wert"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "tableRow",
+     "content": [
+      {
+       "type": "tableCell",
+       "attrs": {},
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "日本語"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableCell",
+       "attrs": {},
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "Größe 🚀"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

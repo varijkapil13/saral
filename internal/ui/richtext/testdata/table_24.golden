@@ -1,0 +1,10 @@
+│ Node     │ Accepted │ Note     │
+│──────────│──────────│──────────│
+│ a cell   │          │ colspan  │
+│ spanning │          │ 2        │
+│ two      │          │          │
+│ columns  │          │          │
+│ a cell   │ b        │ c        │
+│ spanning │          │          │
+│ two rows │          │          │
+│          │ d        │ e        │
