@@ -4,6 +4,7 @@ package list
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -44,6 +45,7 @@ var _ kernel.KeyCapturer = (*Model)(nil)
 type Model struct {
 	deps     kernel.Deps
 	search   *app.Search
+	cache    app.Cache
 	normal   map[string]action
 	inFilter map[string]action
 	styles   *styles
@@ -98,6 +100,21 @@ type Model struct {
 	gen     int
 	cancel  context.CancelFunc
 
+	// stale marks the rows on screen as older than they should be: they came off
+	// disk past their TTL, or the refresh that would have replaced them failed.
+	// It is what the badge in the summary line is drawn from.
+	stale bool
+	// cachedMore records that the stored rows were only part of the answer. Rows
+	// off disk carry no cursor, so paging on from them means asking the search
+	// again rather than following one.
+	cachedMore bool
+
+	focused bool
+
+	poll       time.Duration
+	pollArmed  bool
+	pollPaused bool
+
 	zonePrefix string
 }
 
@@ -124,10 +141,12 @@ func (m *Model) WantsRawKeys() bool { return m.filtering || m.bind != bindNone }
 func New(d kernel.Deps) kernel.View {
 	m := &Model{
 		deps:   d,
+		cache:  d.Cache,
 		styles: newStyles(d.Theme),
 		rows:   newRowCache(rowCacheLimit),
 		filter: newFilterInput(),
 		saved:  d.Saved,
+		poll:   PollInterval(),
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
@@ -143,7 +162,31 @@ func New(d kernel.Deps) kernel.View {
 	m.jql, m.title = defaultQuery(d.Project)
 	m.defaulted = true
 	m.relayout()
+	m.fromCache()
 	return m
+}
+
+// fromCache puts the rows the last session left on disk on screen, before
+// anything at all is asked of the site (docs/UX.md principle 1).
+//
+// It runs here rather than in Init because this is where a first paint happens:
+// kernel.FirstPaint builds the view and renders one frame without ever calling
+// Init, which is the thing docs/PERFORMANCE.md budgets at 60ms.
+func (m *Model) fromCache() {
+	if m.cache == nil {
+		return
+	}
+	snap, ok := m.cache.Rows(m.jql)
+	if !ok || len(snap.Issues) == 0 {
+		return
+	}
+	m.issues, m.needles = snap.Issues, nil
+	m.page, m.missing = jira.Page[jira.Issue]{}, nil
+	m.cachedMore, m.stale = snap.More, snap.Stale
+	m.loaded, m.cursor, m.top = true, 0, 0
+	m.rows.reset()
+	m.relayout()
+	m.refilter()
 }
 
 func defaultQuery(project string) (jql, title string) {
@@ -178,8 +221,23 @@ type QueryMsg struct {
 // does, rather than a second implementation of it.
 type SaveQueryMsg struct{}
 
-// Init runs the opening search.
-func (m *Model) Init() tea.Cmd { return m.load() }
+// Init asks the site for what the first frame could not draw from disk.
+func (m *Model) Init() tea.Cmd {
+	if m.loaded {
+		return tea.Batch(m.revalidate(), m.pageAheadIfNeeded())
+	}
+	return m.load()
+}
+
+// revalidate re-reads rows that came off disk, and only once they are past their
+// TTL: rows written seconds ago are what the last frame of the last session
+// showed, and asking for them again is the round trip the cache exists to spare.
+func (m *Model) revalidate() tea.Cmd {
+	if !m.stale {
+		return nil
+	}
+	return m.refresh(false)
+}
 
 // Update handles one message.
 func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
@@ -189,7 +247,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.resize(msg.Width, msg.Height)
 
 	case kernel.FocusMsg:
-		m.setFocus(msg.Focused)
+		cmd = m.setFocus(msg.Focused)
 
 	case kernel.ThemeMsg:
 		m.styles = newStyles(msg.Theme)
@@ -231,6 +289,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case failedMsg:
 		cmd = m.failed(msg)
 
+	case pollMsg:
+		cmd = m.polled(msg)
+
 	case tea.KeyPressMsg:
 		cmd = m.key(msg)
 
@@ -243,16 +304,21 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	return m, cmd
 }
 
-// setFocus keeps the filter's cursor out of a pane nobody is looking at.
-func (m *Model) setFocus(on bool) {
-	if !m.filtering {
-		return
+// setFocus keeps the filter's cursor out of a pane nobody is looking at, and the
+// poller scoped to the view somebody is.
+func (m *Model) setFocus(on bool) tea.Cmd {
+	m.focused = on
+	switch {
+	case !m.filtering:
+	case on:
+		_ = m.filter.Focus()
+	default:
+		m.filter.Blur()
 	}
 	if on {
-		_ = m.filter.Focus()
-		return
+		return m.pollTick()
 	}
-	m.filter.Blur()
+	return nil
 }
 
 func (m *Model) resize(w, h int) tea.Cmd {
@@ -329,21 +395,27 @@ func (m *Model) load() tea.Cmd {
 		return nil
 	}
 	ctx, gen := m.begin()
-	return withCancel(m.cancel, load(ctx, m.search, m.jql, gen))
+	return withCancel(m.cancel, load(ctx, m.search, m.cache, m.jql, gen))
 }
 
 func (m *Model) refresh(purge bool) tea.Cmd {
 	if m.search == nil {
 		return nil
 	}
+	var said tea.Cmd
 	if purge {
 		m.search.Invalidate()
+		if m.cache != nil {
+			if err := m.cache.Forget(m.jql); err != nil {
+				said = kernel.Warn("the stored copy of this search could not be dropped: " + err.Error())
+			}
+		}
 	}
 	if !m.loaded {
-		return m.load()
+		return tea.Batch(said, m.load())
 	}
 	ctx, gen := m.begin()
-	return withCancel(m.cancel, reload(ctx, m.search, m.jql, len(m.issues), gen))
+	return tea.Batch(said, withCancel(m.cancel, reload(ctx, m.search, m.cache, m.jql, len(m.issues), gen)))
 }
 
 func (m *Model) retarget(msg QueryMsg) tea.Cmd {
@@ -376,8 +448,13 @@ func (m *Model) setQuery(jql, title string, byDefault bool) tea.Cmd {
 	}
 	m.issues, m.page, m.missing, m.view, m.needles = nil, jira.Page[jira.Issue]{}, nil, nil, nil
 	m.cursor, m.top, m.loaded = 0, 0, false
+	m.cachedMore, m.stale = false, false
 	m.rows.reset()
 	m.refilter()
+	m.fromCache()
+	if m.loaded {
+		return tea.Batch(m.revalidate(), m.pageAheadIfNeeded())
+	}
 	return m.load()
 }
 
@@ -397,11 +474,12 @@ func (m *Model) loadedPage(msg loadedMsg) tea.Cmd {
 	m.loading, m.loaded = false, true
 	m.issues, m.needles = slices.Clone(msg.page.Items), nil
 	m.page, m.missing = msg.page, msg.missing
+	m.cachedMore, m.stale = false, false
 	m.rows.reset()
 	m.relayout()
 	m.refilter()
 	m.cursor, m.top = 0, 0
-	return tea.Batch(m.missingFields(), m.pageAheadIfNeeded())
+	return tea.Batch(m.missingFields(), notStored(msg.stored), m.pageAheadIfNeeded(), m.pollTick())
 }
 
 func (m *Model) nextPage(msg pagedMsg) tea.Cmd {
@@ -411,9 +489,10 @@ func (m *Model) nextPage(msg pagedMsg) tea.Cmd {
 	m.loading = false
 	m.issues, m.needles = append(m.issues, msg.page.Items...), nil
 	m.page = msg.page
+	m.cachedMore, m.stale = false, false
 	m.relayout()
 	m.refilter()
-	return m.pageAheadIfNeeded()
+	return tea.Batch(notStored(msg.stored), m.pageAheadIfNeeded(), m.pollTick())
 }
 
 // patch replaces the rows with a re-read of themselves, leaving the cursor on
@@ -425,19 +504,30 @@ func (m *Model) patch(msg patchedMsg) tea.Cmd {
 	m.loading, m.loaded = false, true
 	under := m.selectedKey()
 	m.issues, m.page, m.needles = msg.issues, msg.page, nil
+	m.cachedMore, m.stale = false, false
 	m.rows.reset()
 	m.relayout()
 	m.refilter()
 	m.restore(under)
-	return m.pageAheadIfNeeded()
+	return tea.Batch(notStored(msg.stored), m.pageAheadIfNeeded(), m.pollTick())
 }
 
+// failed keeps whatever is on screen. Rows that are already drawn are the last
+// true answer this session had, so a refusal badges them rather than clearing
+// them (docs/UX.md — stale data is badged, not hidden).
 func (m *Model) failed(msg failedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
 	m.loading = false
-	return kernel.Fail(msg.err)
+	if len(m.issues) > 0 {
+		m.stale = true
+	}
+	var limit *jira.RateLimitError
+	if errors.As(msg.err, &limit) {
+		m.pollPaused = true
+	}
+	return tea.Batch(kernel.Fail(msg.err), m.pollTick())
 }
 
 // missingFields reports the projection fields this site has no field for, which
@@ -453,7 +543,7 @@ func (m *Model) missingFields() tea.Cmd {
 // what is loaded, or when the local filter has left too few rows to fill the
 // screen. One request is in flight at a time, whatever the cursor does.
 func (m *Model) pageAheadIfNeeded() tea.Cmd {
-	if m.loading || !m.page.HasMore() {
+	if m.loading || m.search == nil || !m.hasMore() {
 		return nil
 	}
 	near := m.cursor >= len(m.view)-lookahead
@@ -462,8 +552,17 @@ func (m *Model) pageAheadIfNeeded() tea.Cmd {
 		return nil
 	}
 	ctx, gen := m.begin()
-	return withCancel(m.cancel, more(ctx, m.page, gen))
+	// Rows that came off disk carry no cursor to follow, so the page after them
+	// is reached by asking the search again and walking to where they end.
+	if !m.page.HasMore() {
+		return withCancel(m.cancel, reload(ctx, m.search, m.cache, m.jql, len(m.issues)+pageSize, gen))
+	}
+	return withCancel(m.cancel, more(ctx, m.cache, m.jql, m.issues, m.page, gen))
 }
+
+// hasMore reports whether anything is left to fetch, from the live page or from
+// what the stored rows said about the answer they were part of.
+func (m *Model) hasMore() bool { return m.page.HasMore() || m.cachedMore }
 
 // --- selection and filtering ------------------------------------------------
 
@@ -829,13 +928,15 @@ type summaryKey struct {
 	more            bool
 	loading, loaded bool
 	filtered        bool
+	stale           bool
 }
 
 func (m *Model) summaryKey() summaryKey {
 	return summaryKey{
 		title: m.title, width: m.width, gen: m.styles.gen,
-		issues: len(m.issues), visible: len(m.view), more: m.page.HasMore(),
+		issues: len(m.issues), visible: len(m.view), more: m.hasMore(),
 		loading: m.loading, loaded: m.loaded, filtered: m.query != "",
+		stale: m.stale,
 	}
 }
 
@@ -849,12 +950,21 @@ func (m *Model) summaryLine() string {
 	}
 	ell := m.deps.Theme.Glyphs.Ellipsis
 	count := m.countLabel()
-	title := ansi.Truncate(m.title, max(m.width-ansi.StringWidth(count)-1, 1), ell)
-	pad := max(m.width-ansi.StringWidth(title)-ansi.StringWidth(count), 1)
-	m.summary = m.styles.title.Render(title) + strings.Repeat(" ", pad) + m.styles.count.Render(count)
+	badge := ""
+	if m.stale {
+		badge = m.deps.Theme.StaleBadge.Render(staleLabel)
+	}
+	right := ansi.StringWidth(badge) + ansi.StringWidth(count)
+	title := ansi.Truncate(m.title, max(m.width-right-1, 1), ell)
+	pad := max(m.width-ansi.StringWidth(title)-right, 1)
+	m.summary = m.styles.title.Render(title) + strings.Repeat(" ", pad) + badge + m.styles.count.Render(count)
 	m.sumKey = key
 	return m.summary
 }
+
+// staleLabel is a word and not a glyph: the glyph beside the count already means
+// a refresh is in flight, which is the opposite state.
+const staleLabel = "stale"
 
 func (m *Model) countLabel() string {
 	var b strings.Builder
@@ -878,7 +988,7 @@ func (m *Model) countLabel() string {
 
 func (m *Model) total() string {
 	n := strconv.Itoa(len(m.issues))
-	if m.page.HasMore() {
+	if m.hasMore() {
 		return n + "+"
 	}
 	return n

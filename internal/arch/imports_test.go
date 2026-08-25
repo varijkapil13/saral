@@ -326,6 +326,14 @@ func TestBrokenRules_MatchTheOffendingPackagesAndNothingElse(t *testing.T) {
 			want:    nil,
 		},
 		{
+			// The cache policy — kinds, TTLs, the codec — is a use case over the
+			// file, so this direction is deliberate rather than tolerated.
+			name:    "a use case reaching down into the store",
+			pkgDir:  "internal/app",
+			imports: "internal/store",
+			want:    nil,
+		},
+		{
 			name:    "a package whose name merely starts with an exempt one",
 			pkgDir:  "internal/configuration",
 			imports: "pkg/jira/cloud",

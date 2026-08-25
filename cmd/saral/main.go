@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -17,12 +18,17 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/config"
+	"github.com/varijkapil13/saral/internal/store"
 	_ "github.com/varijkapil13/saral/internal/ui"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/list"
 	"github.com/varijkapil13/saral/internal/ui/onboarding"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/cloud"
 )
+
+// cacheFile is the bbolt database inside config.CacheDir().
+const cacheFile = "cache.db"
 
 // tokenTimeout bounds resolving the token, which happens before the first frame
 // and cannot be cancelled by anyone watching it. internal/config gives a command
@@ -58,6 +64,7 @@ type options struct {
 	project    string
 	view       string
 	theme      string
+	poll       time.Duration
 	mouse      bool
 	mouseSet   bool
 	benchPaint bool
@@ -71,6 +78,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fs.StringVar(&opt.project, "project", "", "project key to scope the session to; several capabilities are per-project")
 	fs.StringVar(&opt.profile, "profile", "", "profile to use (default: the active one)")
 	fs.StringVar(&opt.theme, "theme", "", "auto, dark, light or no-color")
+	fs.DurationVar(&opt.poll, "poll", 0, "re-read the focused view this often; off by default, and pauses when Jira rate-limits")
 	fs.BoolVar(&opt.mouse, "mouse", true, "enable mouse reporting")
 	fs.BoolVar(&opt.benchPaint, "bench-first-paint", false, "render one frame, print how long it took, and exit")
 	fs.BoolVar(&opt.showVer, "version", false, "print the version and exit")
@@ -106,10 +114,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("%d view(s) failed to register: %w", len(errs), errors.Join(errs...))
 	}
 
-	deps, kopts, notice, err := build(opt)
+	deps, kopts, notice, closeCache, err := build(opt)
 	if err != nil {
 		return err
 	}
+	defer closeCache()
 	if opt.benchPaint {
 		return benchFirstPaint(stdout, stderr, deps, kopts, notice)
 	}
@@ -124,32 +133,36 @@ func run(args []string, stdout, stderr io.Writer) error {
 // running. Resolving a token can fail for reasons that are nobody's mistake — a
 // locked keychain, a helper command that is not installed on this machine — and
 // none of them is a reason to refuse to open.
-func build(opt options) (kernel.Deps, []kernel.Option, string, error) {
-	deps := kernel.Deps{}
+//
+// The fourth releases the cache file. bbolt holds an exclusive lock on it for as
+// long as it is open, so the run that took it gives it back rather than leaving
+// the next copy of Saral without one.
+func build(opt options) (deps kernel.Deps, kopts []kernel.Option, notice string, releaseCache func(), err error) {
+	releaseCache = func() {}
 	cfg, err := config.Load()
 	switch {
 	case errors.Is(err, config.ErrNoConfig):
 		cfg = config.Config{Mouse: true}
 	case err != nil:
-		return deps, nil, "", err
+		return deps, nil, notice, releaseCache, err
 	}
 
 	// A config file that exists but points nowhere is a mistake worth naming: the
 	// alternative is a session that silently talks to no site at all.
 	profile, perr := profileFor(cfg, opt.profile)
 	if perr != nil && (opt.profile != "" || len(cfg.Profiles) > 0) {
-		return deps, nil, "", perr
+		return deps, nil, notice, releaseCache, perr
 	}
 	deps.Site = profile.Site
 	project, err := sessionProject(opt.project, profile.Project)
 	if err != nil {
-		return deps, nil, "", err
+		return deps, nil, notice, releaseCache, err
 	}
 	deps.Project = project
 
 	saved, err := app.NewSavedQueries(profile.Queries...)
 	if err != nil {
-		return deps, nil, "", err
+		return deps, nil, notice, releaseCache, err
 	}
 	deps.Saved = saved
 	deps.SaveQueries = queryWriter(profile.Name)
@@ -164,7 +177,6 @@ func build(opt options) (kernel.Deps, []kernel.Option, string, error) {
 	// gets one, so this goes on whether or not there is a profile to open with.
 	onboarding.SetConnector(connect)
 
-	var notice string
 	if !firstRun {
 		client, cerr := clientFor(profile)
 		if cerr != nil {
@@ -172,7 +184,16 @@ func build(opt options) (kernel.Deps, []kernel.Option, string, error) {
 		} else {
 			deps.Jira = client
 		}
+		// Opened whether or not the client was: rows from the last session are
+		// worth drawing even in a session that cannot reach the site at all.
+		var cacheNote string
+		deps.Cache, releaseCache, cacheNote = openCache(profile)
+		if notice == "" {
+			notice = cacheNote
+		}
 	}
+
+	list.SetPollInterval(opt.poll)
 
 	theme := opt.theme
 	if theme == "" {
@@ -185,14 +206,38 @@ func build(opt options) (kernel.Deps, []kernel.Option, string, error) {
 	if opt.mouseSet {
 		mouse = opt.mouse
 	}
-	kopts := []kernel.Option{kernel.WithMouse(mouse)}
+	kopts = []kernel.Option{kernel.WithMouse(mouse)}
 	switch {
 	case opt.view != "":
 		kopts = append(kopts, kernel.WithInitialView(opt.view))
 	case firstRun:
 		kopts = append(kopts, kernel.WithInitialView(kernel.SetupViewID))
 	}
-	return deps, kopts, notice, nil
+	return deps, kopts, notice, releaseCache, nil
+}
+
+// openCache opens the profile's cache, and says in words when it could not.
+//
+// Nothing here is fatal: a session that keeps no cache fetches everything it
+// shows, which still works. Another copy of Saral holding the file is the
+// ordinary way that happens, not a mistake, and so is an unwritable home.
+func openCache(p config.Profile) (cache app.Cache, release func(), notice string) {
+	release = func() {}
+	dir, err := config.CacheDir()
+	if err != nil {
+		return nil, release, "nothing will be cached this session: " + err.Error()
+	}
+	db, err := store.Open(filepath.Join(dir, cacheFile))
+	switch {
+	case errors.Is(err, store.ErrLocked):
+		return nil, release, "another copy of Saral has the cache open, so this session keeps none of its own"
+	case err != nil:
+		return nil, release, "nothing will be cached this session: " + err.Error()
+	}
+	// The account is the profile's email rather than its Jira account ID: the ID
+	// takes a round trip to learn, the first frame is drawn before one could have
+	// answered, and two profiles on one site differ by email anyway.
+	return app.NewCache(db, store.Scope{Site: p.Site, Account: p.Email}), func() { _ = db.Close() }, ""
 }
 
 // connect opens a client for credentials the caller already holds, which is what
