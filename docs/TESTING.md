@@ -83,7 +83,8 @@ Bubble Tea's `teatest` drives full programs where an interaction sequence matter
 - Table-driven tests, subtests named after the case in prose.
 - `t.Parallel()` wherever there is no shared state — which should be everywhere.
 - No `time.Sleep` in tests. Inject a clock; `jiratest.Delay` plus `teatest`'s wait helpers cover the
-  async cases.
+  async cases. `app.WithClock` is there for exactly this: every cache TTL is checked by winding a
+  clock forward, never by waiting for one.
 - No network in any test, and CI is what makes that true. The race suite runs inside a network
   namespace with only loopback up, so a test that reaches for a real host fails the build instead of
   passing for whoever wrote it. A step before it compiles every test binary while the network is
@@ -97,7 +98,7 @@ Bubble Tea's `teatest` drives full programs where an interaction sequence matter
 
 ## Import boundaries
 
-A test in `internal/arch` asserts the layering from `docs/ARCHITECTURE.md`. Six rules, one table
+A test in `internal/arch` asserts the layering from `docs/ARCHITECTURE.md`. Seven rules, one table
 entry each:
 
 - `pkg/**` must not import `internal/**`
@@ -106,6 +107,7 @@ entry each:
 - `internal/app` must not import `internal/ui`
 - `pkg/adf` must not import `pkg/jira`
 - `internal/store` must not import `internal/ui`
+- `internal/ui/**` must not import `internal/store`
 
 A second test reads the table itself, because a rule can be wrong in a way that only ever shows up as
 green: a duplicated name, a missing `why`, an exemption that no package the rule covers could match,

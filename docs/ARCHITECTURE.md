@@ -23,8 +23,9 @@ Three constraints drive every decision below:
 │    widget/            shared table, form, pager, zones      │
 ├─────────────────────────────────────────────────────────────┤
 │  internal/app         use cases — orchestration, no IO libs │
+│                       cache policy: kinds, TTLs, the codec  │
 ├─────────────────────────────────────────────────────────────┤
-│  internal/store       bbolt cache, stale-while-revalidate   │
+│  internal/store       bbolt: the file, buckets, records     │
 ├─────────────────────────────────────────────────────────────┤
 │  pkg/jira  (PORT)     interfaces + domain types             │
 │    ├── cloud/         adapter: Jira Cloud REST v3 + Agile   │
@@ -38,13 +39,17 @@ Dependencies point **downward only**. `pkg/*` must never import `internal/*`; `i
 never import `pkg/jira/cloud` directly — it takes the port interface; only `cmd/*` and
 `internal/config` construct a concrete adapter; `internal/app` must never import `internal/ui`,
 because a use case is driven by a view and never reaches back up into one; `pkg/adf` must never
-import `pkg/jira`, because the document library does not know about issues; and `internal/store` must
+import `pkg/jira`, because the document library does not know about issues; `internal/store` must
 never import `internal/ui`, because the cache is written to and read by the layers above it and never
-renders anything. All six are enforced in CI by an import-boundary test (see `docs/TESTING.md`).
+renders anything; and `internal/ui` must never import `internal/store`, because a view takes what it
+needs as an interface declared above the store and can then be driven by a fake. All seven are
+enforced in CI by an import-boundary test (see `docs/TESTING.md`).
 
 The "no IO libs" on `internal/app` is the one line above that no test can hold you to: the
 import-boundary test only sees imports within this module, so a `net/http` in a use case is invisible
-to it. Treat it as a rule a reviewer enforces.
+to it. Treat it as a rule a reviewer enforces. It means a use case does not open sockets or files
+itself, not that it may not reach the layer below: `internal/app` holds the cache policy and so imports
+`internal/store`, which is downward and deliberate. bbolt is named in exactly one package.
 
 ## Ports and adapters
 
@@ -168,8 +173,11 @@ reports of Jira returning a token that loops back to page one.
 
 ## Capabilities as a value object
 
-The probe runs once per site and project, is cached in the store, and is refreshable with `R`. Views
-read it; nobody re-probes ad hoc.
+The probe runs once per site and project, on the kernel's `Init`, and is refreshable with `R`. Views
+read it; nobody re-probes ad hoc. It is **not** kept between runs: what a token may do is exactly the
+kind of answer that changes without warning, and a first frame drawn from a stored one would hide or
+offer a view on last week's permissions. Persisting it needs the kernel to revalidate behind the
+frame, which is [#81](https://github.com/varijkapil13/saral/issues/81).
 
 ```go
 type Capabilities struct {
@@ -325,20 +333,50 @@ Conventions:
 
 ## Caching
 
-`internal/store` is bbolt with typed buckets and a stale-while-revalidate policy:
+`internal/store` is bbolt: the file, the buckets, and records that carry the moment they were
+written. It knows nothing about issues. The policy over it — what the kinds are, how long each lives,
+how a value is encoded, and what a bound is — is `internal/app/cache.go`, together with the `app.Cache`
+interface a view reaches it through. That interface is declared with the implementation that exercises
+it so that its shape answers to a caller rather than being guessed at, and it is declared in
+`internal/app` because `internal/ui` sits above `internal/store` and must not import it, which
+`internal/arch` enforces.
 
-1. A view asks for data and gets whatever is cached **synchronously** — first paint never waits.
-2. If the entry is older than its TTL, a background refresh is issued.
-3. When it lands, a `Msg` carries the delta and the view patches its rows in place, preserving the
-   cursor and scroll position.
+Stale-while-revalidate, as it actually runs:
 
-TTLs by kind: fields and createmeta 24h, board config 1h, versions 10m, issue detail 60s, search
-results 30s. All refreshable on demand. The cache is keyed by site + account so profiles cannot
-bleed into each other.
+1. A view reads the cache **in its constructor**, not in `Init`. `kernel.FirstPaint` builds a view and
+   renders one frame without ever calling `Init`, so a read there is a read that never happens on the
+   path docs/PERFORMANCE.md budgets. First paint never waits.
+2. Rows inside their TTL are drawn and nothing is asked of the site at all. Rows past it are drawn and
+   revalidated behind the frame.
+3. The revalidation arrives as the same cursor-preserving patch a manual refresh uses, so the row
+   under the cursor, the scroll offset and the filter all survive it.
+4. Anything still on screen that could not be confirmed — past its TTL, or a 403, 429 or transport
+   failure over the top of it — is badged with `Theme.StaleBadge` rather than cleared. Seeing
+   yesterday's rows beats seeing none.
 
-The interface a view reaches it through is declared with the implementation that exercises it, in
-`internal/app`, so that its shape is answerable to a caller rather than guessed at. `internal/ui`
-sits above `internal/store` and must not import it, which `internal/arch` now enforces.
+TTLs by kind, from `Kind.TTL()`: fields and createmeta 24h, board config 1h, versions 10m, issue 60s,
+search 30s. All refreshable on demand; `R` also drops the stored answer rather than only refetching.
+The cache is keyed by site + account through `store.Scope`, so profiles cannot bleed into each other.
+The account is the profile's email: the Jira account ID takes a round trip to learn, and the first
+frame is drawn before one could have answered.
+
+Issues are stored once each, keyed by issue key, and a search stores the keys it matched and their
+order. That is what makes two things work. A refresh merges into the copy already held rather than
+replacing it, so a narrow read cannot blank a field it never asked for — `app.MergeIssue` over
+`Issue.Requested`, which is what that mask exists for. And the issue bucket is one corpus rather than
+one per search, bounded to `app.DefaultIssueBound` (5,000) by dropping what was stored longest ago, so
+a long session cannot grow the file without limit.
+
+`Cache.Generation()` counts every write. Anything holding a derived copy of the cache — the local
+fuzzy index in P3.4 — compares one number to find out that its copy is behind, rather than walking the
+corpus to check. It over-reports rather than under-reports: a write a particular reader does not care
+about still moves it, which costs that reader a rebuild and never leaves it answering from a stale
+index. An in-memory counter is a complete answer because bbolt holds the file exclusively, so the
+process that has it open is the only writer there is.
+
+A session with nowhere to keep a cache carries a nil one and every caller draws without it: a first
+run has nothing on disk, another copy of Saral may be holding the file (`store.ErrLocked`, which must
+not stop the program starting), and a home directory is not always writable.
 
 ## Rendering and performance
 

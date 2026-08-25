@@ -7,12 +7,18 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/config"
+	"github.com/varijkapil13/saral/internal/store"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/list"
 	"github.com/varijkapil13/saral/internal/ui/onboarding"
 	"github.com/varijkapil13/saral/pkg/jira"
+	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
 func TestRun_Version(t *testing.T) {
@@ -29,6 +35,7 @@ func TestRun_Version(t *testing.T) {
 
 func TestRun_BenchFirstPaintPrintsMicroseconds(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 
 	var out, errOut bytes.Buffer
 	if err := run([]string{"--bench-first-paint"}, &out, &errOut); err != nil {
@@ -58,6 +65,7 @@ func TestRun_BenchFirstPaintStillSaysWhyThereIsNoClient(t *testing.T) {
 
 func TestRun_UnknownProfileIsAnError(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 
 	var out, errOut bytes.Buffer
 	if err := run([]string{"--profile", "nope", "--bench-first-paint"}, &out, &errOut); err == nil {
@@ -67,8 +75,9 @@ func TestRun_UnknownProfileIsAnError(t *testing.T) {
 
 func TestRun_MissingConfigStillStarts(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 
-	deps, opts, _, err := build(options{benchPaint: true})
+	deps, opts, _, _, err := build(options{benchPaint: true})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -82,9 +91,10 @@ func TestRun_MissingConfigStillStarts(t *testing.T) {
 
 func TestBuild_NoColorEnvironmentWinsOverTheFlag(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 	t.Setenv("NO_COLOR", "1")
 
-	deps, _, _, err := build(options{theme: "dark"})
+	deps, _, _, _, err := build(options{theme: "dark"})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -95,11 +105,12 @@ func TestBuild_NoColorEnvironmentWinsOverTheFlag(t *testing.T) {
 
 func TestBuild_AFirstRunStartsAtSetup(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 
 	// Nothing configured. The kernel would otherwise open whichever view claimed
 	// the first footer slot, leaving setup reachable only by someone who already
 	// knows its name — which is nobody on their first run.
-	_, opts, _, err := build(options{})
+	_, opts, _, _, err := build(options{})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -110,8 +121,9 @@ func TestBuild_AFirstRunStartsAtSetup(t *testing.T) {
 
 func TestBuild_AnExplicitViewStillWinsOnAFirstRun(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 
-	_, opts, _, err := build(options{view: "board"})
+	_, opts, _, _, err := build(options{view: "board"})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -123,6 +135,7 @@ func TestBuild_AnExplicitViewStillWinsOnAFirstRun(t *testing.T) {
 func TestBuild_AConfiguredProfileDoesNotStartAtSetup(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SARAL_CONFIG_DIR", dir)
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 	const cfg = `active = "work"
 
 [profiles.work]
@@ -134,7 +147,7 @@ token = { env = "JIRA_TOKEN" }
 		t.Fatal(err)
 	}
 
-	_, opts, _, err := build(options{})
+	_, opts, _, _, err := build(options{})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -163,6 +176,8 @@ func TestBuild_TheProjectFlagOverridesTheProfileRatherThanReplacingIt(t *testing
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			t.Setenv("SARAL_CONFIG_DIR", dir)
+			t.Setenv("SARAL_CACHE_DIR", t.TempDir())
+			t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 			cfg := "active = \"work\"\n\n[profiles.work]\nsite  = \"example.atlassian.net\"\n" +
 				"email = \"you@example.com\"\ntoken = { env = \"JIRA_TOKEN\" }\n"
 			if tc.stored != "" {
@@ -172,7 +187,7 @@ func TestBuild_TheProjectFlagOverridesTheProfileRatherThanReplacingIt(t *testing
 				t.Fatal(err)
 			}
 
-			deps, _, _, err := build(options{project: tc.flag})
+			deps, _, _, _, err := build(options{project: tc.flag})
 			switch {
 			case tc.fails && err == nil:
 				t.Fatalf("--project %q was accepted and reached JQL", tc.flag)
@@ -201,6 +216,7 @@ func writeProfile(t *testing.T) {
 
 	dir := t.TempDir()
 	t.Setenv("SARAL_CONFIG_DIR", dir)
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 	cfg := "active = \"work\"\n\n[profiles.work]\nsite  = \"example.atlassian.net\"\n" +
 		"email = \"you@example.com\"\ntoken = { env = \"SARAL_TEST_TOKEN\" }\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(cfg), 0o600); err != nil {
@@ -212,7 +228,7 @@ func TestBuild_AResolvableTokenProducesAClientTheSessionCanUse(t *testing.T) {
 	writeProfile(t)
 	t.Setenv("SARAL_TEST_TOKEN", "a-token")
 
-	deps, _, notice, err := build(options{})
+	deps, _, notice, _, err := build(options{})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -233,7 +249,7 @@ func TestBuild_AnUnresolvableTokenStillStartsAndSaysWhy(t *testing.T) {
 	writeProfile(t)
 	t.Setenv("SARAL_TEST_TOKEN", "")
 
-	deps, opts, notice, err := build(options{})
+	deps, opts, notice, _, err := build(options{})
 	if err != nil {
 		t.Fatalf("a token that would not resolve stopped the program: %v", err)
 	}
@@ -261,8 +277,9 @@ func TestBuild_AnUnresolvableTokenStillStartsAndSaysWhy(t *testing.T) {
 
 func TestWithNotice_LeavesTheModelAloneWhenThereIsNothingToSay(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 
-	deps, opts, _, err := build(options{})
+	deps, opts, _, _, err := build(options{})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -308,8 +325,9 @@ func TestConnect_BuildsAClientForCredentialsThatWereNeverSaved(t *testing.T) {
 // refuses the credentials it has just collected.
 func TestBuild_AFirstRunWiresTheConnectorBeforeOnboardingOpens(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 
-	deps, _, _, err := build(options{})
+	deps, _, _, _, err := build(options{})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -335,5 +353,198 @@ func TestBuild_AFirstRunWiresTheConnectorBeforeOnboardingOpens(t *testing.T) {
 	}
 	if !strings.Contains(frame, "Checking the site, the email and the token") {
 		t.Errorf("the flow did not reach a connection attempt:\n%s", frame)
+	}
+}
+
+func TestBuild_OpensTheCacheForAConfiguredProfile(t *testing.T) {
+	writeProfile(t)
+	t.Setenv("SARAL_TEST_TOKEN", "a-token")
+
+	deps, _, notice, closeCache, err := build(options{})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	defer closeCache()
+
+	if deps.Cache == nil {
+		t.Fatal("a configured session has nowhere to keep what it reads")
+	}
+	if notice != "" {
+		t.Errorf("opening the cache said %q", notice)
+	}
+	dir, err := config.CacheDir()
+	if err != nil {
+		t.Fatalf("CacheDir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, cacheFile)); err != nil {
+		t.Errorf("the cache file is not on disk: %v", err)
+	}
+}
+
+func TestBuild_AFirstRunHasNoCacheToOpen(t *testing.T) {
+	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	cacheDir := t.TempDir()
+	t.Setenv("SARAL_CACHE_DIR", cacheDir)
+
+	deps, _, _, closeCache, err := build(options{})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	defer closeCache()
+
+	if deps.Cache != nil {
+		t.Error("a run with no profile opened a cache for a site it does not know")
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, cacheFile)); err == nil {
+		t.Error("a first run took the cache file's lock before it knew whose cache it was")
+	}
+}
+
+// A second copy of Saral cannot have the cache file, because bbolt holds it
+// exclusively. It has to run without one rather than refuse to start.
+func TestBuild_AnotherCopyHoldingTheCacheStillStarts(t *testing.T) {
+	writeProfile(t)
+	t.Setenv("SARAL_TEST_TOKEN", "a-token")
+
+	dir, err := config.CacheDir()
+	if err != nil {
+		t.Fatalf("CacheDir: %v", err)
+	}
+	held, err := store.Open(filepath.Join(dir, cacheFile))
+	if err != nil {
+		t.Fatalf("taking the cache first: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := held.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
+
+	deps, opts, notice, closeCache, err := build(options{})
+	if err != nil {
+		t.Fatalf("build refused to start with the cache held elsewhere: %v", err)
+	}
+	defer closeCache()
+
+	if deps.Cache != nil {
+		t.Error("two copies of Saral both hold the cache")
+	}
+	if deps.Jira == nil {
+		t.Error("a session with no cache also lost its connection to the site")
+	}
+	if !strings.Contains(notice, "another copy of Saral") {
+		t.Errorf("the run says %q, want it to say why nothing is being cached", notice)
+	}
+	if _, _, err := kernel.FirstPaint(deps, 100, 30, opts...); err != nil {
+		t.Errorf("FirstPaint with no cache: %v", err)
+	}
+}
+
+func TestBuild_ACacheFileThatCannotBeOpenedIsNotFatal(t *testing.T) {
+	writeProfile(t)
+	t.Setenv("SARAL_TEST_TOKEN", "a-token")
+
+	dir, err := config.CacheDir()
+	if err != nil {
+		t.Fatalf("CacheDir: %v", err)
+	}
+	// A directory where the file goes is the portable way to make opening it
+	// fail; a read-only parent does not stop root, which is who CI runs as.
+	if err := os.MkdirAll(filepath.Join(dir, cacheFile), 0o700); err != nil {
+		t.Fatalf("blocking the cache file: %v", err)
+	}
+
+	deps, _, notice, closeCache, err := build(options{})
+	if err != nil {
+		t.Fatalf("build refused to start without a usable cache: %v", err)
+	}
+	defer closeCache()
+
+	if deps.Cache != nil {
+		t.Error("a cache was built over a file that could not be opened")
+	}
+	if !strings.Contains(notice, "nothing will be cached") {
+		t.Errorf("the run says %q, want it to say that nothing is being cached", notice)
+	}
+}
+
+func TestBuild_ThePollFlagIsOffUnlessItIsGiven(t *testing.T) {
+	writeProfile(t)
+	t.Setenv("SARAL_TEST_TOKEN", "a-token")
+	t.Cleanup(func() { list.SetPollInterval(0) })
+
+	_, _, _, closeCache, err := build(options{})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	closeCache()
+	if got := list.PollInterval(); got != 0 {
+		t.Errorf("a run nobody asked to poll polls every %s", got)
+	}
+
+	_, _, _, closeCache, err = build(options{poll: 90 * time.Second})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	closeCache()
+	if got := list.PollInterval(); got != 90*time.Second {
+		t.Errorf("--poll 90s produced %s", got)
+	}
+}
+
+// TestFirstPaint_DrawsRowsOutOfTheRealCacheFile is the one test that runs the
+// whole path: bbolt on disk, through app.Cache, onto kernel.Deps, into the list's
+// constructor, and out as a frame. Everything above the store is otherwise tested
+// against a cache in a map, because internal/ui may not import internal/store.
+func TestFirstPaint_DrawsRowsOutOfTheRealCacheFile(t *testing.T) {
+	writeProfile(t)
+	t.Setenv("SARAL_TEST_TOKEN", "a-token")
+
+	// The query the list opens on, which is internal/ui/list's own default for a
+	// session scoped to a project. Nothing exports it, so if it changes this test
+	// stops finding rows and says so rather than passing on a different question.
+	const opensOn = `project = "PROJ" AND assignee = currentUser() ORDER BY updated DESC`
+
+	deps, _, _, releaseCache, err := build(options{project: "PROJ"})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	defer releaseCache()
+	if deps.Cache == nil {
+		t.Fatal("there is no cache to write into")
+	}
+
+	rows := jiratest.Gen(5)
+	mask := jira.NewFieldMask(app.ListProjection().IDs)
+	for i := range rows {
+		rows[i].Requested = mask
+	}
+	if err := deps.Cache.PutRows(opensOn, rows, false); err != nil {
+		t.Fatalf("PutRows: %v", err)
+	}
+
+	// A second session over the same file, which is what the next run of the
+	// program is. The first has to let the lock go for this to open at all.
+	releaseCache()
+	deps, opts, _, releaseCache, err := build(options{project: "PROJ"})
+	if err != nil {
+		t.Fatalf("second build: %v", err)
+	}
+	defer releaseCache()
+
+	took, frame, err := kernel.FirstPaint(deps, 120, 40, opts...)
+	if err != nil {
+		t.Fatalf("FirstPaint: %v", err)
+	}
+	for i := range rows {
+		if !strings.Contains(frame, rows[i].Key) {
+			t.Fatalf("the first frame does not show %s, so it was not drawn from the file:\n%s", rows[i].Key, frame)
+		}
+		if !strings.Contains(frame, rows[i].Summary) {
+			t.Errorf("%s was drawn without its summary", rows[i].Key)
+		}
+	}
+	if took > 60*time.Millisecond {
+		t.Errorf("the first paint took %s, want under the 60ms in docs/PERFORMANCE.md", took)
 	}
 }

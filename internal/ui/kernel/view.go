@@ -91,6 +91,10 @@ type Deps struct {
 	// with mouse = false disables the manager, so Zones.Enabled() answers that
 	// question and Mark writes nothing into the frame.
 	Zones *zone.Manager
+	// Cache is what this session has already read from the site, or nil when it
+	// has nowhere to keep one. Every view has to draw without it: a first run has
+	// nothing on disk, and another copy of Saral may be holding the file.
+	Cache app.Cache
 	// Site is the host this session is talking to, for display only.
 	Site string
 	// Now is the clock. Tests inject a fixed one.

@@ -1,0 +1,30 @@
+ saral | Issues                                                                            PROJ | example.atlassian.net 
+My issues in PROJ                                                                                         stale 6 issues
+  KEY     SUMMARY                                                TYPE       STATUS        ASSIGNEE          UPDATED     
+> PROJ-1  Add the nightly export                                 Epic       Building      Grace Hopper      02 Mar 12:00
+  PROJ-2  Rework webhook retries                                 Chore      Shipped       Alan Turing       02 Mar 14:00
+  PROJ-3  Investigate the onboarding wizard                      Story      Triage        Ada Lovelace      02 Mar 16:00
+  PROJ-4  Document CSV import                                    Defect     Building      unassigned        02 Mar 18:00
+  PROJ-5  Retire the audit trail                                 Chore      Shipped       Alan Turing       02 Mar 20:00
+  PROJ-6  Speed up session expiry                                Story      Triage        Ada Lovelace      02 Mar 22:00
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+search failed: dial tcp: no such host                                                                                   
+ g1 Issues                                                   ↓/j down | ↑/k up | enter open | / filter | ? help | q quit

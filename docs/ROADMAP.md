@@ -240,21 +240,29 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
 - [ ] **P3.1 — Command palette** · [#12](https://github.com/varijkapil13/saral/issues/12) · **owns** `internal/ui/palette/**`
   `ctrl+k`, fuzzy over the command registry, frecency ranking, shows the keybinding for what you ran.
   Wires up `app.SavedQuery`, whose number-key binding PC.2 settles.
-- [ ] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`, `internal/app/cache.go`, `go.mod`, `cmd/saral/main.go` and `internal/ui/kernel/view.go` (opening the cache and adding the one `Deps` field that carries it — nothing else)
-  Adds the bbolt dependency, in its own commit ahead of the code that needs it. bbolt buckets, TTLs,
-  stale-while-revalidate, cursor-preserving row patching, stale badge. Row patching is the other
-  consumer of PC.1's field-presence answer. **Adds the `internal/store` must-not-import-`internal/ui`
-  rule to `internal/arch` in the same PR** — PC.4 adds its sibling and cannot add this one, because
-  the package does not exist yet.
-  The dependency landed first and on its own, alongside the smallest `internal/store` that keeps it —
-  opening the file, closing it, naming buckets — and the import rule. CI runs `go mod tidy` before
-  anything else and that strips a `require` line nothing imports, so the package is what makes the
-  dependency real. The cache is what is left: `internal/app/cache.go` declaring the interface —
-  declared here because a view may not import the store — the bbolt implementation of it, the
-  `kernel.Deps` field that carries it, and `build()` opening it from `config.CacheDir()` and the
-  profile. **Interface and implementation land in the same PR**, and the interface answers to what
-  P3.4 needs to read as well as to what a view needs: knowing that the cache changed, not only what
-  is in it. A session with nowhere to cache carries a nil one and every caller copes.
+- [x] **P3.2 — Cache and offline** · [#13](https://github.com/varijkapil13/saral/issues/13) · **owns** `internal/store/**`, `internal/app/cache.go`, `cmd/saral/main.go`, `internal/ui/kernel/view.go` (the one `Deps` field that carries the cache — nothing else), `internal/ui/list/**` including its `testdata/**`, `internal/arch/imports_test.go`, `docs/{ARCHITECTURE,TESTING,ROADMAP}.md`
+  The bbolt dependency and the smallest `internal/store` that keeps it landed first and on their own,
+  in [#78](https://github.com/varijkapil13/saral/pull/78), with the `internal/store`
+  must-not-import-`internal/ui` rule; W0-b added the sibling rule the other way round, so
+  `internal/arch` needed nothing here beyond confirming both. CI runs `go mod tidy` before anything
+  else and that strips a `require` line nothing imports, so the package is what made the dependency
+  real, and `go.mod` is no longer this packet's to touch.
+  The cache is the rest: `internal/app/cache.go` declaring `app.Cache` — declared there because a view
+  may not import the store — with the bbolt-backed implementation beside it, the `kernel.Deps` field
+  that carries it, and `build()` opening it from `config.CacheDir()` and the profile.
+  **Row patching was already built:** `internal/ui/list`'s `patchedMsg`/`reload`/`patch` have preserved
+  the cursor across a refresh since P1.5, so this packet pointed them at the cache instead of writing a
+  second one. What it did add there is the read in `list.New` — a first paint happens in the
+  constructor, because `kernel.FirstPaint` never calls `Init` — the stale badge, the paging that
+  follows rows off disk which carry no cursor, and the optional per-view poller.
+  `app.MergeIssue` is the other consumer of PC.1's field-presence answer: issues are stored once each
+  and a narrow refresh merges into the copy already held, so a list row cannot unassign an issue a
+  wider read filled in. The interface also answers what P3.4 needs and not only what a view needs —
+  `EachIssue` for the corpus and `Generation()` for knowing the corpus moved. A session with nowhere to
+  cache carries a nil one and every caller copes.
+  The clause in `docs/ARCHITECTURE.md` saying the capability probe "is cached in the store" was false
+  and is gone; persisting it needs the kernel, which is
+  [#81](https://github.com/varijkapil13/saral/issues/81).
 - [ ] **P3.3 — Mouse** · [#14](https://github.com/varijkapil13/saral/issues/14) · **owns** `internal/ui/widget/zone*.go` + zone wiring in own files
   Click, double-click, wheel-under-pointer, drag-to-resize, clickable chips and footer.
 - [ ] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/index.go` · **after P3.2**
