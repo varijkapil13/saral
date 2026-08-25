@@ -15,6 +15,8 @@ These are budgets, not aspirations: CI enforces the ones it can, and benchmarks 
 | RSS with 10k issues cached | **< 60 MB** | measured in the bench harness |
 | Stripped binary | **< 15 MiB** | enforced in CI (`ci.yml`) |
 | Cache read for a view's first paint | < 5 ms | bbolt read benchmark |
+| Rank 10k cached issues against a keystroke | **< 16 ms**, 1 allocation | `BenchmarkIndexSearch10k`, asserted in `internal/app/index_budget_test.go` |
+| Rebuild the local index over 10k cached issues | < 16 ms | `BenchmarkIndexRebuild10k`, asserted beside it |
 
 ## Where the time actually goes
 
@@ -60,6 +62,26 @@ func BenchmarkRowRender(b *testing.B)    { ... }
 
 `make bench` runs them all. P9.2 wires `benchstat` into CI to fail a PR that regresses a budgeted
 path by more than 10%.
+
+### What the local index costs today
+
+Measured on an M2 Pro at ten thousand cached issues — twice the 5,000 the cache itself is bounded to,
+so the real worst case is half of each of these:
+
+| Benchmark | ns/op | allocs/op |
+|---|---|---|
+| `BenchmarkIndexSearch10k` — three runes typed, a screenful asked for | 795,000 | 1 |
+| `BenchmarkIndexSearchOneRune10k` — one rune, which nearly everything matches | 1,016,000 | 1 |
+| `BenchmarkIndexSearchUnbounded10k` — every hit rather than a screenful | 926,000 | 1 |
+| `BenchmarkIndexRebuild10k` — the walk a moved generation costs | 245,000 | 1 |
+| `BenchmarkPatternScore` — one candidate scored | 65 | 0 |
+
+The one allocation is the answer handed back, which the caller keeps. Everything behind it — the
+rows, the prepared pattern, the ranking buffer — outlives the call or never leaves the stack, and
+`app.Pattern` folds case without copying either side, so scoring is allocation-free however many
+candidates it is run over. That is the property that made writing the scorer cheaper than taking
+`github.com/sahilm/fuzzy`, whose API materialises a `[]string` of every target and a `[]int` of
+matched offsets per hit.
 
 ## Measuring for real
 
