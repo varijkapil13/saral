@@ -325,19 +325,27 @@ func TestRun_CollapsesIdenticalSearchesThatAreInFlightAtOnce(t *testing.T) {
 	}
 	s := NewSearch(blocking)
 
-	var entered atomic.Int64
+	// Joining the flight is the barrier: a caller merely started would
+	// legitimately begin a second search once this one had finished.
+	wanted := searchKey(jira.Query{JQL: testJQL, Fields: ListProjection().IDs})
+	var joined atomic.Int64
+	s.flight.joined = func(key string) {
+		if key == wanted {
+			joined.Add(1)
+		}
+	}
+
 	results := make(chan error, callers)
 	for range callers {
 		go func() {
-			entered.Add(1)
 			_, err := s.Run(t.Context(), Request{JQL: testJQL, Projection: ListProjection()})
 			results <- err
 		}()
 	}
 
 	<-blocking.arrived
-	waitFor(t, "every caller to have reached the search", func() bool {
-		return entered.Load() == callers
+	waitFor(t, "every caller to have joined the search in flight", func() bool {
+		return joined.Load() == callers
 	})
 	close(blocking.release)
 	for range callers {
