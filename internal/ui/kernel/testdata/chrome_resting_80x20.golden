@@ -17,4 +17,4 @@ board body
                                                                                 
                                                                                 
                                                                                 
- g1 Board  g2 Backlog                                      enter open | / filter
+ Board  enter open  / filter                                              ctrl+k

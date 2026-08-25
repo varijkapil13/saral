@@ -1,30 +1,30 @@
 editing an issue's fields
   the field list
-    short  ↓/j down · ↑/k up · enter change this field · ctrl+s save
+    acts   enter change · del empty · ctrl+s save · X discard
     full   [↓/j down, ↑/k up, enter change this field, del empty this field]
     full   [←/h previous value, →/l next value]
     full   [ctrl+s save, X discard changes]
   a field taking typing
-    short  enter keep this value · esc leave the value alone
+    acts   enter keep this value · esc leave the value alone
     full   [enter keep this value, esc leave the value alone]
   waiting for the go-ahead to save
-    short  y go ahead · esc do not save yet
+    acts   y go ahead · esc do not save yet
     full   [y go ahead, esc do not save yet]
   saving
     nothing of its own; the globals are all that answer
   somebody else changed it first
-    short  y re-read it and put your edits back on top · esc leave it as it is for now
+    acts   y re-read it and put your edits back on top · esc leave it as it is for now
     full   [y re-read it and put your edits back on top, esc leave it as it is for now]
 changing an issue's status
   the moves this issue can make
-    short  ↓/j down · ↑/k up · enter choose
+    acts   enter choose
     full   [↓/j down, ↑/k up, enter choose]
   the transition screen
-    short  ↓/j down · ↑/k up · ←/h previous value · →/l next value · enter use these values
+    acts   ←/h previous · →/l next · enter use these values
     full   [↓/j down, ↑/k up, ←/h previous value, →/l next value]
     full   [enter use these values, esc back]
   waiting for the go-ahead to move
-    short  y go ahead · esc back
+    acts   y go ahead · esc back
     full   [y go ahead, esc back]
   moving
     nothing of its own; the globals are all that answer

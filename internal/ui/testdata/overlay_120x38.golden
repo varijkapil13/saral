@@ -1,0 +1,42 @@
+comment
+a write a comment    ↓/j  down         ctrl+d half page down    1-9   saved query           ctrl+k commands
+e edit this one      ↑/k  up           ctrl+u half page up      g 1-9 switch view           ?      help
+d delete this one    pgdn page down    g g    oldest            esc   back                  q      quit
+                     pgup page up      G      newest            r     refresh
+                                                                R     refetch everything
+
+form
+enter use this issue type    ↓/j  down         1-9   saved query           ctrl+k commands
+                             ↑/k  up           g 1-9 switch view           ?      help
+                             home first row    esc   back                  q      quit
+                             end  last row     r     refresh
+                                               R     refetch everything
+
+issue
+e edit fields      ↓/j    down         d/ctrl+d half page down    1-9   saved query           ctrl+k commands
+t change status    ↑/k    up           u/ctrl+u half page up      g 1-9 switch view           ?      help
+c comment          f/pgdn page down    g g      top               esc   back                  q      quit
+                   b/pgup page up      G        bottom            r     refresh
+                                                                  R     refetch everything
+
+issue.edit
+enter  change this field    ↓/j down    ←/h previous value    1-9   saved query           ctrl+k commands
+del    empty this field     ↑/k up      →/l next value        g 1-9 switch view           ?      help
+ctrl+s save                                                   esc   back                  q      quit
+X      discard changes                                        r     refresh
+                                                              R     refetch everything
+
+issue.move
+enter choose    ↓/j down    1-9   saved query           ctrl+k commands
+                ↑/k up      g 1-9 switch view           ?      help
+                            esc   back                  q      quit
+                            r     refresh
+                            R     refetch everything
+
+list
+enter open                        ↓/j  down         ctrl+d half page down    1-9   saved query           ctrl+k commands
+/     filter                      ↑/k  up           ctrl+u half page up      g 1-9 switch view           ?      help
+a     all issues                  pgdn page down    g g    first row         esc   back                  q      quit
+e     edit this search            pgup page up      G      last row          r     refresh
+s     save this query to a key                                               R     refetch everything
+

@@ -8,9 +8,9 @@ for six months.
 
 1. **First paint is instant, always.** Cached data appears before the network is touched. A spinner
    is a failure of caching, not a loading state.
-2. **The footer only shows keys that work right now.** No greyed-out lists of everything. Context
-   determines the hints, and the hints come from the key registry so they can never drift from
-   reality.
+2. **The footer only shows keys that work right now**, and it shows what you can *do* before where
+   you can go. No greyed-out lists of everything. Context determines the hints, and the hints come
+   from the key registry so they can never drift from reality.
 3. **Every action is reachable three ways** — a key, the command palette, and the mouse. Nothing is
    keyboard-only, and nothing is mouse-only.
 4. **Nothing destructive without a named confirmation.** The confirm shows what will change, in
@@ -27,7 +27,7 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 | Stage | Mechanism |
 |---|---|
 | First minute | Onboarding writes the profile, then drops you on your own issues — or on the project itself, where nothing in it is assigned to you, because an empty first screen reads as a broken program. `?` explains the current view only. |
-| First hour | The footer teaches the six keys that matter here. Mouse works, so nothing is blocked on learning. |
+| First hour | The footer teaches what can be done to the thing in front of you, most-used first. Mouse works, so nothing is blocked on learning. |
 | First week | Frecency: projects, assignees, versions and labels reorder so your usual choices are first. |
 | | Hints: after you reach an action through the palette three times, the status line notes its key. Built in P3.1 ([#12](https://github.com/varijkapil13/saral/issues/12)) rather than with the footer: the count, the call site and the frecency table are one piece of data, and P3.1 already owns it. `kernel.CommandRanMsg{ID, Keys}` is the signal it hangs on, and `Command.Keys` is the key it names — a command nothing binds is never given one, and the line is said once rather than on every run after the third. |
 | Ongoing | JQL history with fuzzy recall; saved queries bound to `1`–`9` and kept in the profile. |
@@ -61,6 +61,46 @@ different places, and each of those is the one on screen at the time. A state wi
 to offer — a save in flight, a site being asked — says so by advertising nothing, and the footer falls
 back to the globals rather than naming a key that is being refused. `docs/ARCHITECTURE.md` has the
 interface and the generation counter the memoized chrome needs.
+
+### The row at the bottom
+
+One row, three cells, at every width. It is never two rows, because the constraint is width and not
+height: a second row would be truncated the same way and would cost a view a line it needs more —
+at 80×20 the body is 17 rows with a status line up, and the issue list has as few as 13 live rows in it.
+
+| cell | what it holds |
+|---|---|
+| root | the **root** view's title — where `esc` lands, and what a click there goes back to |
+| actions | what can be done to the thing on screen, most-used first, terse; whatever is left over becomes `+N` |
+| globals | `? ctrl+k esc`, or `q` at the bottom of the stack — bare keys, and never given up |
+
+```
+ Issues  e edit  t status  c comment  y copy  o open              ? ctrl+k esc
+ Issues  enter open  c comment  e edit  t status  / filter  +3    ? ctrl+k q
+```
+
+**The order things are given up in is the point.** Actions fold into a `+N` from the right, then the
+root cell goes, then the actions lose their descriptions and keep their keys. The globals never go.
+That order exists because the previous row gave up exactly the wrong end first: seven view slots cost
+81 columns against the 80 this program documents as its minimum, so `? help`, `esc back` and
+`ctrl+k commands` were all past the ellipsis, and at some widths the row overflowed by one column and
+was dropped whole. Somebody ran the program at 80 columns for a week and was never told the command
+palette existed ([#96](https://github.com/varijkapil13/saral/issues/96)).
+
+**The motions are not on the row.** The issue pane answers sixteen strokes and thirteen of them only
+move the cursor; a row that lists them in the order they were declared spends itself on scrolling.
+`?` lists them, and it leads with the actions — spelt out, because the overlay has room for *edit
+fields* where the row had room for *edit*. Every key appears there exactly once.
+
+**Every entry on the row is clickable**, and a click is delivered to the view as the first stroke of
+the binding it advertises — so the key, the palette entry and the pointer are one implementation and
+cannot drift. `+N` opens `?`, which is where what it stands for is listed.
+
+The digits keep their place on the row where they work: in a root view the bound saved queries are
+the first entry in the actions cell, named after the query. **The view slots are not on the row.**
+One row cannot hold nine destinations and the actions as well, the destinations are the half needed
+least often, and the header already says what is on top — so `g1`–`g9` are taught by `?` and by the
+palette's *Go to* rows, and the row names only the root you are in.
 
 The theme is switched from the palette — *use the dark theme*, *follow the terminal's own colours* —
 and the choice is written back into the profile it came from. There is no key for it: every letter
@@ -143,7 +183,8 @@ either takes a digit for itself or hands the view both keys in the order they we
 away, and a view that is taking typing gets the keys before any of this happens.
 
 The footer advertises only what works: the digits that actually have a query bound, named after the
-query, and the view slots as `g1`–`g9`.
+query. The slots themselves are not on the row — see *The row at the bottom* — so a slot is still
+allocated here rather than picked, and `?` and the palette are where its digit is taught.
 
 | Slot | View | Arrives with |
 |---|---|---|
@@ -187,7 +228,10 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 | click a status, type or assignee cell | show only the rows with that value; click it again to show them all |
 | wheel | scroll the pane under the pointer, not the focused one |
 | click the line that names the search | show its JQL and offer to change it, the same as `e` |
-| click a footer entry | switch view |
+| click the footer's root cell | go back to that root, the same as `esc` from a pushed view |
+| click a footer action | do it — the view is handed the first stroke of the key that entry names |
+| click the footer's `+N` | open `?`, which lists what did not fit |
+| click the footer while `?` is up | close the overlay — the one entry the row has there |
 | click anything else a view draws | do what it says — write, send, delete, confirm, put aside, pick a value, go back to an onboarding step |
 
 **A double-click is timed, because nothing else can time it.** `tea.MouseClickMsg` carries a

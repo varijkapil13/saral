@@ -35,12 +35,15 @@ func (r *reporterView) LiveKeys() (set KeySet, gen int) {
 func twoStateReporter(id string) *reporterView {
 	return &reporterView{id: id, sets: []KeySet{
 		{
-			Short: []Binding{Bind([]string{"enter"}, "enter", "open"), Bind([]string{"/"}, "/", "filter")},
-			Full:  [][]Binding{{Bind([]string{"enter"}, "enter", "open"), Bind([]string{"/"}, "/", "filter")}},
+			Acts: []Binding{Bind([]string{"enter"}, "enter", "open"), Bind([]string{"/"}, "/", "filter")},
+			Full: [][]Binding{
+				{Bind([]string{"j"}, "↓/j", "down"), Bind([]string{"k"}, "↑/k", "up")},
+				{Bind([]string{"enter"}, "enter", "open the row under the cursor"), Bind([]string{"/"}, "/", "filter these rows")},
+			},
 		},
 		{
-			Short: []Binding{Bind([]string{"enter"}, "enter", "keep filter"), Bind([]string{"esc"}, "esc", "clear filter")},
-			Full:  [][]Binding{{Bind([]string{"enter"}, "enter", "keep filter"), Bind([]string{"esc"}, "esc", "clear filter")}},
+			Acts: []Binding{Bind([]string{"enter"}, "enter", "keep filter"), Bind([]string{"esc"}, "esc", "clear filter")},
+			Full: [][]Binding{{Bind([]string{"enter"}, "enter", "keep filter"), Bind([]string{"esc"}, "esc", "clear filter")}},
 		},
 	}}
 }
@@ -151,6 +154,7 @@ func TestFrame_GoldenPerState(t *testing.T) {
 				view.state = state
 				RegisterView(reporterSpec("board", 1, view))
 				RegisterView(spec("backlog", 2, "", &stubView{id: "backlog"}))
+				RegisterView(spec(PaletteViewID, 0, "", &stubView{id: PaletteViewID}))
 
 				m := newAt(t, testDeps(), size.w, size.h)
 				golden(t, "chrome_"+name+"_"+size.label+".golden", ansi.Strip(m.Frame()))

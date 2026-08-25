@@ -52,7 +52,11 @@ func defaultKeys() keyMap {
 // stale hint behind.
 func (k keyMap) keySet() kernel.KeySet {
 	return kernel.KeySet{
-		Short: []kernel.Binding{k.Down, k.Up, k.Write, k.Edit, k.Delete},
+		Acts: []kernel.Binding{
+			kernel.Terse(k.Write, "write"),
+			kernel.Terse(k.Edit, "edit"),
+			kernel.Terse(k.Delete, "delete"),
+		},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.HalfDown, k.HalfUp, k.Top, k.Bottom},
@@ -68,12 +72,12 @@ var liveSets = func() [3]kernel.KeySet {
 	return [3]kernel.KeySet{
 		browsing: k.keySet(),
 		writing: {
-			Short: []kernel.Binding{k.Send, k.Cancel},
-			Full:  [][]kernel.Binding{{k.Send, k.Cancel}},
+			Acts: []kernel.Binding{k.Send, k.Cancel},
+			Full: [][]kernel.Binding{{k.Send, k.Cancel}},
 		},
 		confirming: {
-			Short: []kernel.Binding{k.Confirm, k.Keep},
-			Full:  [][]kernel.Binding{{k.Confirm, k.Keep}},
+			Acts: []kernel.Binding{k.Confirm, k.Keep},
+			Full: [][]kernel.Binding{{k.Confirm, k.Keep}},
 		},
 	}
 }()

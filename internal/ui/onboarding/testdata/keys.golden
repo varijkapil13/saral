@@ -1,23 +1,23 @@
 the first step
-  short  enter continue
+  acts   enter continue
   full   [enter continue]
 the first step, after it failed
-  short  ctrl+r try that again · enter continue
+  acts   ctrl+r try that again · enter continue
   full   [ctrl+r try that again, enter continue]
 a step with something to type
-  short  enter continue · shift+tab back a step
+  acts   enter continue · shift+tab back a step
   full   [enter continue, shift+tab back a step, ctrl+r try that again]
 a step with something to choose
-  short  ↑/↓ choose · enter continue · shift+tab back a step
+  acts   ↑/↓ choose · enter continue · shift+tab back a step
   full   [↑/↓ choose, enter continue, shift+tab back a step, ctrl+r try that again]
 the review
-  short  enter write the profile · shift+tab back a step
+  acts   enter write the profile · shift+tab back a step
   full   [enter write the profile, shift+tab back a step]
 the summary
-  short  enter start using it
+  acts   enter start using it
   full   [enter start using it]
 after a step failed
-  short  ctrl+r try that again · shift+tab back a step
+  acts   ctrl+r try that again · shift+tab back a step
   full   [ctrl+r try that again, shift+tab back a step, enter continue]
 waiting on the site
   nothing of its own; the globals are all that answer

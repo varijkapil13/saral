@@ -75,18 +75,19 @@ func (k keyMap) keySet() kernel.KeySet { return k.browsing(false) }
 // browsing is the resting state, with or without a filter already narrowing the
 // rows. The narrowed one offers the key that clears it.
 //
-// The two that reach another search are in the overlay and not the hint line: a
-// fifth entry there is enough to push the whole line past what an eighty-column
-// footer holds, and the kernel drops the line rather than shortening it.
+// Everything the list can do is offered, in the order it gets used. Nothing is
+// left out of the inventory to make it fit: whatever the row cannot hold folds
+// into a +N, and the overlay lists it.
 func (k keyMap) browsing(narrowed bool) kernel.KeySet {
-	short := []kernel.Binding{k.Down, k.Up, k.Open, k.Filter}
+	all, search, save := kernel.Terse(k.All, "all"), kernel.Terse(k.Edit, "search"), kernel.Terse(k.Save, "save")
+	acts := []kernel.Binding{k.Open, k.Filter, all, search, save}
 	actions := []kernel.Binding{k.Open, k.Filter, k.All, k.Edit, k.Save}
 	if narrowed {
-		short = []kernel.Binding{k.Down, k.Up, k.Open, k.Unfilter}
+		acts = []kernel.Binding{k.Open, k.Filter, kernel.Terse(k.Unfilter, "clear"), all, search, save}
 		actions = []kernel.Binding{k.Open, k.Filter, k.Unfilter, k.All, k.Edit, k.Save}
 	}
 	return kernel.KeySet{
-		Short: short,
+		Acts: acts,
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.HalfDown, k.HalfUp, k.Top, k.Bottom},
@@ -117,21 +118,23 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	var sets [keyStates]kernel.KeySet
 	sets[keysBrowsing] = k.keySet()
 	sets[keysNarrowed] = k.browsing(true)
+	// A prompt keeps its words: two answers to one question always fit, and what
+	// they are called is the whole point of asking.
 	sets[keysFiltering] = kernel.KeySet{
-		Short: []kernel.Binding{k.Accept, k.Clear},
-		Full:  [][]kernel.Binding{{k.Accept, k.Clear}},
+		Acts: []kernel.Binding{k.Accept, k.Clear},
+		Full: [][]kernel.Binding{{k.Accept, k.Clear}},
 	}
 	sets[keysPickingSlot] = kernel.KeySet{
-		Short: []kernel.Binding{k.Slot, k.Drop},
-		Full:  [][]kernel.Binding{{k.Slot, k.Drop}},
+		Acts: []kernel.Binding{k.Slot, k.Drop},
+		Full: [][]kernel.Binding{{k.Slot, k.Drop}},
 	}
 	sets[keysConfirmingSlot] = kernel.KeySet{
-		Short: []kernel.Binding{k.Take, k.Drop},
-		Full:  [][]kernel.Binding{{k.Take, k.Drop}},
+		Acts: []kernel.Binding{k.Take, k.Drop},
+		Full: [][]kernel.Binding{{k.Take, k.Drop}},
 	}
 	sets[keysAsking] = kernel.KeySet{
-		Short: []kernel.Binding{k.Run, k.Keep},
-		Full:  [][]kernel.Binding{{k.Run, k.Keep}},
+		Acts: []kernel.Binding{k.Run, k.Keep},
+		Full: [][]kernel.Binding{{k.Run, k.Keep}},
 	}
 	return sets
 }()

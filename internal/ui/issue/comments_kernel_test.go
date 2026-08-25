@@ -128,12 +128,12 @@ func TestSession_TheThreadOpensOverTheIssueAndEscComesBack(t *testing.T) {
 	s.press("c")
 	mustContain(t, s.frame(), "The conversation you came for.")
 	mustContain(t, s.title(), "PROJ-2")
-	mustContain(t, s.footer(), "a write a comment")
+	mustContain(t, s.footer(), "a write")
 
 	s.press("esc")
 	mustContain(t, s.frame(), "PROJ-2", "Comments (1)")
 	mustContain(t, s.footer(), "c comment")
-	mustNotContain(t, s.footer(), "a write a comment")
+	mustNotContain(t, s.footer(), "a write")
 
 	s.press("esc")
 	mustContain(t, s.frame(), "the rows this issue was opened from")
@@ -150,7 +150,7 @@ func TestSession_TheFooterNamesTheKeyOnlyWhereItOpensTheThread(t *testing.T) {
 	mustContain(t, s.footer(), "c comment")
 
 	s.press("c")
-	mustContain(t, s.footer(), "a write a comment")
+	mustContain(t, s.footer(), "a write")
 	mustNotContain(t, s.footer(), "c comment")
 
 	s.press("esc")
@@ -194,17 +194,18 @@ func TestSession_WhatIsWrittenInTheThreadIsThereWhenYouComeBack(t *testing.T) {
 	mustContain(t, s.frame(), "Comments (1)", "Written without leaving the issue.")
 }
 
-// The hint line is one row that the help component overflows rather than
-// truncates once it runs out of room, and the kernel then draws none of it. A
-// fifth key on this pane is exactly the kind of thing that tips it, so the
-// smallest terminal docs/UX.md supports is held to still teaching the keys.
+// The row is one line shared by three cells, and the smallest terminal
+// docs/UX.md supports is where it has to give something up. Every action this pane
+// offers survives there, and so does every way out. This build registers no
+// palette, so ctrl+k is honestly absent from the globals.
 func TestSession_TheSmallestTerminalStillTeachesThePanesKeys(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(12)
 	s := boot(t, testDeps(f), seedOf(t, f, "PROJ-7"), kernel.MinWidth, kernel.MinHeight)
 
-	mustContain(t, s.footer(), "down", "up", "edit fields")
+	mustContain(t, s.footer(), "Issues", "e edit", "t status", "c comment", "? esc")
+	mustNotContain(t, s.footer(), "…")
 }
 
 func TestSession_Frames(t *testing.T) {

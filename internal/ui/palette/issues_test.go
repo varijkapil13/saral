@@ -216,7 +216,7 @@ func TestPalette_EnterOverAnIssueIsAdvertisedAsOpeningIt(t *testing.T) {
 	if gen != int(keysIssue) {
 		t.Fatalf("the cursor is on an issue and the keys are in state %d", gen)
 	}
-	if labels := shortOf(set); !strings.Contains(labels, "open it") || strings.Contains(labels, "run it") {
+	if labels := actsOf(set); !strings.Contains(labels, "open it") || strings.Contains(labels, "run it") {
 		t.Errorf("the footer says %q over an issue", labels)
 	}
 }

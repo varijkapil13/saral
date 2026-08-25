@@ -75,7 +75,7 @@ func TestLiveKeys_FollowTheStepTheUserIsOn(t *testing.T) {
 		}
 		seen[gen] = tc.state
 		if tc.state == keysBusy && !set.IsZero() {
-			t.Errorf("a step waiting on the site advertises %s, none of which answers", shortOf(set))
+			t.Errorf("a step waiting on the site advertises %s, none of which answers", actsOf(set))
 		}
 	}
 }
@@ -86,11 +86,11 @@ func TestLiveKeys_FollowTheStepTheUserIsOn(t *testing.T) {
 func TestLiveKeys_TheFirstStepDoesNotOfferAWayBack(t *testing.T) {
 	t.Parallel()
 	for _, state := range []keyState{keysFirstStep, keysFirstStepFailed} {
-		if got := shortOf(liveSets[state]); strings.Contains(got, "back") {
+		if got := actsOf(liveSets[state]); strings.Contains(got, "back") {
 			t.Errorf("the first step offers a way back: %s", got)
 		}
 	}
-	if got := shortOf(liveSets[keysTyping]); !strings.Contains(got, "back") {
+	if got := actsOf(liveSets[keysTyping]); !strings.Contains(got, "back") {
 		t.Errorf("a later step lost its way back: %s", got)
 	}
 }
@@ -104,7 +104,7 @@ func TestLiveKeys_EnterIsNamedForWhatItDoesOnThisStep(t *testing.T) {
 		keysReview: "write the profile",
 		keysDone:   "start using it",
 	} {
-		if got := shortOf(liveSets[state]); !strings.Contains(got, want) {
+		if got := actsOf(liveSets[state]); !strings.Contains(got, want) {
 			t.Errorf("state %d does not say enter %q: %s", state, want, got)
 		}
 	}
@@ -122,8 +122,8 @@ func TestLiveKeys_CostNothingToAskFor(t *testing.T) {
 	}
 }
 
-func shortOf(set kernel.KeySet) string {
-	return strings.Join(labels(set.Short), " · ")
+func actsOf(set kernel.KeySet) string {
+	return strings.Join(labels(set.Acts), " · ")
 }
 
 func labels(bindings []kernel.Binding) []string {
@@ -139,7 +139,7 @@ func writeKeySet(b *strings.Builder, set kernel.KeySet) {
 		b.WriteString("  nothing of its own; the globals are all that answer\n")
 		return
 	}
-	fmt.Fprintf(b, "  short  %s\n", shortOf(set))
+	fmt.Fprintf(b, "  acts   %s\n", actsOf(set))
 	for _, column := range set.Full {
 		fmt.Fprintf(b, "  full   [%s]\n", strings.Join(labels(column), ", "))
 	}

@@ -221,7 +221,7 @@ func init() {
 	kernel.RegisterView(kernel.ViewSpec{
 		ID:       "board",
 		Title:    "Board",
-		Slot:     2,                       // footer position, reached with g2
+		Slot:     2,                       // the digit g reaches it with; see docs/UX.md
 		Requires: kernel.CapBoards,        // hidden when absent
 		New:      func(d kernel.Deps) kernel.View { return New(d) },
 	})
@@ -232,7 +232,7 @@ Three registries, all with the same conflict-free property:
 
 | Registry | Registered by | Consumed by |
 |---|---|---|
-| `RegisterView` | each view package's `register.go` | footer, view stack, `saral <view>` |
+| `RegisterView` | each view package's `register.go` | view stack, the go-to digits, `saral <view>` |
 | `RegisterCommand` | any package | command palette (`ctrl+k`) |
 | `RegisterKeys` | each view, scoped to itself | help overlay, footer hints — the view's resting state; `kernel.KeyReporter` is how a view answers for the state it is actually in |
 
@@ -296,6 +296,53 @@ whole run: the view's resting state, and the whole answer for a view whose keys 
 and the `?` overlay ask the focused view first and fall back to the registry, so a static view pays
 nothing. The registry entry stays the thing `internal/ui`'s command sweep holds a palette entry's key
 against, which is why it must not be empty.
+
+A `KeySet` is partitioned rather than ordered:
+
+```go
+type KeySet struct {
+	Acts  []Binding   // what can be done here, most-used first, terse — the footer's middle cell
+	Short []Binding   // the one-line bubbles/help form; the footer's fallback when Acts is empty
+	Full  [][]Binding // the ? overlay, one inner slice per column — the motions and the sentences
+}
+```
+
+`Acts` is the footer and `Full` is the explanation, and they are deliberately not the same list twice:
+one row shared with the root cell and the globals has space for *edit*, and the overlay has space for
+*edit fields*. `kernel.Terse(b, desc)` makes the short copy from the long binding so the key itself is
+spelt once. `mergeKeys` builds the overlay so that every key appears exactly once: the actions lead,
+in the order the row shows them but carrying the longest description any column gives that key, and
+the remaining columns are drawn with the actions taken out. Listing each action twice — once terse and
+once in full — cost two columns and pushed the globals off the right of a 120-column screen. A state that genuinely offers nothing — a save in flight, a site being asked — names no `Acts`
+and the footer falls back to the globals; `internal/ui/livekeys_test.go` holds every other state to
+naming one, and holds every advertised action to a first stroke `kernel.Stroke` can turn back into the
+keypress a click delivers.
+
+The footer draws one row in three cells and gives them up in a fixed order — actions into a `+N` from
+the right, then the root cell, then the descriptions, and never the globals. `docs/UX.md` has the
+reasoning and the renderings. Each entry is a zone under the kernel's own prefix, and a click on one
+is fed back through the kernel's own key handling as that binding's first stroke, so the key, the
+palette entry and the pointer are one implementation.
+
+### Reaching outside the terminal
+
+`internal/ui/kernel/external.go` holds the three things a view needs that are not Jira and not the
+terminal, so that five packets do not each write their own:
+
+```go
+func Copy(text, what string) tea.Cmd            // OSC 52, and says what it copied
+func OpenURL(link string) tea.Cmd               // the desktop's own handler
+func IssueURL(site, key string) (string, error) // the browse link, or a refusal
+```
+
+Two things they exist to get right. **A clipboard write cannot be confirmed**: it is an escape
+sequence out to the terminal, and a terminal or multiplexer that refuses it drops it silently, so
+there is no error to report and a copy that never happened looks exactly like one that did. `Copy`
+therefore names what it copied on the status line itself rather than trusting a caller to remember.
+And **`Deps.Site` is not a hostname**: it is whatever a profile was written with, nothing after
+onboarding checks its shape, so it may carry a scheme, a port or the context path a Data Center
+install is served under. `IssueURL` parses rather than concatenates, and refuses what is not a site
+rather than building a link to somebody else's website.
 
 Two constraints come with it, and both fail silently:
 

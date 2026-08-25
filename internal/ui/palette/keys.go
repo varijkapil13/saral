@@ -50,22 +50,22 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	k := defaultKeys()
 	var sets [keyStates]kernel.KeySet
 	sets[keysOffering] = kernel.KeySet{
-		Short: []kernel.Binding{k.Down, k.Up, k.Run, k.Close},
+		Acts: []kernel.Binding{k.Run, k.Close},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.Run, k.Close},
 		},
 	}
 	sets[keysIssue] = kernel.KeySet{
-		Short: []kernel.Binding{k.Down, k.Up, k.Open, k.Close},
+		Acts: []kernel.Binding{k.Open, k.Close},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.Open, k.Close},
 		},
 	}
 	sets[keysNothing] = kernel.KeySet{
-		Short: []kernel.Binding{k.Close},
-		Full:  [][]kernel.Binding{{k.Close}},
+		Acts: []kernel.Binding{k.Close},
+		Full: [][]kernel.Binding{{k.Close}},
 	}
 	return sets
 }()

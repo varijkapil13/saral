@@ -112,6 +112,75 @@ func TestLiveKeys_AFreshlyBuiltViewAdvertisesSomething(t *testing.T) {
 	}
 }
 
+// actionFree names the states that deliberately offer nothing to do, with the
+// reason. A state waiting on a site has no action of its own and says so by
+// advertising none, which is a different thing from a view that never got round
+// to naming its actions.
+//
+// The states themselves are private to their packages, so each package holds its
+// own states to this; what belongs here is the record of which views have one at
+// all, so that a seventh view cannot quietly join them.
+var actionFree = map[string]string{
+	issue.EditViewID:  "a save in flight refuses every key until the site answers",
+	issue.MoveViewID:  "a transition in flight refuses every key until the site answers",
+	onboarding.ViewID: "a step being checked against the site refuses enter and shift+tab both",
+}
+
+// Every state a footer can be drawn from has to name what can be done in it, or
+// the row is the globals and nothing else. What this can reach from above the
+// views is the state each one opens in and the resting set each one registered;
+// the rest is held by each package over its own states.
+func TestLiveKeys_EveryReportingStateNamesAnActionOrIsListedWithAReason(t *testing.T) {
+	sweepEnv(t)
+	for _, scope := range kernel.KeyScopes() {
+		if got := kernel.KeysFor(scope).Acts; len(got) == 0 {
+			t.Errorf("%s registered a resting set that names no action, so its footer is a row of globals "+
+				"and the command sweep has nothing to hold a palette entry's key against", scope)
+		}
+	}
+	for scope, build := range keyReporters {
+		reporter, ok := build(depsFor(t)).(kernel.KeyReporter)
+		if !ok {
+			continue
+		}
+		set, _ := reporter.LiveKeys()
+		if len(set.Acts) == 0 && actionFree[scope] == "" {
+			t.Errorf("%s opens in a state that names no action and is not listed as action-free with a reason", scope)
+		}
+	}
+	for scope, why := range actionFree {
+		if _, reports := keyReporters[scope]; !reports {
+			t.Errorf("actionFree names %q, which does not report its live keys, so it has no states to be free of", scope)
+		}
+		if why == "" {
+			t.Errorf("%s is listed action-free with no reason", scope)
+		}
+	}
+}
+
+// Two things every advertised action owes the mouse and the footer's zone map: a
+// first stroke the kernel can turn back into the keypress a click delivers, and a
+// key label no other action in the same state shares, because the zone a click
+// resolves to is minted from that label.
+func TestLiveKeys_EveryAdvertisedActionCanBeClicked(t *testing.T) {
+	sweepEnv(t)
+	for _, scope := range kernel.KeyScopes() {
+		seen := make(map[string]string)
+		for _, b := range kernel.KeysFor(scope).Acts {
+			label := b.Help().Key
+			if other, clash := seen[label]; clash {
+				t.Errorf("%s advertises %q for both %q and %q; the footer mints one zone per label, "+
+					"so a click on it reaches whichever came first", scope, label, other, b.Help().Desc)
+			}
+			seen[label] = b.Help().Desc
+			if _, ok := kernel.Stroke(b); !ok {
+				t.Errorf("%s advertises %q on %v, which the kernel cannot spell back into a keypress, "+
+					"so clicking it does nothing", scope, label, b.Keys())
+			}
+		}
+	}
+}
+
 // seed is the row a list would have handed over: a key and nothing else, which
 // is all these panes need to be built.
 func seed() jira.Issue {

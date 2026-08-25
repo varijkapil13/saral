@@ -80,7 +80,7 @@ func TestLiveKeys_FollowTheStageTheEditorIsIn(t *testing.T) {
 		}
 		seen[gen] = tc.name
 		if tc.stage == stageSaving && !set.IsZero() {
-			t.Errorf("a save in flight advertises %s, none of which answers", shortOf(set))
+			t.Errorf("a save in flight advertises %s, none of which answers", actsOf(set))
 		}
 	}
 }
@@ -112,10 +112,10 @@ func TestLiveKeys_FollowTheStageThePickerIsIn(t *testing.T) {
 		}
 		seen[gen] = tc.name
 	}
-	if !strings.Contains(shortOf(moveLiveSets[moveScreen]), "next value") {
+	if !strings.Contains(actsOf(moveLiveSets[moveScreen]), "→/l next") {
 		t.Error("the transition screen does not advertise the key that fills a field in")
 	}
-	if strings.Contains(shortOf(moveLiveSets[moveList]), "next value") {
+	if strings.Contains(actsOf(moveLiveSets[moveList]), "→/l next") {
 		t.Error("the list of moves advertises a key that only the screen answers")
 	}
 }
@@ -124,8 +124,8 @@ func TestLiveKeys_FollowTheStageThePickerIsIn(t *testing.T) {
 // The label has to come from the stage, or one of the two is a lie.
 func TestLiveKeys_YIsNamedForTheQuestionItIsAnswering(t *testing.T) {
 	t.Parallel()
-	confirm := shortOf(editLiveSets[stageConfirm])
-	conflict := shortOf(editLiveSets[stageConflict])
+	confirm := actsOf(editLiveSets[stageConfirm])
+	conflict := actsOf(editLiveSets[stageConflict])
 	switch {
 	case !strings.Contains(confirm, "y go ahead"):
 		t.Errorf("a save waiting to be confirmed does not name y: %s", confirm)
@@ -158,8 +158,8 @@ func TestLiveKeys_CostNothingToAskFor(t *testing.T) {
 	}
 }
 
-func shortOf(set kernel.KeySet) string {
-	return strings.Join(labels(set.Short), " · ")
+func actsOf(set kernel.KeySet) string {
+	return strings.Join(labels(set.Acts), " · ")
 }
 
 func labels(bindings []kernel.Binding) []string {
@@ -175,7 +175,7 @@ func writeKeySet(b *strings.Builder, set kernel.KeySet) {
 		b.WriteString("    nothing of its own; the globals are all that answer\n")
 		return
 	}
-	fmt.Fprintf(b, "    short  %s\n", shortOf(set))
+	fmt.Fprintf(b, "    acts   %s\n", actsOf(set))
 	for _, column := range set.Full {
 		fmt.Fprintf(b, "    full   [%s]\n", strings.Join(labels(column), ", "))
 	}

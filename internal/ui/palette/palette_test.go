@@ -174,7 +174,7 @@ func TestPalette_NothingMatchingSaysSoAndOffersNoKeysThatWouldDoAnything(t *test
 	if gen != int(keysNothing) {
 		t.Errorf("the keys are in state %d with nothing on offer", gen)
 	}
-	if labels := shortOf(set); strings.Contains(labels, "run it") {
+	if labels := actsOf(set); strings.Contains(labels, "run it") {
 		t.Errorf("the footer offers enter with nothing to run: %s", labels)
 	}
 }
@@ -410,9 +410,9 @@ func lineWith(t *testing.T, frame, want string) string {
 	return ""
 }
 
-func shortOf(set kernel.KeySet) string {
-	out := make([]string, 0, len(set.Short))
-	for _, b := range set.Short {
+func actsOf(set kernel.KeySet) string {
+	out := make([]string, 0, len(set.Acts))
+	for _, b := range set.Acts {
 		out = append(out, b.Help().Key+" "+b.Help().Desc)
 	}
 	return strings.Join(out, " · ")

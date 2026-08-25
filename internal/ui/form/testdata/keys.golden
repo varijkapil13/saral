@@ -1,17 +1,17 @@
 choosing an issue type
-  short  ↓/j down · ↑/k up · enter use this issue type
+  acts   enter use this issue type
   full   [↓/j down, ↑/k up, home first row, end last row, enter use this issue type]
 the field list
-  short  ↓/j down · ↑/k up · enter edit this field · ctrl+s create the issue
+  acts   enter edit · ctrl+d empty · ctrl+s create · ctrl+t type
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, end last row]
   full   [enter edit this field, ctrl+d empty this field, ctrl+s create the issue, ctrl+t change the issue type]
 a one-line field open
-  short  enter take this value · esc close the editor, keeping what is typed
+  acts   enter take it · esc keep and close
   full   [enter take this value, esc close the editor, keeping what is typed]
 the long-text pane open
-  short  ctrl+d finish this text · esc close the editor, keeping what is typed
+  acts   ctrl+d finish · esc keep and close
   full   [ctrl+d finish this text, esc close the editor, keeping what is typed]
 the value chooser open
-  short  ↓ next value · ↑ previous value · tab pick or unpick · enter take this value · esc close the editor, keeping what is typed
+  acts   tab pick · enter take it · esc keep and close
   full   [↓ next value, ↑ previous value, pgdn page down, pgup page up]
   full   [tab pick or unpick, enter take this value, esc close the editor, keeping what is typed]

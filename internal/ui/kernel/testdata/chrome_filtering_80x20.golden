@@ -17,4 +17,4 @@ board body
                                                                                 
                                                                                 
                                                                                 
- g1 Board  g2 Backlog                       enter keep filter | esc clear filter
+ Board  enter keep filter  esc clear filter                               ctrl+k

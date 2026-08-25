@@ -49,8 +49,8 @@ func TestSession_Frame(t *testing.T) {
 	golden(t, "session_120x30.golden", ansi.Strip(s.m.Frame()))
 
 	footer := lastLine(ansi.Strip(s.m.Frame()))
-	mustContain(t, footer, "run it", "close", "commands")
-	mustNotContain(t, footer, "quit", "help")
+	mustContain(t, footer, "run it", "close", "ctrl+k")
+	mustNotContain(t, footer, "? ctrl+k", "quit", "help")
 
 	s.press("esc")
 	mustNotContain(t, ansi.Strip(s.m.Frame()), "what do you want to do?")
