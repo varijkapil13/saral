@@ -344,7 +344,7 @@ func (m *Model) chooseFacet() tea.Cmd {
 	m.head = ""
 	// The rows this program supplies itself are on offer before the site has
 	// answered anything, and they stay on offer if it refuses.
-	m.rerank()
+	m.rerank("")
 	return m.fetch("")
 }
 
@@ -489,9 +489,10 @@ func (m *Model) tookVocabulary(msg vocabularyMsg) tea.Cmd {
 		return nil
 	}
 	m.loading, m.failure = false, nil
+	under := m.underCursor()
 	m.all, m.complete = msg.values, true
 	m.memo.reset()
-	m.rerank()
+	m.rerank(under)
 	return nil
 }
 
@@ -506,6 +507,7 @@ func (m *Model) tookPeople(msg peopleMsg) tea.Cmd {
 	if msg.needle == "" {
 		m.complete = msg.complete
 	}
+	under := m.underCursor()
 	held := make(map[string]bool, len(m.all)+len(msg.people))
 	for i := range m.all {
 		held[m.all[i].term.ID] = true
@@ -519,7 +521,7 @@ func (m *Model) tookPeople(msg peopleMsg) tea.Cmd {
 	}
 	sortPeople(m.all)
 	m.memo.reset()
-	m.rerank()
+	m.rerank(under)
 	return nil
 }
 
@@ -535,7 +537,7 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	// same keystrokes would never reach it again.
 	delete(m.asked, msg.needle)
 	m.head = ""
-	m.rerank()
+	m.rerank(m.underCursor())
 	return kernel.Fail(msg.err)
 }
 
@@ -543,7 +545,7 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 // where what is held cannot answer: the accounts, whose matching this program
 // cannot reproduce, and only once the local answer has run thin.
 func (m *Model) retype() tea.Cmd {
-	m.rerank()
+	m.rerank(m.underCursor())
 	needle := strings.TrimSpace(m.query)
 	switch {
 	case !m.facet.people(), needle == "", m.complete, m.asked[needle]:
@@ -554,12 +556,13 @@ func (m *Model) retype() tea.Cmd {
 	return m.fetch(needle)
 }
 
-// rerank recomputes the order without asking anything of the site.
-func (m *Model) rerank() {
-	under := ""
-	if v := m.selected(); v != nil {
-		under = v.term.ID
-	}
+// rerank recomputes the order without asking anything of the site and puts the
+// cursor back on under, which is a value id and not a row number.
+//
+// It cannot read that row itself: shown holds indices into all, so an answer
+// that appends to all and sorts it leaves them pointing at other values. Only
+// the caller still knows which row the reader was looking at.
+func (m *Model) rerank(under string) {
 	m.shown, m.ranks = rank(m.all, app.NewPattern(strings.TrimSpace(m.query)), m.shown[:0], m.ranks[:0])
 	m.cursor = 0
 	if under != "" {
@@ -571,6 +574,15 @@ func (m *Model) rerank() {
 		}
 	}
 	m.scrollToCursor()
+}
+
+// underCursor names the value the cursor is on. It has to be read before
+// anything appends to or replaces all.
+func (m *Model) underCursor() string {
+	if v := m.selected(); v != nil {
+		return v.term.ID
+	}
+	return ""
 }
 
 // --- selection --------------------------------------------------------------

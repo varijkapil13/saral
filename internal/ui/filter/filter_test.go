@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -592,4 +593,68 @@ func TestPicker_TheEmptyStatesSayWhichKindOfEmptyTheyAre(t *testing.T) {
 
 	mustContain(t, dr.view(), "No priority here matches", "e on the list edits the search by hand.")
 	mustNotContain(t, dr.view(), "The site would not say.")
+}
+
+// An answer that lands while the reader is looking at the list must not move
+// the highlight. shown holds indices into all, so an answer that appends to all
+// and sorts it leaves those row numbers pointing at other values — and enter
+// filters by whatever the cursor is on, so a highlight that slid one row runs a
+// search nobody asked for and says nothing about it.
+func TestPicker_AnAnswerThatLandsLateLeavesTheCursorOnTheSameValue(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		facet Facet
+		// first is what the late answer puts at the top of the list, so that the
+		// test fails if the answer was dropped instead of drawn.
+		first string
+		late  func(m *Model) tea.Msg
+	}{
+		"an account search": {
+			facet: FacetReporter,
+			first: "Aaa Aardvark",
+			late: func(m *Model) tea.Msg {
+				return peopleMsg{gen: m.gen, facet: FacetReporter, needle: "aa", people: []jira.User{{
+					AccountID: "acct-aardvark", DisplayName: "Aaa Aardvark",
+					Active: true, TimeZone: time.UTC, Kind: jira.AccountPerson,
+				}}}
+			},
+		},
+		"a vocabulary read": {
+			facet: FacetLabel,
+			first: "aardvark",
+			late: func(m *Model) tea.Msg {
+				labels := []string{"aardvark"}
+				for i := range m.all {
+					labels = append(labels, m.all[i].term.ID)
+				}
+				return vocabularyMsg{gen: m.gen, facet: FacetLabel, values: labelValues(labels)}
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			dr := newDriver(t, testDeps(newFake(40)), 120, 30)
+			dr.pick(tc.facet)
+			dr.key("down")
+
+			sel := dr.m.selected()
+			if sel == nil {
+				t.Fatalf("the %s facet offered no row to stand on", tc.facet.Label())
+			}
+			was := sel.term
+
+			dr.send(tc.late(dr.m))
+
+			if got := dr.labels(); len(got) == 0 || got[0] != tc.first {
+				t.Fatalf("the answer never reached the list: it offers %v", got)
+			}
+			now := dr.m.selected()
+			if now == nil || now.term != was {
+				t.Errorf("the highlight moved from %q to %q; enter would filter by the wrong value",
+					was.Label, now.term.Label)
+			}
+		})
+	}
 }

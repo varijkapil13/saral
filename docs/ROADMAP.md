@@ -661,6 +661,11 @@ lands first, because `pkg/jira/port.go` blocks everyone while it is open.
   on a robot can be taken off again.
   **Version, component and sprint are not offered** and the docs say why: none can be read through
   `jira.SessionClient`, so a row for one would be a facet with nowhere to get its values from.
+  **A late answer does not move the cursor.** `shown` holds indices into `all`, and an account search
+  landing appends to `all` and sorts it — so reading the row under the cursor *after* that read a
+  different value, slid the highlight one row, and left `enter` filtering by somebody the user never
+  chose, silently. The row is now named before anything reorders the set and restored by id, which is
+  what `docs/UX.md` principle 5 asks for.
   Budgets held: the list's steady scroll is 1 allocation a frame with terms in force, `BenchmarkFrame`
   is unchanged at 297, and the picker is virtualized and memoized — 3 allocations a frame scrolling
   two thousand labels, 94µs from keystroke to frame.
