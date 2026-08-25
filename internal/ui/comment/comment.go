@@ -31,9 +31,9 @@ const lookahead = 5
 // overscan, in both selected and unselected forms, several relayouts deep.
 const blockCacheLimit = 256
 
-// editorLines is the maximum number of logical lines the editor accepts. It is
-// the widget's own ceiling; a comment longer than this is not something a
-// terminal editor is the right place for.
+// editorLines is the most rows of text the editor accepts. It is the widget's
+// own ceiling; a comment longer than this is not something a terminal editor is
+// the right place for.
 const editorLines = 10000
 
 // editorOptions is how a document is rendered for somebody to edit, and how the
@@ -119,17 +119,30 @@ type Model struct {
 	editing   string
 	original  adf.Doc
 	pending   jira.Comment
+	prompt    []string
 	sending   bool
 	pendingGo bool
+
+	// composerLines is how many lines the draft occupies at the width the
+	// composer has, which is what its height is derived from. It is recomputed
+	// when the text or the width moves rather than per frame.
+	composerLines int
+
+	// pan is how far right the thread is scrolled. It is only ever non-zero
+	// because a line is wider than the box: code is never wrapped and a grid is
+	// never cut, so panning is how the rest of one is reached.
+	pan int
 
 	// draft is the text last written to disk, so that a keystroke that changes
 	// nothing does not rewrite the file.
 	draft       string
 	draftFailed bool
 
-	lines  []string
-	head   string
-	headAt headKey
+	lines    []string
+	head     []string
+	headAt   headKey
+	chrome   string
+	chromeAt chromeKey
 
 	width, height int
 	gen           int
@@ -145,8 +158,15 @@ type Model struct {
 func New(d kernel.Deps) kernel.View { return build(d, "") }
 
 // Thread builds the thread for one issue, which is how a view holding an issue
-// opens it.
-func Thread(d kernel.Deps, key string) kernel.View { return build(d, key) }
+// opens it — pushed over that view, or held as a child model inside it.
+//
+// A pane that embeds one owes it four things: the kernel.SizeMsg for the box it
+// has been given, every message the pane is handed, a kernel.ThreadMsg when the
+// issue changes, and its own answers to WantsRawKeys, BlocksClose and LiveKeys.
+// Everything else — one fetch, one draft, one cursor, one composer with the text
+// still in it — follows from there being one of these however many boxes it is
+// drawn in.
+func Thread(d kernel.Deps, key string) *Model { return build(d, key) }
 
 // Push returns the command that opens the thread for one issue on top of
 // whatever is on screen.
@@ -178,7 +198,14 @@ func newEditor() textarea.Model {
 	ta.Prompt = ""
 	ta.ShowLineNumbers = false
 	ta.Placeholder = "Markdown. Tables, lists, quotes and code fences all survive the round trip."
-	ta.MaxHeight = editorLines
+	// The widget sizes itself to the rows the draft actually occupies, which is
+	// what the composer's height is derived from: it soft-wraps on words, so
+	// counting cells and dividing by the width is a line out at every width but
+	// one. MaxHeight is then the display ceiling and MaxContentHeight the
+	// document's, which is why the two are not the same number.
+	ta.DynamicHeight = true
+	ta.MinHeight = 1
+	ta.MaxContentHeight = editorLines
 	// The widget's own cursor blink is a timer this view would then own for as
 	// long as the editor is open; dropping it costs a blinking block and keeps
 	// every frame reproducible.
@@ -202,8 +229,15 @@ func (m *Model) BlocksClose() (string, bool) {
 	return "", false
 }
 
-// Init reads the thread.
-func (m *Model) Init() tea.Cmd { return m.load() }
+// Init reads the thread, and only when there is one to read. A pane that embeds
+// this builds it before an issue may be known, and asking again for a thread
+// already in hand would throw the reader's place away.
+func (m *Model) Init() tea.Cmd {
+	if m.issue == "" || m.loaded || m.loading {
+		return nil
+	}
+	return m.load()
+}
 
 // Update handles one message.
 func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
@@ -219,10 +253,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
 		m.blocks.reset()
+		m.reprompt()
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.blocks.reset()
+		m.reprompt()
 
 	case kernel.RefreshMsg:
 		cmd = m.load()
@@ -268,34 +304,49 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 func (m *Model) location() *time.Location { return m.deps.Caps.Location() }
 
+// resize takes the box the pane has been given. The width is what every memo is
+// keyed on, so a divider moving, a terminal resizing and this same thread going
+// from a sidebar to the whole screen all arrive here and all invalidate the same
+// things; the height only moves where the lines go.
 func (m *Model) resize(w, h int) tea.Cmd {
 	if w == m.width && h == m.height {
 		return nil
 	}
+	if w != m.width {
+		m.blocks.reset()
+	}
 	m.width, m.height = w, h
-	m.blocks.reset()
-	m.editor.SetWidth(max(w-indent, 8))
-	m.editor.SetHeight(max(m.editorHeight(), 1))
-	m.ensureVisible()
+	m.relayout()
+	m.reprompt()
 	return m.pageAheadIfNeeded()
 }
 
-// focus keeps the editor's cursor out of a pane nobody is looking at, and lets
-// go of a request nobody is waiting for.
+// focus keeps the cursor out of a composer nobody is typing into. It does not
+// let go of a request, because losing the keys is not being closed: a thread in
+// a sidebar loses them whenever the pane beside it takes them, and the kernel
+// blurs a view it is pushing over or switching away from as well as one it is
+// discarding. Each request cancels its own context when it finishes, so the one
+// case that is a discard costs a read that lands nowhere rather than a goroutine
+// that stays.
 func (m *Model) focus(on bool) {
-	switch {
-	case on && m.mode == writing:
+	if on && m.mode == writing {
 		_ = m.editor.Focus()
-	case !on:
+		return
+	}
+	if !on {
 		m.editor.Blur()
-		m.stop()
 	}
 }
 
 func (m *Model) retarget(key string) tea.Cmd {
 	key = strings.TrimSpace(key)
-	if key == "" || key == m.issue {
+	switch key {
+	case "":
 		return nil
+	case m.issue:
+		// A pane that embeds this names the issue it was built with, and a
+		// thread that has read nothing yet has to take that as the cue.
+		return m.Init()
 	}
 	m.issue = key
 	m.comments, m.page = nil, jira.Page[jira.Comment]{}
@@ -430,8 +481,7 @@ func (m *Model) openEditor(id string, c jira.Comment) tea.Cmd {
 	m.draft = text
 	m.editor.SetValue(text)
 	m.editor.MoveToEnd()
-	m.editor.SetWidth(max(m.width-indent, 8))
-	m.editor.SetHeight(max(m.editorHeight(), 1))
+	m.relayout()
 	_ = m.editor.Focus()
 
 	switch {
@@ -461,6 +511,7 @@ func (m *Model) closeEditor() tea.Cmd {
 	m.editor.Blur()
 	m.editor.Reset()
 	m.draft = ""
+	m.relayout()
 	return cmd
 }
 
@@ -541,6 +592,7 @@ func (m *Model) saved(msg savedMsg) tea.Cmd {
 	m.mode, m.editing = browsing, ""
 	m.editor.Blur()
 	m.editor.Reset()
+	m.relayout()
 
 	if msg.edited {
 		at := slices.IndexFunc(m.comments, func(c jira.Comment) bool { return c.ID == msg.comment.ID })
@@ -571,12 +623,14 @@ func (m *Model) askToDelete() tea.Cmd {
 		return kernel.Warn("there is no comment here to delete")
 	}
 	m.mode, m.pending = confirming, *c
+	m.prompt = m.buildPrompt()
+	m.ensureVisible()
 	return nil
 }
 
 func (m *Model) confirmDelete() tea.Cmd {
 	id := m.pending.ID
-	m.mode = browsing
+	m.mode, m.prompt = browsing, nil
 	if m.deps.Jira == nil || id == "" {
 		return nil
 	}
@@ -604,17 +658,98 @@ func (m *Model) deleted(msg deletedMsg) tea.Cmd {
 
 // --- moving -----------------------------------------------------------------
 
-func (m *Model) threadHeight() int {
-	h := m.height - 2
-	if m.mode == confirming {
-		h--
-	}
-	return max(h, 1)
+// layout is how the box's lines are divided. head, thread, prompt and composer
+// add up to exactly the height the pane was given, at every height, which is
+// what makes a 34-column sidebar and a whole screen the same code rather than
+// two. chrome and editor are how the composer divides its own share.
+type layout struct {
+	head     int
+	thread   int
+	prompt   int
+	composer int
+	chrome   int
+	editor   int
 }
 
-func (m *Model) editorHeight() int { return max(m.height-4, 1) }
+// layout divides the box. The thread is on top and the composer under it,
+// because a comment is not written on a screen that hides what it is replying
+// to: the composer takes 1+lines — the draft and the one row saying what it is
+// and how to send it — with a floor of three so there is somewhere to start
+// typing, and a ceiling of half the box so that the thread never goes away.
+func (m *Model) layout() layout {
+	lay := m.divide(min(2, m.height))
+	if lay.thread == 0 && lay.head > 1 {
+		// The rule under the identity line is the last thing worth a row: what
+		// is being replied to earns one before the line under its name does.
+		lay = m.divide(1)
+	}
+	return lay
+}
 
-func (m *Model) blockLines(at int) []string {
+func (m *Model) divide(head int) layout {
+	lay := layout{head: head}
+	rest := m.height - head
+	if m.mode == confirming {
+		lay.prompt = min(len(m.prompt), rest)
+		rest -= lay.prompt
+	}
+	if m.mode == writing {
+		lay.composer = min(composerHeight(m.composerLines, m.height), rest)
+		// One line of the thread is worth more than the composer's chrome row;
+		// below that there is nothing left to give.
+		if rest-lay.composer == 0 && rest >= 2 {
+			lay.composer = rest - 1
+		}
+		rest -= lay.composer
+		if lay.composer >= 2 {
+			lay.chrome = 1
+		}
+		lay.editor = lay.composer - lay.chrome
+	}
+	lay.thread = max(rest, 0)
+	return lay
+}
+
+func composerHeight(lines, boxH int) int {
+	return min(max(1+lines, 3), max(3, boxH/2))
+}
+
+// composerRows is the most rows the draft itself may take in a box this tall:
+// the composer's ceiling, less the row of chrome above it.
+func composerRows(boxH int) int { return max(composerHeight(editorLines, boxH)-1, 1) }
+
+func (m *Model) threadHeight() int { return max(m.layout().thread, 1) }
+
+// relayout re-derives everything a change of box or of draft moves: how many
+// rows the draft occupies at this width, how far the thread may be panned, and
+// where its window sits.
+func (m *Model) relayout() {
+	m.editor.MaxHeight = composerRows(m.height)
+	m.editor.SetWidth(max(m.width, minBody))
+	m.composerLines = m.editor.Height()
+	// A box too short for the composer's own ceiling gives it fewer rows than
+	// the draft asked for. The widget is held to what will actually be drawn, or
+	// the cursor sits on a row nothing puts on screen.
+	if rows := m.layout().editor; rows >= 1 && rows < m.editor.Height() {
+		m.editor.SetHeight(rows)
+		m.composerLines = m.editor.Height()
+	}
+	m.clampPan()
+	m.ensureVisible()
+}
+
+// reprompt rebuilds the delete confirmation, which is laid out for the box it is
+// drawn in rather than cut to fit it.
+func (m *Model) reprompt() {
+	if m.mode != confirming || m.width <= 0 {
+		return
+	}
+	m.prompt = m.buildPrompt()
+}
+
+// blockAt lays one comment out at the width in hand, memoized on everything its
+// lines depend on.
+func (m *Model) blockAt(at int) *block {
 	if at < 0 || at >= len(m.comments) {
 		return nil
 	}
@@ -623,14 +758,33 @@ func (m *Model) blockLines(at int) []string {
 		id: c.ID, updated: c.Updated.UnixNano(), width: m.width,
 		gen: m.styles.gen, selected: at == m.cursor,
 	}
-	if lines, ok := m.blocks.get(k); ok {
-		return lines
+	if made, ok := m.blocks.get(k); ok {
+		return made
 	}
-	lines := renderBlock(c, m.width, at == m.cursor, m.styles, m.deps.Theme, m.location())
-	lines = m.zones.MarkLines(zoneComment+c.ID, lines)
-	lines = append(lines, "")
-	m.blocks.put(k, lines)
-	return lines
+	made := renderBlock(c, m.width, at == m.cursor, m.styles, m.deps.Theme, m.location())
+	m.blocks.put(k, made)
+	return made
+}
+
+// blockHeight is how many lines a comment takes, which is all the scrolling
+// needs to know. Asking for the lines themselves would mark a mouse zone around
+// a block nothing is about to draw.
+func (m *Model) blockHeight(at int) int {
+	b := m.blockAt(at)
+	if b == nil {
+		return 0
+	}
+	// The blank line between one comment and the next is drawn outside the
+	// block, so that it falls outside the zone.
+	return len(b.lines) + 1
+}
+
+func (m *Model) blockLines(at int) []string {
+	b := m.blockAt(at)
+	if b == nil {
+		return nil
+	}
+	return b.window(m.pan, m.deps.Theme.Glyphs.Ellipsis, m.zones, zoneComment+m.comments[at].ID)
 }
 
 func (m *Model) moveTo(at int) tea.Cmd {
@@ -670,7 +824,7 @@ func (m *Model) scrollToBottom() {
 	h := m.threadHeight()
 	used, at := 0, len(m.comments)-1
 	for at >= 0 {
-		n := len(m.blockLines(at))
+		n := m.blockHeight(at)
 		if used+n > h {
 			break
 		}
@@ -686,7 +840,7 @@ func (m *Model) scrollToBottom() {
 		m.top, m.skip = at, 0
 	default:
 		m.top = at
-		m.skip = max(len(m.blockLines(at))-(h-used), 0)
+		m.skip = max(m.blockHeight(at)-(h-used), 0)
 	}
 }
 
@@ -701,7 +855,7 @@ func (m *Model) ensureVisible() {
 	for m.top < m.cursor {
 		used := 0
 		for i := m.top; i <= m.cursor; i++ {
-			n := len(m.blockLines(i))
+			n := m.blockHeight(i)
 			if i == m.top {
 				n -= m.skip
 			}
@@ -713,7 +867,7 @@ func (m *Model) ensureVisible() {
 		m.top++
 		m.skip = 0
 	}
-	m.skip = min(m.skip, max(len(m.blockLines(m.top))-1, 0))
+	m.skip = min(m.skip, max(m.blockHeight(m.top)-1, 0))
 }
 
 // pageStep is how far a page key moves: as many comments as the window holds,
@@ -725,7 +879,7 @@ func (m *Model) pageStep(dir int) int {
 		if next < 0 || next >= len(m.comments) {
 			return at
 		}
-		used += len(m.blockLines(next))
+		used += m.blockHeight(next)
 		if used > h && next != m.cursor+dir {
 			return at
 		}
@@ -740,7 +894,7 @@ func (m *Model) pageStep(dir int) int {
 // a wheel does everywhere else.
 func (m *Model) scroll(delta int) {
 	for ; delta > 0; delta-- {
-		if m.skip+1 < len(m.blockLines(m.top)) {
+		if m.skip+1 < m.blockHeight(m.top) {
 			m.skip++
 			continue
 		}
@@ -758,8 +912,41 @@ func (m *Model) scroll(delta int) {
 			return
 		}
 		m.top--
-		m.skip = max(len(m.blockLines(m.top))-1, 0)
+		m.skip = max(m.blockHeight(m.top)-1, 0)
 	}
+}
+
+// panBy moves the window sideways. Half the box at a time, so that the step is
+// the same gesture whatever the box is: a 34-column sidebar and a 120-column
+// screen both take two presses to move a screenful.
+func (m *Model) panBy(dir int) {
+	m.pan = max(m.pan+dir*max(m.width/2, 1), 0)
+	m.clampPan()
+}
+
+// clampPan holds the pan against the widest line the window is actually showing,
+// so that scrolling off the code block that was being read brings the thread
+// back to its left edge rather than leaving the prose shifted out of the box.
+func (m *Model) clampPan() {
+	if m.pan == 0 {
+		return
+	}
+	m.pan = min(m.pan, max(m.widestVisible()-m.width, 0))
+}
+
+// widestVisible is the widest line in the window, which is as far as the pane
+// can usefully be panned.
+func (m *Model) widestVisible() int {
+	h, used, wide := m.threadHeight(), -m.skip, m.width
+	for i := m.top; i < len(m.comments) && used < h; i++ {
+		b := m.blockAt(i)
+		if b == nil {
+			break
+		}
+		wide = max(wide, b.wide)
+		used += len(b.lines) + 1
+	}
+	return wide
 }
 
 // --- input ------------------------------------------------------------------
@@ -798,6 +985,10 @@ func (m *Model) browseKey(stroke string) tea.Cmd {
 		m.scroll(m.threadHeight() / 2)
 	case actHalfUp:
 		m.scroll(-m.threadHeight() / 2)
+	case actPanRight:
+		m.panBy(1)
+	case actPanLeft:
+		m.panBy(-1)
 	case actTop:
 		return m.jumpTo(0)
 	case actBottom:
@@ -827,6 +1018,9 @@ func (m *Model) editorKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	var cmd tea.Cmd
 	m.editor, cmd = m.editor.Update(msg)
+	// The composer grows with the draft, and the thread above it gives up the
+	// lines: the layout is re-derived on the keystroke rather than per frame.
+	m.relayout()
 	return tea.Batch(cmd, m.keepDraft(m.editor.Value()))
 }
 
@@ -837,7 +1031,7 @@ func (m *Model) confirmKey(stroke string) tea.Cmd {
 	if m.confirm[stroke] == actConfirm {
 		return m.confirmDelete()
 	}
-	m.mode = browsing
+	m.mode, m.prompt = browsing, nil
 	return nil
 }
 
@@ -887,8 +1081,11 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	return nil
 }
 
+// wheel scrolls the thread, including while a comment is being written: the
+// thread is on screen then, and re-reading what is being replied to is the
+// reason it is.
 func (m *Model) wheel(msg tea.MouseWheelMsg) tea.Cmd {
-	if m.mode != browsing {
+	if m.mode == confirming {
 		return nil
 	}
 	switch msg.Button {
@@ -905,42 +1102,77 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) tea.Cmd {
 
 func (m *Model) mark(name, s string) string { return m.zones.Mark(name, s) }
 
-// View draws the window and nothing else: a thread of a thousand comments and a
-// thread of ten do the same work here.
+// View draws the box it was given, in exactly as many lines as it was given:
+// the thread, then whatever the thread is answering — a composer, or the
+// sentence naming a comment about to go. It draws the window and nothing else,
+// so a thread of a thousand comments and a thread of ten do the same work here,
+// and the same instance draws a sidebar and a whole screen with no second
+// layout.
 func (m *Model) View() string {
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
-	if m.mode == writing {
-		return m.header() + "\n" + m.editorCaption() + "\n" + m.editor.View() + "\n" + m.editorHint()
-	}
+	m.clampPan()
+	lay := m.layout()
 	lines := m.lines[:0]
-	h := m.threadHeight()
-	if len(m.comments) == 0 {
-		lines = m.appendEmpty(lines, h)
-	} else {
-		for i := m.top; i < len(m.comments) && len(lines) < h; i++ {
-			block := m.blockLines(i)
-			from := 0
-			if i == m.top {
-				from = min(m.skip, len(block))
-			}
-			for _, line := range block[from:] {
-				if len(lines) >= h {
-					break
-				}
-				lines = append(lines, line)
-			}
-		}
-		for len(lines) < h {
-			lines = append(lines, "")
-		}
-	}
-	if m.mode == confirming {
-		lines = append(lines, m.deletePrompt())
-	}
+	lines = append(lines, m.headLines(lay.head)...)
+	lines = m.appendThread(lines, lay.thread)
+	lines = append(lines, m.prompt[:lay.prompt]...)
+	lines = m.appendComposer(lines, lay)
 	m.lines = lines
-	return m.header() + "\n" + strings.Join(lines, "\n")
+	return strings.Join(lines, "\n")
+}
+
+func (m *Model) appendThread(lines []string, h int) []string {
+	if h <= 0 {
+		return lines
+	}
+	if len(m.comments) == 0 {
+		return m.appendEmpty(lines, h)
+	}
+	at := len(lines)
+	for i := m.top; i < len(m.comments) && len(lines)-at < h; i++ {
+		block := m.blockLines(i)
+		from := 0
+		if i == m.top {
+			from = min(m.skip, len(block))
+		}
+		for _, line := range block[from:] {
+			if len(lines)-at >= h {
+				break
+			}
+			lines = append(lines, line)
+		}
+	}
+	for len(lines)-at < h {
+		lines = append(lines, "")
+	}
+	return lines
+}
+
+// appendComposer draws the composer under the thread: one row saying which
+// comment this is and how to finish it, then the draft. The chrome row is what
+// a box too short for both gives up, because what is left is the text being
+// typed.
+func (m *Model) appendComposer(lines []string, lay layout) []string {
+	if lay.composer <= 0 {
+		return lines
+	}
+	if lay.chrome > 0 {
+		lines = append(lines, m.composerChrome())
+	}
+	drawn := 0
+	for _, line := range strings.Split(m.editor.View(), "\n") {
+		if drawn >= lay.editor {
+			break
+		}
+		lines = append(lines, line)
+		drawn++
+	}
+	for ; drawn < lay.editor; drawn++ {
+		lines = append(lines, "")
+	}
+	return lines
 }
 
 func (m *Model) appendEmpty(lines []string, h int) []string {

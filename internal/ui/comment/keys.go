@@ -11,6 +11,11 @@ type keyMap struct {
 	PageDown kernel.Binding
 	HalfUp   kernel.Binding
 	HalfDown kernel.Binding
+	// PanLeft and PanRight move the thread sideways. Code is never wrapped and a
+	// grid is never cut, so a comment holding either can be wider than the box —
+	// in a narrow sidebar, most of them are — and this is how the rest is read.
+	PanLeft  kernel.Binding
+	PanRight kernel.Binding
 	Go       kernel.Binding
 	Top      kernel.Binding
 	Bottom   kernel.Binding
@@ -34,6 +39,8 @@ func defaultKeys() keyMap {
 		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f", "space"}, "pgdn", "page down"),
 		HalfUp:   kernel.Bind([]string{"ctrl+u"}, "ctrl+u", "half page up"),
 		HalfDown: kernel.Bind([]string{"ctrl+d"}, "ctrl+d", "half page down"),
+		PanLeft:  kernel.Bind([]string{"h", "left"}, "←/h", "pan left"),
+		PanRight: kernel.Bind([]string{"l", "right"}, "→/l", "pan right"),
 		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
 		Top:      kernel.Bind([]string{"home"}, "g g", "oldest"),
 		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "newest"),
@@ -59,7 +66,7 @@ func (k keyMap) keySet() kernel.KeySet {
 		},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
-			{k.HalfDown, k.HalfUp, k.Top, k.Bottom},
+			{k.HalfDown, k.HalfUp, k.Top, k.Bottom, k.PanLeft, k.PanRight},
 			{k.Write, k.Edit, k.Delete},
 		},
 	}
@@ -99,6 +106,8 @@ const (
 	actPageUp
 	actHalfDown
 	actHalfUp
+	actPanLeft
+	actPanRight
 	actGo
 	actTop
 	actBottom
@@ -118,6 +127,7 @@ func (k keyMap) tables() (browse, confirm map[string]action) {
 		binding{k.Down, actDown}, binding{k.Up, actUp},
 		binding{k.PageDown, actPageDown}, binding{k.PageUp, actPageUp},
 		binding{k.HalfDown, actHalfDown}, binding{k.HalfUp, actHalfUp},
+		binding{k.PanLeft, actPanLeft}, binding{k.PanRight, actPanRight},
 		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
 		binding{k.Write, actWrite}, binding{k.Edit, actEdit}, binding{k.Delete, actDelete},
 	)

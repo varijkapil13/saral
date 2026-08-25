@@ -1,0 +1,24 @@
+PROJ-1 | 2 comments               
+----------------------------------
+  Sam Tester | 02 Mar 2026 09:00  
+    What the log said             
+                                  
+    The total is wrong past the   
+    rounding step, see the note   
+    (https://example.atlassian.net
+    \ /wiki/x).                   
+                                  
+    | go                          
+    | func total(rows []Row) Mo...
+
+> Sam Tester | 02 Mar 2026 09:00  
+    Fix is behind a flag until the
+    migration lands.              
+
+
+
+
+
+New on PROJ-1          ctrl+s  esc
+Rounding is done in the adapter,  
+not here.                         

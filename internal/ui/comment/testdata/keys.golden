@@ -1,7 +1,7 @@
 reading the thread
   acts   a write · e edit · d delete
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
-  full   [ctrl+d half page down, ctrl+u half page up, g g oldest, G newest]
+  full   [ctrl+d half page down, ctrl+u half page up, g g oldest, G newest, ←/h pan left, →/l pan right]
   full   [a write a comment, e edit this one, d delete this one]
 writing a comment
   acts   ctrl+s send · esc put it aside

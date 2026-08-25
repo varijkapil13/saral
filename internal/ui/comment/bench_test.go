@@ -44,10 +44,36 @@ func thread(tb testing.TB, n, w, h int) *Model {
 	return m
 }
 
+// wideThread is a thread of comments whose code blocks are all wider than the
+// box, so that every line on screen is one the pane has to cut.
+func wideThread(tb testing.TB, w, h int) *Model {
+	tb.Helper()
+
+	m := thread(tb, 200, w, h)
+	code := "func total(rows []Row) Money { return sum(rows).Round(2) } // the rounding that lies"
+	for i := range m.comments {
+		m.comments[i].Body = adf.NewDoc(
+			adf.NewNode("paragraph", adf.NewText("comment number "+strconv.Itoa(i))),
+			adf.NewNode("codeBlock", adf.NewText(code)).WithAttrs(adf.Attrs{"language": "go"}),
+		)
+	}
+	m.blocks.reset()
+	_ = m.View()
+	return m
+}
+
 func scroll(b *testing.B, m *Model) {
 	b.Helper()
 
 	var down, up tea.Msg = keyPress("j"), keyPress("k")
+	// The first press of each key renders the two comments the selection moves
+	// between; every frame after that is the memo, which is the steady state this
+	// claims to measure.
+	for _, key := range []tea.Msg{down, up} {
+		next, _ := m.Update(key)
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := range b.N {
@@ -102,6 +128,55 @@ func BenchmarkThreadRedraw200x60(b *testing.B) {
 	}
 }
 
+// BenchmarkThreadRedrawSidebar34x24 is the sidebar: the same instance at a third
+// of the width, with every comment laid out for it.
+func BenchmarkThreadRedrawSidebar34x24(b *testing.B) {
+	m := thread(b, 10000, 34, 24)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = m.View()
+	}
+}
+
+// BenchmarkThreadCompose is a frame with the composer open, which is a second
+// layout over the same thread and must not cost a render of it.
+func BenchmarkThreadCompose(b *testing.B) {
+	m := thread(b, 10000, 34, 24)
+	next, _ := m.Update(WriteMsg{})
+	m, _ = next.(*Model)
+	for _, r := range "A reply long enough to wrap in a sidebar twice over." {
+		next, _ = m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+		m, _ = next.(*Model)
+	}
+	_ = m.View()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = m.View()
+	}
+}
+
+// BenchmarkThreadPan is the window cut out of the lines too wide for the box.
+// Panning re-cuts a screenful, so it is the one gesture that cannot be answered
+// out of the memo — but it is memoized per pan, so holding the key is not a cut
+// per frame.
+func BenchmarkThreadPan(b *testing.B) {
+	m := wideThread(b, 34, 24)
+	right, left := keyPress("l"), keyPress("h")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		key := right
+		if i%2 == 1 {
+			key = left
+		}
+		next, _ := m.Update(key)
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
 // BenchmarkThreadRenderBlock is the per-comment cost the memo protects.
 func BenchmarkThreadRenderBlock(b *testing.B) {
 	m := thread(b, 20, 120, 40)
@@ -113,9 +188,12 @@ func BenchmarkThreadRenderBlock(b *testing.B) {
 	}
 }
 
+// Deliberately not parallel. An allocation count comes from process-wide
+// MemStats, so a benchmark run beside sixty other tests is handed their
+// allocations divided by its own iteration count — and under -race it runs long
+// enough to be handed a lot of them. A sequential test is the only one that has
+// the counter to itself.
 func TestScrolling_CostsTheSameOnTenThousandCommentsAsOnTwenty(t *testing.T) {
-	t.Parallel()
-
 	big := testing.Benchmark(BenchmarkThreadSteadyScroll10k)
 	small := testing.Benchmark(BenchmarkThreadSteadyScroll20)
 
@@ -124,10 +202,53 @@ func TestScrolling_CostsTheSameOnTenThousandCommentsAsOnTwenty(t *testing.T) {
 		t.Errorf("a 10k-comment thread allocates %d per frame against %d for a 20-comment one; the render is not virtualized",
 			bigAllocs, smallAllocs)
 	}
-	// What is left is the frame string View has to return and the header joined
-	// onto it; every comment behind them is memoized.
+	// What is left is the frame string View has to return; every comment behind it
+	// is memoized.
 	if bigAllocs > 2 {
 		t.Errorf("a steady-state frame allocates %d times, want the memo to carry all but the frame itself", bigAllocs)
+	}
+}
+
+// The composer is a second thing in the box and not a second layout of it, so a
+// frame with it open costs no render of the thread above it. What a composing
+// frame does cost is one render of the editor widget, which is the library's own
+// and is not memoized here: its key would have to include the cursor, the scroll
+// offset and the placeholder, and a memo that misses one of those draws the
+// wrong text at the wrong width.
+func TestComposing_RendersNoCommentPerFrame(t *testing.T) {
+	t.Parallel()
+
+	m := thread(t, 200, 34, 24)
+	next, _ := m.Update(WriteMsg{})
+	m, _ = next.(*Model)
+	_ = m.View()
+
+	before := len(m.blocks.made)
+	for range 50 {
+		_ = m.View()
+	}
+	if got := len(m.blocks.made); got != before {
+		t.Errorf("fifty composing frames rendered %d comments", got-before)
+	}
+}
+
+// Panning cuts the lines again — it has to, the window into them moved — but it
+// never lays a comment out again: the cut is over lines the memo already holds.
+func TestPanning_CutsTheLinesAgainAndRendersNoComment(t *testing.T) {
+	t.Parallel()
+
+	m := wideThread(t, 34, 24)
+	before := len(m.blocks.made)
+	for range 10 {
+		next, _ := m.Update(keyPress("l"))
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+	if m.pan == 0 {
+		t.Fatal("nothing panned, so this measured the wrong thing")
+	}
+	if got := len(m.blocks.made); got != before {
+		t.Errorf("panning rendered %d comments again", got-before)
 	}
 }
 
