@@ -118,23 +118,52 @@ issue by key — typing `PROJ-142`, or pasting a Jira URL — is not built; it i
 ## Mouse
 
 Bubble Tea v2 declares mouse mode in the view; hit-testing is by zone lookup, not coordinate
-arithmetic (see `docs/ARCHITECTURE.md`).
+arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 
 | Gesture | Result |
 |---|---|
-| click | focus that pane, select that row |
-| double-click | open (same as `enter`) |
+| click a row | select it |
+| double-click a row | open it, same as `enter` — and only when both clicks are one gesture |
+| click a status, type or assignee cell | show only the rows with that value; click it again to show them all |
 | wheel | scroll the pane under the pointer, not the focused one |
-| drag divider | resize panes; the ratio persists per view |
-| click a status chip / label / assignee | filter by it; click again to clear |
-| click footer entry | switch view |
-| right-click a row | context menu of the actions valid for it |
+| click a footer entry | switch view |
+| click anything else a view draws | do what it says — write, send, delete, confirm, put aside, pick a value, go back to an onboarding step |
+
+**A double-click is timed, because nothing else can time it.** `tea.MouseClickMsg` carries a
+position, a button and a modifier: no click count and no instant. Every view here first reached for
+"a second click on the row that is already selected", which cannot tell a double-click from two
+deliberate clicks a minute apart, so pointing at an issue and then pointing at it again opened it.
+`widget.Clicks` times the pair against `Deps.Now` — the clock a test injects — over a 400 ms window,
+and a slower second click only re-selects.
+
+**Narrowing by a cell is the one filter with no key**, and that is deliberate: every letter left is
+one somebody types into `/`, and `esc` in a root view never reaches the view at all. So the rows the
+narrowing leaves out are named in a line under the list, the same cell clears it, and the palette
+carries *show only rows with this row's status / type / assignee* and *show every row again* for
+anyone without a pointer. It composes with `/`: both are things being left out, and a row has to
+survive both.
+
+Two gestures this table used to promise are not built, and are not being built here:
+
+- **Drag a divider to resize panes** — [#75](https://github.com/varijkapil13/saral/issues/75). There
+  is no divider: no view has two panes, which is also why there is no `tab`. `widget.Drag` is the
+  press-move-release machine, tested and bound to nothing; P6.3 binds it to the first pane divider,
+  along with persisting the ratio.
+- **Right-click for a context menu of the actions valid for a row** —
+  [#76](https://github.com/varijkapil13/saral/issues/76). `kernel.Command` has no notion of what a
+  command applies to, so "the actions valid for this row" has no data source, and the menu itself
+  would be a second copy of the palette overlay.
+
+**Labels are clickable nowhere**, because no view that can filter draws them: the issue list's
+columns are key, summary, type, status, assignee and updated, and the detail pane that does list
+labels has nothing of its own to narrow. When a view draws a label it can narrow by, it marks the
+label the way the list marks its cells.
 
 Mouse mode must be disableable (`mouse = false` in config) for people who rely on terminal text
 selection. Off means off all the way down: the zone manager is disabled with it, so a view's markers
 are never written into the frame in the first place and there is nothing left for a selection to
-pick up. Nothing from the mouse — click, wheel, drag or release — reaches the view while the help
-overlay is covering it.
+pick up — and a view asks `Zones.Enabled()` before telling anybody to click something. Nothing from
+the mouse — click, wheel, drag or release — reaches the view while the help overlay is covering it.
 
 ## Rendering rules for modern terminals
 

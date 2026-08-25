@@ -479,12 +479,7 @@ func (m Model) explain() []string {
 	return out
 }
 
-func (m Model) mark(id, row string) string {
-	if m.zone == "" || m.deps.Zones == nil {
-		return row
-	}
-	return m.deps.Zones.Mark(m.zone+id, row)
-}
+func (m Model) mark(id, row string) string { return m.zones.Mark(id, row) }
 
 func indent(s string) string { return strings.Repeat(" ", inputIndent) + s }
 

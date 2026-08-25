@@ -17,6 +17,7 @@ import (
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -81,6 +82,10 @@ type Model struct {
 	filter    textinput.Model
 	query     string
 
+	// facet is the cell somebody clicked, and what the rows stay narrowed to
+	// until they click it again.
+	facet facet
+
 	// defaulted records that the search on screen is still the one New derived
 	// from the session's project. A project switch retargets that search and
 	// leaves alone one the user asked for.
@@ -115,7 +120,8 @@ type Model struct {
 	pollArmed  bool
 	pollPaused bool
 
-	zonePrefix string
+	zones  widget.Zoner
+	clicks *widget.Clicks
 }
 
 // bindStep is how far the gesture that binds this query to a number key has
@@ -155,9 +161,8 @@ func New(d kernel.Deps) kernel.View {
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
-	if d.Zones != nil {
-		m.zonePrefix = d.Zones.NewPrefix()
-	}
+	m.zones = widget.NewZoner(d.Zones)
+	m.clicks = widget.NewClicks(d.Now)
 	m.normal, m.inFilter = defaultKeys().tables()
 	m.jql, m.title = defaultQuery(d.Project)
 	m.defaulted = true
@@ -277,6 +282,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case SaveQueryMsg:
 		m.startBind()
 
+	case FacetMsg:
+		cmd = m.facetMsg(msg)
+
 	case loadedMsg:
 		cmd = m.loadedPage(msg)
 
@@ -359,6 +367,9 @@ func (m *Model) widestKey() int {
 // column captions and the filter prompt when one is open.
 func (m *Model) rowsHeight() int {
 	h := m.height - 2
+	if m.facet.on() {
+		h--
+	}
 	if m.filtering || m.bind != bindNone {
 		h--
 	}
@@ -449,6 +460,7 @@ func (m *Model) setQuery(jql, title string, byDefault bool) tea.Cmd {
 	m.issues, m.page, m.missing, m.view, m.needles = nil, jira.Page[jira.Issue]{}, nil, nil, nil
 	m.cursor, m.top, m.loaded = 0, 0, false
 	m.cachedMore, m.stale = false, false
+	m.facet = facet{}
 	m.rows.reset()
 	m.refilter()
 	m.fromCache()
@@ -547,7 +559,7 @@ func (m *Model) pageAheadIfNeeded() tea.Cmd {
 		return nil
 	}
 	near := m.cursor >= len(m.view)-lookahead
-	starved := m.query != "" && len(m.view) < m.rowsHeight() && len(m.issues) < autoFillCap
+	starved := m.filtered() && len(m.view) < m.rowsHeight() && len(m.issues) < autoFillCap
 	if !near && !starved {
 		return nil
 	}
@@ -576,6 +588,17 @@ func (m *Model) selectedKey() string {
 	return ""
 }
 
+func (m *Model) selectedIssue() *jira.Issue {
+	if m.cursor < 0 || m.cursor >= len(m.view) {
+		return nil
+	}
+	at := m.view[m.cursor]
+	if at < 0 || at >= len(m.issues) {
+		return nil
+	}
+	return &m.issues[at]
+}
+
 // restore puts the cursor back on an issue by key, keeping the scroll offset so
 // that the row does not jump even when its index moved.
 func (m *Model) restore(key string) {
@@ -600,14 +623,16 @@ func (m *Model) refilter() {
 	needle := strings.ToLower(m.query)
 	if needle == "" {
 		for i := range m.issues {
-			m.view = append(m.view, i)
+			if m.facet.matches(&m.issues[i]) {
+				m.view = append(m.view, i)
+			}
 		}
 		m.restore(under)
 		return
 	}
 	m.buildNeedles()
 	for i := range m.issues {
-		if strings.Contains(m.needles[i], needle) {
+		if strings.Contains(m.needles[i], needle) && m.facet.matches(&m.issues[i]) {
 			m.view = append(m.view, i)
 		}
 	}
@@ -817,19 +842,25 @@ func (m *Model) open() tea.Cmd {
 	return kernel.Push(issue.ViewID, iss.Key, issue.New(m.deps, iss))
 }
 
-// click selects the row under the pointer, and opens it when it was already the
-// selected one. There is no double-click message in Bubble Tea v2, and a second
-// click on the row you just picked is the gesture that means "this one".
+// click narrows the rows to the cell under the pointer, or selects the row that
+// cell is on and opens it on a double-click. Bubble Tea v2 reports neither a
+// click count nor an instant, so the second click is timed against this
+// session's clock rather than inferred from the row already being selected.
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
-	if msg.Button != tea.MouseLeft || m.deps.Zones == nil {
+	if msg.Button != tea.MouseLeft {
 		return nil
 	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.view)); i++ {
 		iss := &m.issues[m.view[i]]
-		if !m.deps.Zones.Get(m.zonePrefix + "row:" + iss.Key).InBounds(msg) {
+		if cmd, narrowed := m.clickFacet(msg, iss); narrowed {
+			m.clicks.Forget()
+			return cmd
+		}
+		if !m.zones.Hit(rowZone(iss.Key), msg) {
 			continue
 		}
-		if i == m.cursor {
+		if m.clicks.Double(rowZone(iss.Key)) {
+			m.cursor = i
 			return m.open()
 		}
 		return m.moveTo(i)
@@ -877,6 +908,9 @@ func (m *Model) View() string {
 		}
 		m.warm(end)
 	}
+	if m.facet.on() {
+		lines = append(lines, m.facetPrompt())
+	}
 	if m.filtering {
 		lines = append(lines, m.filter.View())
 	}
@@ -904,10 +938,8 @@ func (m *Model) row(at int, selected bool) string {
 	if s, ok := m.rows.get(k); ok {
 		return s
 	}
-	s := renderRow(iss, m.lay, selected, m.styles, m.deps.Theme, m.deps.Caps.Location(), m.now())
-	if m.deps.Zones != nil {
-		s = m.deps.Zones.Mark(m.zonePrefix+"row:"+iss.Key, s)
-	}
+	s := renderRow(iss, m.lay, selected, m.styles, m.deps.Theme, m.deps.Caps.Location(), m.now(), m.zones)
+	s = m.zones.Mark(rowZone(iss.Key), s)
 	m.rows.put(k, s)
 	return s
 }
@@ -935,7 +967,7 @@ func (m *Model) summaryKey() summaryKey {
 	return summaryKey{
 		title: m.title, width: m.width, gen: m.styles.gen,
 		issues: len(m.issues), visible: len(m.view), more: m.hasMore(),
-		loading: m.loading, loaded: m.loaded, filtered: m.query != "",
+		loading: m.loading, loaded: m.loaded, filtered: m.filtered(),
 		stale: m.stale,
 	}
 }
@@ -971,7 +1003,7 @@ func (m *Model) countLabel() string {
 	switch {
 	case !m.loaded && m.loading:
 		b.WriteString("searching")
-	case m.query != "":
+	case m.filtered():
 		b.WriteString(strconv.Itoa(len(m.view)))
 		b.WriteString(" of ")
 		b.WriteString(m.total())
@@ -1001,8 +1033,8 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 		lines = append(lines, m.styles.muted.Render("  No Jira connection in this session yet."))
 	case !m.loaded:
 		lines = append(lines, m.styles.muted.Render("  Searching"+m.deps.Theme.Glyphs.Ellipsis))
-	case m.query != "":
-		lines = append(lines, m.styles.muted.Render("  No loaded row matches "+strconv.Quote(m.query)+"."))
+	case m.filtered():
+		lines = append(lines, m.styles.muted.Render("  No loaded row matches "+m.filterWords()+"."))
 	default:
 		lines = append(lines, m.styles.muted.Render("  Nothing matches this search."),
 			m.styles.muted.Render("  "+m.jql))

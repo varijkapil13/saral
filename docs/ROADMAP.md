@@ -263,8 +263,29 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   The clause in `docs/ARCHITECTURE.md` saying the capability probe "is cached in the store" was false
   and is gone; persisting it needs the kernel, which is
   [#81](https://github.com/varijkapil13/saral/issues/81).
-- [ ] **P3.3 — Mouse** · [#14](https://github.com/varijkapil13/saral/issues/14) · **owns** `internal/ui/widget/zone*.go` + zone wiring in own files
-  Click, double-click, wheel-under-pointer, drag-to-resize, clickable chips and footer.
+- [x] **P3.3 — Mouse** · [#14](https://github.com/varijkapil13/saral/issues/14) · **owns** `internal/ui/widget/**`, the zone and click wiring plus tests and `testdata/**` in `internal/ui/{list,issue,form,comment,onboarding}`, `docs/{UX,ARCHITECTURE,ROADMAP}.md`
+  **The `owns` line above is a correction.** It used to read `internal/ui/widget/zone*.go` + zone
+  wiring in own files, and `internal/ui/widget/` did not exist — so on day one this packet owned
+  nothing that renders, while every shipped view already marked zones and handled clicks.
+  **Most of this row was already built, and the audit is on the issue.** Click-to-select, the wheel
+  and the footer click were shipped by P1.5, P2.x and W0-b. What was actually missing: the
+  double-click, the chips, and the wheel over two panes that could not scroll at all.
+  `internal/ui/widget` is the copy-paste in all five view packages made one thing: `Zoner` (the prefix
+  plus `Mark`/`MarkLines`/`Hit`, where a nil or disabled manager needs no branch of its own),
+  `Clicks` (the double-click, timed against `Deps.Now` — `tea.MouseClickMsg` has neither a click count
+  nor a timestamp, and the "second click on the already-selected row" rule every view had reached for
+  fires on two deliberate clicks a minute apart), `Window` (the scrolled window) and `Drag`.
+  Clickable status, type and assignee cells narrow the list to that value and clear it on a second
+  click, composing with `/`, named in a line under the rows and reachable from the palette because
+  `esc` in a root view never reaches the view. **Labels are clickable nowhere:** no view that can
+  filter draws them, so `docs/UX.md` says that rather than promising it.
+  `internal/ui/issue`'s edit pane and move pane now scroll: both drew every line and let the frame
+  clip, so the last field was unreachable by wheel *or* cursor on a short terminal.
+  **Two gestures were cut and filed:** drag-to-resize is [#75](https://github.com/varijkapil13/saral/issues/75)
+  — there is no divider to drag until a view has two panes, so `widget.Drag` ships tested and bound to
+  nothing for P6.3 — and the right-click context menu is
+  [#76](https://github.com/varijkapil13/saral/issues/76), which needs `kernel.Command` to know what a
+  command applies to.
 - [x] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/{index,match}.go`, their tests and benchmarks, `docs/{PERFORMANCE,ROADMAP}.md` · **after P3.2**
   **This row used to promise "instant search over cached issues with no round trip".** Half of that
   already shipped in P1.5: `internal/ui/list` filters as you type with no round trip and no

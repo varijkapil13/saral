@@ -481,16 +481,13 @@ func (m *Model) fit(s string) string {
 
 // --- zones ------------------------------------------------------------------
 
-func (m *Model) mark(id, line string) string {
-	if m.deps.Zones == nil {
-		return line
-	}
-	return m.deps.Zones.Mark(id, line)
-}
+func (m *Model) mark(id, line string) string { return m.zones.Mark(id, line) }
 
-func (m *Model) rowZone(i int) string    { return m.zonePrefix + "row:" + strconv.Itoa(i) }
-func (m *Model) typeZone(i int) string   { return m.zonePrefix + "type:" + strconv.Itoa(i) }
-func (m *Model) choiceZone(i int) string { return m.zonePrefix + "choice:" + strconv.Itoa(i) }
+// The zones are named after the row on screen rather than the field in it, so
+// the ids a session mints are bounded by the height of the terminal.
+func (m *Model) rowZone(i int) string    { return "row:" + strconv.Itoa(i) }
+func (m *Model) typeZone(i int) string   { return "type:" + strconv.Itoa(i) }
+func (m *Model) choiceZone(i int) string { return "choice:" + strconv.Itoa(i) }
 
 // padTruncate makes a string exactly width columns wide, counting grapheme
 // clusters rather than bytes so that an emoji or a CJK field name does not

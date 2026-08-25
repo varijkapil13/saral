@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -141,25 +140,39 @@ func (p *panel) typed(text string) {
 func (p *panel) frame() string { return ansi.Strip(p.view.View()) }
 
 // zoneAt draws the pane, hands the frame to the zone manager the way the kernel
-// does, and returns where the named element ended up. The prefix is handed out
-// per component so it is discovered rather than assumed, and the manager
-// records on a goroutine of its own so it is looked for until it appears.
+// does, and returns where the named element ended up. The id comes from the pane
+// itself rather than being guessed at from the prefixes handed out so far — the
+// counter is global to the test binary and runs past any number a loop here
+// would try. The manager records on a goroutine of its own, so the zone is
+// looked for until it appears.
 func (p *panel) zoneAt(d kernel.Deps, suffix string) *zone.ZoneInfo {
 	p.t.Helper()
 
+	id := p.zoneID(suffix)
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		d.Zones.Scan(p.view.View())
-		for i := 1; i < 64; i++ {
-			at := d.Zones.Get("zone_" + strconv.Itoa(i) + "__" + suffix)
-			if !at.IsZero() {
-				return at
-			}
+		if at := d.Zones.Get(id); !at.IsZero() {
+			return at
 		}
 		if time.Now().After(deadline) {
-			p.t.Fatalf("nothing on screen is marked %q", suffix)
+			p.t.Fatalf("nothing on screen is marked %q", id)
 		}
 		runtime.Gosched()
+	}
+}
+
+func (p *panel) zoneID(suffix string) string {
+	p.t.Helper()
+
+	switch v := p.view.(type) {
+	case *editModel:
+		return v.zones.ID(suffix)
+	case *moveModel:
+		return v.zones.ID(suffix)
+	default:
+		p.t.Fatalf("a %T marks no zones", p.view)
+		return ""
 	}
 }
 

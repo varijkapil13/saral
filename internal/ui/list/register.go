@@ -34,6 +34,27 @@ func init() {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SaveQueryMsg{}))
 		},
 	})
+	// The cells a click narrows the rows by, reachable without a pointer. There
+	// is no key for them: every letter left is one somebody types into a filter.
+	for _, f := range []struct {
+		id, title string
+		kind      Facet
+	}{
+		{"issues.only-status", "Show only rows with this row's status", FacetStatus},
+		{"issues.only-type", "Show only rows with this row's type", FacetType},
+		{"issues.only-assignee", "Show only rows with this row's assignee", FacetAssignee},
+		{"issues.show-all", "Show every row again", FacetNone},
+	} {
+		kind := f.kind
+		kernel.RegisterCommand(kernel.Command{
+			ID:    f.id,
+			Title: f.title,
+			Group: "Search",
+			Run: func(kernel.Deps) tea.Cmd {
+				return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(FacetMsg{Kind: kind}))
+			},
+		})
+	}
 	for _, q := range []struct{ id, title, jql string }{
 		{"issues.mine", "My issues", "assignee = currentUser() ORDER BY updated DESC"},
 		{"issues.reported", "Issues I reported", "reporter = currentUser() ORDER BY created DESC"},

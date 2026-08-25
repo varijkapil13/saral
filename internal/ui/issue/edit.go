@@ -10,6 +10,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -59,7 +60,19 @@ type editModel struct {
 	drafts draftStore
 
 	width, height int
-	zonePrefix    string
+	// top is the first field row on screen: the pane has more fields than a
+	// short terminal has room for. follow is set when the cursor has moved and
+	// the window has to come with it, and cleared once it has — otherwise the
+	// cursor would pull every frame back and the wheel could scroll nothing.
+	top    int
+	follow bool
+	// reach is how far the last frame could scroll. The wheel clamps against it
+	// rather than against nothing: an offset allowed to run past the end has to
+	// be wound all the way back before the next notch moves anything.
+	reach int
+
+	zones  widget.Zoner
+	clicks *widget.Clicks
 
 	gen    int
 	cancel context.CancelFunc
@@ -99,9 +112,8 @@ func NewEdit(d kernel.Deps, iss jira.Issue, opts ...editOption) kernel.View {
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
-	if d.Zones != nil {
-		m.zonePrefix = d.Zones.NewPrefix()
-	}
+	m.zones = widget.NewZoner(d.Zones)
+	m.clicks = widget.NewClicks(d.Now)
 	if store, err := newDraftStore(); err == nil {
 		m.drafts = store
 	}
@@ -184,6 +196,9 @@ func (m *editModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case tea.MouseClickMsg:
 		cmd = m.click(msg)
+
+	case tea.MouseWheelMsg:
+		m.wheel(msg)
 	}
 	return m, cmd
 }
@@ -347,6 +362,7 @@ func (m *editModel) moveTo(at int) {
 		return
 	}
 	m.cursor = min(max(at, 0), len(m.rows)-1)
+	m.follow = true
 	m.note, m.fail = "", ""
 }
 
@@ -477,23 +493,40 @@ func (m *editModel) reread() tea.Cmd {
 	return loadForEdit(ctx, m.search, m.issue.Key, gen)
 }
 
-// click puts the cursor on the row under the pointer, and acts on it when it
-// was already the row under the cursor.
+// click puts the cursor on the row under the pointer, and opens it on a
+// double-click. A single click never opens a field: the pane hands a description
+// to $EDITOR, which is not what somebody pointing at a row asked for.
 func (m *editModel) click(msg tea.MouseClickMsg) tea.Cmd {
-	if msg.Button != tea.MouseLeft || m.deps.Zones == nil || m.stage != stageBrowse {
+	if msg.Button != tea.MouseLeft || m.stage != stageBrowse {
 		return nil
 	}
 	for i := range m.rows {
-		if !m.deps.Zones.Get(m.zonePrefix + "row:" + m.rows[i].id).InBounds(msg) {
+		zone := editRowZone(m.rows[i].id)
+		if !m.zones.Hit(zone, msg) {
 			continue
 		}
-		if i == m.cursor {
+		if m.clicks.Double(zone) {
+			m.moveTo(i)
 			return m.act()
 		}
 		m.moveTo(i)
 		return nil
 	}
 	return nil
+}
+
+// wheel scrolls the field rows under the pointer. The offset is clamped where
+// the frame is drawn, because how many lines a row occupies depends on what the
+// site refused and how wide the terminal is.
+func (m *editModel) wheel(msg tea.MouseWheelMsg) {
+	switch msg.Button {
+	case tea.MouseWheelUp:
+		m.top -= widget.WheelStep
+	case tea.MouseWheelDown:
+		m.top += widget.WheelStep
+	default:
+	}
+	m.top = min(max(m.top, 0), m.reach)
 }
 
 // --- the editor handoff -----------------------------------------------------
