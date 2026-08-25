@@ -2,12 +2,12 @@ browsing
   short  ↓/j down · ↑/k up · enter open · / filter
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
-  full   [enter open, / filter, s save this query to a key]
+  full   [enter open, / filter, a all issues, e edit this search, s save this query to a key]
 a filter kept on the rows
   short  ↓/j down · ↑/k up · enter open · ctrl+g clear filter
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
-  full   [enter open, / filter, ctrl+g clear filter, s save this query to a key]
+  full   [enter open, / filter, ctrl+g clear filter, a all issues, e edit this search, s save this query to a key]
 filter open
   short  enter keep filter · esc clear filter
   full   [enter keep filter, esc clear filter]
@@ -17,3 +17,6 @@ picking the number key
 confirming a number key that is taken
   short  y take the key · esc leave it alone
   full   [y take the key, esc leave it alone]
+editing the search on screen
+  short  enter run this search · esc keep the one on screen
+  full   [enter run this search, esc keep the one on screen]

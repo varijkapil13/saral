@@ -22,6 +22,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"filter open", keysFiltering},
 		{"picking the number key", keysPickingSlot},
 		{"confirming a number key that is taken", keysConfirmingSlot},
+		{"editing the search on screen", keysAsking},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the list has %d key states and this test names %d", keyStates, len(named))
@@ -48,6 +49,7 @@ func TestLiveKeys_FollowWhatTheListIsDoing(t *testing.T) {
 		{"filter open", func() { m.filtering = true }, keysFiltering},
 		{"picking a key", func() { m.filtering, m.bind = false, bindPick }, keysPickingSlot},
 		{"confirming a key", func() { m.bind = bindConfirm }, keysConfirmingSlot},
+		{"editing the search", func() { m.bind, m.asking = bindNone, true }, keysAsking},
 	} {
 		tc.enter()
 		set, gen := m.LiveKeys()

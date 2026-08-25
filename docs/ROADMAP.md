@@ -64,6 +64,24 @@ instance from day one.
   preserved verbatim. Golden-file tests over real captured ADF.
 - [x] **P1.5 — Issue list and detail views** · [#6](https://github.com/varijkapil13/saral/issues/6) · **owns** `internal/ui/{list,issue}/**`
   Virtualized table, incremental cursor paging, `142+` counts, detail pane, comment thread read-only.
+  **Every search this view offered narrowed by who you are.** Found against a real site: a project of
+  nineteen issues, three of them the owner's, and no gesture anywhere that could ask for the other
+  sixteen — the palette's three searches all carry `currentUser()`, and P3.3's facets filter rows
+  already loaded rather than widening the query. There is now a fourth search with no predicate at all (`a`, *Every issue in this project*),
+  the default falls back to it once when nothing in the project is assigned to the account rather than
+  opening on an empty screen, and `e` shows the JQL actually running and takes an edited one, which is
+  also what clicking the line that names it does. A `search` value composes the predicate and the
+  ordering apart, because `scoped()` had nothing to put an `AND` between for the one search that is
+  only an ordering.
+  `r` and `R` now say what came back — *nothing has changed, still 19 issues* as much as *2 new, 1
+  changed* — and the summary line keeps the time the rows last came from the site. Pressing `r` on a
+  query whose answer had not moved was the other half of the same afternoon: correct behaviour,
+  reported as nothing, read as a broken key.
+  **What this did not fix:** every one of these searches, and the default, is only meaningful for a
+  token that is a person. `currentUser()` for a service account resolves to an account nobody assigns
+  anything to, so *My issues* is reliably empty and the fallback fires on every project — which is the
+  right behaviour and the wrong default. Filed as
+  [#102](https://github.com/varijkapil13/saral/issues/102).
 - [x] **P1.6 — First-run onboarding** · [#7](https://github.com/varijkapil13/saral/issues/7) · **owns** `internal/ui/onboarding/**`
   Site, email, token, project picker; writes the profile; explains what the probe found.
 

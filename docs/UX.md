@@ -26,7 +26,7 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 
 | Stage | Mechanism |
 |---|---|
-| First minute | Onboarding writes the profile, then drops you on your own issues. `?` explains the current view only. |
+| First minute | Onboarding writes the profile, then drops you on your own issues — or on the project itself, where nothing in it is assigned to you, because an empty first screen reads as a broken program. `?` explains the current view only. |
 | First hour | The footer teaches the six keys that matter here. Mouse works, so nothing is blocked on learning. |
 | First week | Frecency: projects, assignees, versions and labels reorder so your usual choices are first. |
 | | Hints: after you reach an action through the palette three times, the status line notes its key. Built in P3.1 ([#12](https://github.com/varijkapil13/saral/issues/12)) rather than with the footer: the count, the call site and the frecency table are one piece of data, and P3.1 already owns it. `kernel.CommandRanMsg{ID, Keys}` is the signal it hangs on, and `Command.Keys` is the key it names — a command nothing binds is never given one, and the line is said once rather than on every run after the third. |
@@ -81,8 +81,10 @@ palette                ctrl+k         everything, fuzzy; opens over what you wer
                                       the one global a view taking typing cannot swallow
 search in view         /              filter rows live
 clear that filter      ctrl+g         from the browsing state; esc does it while still typing
+every issue here       a              widen the search to the whole of the session's project
+edit this search       e              show the JQL on screen and run an edited one
 save this search       s              bind the query on screen to a number key
-refresh                r / R          current view / purge and refetch
+refresh                r / R          current view / purge and refetch. both say what came back
 ```
 
 Vim keys and arrows are both always bound. `j/k` and `↑/↓` are not a preference to configure.
@@ -184,6 +186,7 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 | double-click a row | open it, same as `enter` — and only when both clicks are one gesture |
 | click a status, type or assignee cell | show only the rows with that value; click it again to show them all |
 | wheel | scroll the pane under the pointer, not the focused one |
+| click the line that names the search | show its JQL and offer to change it, the same as `e` |
 | click a footer entry | switch view |
 | click anything else a view draws | do what it says — write, send, delete, confirm, put aside, pick a value, go back to an onboarding step |
 
@@ -256,6 +259,13 @@ the mouse — click, wheel, drag or release — reaches the view while the help 
   move task percentage) and elapsed time when it does not.
 - Rate limiting is shown as a countdown, not an error, and any poller pauses itself.
 - Stale data is badged rather than hidden. Seeing yesterday's board beats seeing nothing.
+- **A refresh says what came back, including when that is nothing.** `r` and `R` are the two keys
+  whose whole job is invisible when the answer has not moved, and a refresh that reports nothing is
+  indistinguishable from one that never ran — which is exactly how a working `r` was read as broken.
+  So the status line names the outcome in the words of the thing asked for (*refreshed* against
+  *refetched from scratch*, since `R` does strictly more), and the summary line keeps the time the
+  rows last came from the site, because a status line goes away and a question about how old the
+  screen is comes back.
 - Errors state what failed and what to do. `403` becomes "You need the Bulk Change permission to move
   issues between projects", which is the capability `Reason` verbatim.
 - **The status line is transient, so nothing that has to persist may live only there.** It is one

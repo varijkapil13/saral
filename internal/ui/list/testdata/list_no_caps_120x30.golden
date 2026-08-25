@@ -1,5 +1,5 @@
  saral | Issues                                                                            PROJ | example.atlassian.net 
-All issues                                                                                                     12 issues
+All issues                                                                                      checked 09:00  12 issues
   KEY      SUMMARY                                               TYPE       STATUS        ASSIGNEE          UPDATED     
 > PROJ-1   Add the nightly export                                Epic       Building      Grace Hopper      02 Mar 12:00
   PROJ-2   Rework webhook retries                                Chore      Shipped       Alan Turing       02 Mar 14:00
@@ -26,5 +26,5 @@ All issues                                                                      
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                                                                                                                        
+ nothing in PROJ is assigned to you, so this is every issue in it                                                       
  g1 Issues                                                   ↓/j down | ↑/k up | enter open | / filter | ? help | q quit

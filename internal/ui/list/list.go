@@ -49,6 +49,7 @@ type Model struct {
 	cache    app.Cache
 	normal   map[string]action
 	inFilter map[string]action
+	inAsk    map[string]action
 	styles   *styles
 	rows     *rowCache
 
@@ -84,14 +85,26 @@ type Model struct {
 	filter    textinput.Model
 	query     string
 
+	// asking is the prompt that shows the search on screen and takes an edited
+	// one, so that what is being run is readable and changeable from the view
+	// rather than only from the palette.
+	asking bool
+	ask    textinput.Model
+
 	// facet is the cell somebody clicked, and what the rows stay narrowed to
 	// until they click it again.
 	facet facet
 
-	// defaulted records that the search on screen is still the one New derived
-	// from the session's project. A project switch retargets that search and
-	// leaves alone one the user asked for.
+	// defaulted records that the search on screen is still the one this view
+	// chose from the session's project. A project switch retargets that search
+	// and leaves alone one the user asked for.
 	defaulted bool
+
+	// widened records that the default has already fallen back to the whole
+	// project for want of anything assigned to this account. It stops an empty
+	// project being asked the same question twice, and a project switch clears
+	// it because that derives a fresh default.
+	widened bool
 
 	// saved is the kernel's set of saved queries, as this view was built and as
 	// the kernel last changed it, kept so that binding a key can name what that
@@ -111,6 +124,11 @@ type Model struct {
 	// kernel.Fail writes is replaced by the next keypress, so the pane keeps its
 	// own copy of the reason for as long as it is empty.
 	failure error
+
+	// checked is when what is on screen last came from the site, and the zero
+	// time until anything has. The summary line's stamp is drawn from it: the
+	// status line a refresh writes goes away, and this does not.
+	checked time.Time
 
 	// stale marks the rows on screen as older than they should be: they came off
 	// disk past their TTL, or the refresh that would have replaced them failed.
@@ -141,16 +159,18 @@ const (
 	bindConfirm
 )
 
-// WantsRawKeys is true while the filter is open, and while a number key is
+// WantsRawKeys is true while either prompt is open, and while a number key is
 // being picked. Without it the kernel matches its own bindings first, so a
 // query loses every digit, r triggers a refetch, esc cannot cancel, and q quits
 // the program out from under the typing — and the digit that was meant to bind
 // a key would run whatever is already on it instead.
-func (m *Model) WantsRawKeys() bool { return m.filtering || m.bind != bindNone }
+func (m *Model) WantsRawKeys() bool { return m.filtering || m.asking || m.bind != bindNone }
 
 // New builds the issue list. The query it opens on is the user's own work,
-// narrowed to the session's project when there is one; both halves are resolved
-// at runtime, so nothing about the site is written down here.
+// narrowed to the session's project when there is one — and the project itself
+// where that comes back empty, which widen does once the site has answered.
+// Every half of it is resolved at runtime, so nothing about the site is written
+// down here.
 func New(d kernel.Deps) kernel.View {
 	m := &Model{
 		deps:   d,
@@ -158,6 +178,7 @@ func New(d kernel.Deps) kernel.View {
 		styles: newStyles(d.Theme),
 		rows:   newRowCache(rowCacheLimit),
 		filter: newFilterInput(),
+		ask:    newAskInput(),
 		saved:  d.Saved,
 		poll:   PollInterval(),
 	}
@@ -170,7 +191,7 @@ func New(d kernel.Deps) kernel.View {
 	}
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
-	m.normal, m.inFilter = defaultKeys().tables()
+	m.normal, m.inFilter, m.inAsk = defaultKeys().tables()
 	m.jql, m.title = defaultQuery(d.Project)
 	m.defaulted = true
 	m.relayout()
@@ -199,18 +220,6 @@ func (m *Model) fromCache() {
 	m.rows.reset()
 	m.relayout()
 	m.refilter()
-}
-
-func defaultQuery(project string) (jql, title string) {
-	if strings.TrimSpace(project) == "" {
-		return "assignee = currentUser() ORDER BY updated DESC", "My issues"
-	}
-	return "project = " + quote(project) + " AND assignee = currentUser() ORDER BY updated DESC",
-		"My issues in " + project
-}
-
-func quote(s string) string {
-	return strconv.Quote(strings.ReplaceAll(s, `"`, ""))
 }
 
 func newFilterInput() textinput.Model {
@@ -252,7 +261,7 @@ func (m *Model) revalidate() tea.Cmd {
 	if !m.stale {
 		return nil
 	}
-	return m.refresh(false)
+	return m.refetch(whyBackground)
 }
 
 // Update handles one message.
@@ -293,6 +302,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case SaveQueryMsg:
 		m.startBind()
 
+	case EditQueryMsg:
+		cmd = m.startAsk()
+
 	case FacetMsg:
 		cmd = m.facetMsg(msg)
 
@@ -331,11 +343,14 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 func (m *Model) setFocus(on bool) tea.Cmd {
 	m.focused = on
 	switch {
-	case !m.filtering:
-	case on:
+	case m.filtering && on:
 		_ = m.filter.Focus()
-	default:
+	case m.filtering:
 		m.filter.Blur()
+	case m.asking && on:
+		_ = m.ask.Focus()
+	case m.asking:
+		m.ask.Blur()
 	}
 	if on {
 		return m.pollTick()
@@ -348,6 +363,9 @@ func (m *Model) resize(w, h int) tea.Cmd {
 		return nil
 	}
 	m.width, m.height = w, h
+	if m.asking {
+		m.ask.SetWidth(m.askWidth())
+	}
 	m.relayout()
 	m.scrollToCursor()
 	return m.pageAheadIfNeeded()
@@ -387,7 +405,7 @@ func (m *Model) rowsHeight() int {
 	if m.keptFilter() {
 		h--
 	}
-	if m.filtering || m.bind != bindNone {
+	if m.filtering || m.asking || m.bind != bindNone {
 		h--
 	}
 	return max(h, 1)
@@ -418,20 +436,32 @@ func (m *Model) stop() {
 
 func (m *Model) current(gen int) bool { return gen == m.gen }
 
-func (m *Model) load() tea.Cmd {
+func (m *Model) load() tea.Cmd { return m.loadFor(whyOpen) }
+
+func (m *Model) loadFor(w why) tea.Cmd {
 	if m.search == nil {
 		return nil
 	}
 	ctx, gen := m.begin()
-	return withCancel(m.cancel, load(ctx, m.search, m.cache, m.jql, gen))
+	return withCancel(m.cancel, load(ctx, m.search, m.cache, m.jql, gen, w))
 }
 
 func (m *Model) refresh(purge bool) tea.Cmd {
+	if purge {
+		return m.refetch(whyPurge)
+	}
+	return m.refetch(whyRefresh)
+}
+
+// refetch re-reads the search on screen. What it was asked for travels with the
+// request, because a poll, a revalidation and somebody pressing r all arrive
+// here and only one of them has anybody waiting to be told what came back.
+func (m *Model) refetch(w why) tea.Cmd {
 	if m.search == nil {
 		return nil
 	}
 	var said tea.Cmd
-	if purge {
+	if w == whyPurge {
 		m.search.Invalidate()
 		if m.cache != nil {
 			if err := m.cache.Forget(m.jql); err != nil {
@@ -440,10 +470,10 @@ func (m *Model) refresh(purge bool) tea.Cmd {
 		}
 	}
 	if !m.loaded {
-		return tea.Batch(said, m.load())
+		return tea.Batch(said, m.loadFor(w))
 	}
 	ctx, gen := m.begin()
-	return tea.Batch(said, withCancel(m.cancel, reload(ctx, m.search, m.cache, m.jql, len(m.issues), gen)))
+	return tea.Batch(said, withCancel(m.cancel, reload(ctx, m.search, m.cache, m.jql, len(m.issues), gen, w)))
 }
 
 func (m *Model) retarget(msg QueryMsg) tea.Cmd {
@@ -461,6 +491,7 @@ func (m *Model) reproject(project string) tea.Cmd {
 	if !m.defaulted {
 		return nil
 	}
+	m.widened = false
 	jql, title := defaultQuery(project)
 	return m.setQuery(jql, title, true)
 }
@@ -477,6 +508,7 @@ func (m *Model) setQuery(jql, title string, byDefault bool) tea.Cmd {
 	m.issues, m.page, m.missing, m.view, m.needles = nil, jira.Page[jira.Issue]{}, nil, nil, nil
 	m.cursor, m.top, m.loaded = 0, 0, false
 	m.cachedMore, m.stale, m.failure = false, false, nil
+	m.checked = time.Time{}
 	m.facet = facet{}
 	m.rows.reset()
 	m.refilter()
@@ -500,15 +532,20 @@ func (m *Model) loadedPage(msg loadedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
+	before := m.issues
 	m.loading, m.loaded = false, true
 	m.issues, m.needles = slices.Clone(msg.page.Items), nil
 	m.page, m.missing = msg.page, msg.missing
-	m.cachedMore, m.stale = false, false
+	m.cachedMore, m.stale, m.checked = false, false, m.now()
 	m.rows.reset()
 	m.relayout()
 	m.refilter()
 	m.cursor, m.top = 0, 0
-	return tea.Batch(m.missingFields(), notStored(msg.stored), m.pageAheadIfNeeded(), m.pollTick())
+	if wider := m.widen(); wider != nil {
+		return tea.Batch(notStored(msg.stored), wider)
+	}
+	return tea.Batch(m.missingFields(), notStored(msg.stored),
+		refreshed(msg.why, before, m.issues), m.pageAheadIfNeeded(), m.pollTick())
 }
 
 func (m *Model) nextPage(msg pagedMsg) tea.Cmd {
@@ -518,7 +555,7 @@ func (m *Model) nextPage(msg pagedMsg) tea.Cmd {
 	m.loading = false
 	m.issues, m.needles = append(m.issues, msg.page.Items...), nil
 	m.page = msg.page
-	m.cachedMore, m.stale = false, false
+	m.cachedMore, m.stale, m.checked = false, false, m.now()
 	m.relayout()
 	m.refilter()
 	return tea.Batch(notStored(msg.stored), m.pageAheadIfNeeded(), m.pollTick())
@@ -531,14 +568,15 @@ func (m *Model) patch(msg patchedMsg) tea.Cmd {
 		return nil
 	}
 	m.loading, m.loaded = false, true
-	under := m.selectedKey()
+	under, before := m.selectedKey(), m.issues
 	m.issues, m.page, m.needles = msg.issues, msg.page, nil
-	m.cachedMore, m.stale = false, false
+	m.cachedMore, m.stale, m.checked = false, false, m.now()
 	m.rows.reset()
 	m.relayout()
 	m.refilter()
 	m.restore(under)
-	return tea.Batch(notStored(msg.stored), m.pageAheadIfNeeded(), m.pollTick())
+	return tea.Batch(notStored(msg.stored), refreshed(msg.why, before, m.issues),
+		m.pageAheadIfNeeded(), m.pollTick())
 }
 
 // failed keeps whatever is on screen. Rows that are already drawn are the last
@@ -562,7 +600,7 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	if errors.As(msg.err, &limit) {
 		m.pollPaused = true
 	}
-	return tea.Batch(kernel.Fail(msg.err), m.pollTick())
+	return tea.Batch(failure(msg.why, msg.err), m.pollTick())
 }
 
 // missingFields reports the projection fields this site has no field for, which
@@ -590,7 +628,7 @@ func (m *Model) pageAheadIfNeeded() tea.Cmd {
 	// Rows that came off disk carry no cursor to follow, so the page after them
 	// is reached by asking the search again and walking to where they end.
 	if !m.page.HasMore() {
-		return withCancel(m.cancel, reload(ctx, m.search, m.cache, m.jql, len(m.issues)+pageSize, gen))
+		return withCancel(m.cancel, reload(ctx, m.search, m.cache, m.jql, len(m.issues)+pageSize, gen, whyPage))
 	}
 	return withCancel(m.cancel, more(ctx, m.cache, m.jql, m.issues, m.page, gen))
 }
@@ -718,6 +756,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.filtering {
 		return m.filterKey(msg, stroke)
 	}
+	if m.asking {
+		return m.askKey(msg, stroke)
+	}
 	if m.bind != bindNone {
 		return m.bindKey(stroke)
 	}
@@ -755,9 +796,13 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.startFilter()
 	case actClear:
 		return m.clearFilter()
+	case actAll:
+		return m.showEverything()
+	case actEdit:
+		return m.startAsk()
 	case actSave:
 		m.startBind()
-	case actNone, actAccept:
+	case actNone, actAccept, actRun, actKeep:
 	}
 	return nil
 }
@@ -891,6 +936,10 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if msg.Button != tea.MouseLeft {
 		return nil
 	}
+	if m.zones.Hit(titleZone, msg) {
+		m.clicks.Forget()
+		return m.startAsk()
+	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.view)); i++ {
 		iss := &m.issues[m.view[i]]
 		if cmd, narrowed := m.clickFacet(msg, iss); narrowed {
@@ -958,6 +1007,9 @@ func (m *Model) View() string {
 	if m.filtering {
 		lines = append(lines, m.filter.View())
 	}
+	if m.asking {
+		lines = append(lines, m.askPrompt())
+	}
 	if m.bind != bindNone {
 		lines = append(lines, m.bindPrompt())
 	}
@@ -1006,6 +1058,7 @@ type summaryKey struct {
 	filtered        bool
 	stale           bool
 	failed          bool
+	checked         int64
 }
 
 func (m *Model) summaryKey() summaryKey {
@@ -1013,7 +1066,7 @@ func (m *Model) summaryKey() summaryKey {
 		title: m.title, width: m.width, gen: m.styles.gen,
 		issues: len(m.issues), visible: len(m.view), more: m.hasMore(),
 		loading: m.loading, loaded: m.loaded, filtered: m.filtered(),
-		stale: m.stale, failed: m.failure != nil,
+		stale: m.stale, failed: m.failure != nil, checked: m.checked.UnixNano(),
 	}
 }
 
@@ -1031,12 +1084,25 @@ func (m *Model) summaryLine() string {
 	if m.stale {
 		badge = m.deps.Theme.StaleBadge.Render(staleLabel)
 	}
-	right := ansi.StringWidth(badge) + ansi.StringWidth(count)
+	stamp := m.checkedLabel()
+	right := ansi.StringWidth(stamp) + ansi.StringWidth(badge) + ansi.StringWidth(count)
 	title := ansi.Truncate(m.title, max(m.width-right-1, 1), ell)
 	pad := max(m.width-ansi.StringWidth(title)-right, 1)
-	m.summary = m.styles.title.Render(title) + strings.Repeat(" ", pad) + badge + m.styles.count.Render(count)
+	m.summary = m.zones.Mark(titleZone, m.styles.title.Render(title)) +
+		strings.Repeat(" ", pad) + stamp + badge + m.styles.count.Render(count)
 	m.sumKey = key
 	return m.summary
+}
+
+// checkedLabel says when what is on screen last came from the site, in the
+// account's own timezone like every other instant this view draws. It is the
+// half of an observable refresh that stays: pressing r twice a minute apart
+// leaves two different times behind, whatever the answer was both times.
+func (m *Model) checkedLabel() string {
+	if m.checked.IsZero() {
+		return ""
+	}
+	return m.styles.muted.Render("checked " + m.checked.In(m.deps.Caps.Location()).Format("15:04") + "  ")
 }
 
 // staleLabel is a word and not a glyph: the glyph beside the count already means

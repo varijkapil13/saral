@@ -19,6 +19,7 @@ const pageSize = 50
 // loadedMsg carries a first page, replacing whatever the list held.
 type loadedMsg struct {
 	gen     int
+	why     why
 	page    jira.Page[jira.Issue]
 	missing []string
 	stored  error
@@ -36,15 +37,19 @@ type pagedMsg struct {
 // principle 5 is that a background refresh patches rows and nothing else.
 type patchedMsg struct {
 	gen    int
+	why    why
 	issues []jira.Issue
 	page   jira.Page[jira.Issue]
 	stored error
 }
 
 // failedMsg is any search that did not produce rows. The error travels whole so
-// that the status line can use the wording the error itself carries.
+// that the status line can use the wording the error itself carries, and what
+// the request was for travels with it so that a refusal is one of the answers a
+// refresh gives rather than an error from nowhere in particular.
 type failedMsg struct {
 	gen int
+	why why
 	err error
 }
 
@@ -75,14 +80,14 @@ func notStored(err error) tea.Cmd {
 }
 
 // load fetches the first page of a query.
-func load(ctx context.Context, search *app.Search, cache app.Cache, jql string, gen int) tea.Cmd {
+func load(ctx context.Context, search *app.Search, cache app.Cache, jql string, gen int, w why) tea.Cmd {
 	return func() tea.Msg {
 		res, err := search.Run(ctx, request(jql))
 		if err != nil {
-			return failedMsg{gen: gen, err: err}
+			return failedMsg{gen: gen, why: w, err: err}
 		}
 		return loadedMsg{
-			gen: gen, page: res.Page, missing: res.Missing,
+			gen: gen, why: w, page: res.Page, missing: res.Missing,
 			stored: keep(cache, jql, res.Page.Items, res.Page.HasMore()),
 		}
 	}
@@ -106,23 +111,23 @@ func more(ctx context.Context, cache app.Cache, jql string, have []jira.Issue, p
 // reload re-reads the rows the list already has, walking as many pages as it
 // took to get them. It exists so that a refresh can patch rows in place rather
 // than throw the user's position away and start again at row one.
-func reload(ctx context.Context, search *app.Search, cache app.Cache, jql string, want, gen int) tea.Cmd {
+func reload(ctx context.Context, search *app.Search, cache app.Cache, jql string, want, gen int, w why) tea.Cmd {
 	return func() tea.Msg {
 		res, err := search.Run(ctx, request(jql))
 		if err != nil {
-			return failedMsg{gen: gen, err: err}
+			return failedMsg{gen: gen, why: w, err: err}
 		}
 		page := res.Page
 		issues := slices.Clone(page.Items)
 		for len(issues) < want && page.HasMore() {
 			page, err = page.Next(ctx)
 			if err != nil {
-				return failedMsg{gen: gen, err: err}
+				return failedMsg{gen: gen, why: w, err: err}
 			}
 			issues = append(issues, page.Items...)
 		}
 		return patchedMsg{
-			gen: gen, issues: issues, page: page,
+			gen: gen, why: w, issues: issues, page: page,
 			stored: keep(cache, jql, issues, page.HasMore()),
 		}
 	}

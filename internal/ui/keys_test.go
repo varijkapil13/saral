@@ -24,6 +24,8 @@ var keyOwners = map[string]string{
 	"issue.edit":        issue.ViewID,
 	"issue.transition":  issue.ViewID,
 	"issues.save-query": list.ViewID,
+	"issues.edit-query": list.ViewID,
+	"issues.all":        list.ViewID,
 	"issues.open":       list.ViewID,
 }
 
