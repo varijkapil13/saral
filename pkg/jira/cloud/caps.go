@@ -54,7 +54,7 @@ func (c *Client) Capabilities(ctx context.Context, projectKey string) (jira.Capa
 	project := strings.TrimSpace(projectKey)
 	caps := jira.Capabilities{Graphics: capsDetectGraphics(os.Getenv)}
 
-	probes := []capsProbe{c.capsAttachments, c.capsTimeZone, c.capsPlans}
+	probes := []capsProbe{c.capsAttachments, c.capsTimeZone, c.capsPlans, c.capsPeople}
 	if project == "" {
 		capsWithoutProject(&caps)
 	} else {
@@ -241,6 +241,37 @@ func (c *Client) capsPlans(ctx context.Context) (capsApply, error) {
 		got.Reason = capsFailed("whether this token can read plans", err)
 	}
 	return func(caps *jira.Capabilities) { caps.Plans = got }, err
+}
+
+// capsPeople asks whether this token may look accounts up at all, by asking for
+// one account. Browse users and groups is a site-wide permission, so this runs
+// whether or not a project was named, and a refusal is a 403 the same way the
+// Plans API's is.
+//
+// It calls the endpoint rather than asking mypermissions for the permission
+// behind it, for two reasons. The answer is then the site's own sentence about
+// the search that was actually refused. And mypermissions fails the whole
+// request with a 400 when one key in it is unrecognised, so folding a fifth key
+// into the probe's list would put Bulk Change and Delete Issues behind whether
+// this site knows that key.
+func (c *Client) capsPeople(ctx context.Context) (capsApply, error) {
+	_, err := c.do(ctx, request{
+		method: http.MethodGet,
+		path:   peopleSearchPath,
+		// An empty query matches every account and is not the same as sending
+		// none, which is a 400. One row is all the question needs.
+		query: url.Values{"query": []string{""}, "maxResults": []string{"1"}},
+		kind:  "the site's accounts",
+		id:    peopleSearchPath,
+	})
+
+	var got jira.Capability
+	if err == nil {
+		got.OK = true
+	} else {
+		got.Reason = capsFailed("whether this token can look accounts up", err)
+	}
+	return func(caps *jira.Capabilities) { caps.People = got }, err
 }
 
 // capsBoards asks whether the project has a board. Absence is an ordinary

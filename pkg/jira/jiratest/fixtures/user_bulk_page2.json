@@ -1,0 +1,21 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/user/bulk?accountId=5b10a2844c20165700ede21g&accountId=140022%3Aexample-app-0001&accountId=5b10ffffffffffffffffffff&startAt=2&maxResults=2",
+  "maxResults": 2,
+  "startAt": 2,
+  "total": 3,
+  "isLast": true,
+  "values": [
+    {
+      "self": "https://example.atlassian.net/rest/api/3/user?accountId=140022%3Aexample-app-0001",
+      "accountId": "140022:example-app-0001",
+      "accountType": "app",
+      "avatarUrls": {
+        "48x48": "https://example.atlassian.net/secure/useravatar?ownerId=140022&avatarId=10350",
+        "32x32": "https://example.atlassian.net/secure/useravatar?size=medium&ownerId=140022&avatarId=10350"
+      },
+      "displayName": "Nightly Runner",
+      "active": true,
+      "timeZone": "Europe/Berlin"
+    }
+  ]
+}

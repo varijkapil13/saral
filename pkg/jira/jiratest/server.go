@@ -218,6 +218,15 @@ var srvDefaultRoutes = []srvRoute{
 	{http.MethodGet, "/rest/api/3/issue/createmeta/{projectIdOrKey}/issuetypes", srvFixtureHandler(http.StatusOK, "createmeta_issuetypes.json")},
 	{http.MethodGet, "/rest/api/3/issue/createmeta/{projectIdOrKey}/issuetypes/{issueTypeId}", srvCreateMeta},
 	{http.MethodGet, "/rest/api/3/myself", srvFixtureHandler(http.StatusOK, "myself.json")},
+	// Two user searches, and the difference between them is the point: the
+	// site-wide one answers every kind of account, and the assignable one answers
+	// only the people, which is how a real site drops its app accounts.
+	{http.MethodGet, "/rest/api/3/user/search", srvFixtureHandler(http.StatusOK, "user_search.json")},
+	{http.MethodGet, "/rest/api/3/user/assignable/search", srvFixtureHandler(http.StatusOK, "user_assignable.json")},
+	{http.MethodGet, "/rest/api/3/user/bulk", srvOffsetPages("user_bulk.json", "user_bulk_page2.json")},
+	{http.MethodGet, "/rest/api/3/project/{key}/statuses", srvFixtureHandler(http.StatusOK, "project_statuses.json")},
+	{http.MethodGet, "/rest/api/3/priority/search", srvFixtureHandler(http.StatusOK, "priority_search.json")},
+	{http.MethodGet, "/rest/api/3/label", srvOffsetPages("labels.json", "labels_page2.json")},
 	{http.MethodGet, "/rest/api/3/configuration", srvFixtureHandler(http.StatusOK, "configuration.json")},
 	{http.MethodGet, "/rest/api/3/mypermissions", srvFixtureHandler(http.StatusOK, "mypermissions_admin.json")},
 	// versions.json is a paged envelope, which is what the singular /version
@@ -293,6 +302,44 @@ func srvSearch(w http.ResponseWriter, r *http.Request) {
 	default:
 		srvWriteError(w, http.StatusBadRequest, "The nextPageToken is not one this search issued.")
 	}
+}
+
+// srvOffsetPages replays an offset-paginated endpoint one page per startAt, so
+// that a walk over it terminates on the fixtures rather than on the first page
+// answered forever. A startAt past the last page answers the last page, which
+// still says isLast and so still ends the walk.
+func srvOffsetPages(pages ...string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		at := 0
+		for i, name := range pages {
+			body, err := Fixture(name)
+			if err != nil {
+				srvWriteError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			var page struct {
+				MaxResults int `json:"maxResults"`
+			}
+			if err := json.Unmarshal(body, &page); err != nil {
+				srvWriteError(w, http.StatusInternalServerError, "jiratest: parsing "+name+": "+err.Error())
+				return
+			}
+			if at == srvStartAt(r) || i == len(pages)-1 {
+				srvWriteJSON(w, http.StatusOK, body)
+				return
+			}
+			at += page.MaxResults
+		}
+		srvWriteError(w, http.StatusInternalServerError, "jiratest: srvOffsetPages was given no pages")
+	}
+}
+
+func srvStartAt(r *http.Request) int {
+	at, err := strconv.Atoi(r.URL.Query().Get("startAt"))
+	if err != nil || at < 0 {
+		return 0
+	}
+	return at
 }
 
 func srvCreateMeta(w http.ResponseWriter, r *http.Request) {

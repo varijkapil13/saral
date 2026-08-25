@@ -81,6 +81,30 @@ type Commenter interface {
 	DeleteComment(ctx context.Context, key, id string) error
 }
 
+// PeopleFinder looks accounts up: by typing, and by the ids a saved filter
+// holds. A filter that names a person stores the account id and nothing else,
+// because a display name is neither unique nor stable, so both halves are one
+// role — whatever can offer a picker must also be able to draw the choice back.
+//
+// Holding this role is not permission to use it: Browse users and groups is
+// site-wide, and a token without it gets a *CapabilityError naming CapPeople
+// rather than an empty list.
+type PeopleFinder interface {
+	FindPeople(ctx context.Context, q PeopleQuery) ([]User, error)
+	People(ctx context.Context, accountIDs []string) ([]User, error)
+}
+
+// FilterVocabulary is the site's own words for the things a filter narrows by,
+// resolved at runtime because every one of them is site configuration. Nothing
+// here may be written down in the source: statuses are minted per project, a
+// priority is a row an administrator can rename, and labels are whatever anyone
+// has typed.
+type FilterVocabulary interface {
+	IssueTypeStatuses(ctx context.Context, projectKey string) ([]IssueTypeStatuses, error)
+	Priorities(ctx context.Context) ([]Priority, error)
+	Labels(ctx context.Context) (Page[string], error)
+}
+
 // SessionClient is every role a view in this build actually calls, and nothing
 // else. It is what a session is built with.
 //
@@ -99,4 +123,6 @@ type SessionClient interface {
 	IssueWriter
 	Mover
 	Commenter
+	PeopleFinder
+	FilterVocabulary
 }

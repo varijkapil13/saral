@@ -49,7 +49,10 @@ var (
 	_ jira.Mover          = (*Fake)(nil)
 	_ jira.CommentReader  = (*Fake)(nil)
 	_ jira.Commenter      = (*Fake)(nil)
+	_ jira.PeopleFinder   = (*Fake)(nil)
 	_ jira.SessionClient  = (*Fake)(nil)
+
+	_ jira.FilterVocabulary = (*Fake)(nil)
 )
 
 // BoardKind is what WithProject builds alongside a project.
@@ -86,6 +89,9 @@ var (
 	NoAttachments = CapReason(jira.CapAttachments, "attachments are disabled on this site")
 	// NoDeleteIssues turns off the delete-issues capability.
 	NoDeleteIssues = CapReason(jira.CapDeleteIssues, "needs Delete Issues permission")
+	// NoPeople turns off looking accounts up, which is the site-wide Browse
+	// users and groups permission an ordinary token can perfectly well lack.
+	NoPeople = CapReason(jira.CapPeople, "needs the Browse users and groups permission")
 	// NoTimeZone leaves the account timezone unknown, which makes every date
 	// render in UTC with the reason beside it.
 	NoTimeZone = CapZone(nil, "Jira did not answer what timezone this account is in")
@@ -119,6 +125,7 @@ type Fake struct {
 	pageSize int
 	caps     jira.Capabilities
 	me       jira.User
+	people   []jira.User
 	fields   []jira.Field
 
 	projects    map[string]*fakeProject
@@ -173,6 +180,7 @@ func (f *Fake) fakeInit() {
 	f.pageSize = 50
 	f.caps = fakeDefaultCaps()
 	f.me = fakeDefaultMe
+	f.people = slices.Clone(fakePeople)
 	f.fields = fakeCloneFields(fakeDefaultFields)
 	f.projects = make(map[string]*fakeProject)
 	f.projectKeys = nil
@@ -207,6 +215,7 @@ func fakeDefaultCaps() jira.Capabilities {
 		Boards:       ok,
 		Attachments:  ok,
 		DeleteIssues: ok,
+		People:       ok,
 		Graphics:     jira.GraphicsHalfBlocks,
 		TimeZone:     time.UTC,
 	}
@@ -224,6 +233,8 @@ func fakeSetCap(c *jira.Capabilities, k jira.CapabilityKey, v jira.Capability) {
 		c.Attachments = v
 	case jira.CapDeleteIssues:
 		c.DeleteIssues = v
+	case jira.CapPeople:
+		c.People = v
 	}
 }
 
@@ -265,6 +276,15 @@ func WithFields(fields []jira.Field) Option {
 // that answers 200 and names nobody, which Me refuses rather than returns.
 func WithMe(u jira.User) Option {
 	return func(f *Fake) { f.me = u }
+}
+
+// WithPeople replaces the site's account directory, which is what FindPeople
+// searches and People resolves ids against. It is not the same list as the
+// accounts on the seeded issues: setting it does not change who an issue is
+// assigned to, and an id that is on an issue and not here resolves to nothing,
+// which is the site that has forgotten a departed account.
+func WithPeople(people []jira.User) Option {
+	return func(f *Fake) { f.people = slices.Clone(people) }
 }
 
 // WithPageSize sets how many items a page holds, for both paginators. The

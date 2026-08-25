@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -195,15 +196,20 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"createmeta_task.json",
 		"field.json",
 		"field_localised.json",
+		"forbidden_browse_users.json",
 		"issue_rich_adf.json",
+		"labels.json",
+		"labels_page2.json",
 		"mypermissions_admin.json",
 		"mypermissions_basic.json",
 		"myself.json",
 		"not_found_board.json",
 		"plans_403.json",
 		"plans_ok.json",
+		"priority_search.json",
 		"problem_method_not_allowed.json",
 		"problem_no_endpoint.json",
+		"project_statuses.json",
 		"rate_limited.json",
 		"search_page1.json",
 		"search_page2.json",
@@ -213,6 +219,10 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"task_failed.json",
 		"task_running.json",
 		"transitions.json",
+		"user_assignable.json",
+		"user_bulk.json",
+		"user_bulk_page2.json",
+		"user_search.json",
 		"validation_error.json",
 		"versions.json",
 	}
@@ -220,6 +230,164 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("fixture set drifted:\n got %v\nwant %v", got, want)
 	}
+}
+
+// The shapes a filter picker reads, none of which is the shape beside it.
+func TestFixtures_CoverTheShapesAPeoplePickerReads(t *testing.T) {
+	t.Parallel()
+
+	t.Run("an account search is a bare array with no envelope at all", func(t *testing.T) {
+		t.Parallel()
+
+		for _, name := range []string{"user_search.json", "user_assignable.json"} {
+			var rows []map[string]any
+			if err := json.Unmarshal(srvFixture(t, name), &rows); err != nil {
+				t.Fatalf("%s is not the bare array the endpoint answers: %v", name, err)
+			}
+			if len(rows) == 0 {
+				t.Fatalf("%s has no rows, so nothing decodes it wrongly and passes", name)
+			}
+			for _, row := range rows {
+				for _, key := range []string{"accountId", "accountType", "displayName"} {
+					if _, ok := row[key]; !ok {
+						t.Errorf("%s: an account sends no %s", name, key)
+					}
+				}
+			}
+		}
+	})
+
+	t.Run("the site-wide search answers every kind of account", func(t *testing.T) {
+		t.Parallel()
+
+		kinds := srvAccountTypes(t, "user_search.json")
+		for _, want := range []string{"atlassian", "app", "customer"} {
+			if !slices.Contains(kinds, want) {
+				t.Errorf("user_search.json lists %v, and a real site holds a %q too", kinds, want)
+			}
+		}
+		// The assignable endpoint drops the accounts that cannot be given work,
+		// which is a shape claim and not a convenience: it is what makes the
+		// scoped search readable on a site that is mostly robots.
+		for _, kind := range srvAccountTypes(t, "user_assignable.json") {
+			if kind != "atlassian" {
+				t.Errorf("user_assignable.json lists a %q account, and the endpoint answers only people", kind)
+			}
+		}
+	})
+
+	t.Run("an account id can carry a colon", func(t *testing.T) {
+		t.Parallel()
+
+		found := false
+		for _, row := range srvAccounts(t, "user_search.json") {
+			id, _ := row["accountId"].(string)
+			found = found || strings.Contains(id, ":")
+		}
+		if !found {
+			t.Error("no account id carries a colon, and anything that splits an id or builds a JQL clause has to survive one")
+		}
+	})
+
+	t.Run("a bulk read answers null for an id the site does not know", func(t *testing.T) {
+		t.Parallel()
+
+		page := srvDecode(t, srvFixture(t, "user_bulk.json"))
+		values, ok := page["values"].([]any)
+		if !ok || len(values) == 0 {
+			t.Fatalf("user_bulk.json values = %v, want the array the envelope carries", page["values"])
+		}
+		if !slices.Contains(values, nil) {
+			t.Error("no entry is null, and a null is what an unknown id decodes into as a blank row")
+		}
+		// The pages have to chain, or the walk that counts the null never
+		// reaches the account after it.
+		if last, _ := page["isLast"].(bool); last {
+			t.Error("the first page says isLast, so the second is never asked for")
+		}
+		if final, _ := srvDecode(t, srvFixture(t, "user_bulk_page2.json"))["isLast"].(bool); !final {
+			t.Error("the last page does not say isLast")
+		}
+	})
+
+	t.Run("a project's statuses are per issue type, and two ids share a name", func(t *testing.T) {
+		t.Parallel()
+
+		var types []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Statuses []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"statuses"`
+		}
+		if err := json.Unmarshal(srvFixture(t, "project_statuses.json"), &types); err != nil {
+			t.Fatalf("project_statuses.json is not the bare array the endpoint answers: %v", err)
+		}
+		if len(types) < 2 {
+			t.Fatalf("got %d issue types, want more than one so that two workflows can differ", len(types))
+		}
+
+		ids := make(map[string]map[string]bool)
+		widths := make(map[int]bool)
+		for _, entry := range types {
+			widths[len(entry.Statuses)] = true
+			for _, status := range entry.Statuses {
+				if ids[status.Name] == nil {
+					ids[status.Name] = make(map[string]bool)
+				}
+				ids[status.Name][status.ID] = true
+			}
+		}
+		if len(widths) < 2 {
+			t.Error("every issue type reaches the same number of statuses, and two types in one project run different workflows")
+		}
+		if len(ids["In Review"]) < 2 {
+			t.Errorf(`"In Review" resolves to %v, want the two ids a team-managed project mints under one name`, ids["In Review"])
+		}
+	})
+
+	t.Run("labels are bare strings and not all of them are ASCII", func(t *testing.T) {
+		t.Parallel()
+
+		seen := make([]string, 0, 8)
+		for _, name := range []string{"labels.json", "labels_page2.json"} {
+			var page struct {
+				Values []string `json:"values"`
+			}
+			if err := json.Unmarshal(srvFixture(t, name), &page); err != nil {
+				t.Fatalf("%s does not carry an array of bare strings: %v", name, err)
+			}
+			seen = append(seen, page.Values...)
+		}
+		if len(seen) == 0 {
+			t.Fatal("the label pages are empty")
+		}
+		if !slices.ContainsFunc(seen, func(l string) bool { return utf8.RuneCountInString(l) != len(l) }) {
+			t.Errorf("every label in %q is ASCII, and a label is whatever anybody typed", seen)
+		}
+	})
+}
+
+func srvAccounts(t *testing.T, fixture string) []map[string]any {
+	t.Helper()
+
+	var rows []map[string]any
+	if err := json.Unmarshal(srvFixture(t, fixture), &rows); err != nil {
+		t.Fatalf("%s is not a bare array of accounts: %v", fixture, err)
+	}
+	return rows
+}
+
+func srvAccountTypes(t *testing.T, fixture string) []string {
+	t.Helper()
+
+	out := make([]string, 0, 8)
+	for _, row := range srvAccounts(t, fixture) {
+		kind, _ := row["accountType"].(string)
+		out = append(out, kind)
+	}
+	return out
 }
 
 // Three paging envelopes, and no endpoint says which one it answers in.

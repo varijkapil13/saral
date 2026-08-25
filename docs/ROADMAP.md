@@ -560,6 +560,44 @@ of headroom under the 15 MiB binary gate. So the display renderer is written her
   signature is 79 cells and the widest description box at 120 columns is 78, so a code block is cut at
   every width the sidebar leaves and something had to reach the rest of it.
 
+## Filtering by a person · the port amendment first
+
+The owner, after a session with the issue list: *"there is no easy way to filter by person. I do not
+want to write JQL queries — this should be accessible on the UI."* The port had `Me` and nothing else
+about accounts, so a person could not be chosen at all, and the only person-ish filter narrowed
+already-fetched rows by **display name**. The picker is a later packet; the contract it codes against
+lands first, because `pkg/jira/port.go` blocks everyone while it is open.
+
+- [x] **FP.1 — The port amendment a filter picker needs** ·
+  [#69](https://github.com/varijkapil13/saral/issues/69) · `contract` · **owns**
+  `pkg/jira/{port,types,roles}.go`, `pkg/jira/cloud/{people,vocab,caps,assert}.go`,
+  `pkg/jira/jiratest/**` including `fixtures/**`, the tests for all of those,
+  `docs/{API-NOTES,ARCHITECTURE,ROADMAP}.md`
+  **One amendment covering every facet a filter narrows by, rather than five.** Five methods appended
+  to the port — `FindPeople`, `People`, `IssueTypeStatuses`, `Priorities`, `Labels` — plus
+  `jira.AccountKind` on `User`, `jira.PeopleQuery`, `jira.IssueTypeStatuses` and `CapPeople`. No
+  existing signature moved; `SessionClient` gains `PeopleFinder` and `FilterVocabulary`, which is
+  additive, and both adapters plus `pkg/jira/cloud/assert.go` pin the two roles at build time.
+  **The wire is not shaped like the rest of the API and the signatures are built around that.**
+  `/user/search` answers a **bare JSON array** that neither paginator here reads, 400s without a
+  `query` and lists everybody with an empty one. Its matching is undocumented and is neither substring
+  nor fuzzy — word prefixes, initials and email tokens — so `PeopleQuery.Match` says in the port's own
+  documentation that the caller ranks the answer and never presents Jira's order as its own.
+  `/user/bulk` defaults to **ten per page** whatever it is asked for and answers **JSON `null` inside
+  `values`** for an id the site does not know, which decodes into a blank row; those are counted for
+  the walk and then dropped, because a blank row is worse than an absence.
+  `AccountKind` **labels and never filters**: an app account is assigned work like a person, and the
+  measured site was ten apps and one human. `IssueTypeStatuses` carries **ids**, per issue type,
+  because a name is localised and a team-managed project mints project-scoped statuses reusing the
+  stock names. `Labels` cannot be narrowed — the endpoint ignores a `query`, measured byte-identical.
+  `CapPeople` probes *Browse users and groups* by **calling the endpoint** rather than by asking
+  `mypermissions` for a fifth key: one unrecognised key fails that whole request, so the existing four
+  would have gone behind whether a site knows the new one.
+  **A conformance table per role, run over both adapters**, because [#74](https://github.com/varijkapil13/saral/issues/74)
+  exists and five more methods must not be five more chances to drift: an unknown id is absent rather
+  than blank, a `Limit` is a ceiling, a refusal names `CapPeople`, a status is identified by its id,
+  and both sites hold two ids under one display name.
+
 ## Batch 4 — Attachments · parallel ×3
 
 - [ ] **P4.1 — List and download** · [#17](https://github.com/varijkapil13/saral/issues/17) · **owns** `pkg/jira/cloud/attachment.go`

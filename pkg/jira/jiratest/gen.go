@@ -28,6 +28,16 @@ var fakeStatuses = []jira.Status{
 	{ID: "10203", Name: "Shipped", Category: jira.CategoryDone},
 }
 
+// fakeSubtaskStatuses is the workflow the subtask type runs, which is not the
+// one the other types run. Its middle status shares a display name with 10202
+// and has a different id: that is what a team-managed project mints on a real
+// site, and it is why an answer about statuses carries ids rather than names.
+var fakeSubtaskStatuses = []jira.Status{
+	{ID: "10201", Name: "Triage", Category: jira.CategoryToDo},
+	{ID: "10204", Name: "Building", Category: jira.CategoryInProgress},
+	{ID: "10203", Name: "Shipped", Category: jira.CategoryDone},
+}
+
 var fakeIssueTypes = []jira.IssueType{
 	{ID: "10301", Name: "Story", IconURL: fakeBaseURL + "/icons/story.png"},
 	{ID: "10302", Name: "Defect", IconURL: fakeBaseURL + "/icons/defect.png"},
@@ -60,6 +70,32 @@ var fakeDefaultMe = jira.User{
 	TimeZone:    time.UTC,
 	Active:      true,
 	AvatarURL:   fakeBaseURL + "/avatar/me",
+}
+
+// fakePeople is the fake site's account directory, and deliberately not the same
+// list as fakeUsers: an account read through a people endpoint says what kind of
+// account it is, and one read off an issue does not, so the accounts that appear
+// in both places appear with a Kind in one and without in the other.
+//
+// It holds an account that is not a person because a real site does — on the one
+// this was measured against, ten of the eleven accounts were apps — and one whose
+// id contains a colon, because two of those eleven did and anything that splits
+// an id on a separator or builds a JQL clause out of one has to survive it.
+var fakePeople = []jira.User{
+	{AccountID: "acct-ada", DisplayName: "Ada Lovelace", Email: "ada@example.invalid", Active: true, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/ada", Kind: jira.AccountPerson},
+	{AccountID: "acct-alan", DisplayName: "Alan Turing", Active: false, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/alan", Kind: jira.AccountPerson},
+	{AccountID: "acct-grace", DisplayName: "Grace Hopper", Email: "grace@example.invalid", Active: true, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/grace", Kind: jira.AccountPerson},
+	{AccountID: "acct-me", DisplayName: "Sam Tester", Email: "sam@example.invalid", Active: true, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/me", Kind: jira.AccountPerson},
+	{AccountID: "acct:nightly-bot", DisplayName: "Nightly Runner", Active: true, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/bot", Kind: jira.AccountApp},
+	{AccountID: "acct-reporter", DisplayName: "Rex Outside", Email: "rex@example.invalid", Active: true, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/rex", Kind: jira.AccountCustomer},
+}
+
+// fakeSiteLabelPool is what Labels answers from, over and above whatever the
+// stored issues carry. Two of them are not ASCII: a label is whatever anybody
+// typed, and a column width taken with len() over one is wrong.
+var fakeSiteLabelPool = []string{
+	"backend", "frontend", "infra", "tech-debt", "customer", "flaky",
+	"prüfung", "検索",
 }
 
 var fakeDefaultFields = []jira.Field{

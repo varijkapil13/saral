@@ -61,8 +61,61 @@ func (d Date) In(loc *time.Location) time.Time {
 // Before reports whether d falls before other.
 func (d Date) Before(other Date) bool { return d.In(time.UTC).Before(other.In(time.UTC)) }
 
+// AccountKind is what sort of account this is. It labels; it does not filter.
+// An app account is assigned work and reports issues exactly as a person does,
+// so hiding one loses rows — but a site whose account list is ten robots and one
+// human is unreadable without the distinction, which is what a picker sinks and
+// badges by.
+type AccountKind int
+
+// The account kinds, in the order a picker prefers them.
+const (
+	// AccountUnknown is a read that did not say. It is not a fourth kind of
+	// account: several endpoints answer a user with no accountType at all.
+	AccountUnknown AccountKind = iota
+	AccountPerson
+	AccountApp
+	AccountCustomer
+)
+
+// ParseAccountKind maps the API's accountType to an AccountKind. The values are
+// an enum rather than display text, so unlike a status or a priority name they
+// are the same on a site in any language.
+func ParseAccountKind(accountType string) AccountKind {
+	switch strings.ToLower(strings.TrimSpace(accountType)) {
+	case "atlassian":
+		return AccountPerson
+	case "app":
+		return AccountApp
+	case "customer":
+		return AccountCustomer
+	default:
+		return AccountUnknown
+	}
+}
+
+// String returns the kind's name for a badge, and "" for a read that did not
+// say, so that a picker drawing it puts nothing rather than the word "unknown"
+// beside every row on an endpoint that omits the field.
+func (k AccountKind) String() string {
+	switch k {
+	case AccountPerson:
+		return "person"
+	case AccountApp:
+		return "app"
+	case AccountCustomer:
+		return "customer"
+	default:
+		return ""
+	}
+}
+
 // User is a Jira account. Email is often absent — Jira hides it unless the
 // account's privacy settings allow it, so nothing may depend on having one.
+//
+// Kind is AccountUnknown on any read that did not carry an accountType, which is
+// most of them: it is filled by the people endpoints, and its absence elsewhere
+// means the answer was silent rather than that the account is odd.
 type User struct {
 	AccountID   string
 	DisplayName string
@@ -70,6 +123,52 @@ type User struct {
 	TimeZone    *time.Location
 	Active      bool
 	AvatarURL   string
+	Kind        AccountKind
+}
+
+// PeopleQuery narrows a search for accounts.
+//
+// Match is handed to Jira, which is the whole difficulty. Its matching is
+// neither substring nor fuzzy and is documented nowhere: measured on a real
+// site, it takes a prefix of any word of the display name, the initials of it,
+// and part of the email address, so a two-letter needle found an account by its
+// initials and a different two-letter needle found nobody although a surname on
+// the site contains it. Nothing local reproduces that, and no read says which
+// rule fired.
+//
+// Two consequences for a caller. Type-ahead has to go back to the site rather
+// than narrow what it already holds, because a longer needle can match what a
+// shorter one did not. And the order the answer arrives in is Jira's, not a
+// ranking: a picker ranks what comes back itself and never presents that order
+// as its own.
+//
+// Project scopes the search to accounts that can be assigned work in one
+// project. It is worth setting for a picker even where the search is not about
+// assigning: the assignable endpoint drops app accounts for free, and on the
+// measured site that was ten of eleven accounts.
+//
+// Limit is a ceiling, not a page size — the port does not page people, because a
+// person is found by typing more rather than by paging. Zero asks for the
+// adapter's own default.
+type PeopleQuery struct {
+	Match   string
+	Project string
+	Limit   int
+}
+
+// IssueTypeStatuses is the statuses one issue type can be in, in one project.
+//
+// It carries ids because neither name identifies anything: a status name is
+// localised, and a team-managed project mints project-scoped statuses that reuse
+// the stock names, so two distinct ids answer to one string on one site. Grouping
+// or filtering by the name silently merges them.
+//
+// The statuses are per issue type and not per project — two types in one project
+// can run different workflows — so a filter offering "every status here" is the
+// union of these and has to say which types it came from.
+type IssueTypeStatuses struct {
+	Type     IssueType
+	Statuses []Status
 }
 
 // ProjectRef identifies a project.
@@ -1096,6 +1195,11 @@ const (
 	CapBoards       CapabilityKey = "boards"
 	CapAttachments  CapabilityKey = "attachments"
 	CapDeleteIssues CapabilityKey = "delete-issues"
+	// CapPeople is whether this token may look accounts up at all. Browse users
+	// and groups is a site-wide permission a perfectly ordinary token can lack,
+	// and without it a person can only be named by an account id somebody
+	// already has.
+	CapPeople CapabilityKey = "people"
 )
 
 // Capability is one probe result. A negative is an answer with a reason
@@ -1113,6 +1217,7 @@ type Capabilities struct {
 	Boards       Capability
 	Attachments  Capability
 	DeleteIssues Capability
+	People       Capability
 	Graphics     GraphicsMode
 	TimeZone     *time.Location
 	// TimeZoneReason is why TimeZone is not the account's own, worded the way a
@@ -1136,6 +1241,8 @@ func (c Capabilities) Capability(k CapabilityKey) Capability {
 		return c.Attachments
 	case CapDeleteIssues:
 		return c.DeleteIssues
+	case CapPeople:
+		return c.People
 	default:
 		return Capability{Reason: fmt.Sprintf("unknown capability %q", k)}
 	}

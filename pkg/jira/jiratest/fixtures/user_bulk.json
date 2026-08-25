@@ -1,0 +1,25 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/user/bulk?accountId=5b10a2844c20165700ede21g&accountId=140022%3Aexample-app-0001&accountId=5b10ffffffffffffffffffff&startAt=0&maxResults=2",
+  "maxResults": 2,
+  "startAt": 0,
+  "total": 3,
+  "isLast": false,
+  "values": [
+    {
+      "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g",
+      "accountId": "5b10a2844c20165700ede21g",
+      "accountType": "atlassian",
+      "emailAddress": "user@example.com",
+      "avatarUrls": {
+        "48x48": "https://example.atlassian.net/secure/useravatar?ownerId=5b10a2844c20165700ede21g&avatarId=10345",
+        "24x24": "https://example.atlassian.net/secure/useravatar?size=small&ownerId=5b10a2844c20165700ede21g&avatarId=10345",
+        "16x16": "https://example.atlassian.net/secure/useravatar?size=xsmall&ownerId=5b10a2844c20165700ede21g&avatarId=10345",
+        "32x32": "https://example.atlassian.net/secure/useravatar?size=medium&ownerId=5b10a2844c20165700ede21g&avatarId=10345"
+      },
+      "displayName": "Example User",
+      "active": true,
+      "timeZone": "Europe/Berlin"
+    },
+    null
+  ]
+}

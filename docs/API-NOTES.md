@@ -108,6 +108,32 @@ Three of them can hand you text no user should ever see.
 | live | `expand=schema` on `/search/jql` answers one entry per **requested** field, keyed by field id, and `names`/`schema` come back only if asked for — while each issue's own `expand` string lists them either way | That is enough to type a custom field in the same round trip, so a search need not call `/field` to decode its own answer. A query of nothing but system fields should not ask. Do not read the `expand` string as evidence anything was expanded. |
 | schema | `GET /issue/{key}` accepts `expand=schema`, one entry per field on the issue | Worth sending on a single-issue read: without it a custom field's value is typed by its shape alone, which cannot tell a number from a number-shaped string, or a sprint array from an option array. |
 
+## People, and the words a filter narrows by
+
+Everything in this section was read from one Cloud site in August 2026. It is the half of the API a
+filter picker lives on, and almost none of it is shaped like the rest.
+
+| Source | Fact | Consequence |
+|---|---|---|
+| live | **`GET /rest/api/3/user/search` answers a bare JSON array.** No envelope, no `total`, no `isLast` — neither paginator in `pkg/jira/cloud/paginate.go` reads that shape | Decode it as a slice. It takes `startAt`/`maxResults` and a page past the end is `[]`, so a walk is possible; nothing here needs one, because a person is found by typing more rather than by paging. |
+| live | `?query=` **absent** is a 400 (`"The username or property query parameter must be provided"`); `?query=` **present and empty** is a 200 listing every account | So the parameter is always sent, including from the state a picker opens in. There is no way to ask this endpoint for nothing. |
+| live | **Matching is neither substring nor fuzzy.** A two-letter needle that appears inside the one human account's surname found nobody; the same account's two initials found it; and a needle that appears only inside the email address found it too | It is word-prefix, initials and email tokens, in some combination no read reveals. Nothing local reproduces it, type-ahead cannot narrow what it already holds — a longer needle can match what a shorter one did not — and the caller must rank what comes back rather than present Jira's order as its own. |
+| live | **`GET /rest/api/3/user/assignable/search?project=X` with no query answers only real people**, dropping app accounts. The measured site had **11 accounts, 10 of them `accountType:"app"`** | It is the endpoint a picker should prefer wherever a project is in hand, and not only for assigning: it is the difference between a readable list and a page of robots. Without a project it is a 400 in the classic envelope; with an unknown one, a 404 in the classic envelope. |
+| live | **`/user/assignable/multiProjectSearch` answers RFC 7807** (`detail: "Required parameter 'projectKeys' is not present."`) while its sibling one path up answers the classic envelope | Two error envelopes one path segment apart. `parseErrorBody` reads both; nothing may assume which a neighbouring route uses. |
+| live | **`GET /rest/api/3/user/bulk` defaults to `maxResults: 10`** whatever it was asked for, and answers `{self, startAt, maxResults, total, isLast, values}` — the Agile offset envelope, on a platform endpoint | Eleven ids came back as ten and `isLast: false`. It has to be walked even for a short list. |
+| live | **A bulk read answers JSON `null` inside `values`** for an id the site does not know, and `total` counts the ids **asked for** rather than the ones found | A decoder reading into a struct gets a zero value with an empty name, and a caller drawing a row per id puts a blank row on screen. Drop them — but count them first, or the offset walk ends a page early. |
+| live | **Three of eleven account ids contain a colon**: a numeric prefix, a colon, then a UUID. `url.Values` escapes it and Jira answers the escaped form with the raw one — the same body carried the escaped spelling in `self` and the raw one in `accountId` | Never build the query string by hand, and never compare two spellings of one id without decoding first. Anything that splits an id on a separator, or drops one into a JQL clause or a cache key, has to survive it. |
+| live | **One account answered to two different display names on two endpoints** — one name on `/user/search` and another on `/user/bulk`, same account id, same minute | A name is not an identity even within one site and one session. Join on `accountId`; a name hydrated later may differ from the one the picker showed. |
+| live | `emailAddress` is `""` on `/user/search` for an app account and the key is **absent entirely** on `/user/bulk` | Absent and empty are one answer here, but only because nothing may depend on an email at all: an account's privacy settings decide whether it is there. |
+| live | `accountType` is one of `atlassian`, `app`, `customer`. It is an enum and not display text, so unlike a status or a priority name it did not move between locales | `jira.AccountKind` labels with it; it must never filter. An app account is assigned work and reports issues exactly as a person does, so hiding one loses rows. |
+| live | **`/user/picker` and the JQL autocomplete endpoints wrap the matched span in HTML** — `<b>`, `<strong>` — inside the field they call `displayName`, and spell a person as `Name - email` in it. `/user/picker` also carries a localised prose `header` (`"Showing 1 of 1 matching users"`) | Neither is data: rendering one puts markup on screen, and the markup lands mid-grapheme on a non-ASCII value. `/user/picker` 400s in RFC 7807 without a `query`. Use `/user/search`. |
+| schema | A token without **Browse users and groups** (`USER_PICKER`, id 27, `type: GLOBAL`) cannot search users | The probe reads a 403 from `/user/search` as the refusal and shows the site's own sentence. No token without the permission was available to provoke it, so the 403 itself is unconfirmed. |
+| live | **`mypermissions` does not know `BROWSE_USERS`.** It answered `400 {"errorMessages":[],"errors":{"BROWSE_USERS":"Unrecognized permission"}}` — the Agile-shaped refusal, on a platform endpoint | The key is `USER_PICKER`. And since one unrecognised key fails the whole request, a probe that folds a new key into an existing list puts every capability in that list behind whether the site knows it. `CapPeople` calls the endpoint instead. |
+| live | **`GET /rest/api/3/project/{key}/statuses` answers a bare array of issue types, each with its own `statuses`**, and two types in one project can carry different ones | It is the only read that says which statuses a filter may offer. Each status carries `untranslatedName` and a nested `statusCategory`; a bad project key is a 404 in the classic envelope. |
+| live | `GET /rest/api/3/priority` is a **bare array**; `GET /rest/api/3/priority/search` is the paged envelope and adds `isDefault` | The bare one is deprecated. The order is the ranking order and is not alphabetical. On the measured site `isDefault` was `false` on all five, so nothing may assume one is flagged. |
+| live | **`GET /rest/api/3/label` ignores a `query`.** A narrowed request answered byte-identically to the unnarrowed one | So there is no server-side label search. Walk it — `{startAt, maxResults, total, isLast, values}` with `values` an array of **bare strings**, `maxResults` defaulting to 1000 — and filter locally. |
+| live | Labels are whatever anybody typed, and the measured site held a German one and a Japanese one among seventeen | A width taken with `len()` over one is wrong. `ansi.StringWidth`, as everywhere. The list came back sorted, and `startAt` past the end answers `values: []` with `isLast: true`. |
+
 ## Create screens and transitions
 
 | Source | Fact | Consequence |
@@ -139,6 +165,9 @@ Three of them can hand you text no user should ever see.
 | live | The site's feature switches and its working day | `GET /rest/api/3/configuration`: voting, watching, unassigned issues, sub-tasks, issue linking, time tracking and attachments, plus a `timeTrackingConfiguration` carrying working hours per day and days per week as **floats**. A "3d" estimate is three of *those* days, not seventy-two hours, so any conversion of `originalEstimateSeconds` to days reads them first |
 | live | Permissions | `GET /rest/api/3/mypermissions?permissions=…&projectKey=…` |
 | schema | The user's timezone | `GET /rest/api/3/myself` |
+| live | Who a filter may name | `GET /rest/api/3/user/search`, or `…/user/assignable/search?project=` where a project is in hand; ids resolve back through `GET /rest/api/3/user/bulk`. Never a display name — see People |
+| live | Which statuses a project's issue types can reach | `GET /rest/api/3/project/{key}/statuses`, per issue type, by **id** |
+| live | The site's priorities and its labels | `GET /rest/api/3/priority/search` and `GET /rest/api/3/label`. Both are site-wide; the label endpoint cannot be narrowed |
 | live | Which projects exist, and which this token can see | `GET /rest/api/3/project/search` — paginated, and the only endpoint that answers it. The port has no method for it, so onboarding derives keys from a `/search/jql` page instead, which answers a shorter question: what the account has touched, not what it could reach. And that page cannot be unbounded, so it cannot even ask for everything |
 
 ## Permissions, which is what the capability probe reads
@@ -214,7 +243,7 @@ do not, and no read tells you which kind you are holding.
 | live | Jira flags an ambiguous field with a bracketed clause name `Name[Field Type]`, and a field `name` may itself contain brackets | So the bracketed form is not reliably parseable either. Use `cf[NNNNN]` where it exists and the id otherwise. |
 | live | `PUT /rest/api/3/mypreferences/locale` is **eventually consistent** — minutes, not seconds — and `Accept-Language` on a request is **ignored outright** | There is no per-request language, so nothing can ask for a stable one, and a read straight after the write still answers in the old language. |
 | live | The language of `name` was seen **changing mid-session** on an account whose `locale` read `en_US`, with `/rest/api/3/status` answering English and `/issue/{key}/transitions` answering German **at the same instant** | Language is a property of neither the request, nor the account, nor reliably the endpoint. This single observation is the whole argument for the rule, and the reason a display name must never be cached as though it identified anything. |
-| live | Every person picker on a create screen carries a site-absolute `autoCompleteUrl` — except a group picker, which carries none, and a labels field, whose URL is on a **different API version** | `internal/ui` takes the port and never an adapter, so a view holding one cannot call it anyway. A picker offers the field's own `allowedValues` plus the authenticated account until the port grows a user search ([#69](https://github.com/varijkapil13/saral/issues/69)). |
+| live | Every person picker on a create screen carries a site-absolute `autoCompleteUrl` — except a group picker, which carries none, and a labels field, whose URL is on a **different API version** | `internal/ui` takes the port and never an adapter, so a view holding one cannot call it anyway, and it never needs to: `FindPeople` and `Labels` reach the same answers in domain terms. The URL stays unread. |
 | schema | `untranslatedName` appears on `/field` and **not** in createmeta | A form builder holding only a create screen cannot know it; join to the `/field` catalogue on the field id. |
 
 ## Boards differ from each other far more than the schema suggests
@@ -296,6 +325,12 @@ any poller on the first 429. Cost-based limits mean a burst of narrow requests b
   bodies above are trustworthy and the move's own caps, permissions and failure detail are not.
 - Whether `Retry-After` ever arrives as an HTTP-date. No 429 was provoked.
 - Whether `isAvailable` on a transition is ever `false` without asking for unavailable ones.
+- What `/user/search` answers a token that lacks **Browse users and groups**. The testbed account
+  held it, so the 403 the `CapPeople` probe is written around has never been seen. A site that
+  answers `200 []` instead would read as "nobody is here", which is the wrong sentence.
+- Whether `/user/search` caps `maxResults` the way `/search/jql` silently caps at 100. The measured
+  site had eleven accounts and never reached a cap, so `FindPeople` holds its own ceiling as well as
+  asking for one.
 
 Fixtures under `pkg/jira/jiratest/fixtures/` are corrected from a capture's **shape** and given
 invented words; captures themselves stay in the gitignored `testdata/live/`. A shape here marked

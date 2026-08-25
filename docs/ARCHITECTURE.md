@@ -99,6 +99,12 @@ type Client interface {
 	Task(ctx context.Context, ref TaskRef) (TaskStatus, error)
 	Plans(ctx context.Context) ([]Plan, error)
 	Me(ctx context.Context) (User, error)
+
+	FindPeople(ctx context.Context, q PeopleQuery) ([]User, error)
+	People(ctx context.Context, accountIDs []string) ([]User, error)
+	IssueTypeStatuses(ctx context.Context, projectKey string) ([]IssueTypeStatuses, error)
+	Priorities(ctx context.Context) ([]Priority, error)
+	Labels(ctx context.Context) (Page[string], error)
 }
 ```
 
@@ -113,6 +119,42 @@ Rules for the port:
   and anything that merges, caches or writes an issue back has to tell those apart.
 - **Every method takes `context.Context`** and must honour cancellation — views cancel in-flight
   work when they close.
+- **Nobody is named by a display name.** A person is chosen from `FindPeople`, stored as an account
+  id and drawn back through `People`; a status is chosen by id from `IssueTypeStatuses`. Both exist
+  because the alternative was measured and does not work: a name is localised, a name is not unique
+  on one site, and one account answered to two different names on two endpoints within a minute.
+
+### Filtering by a person, and by the site's own words
+
+The five methods above are one amendment rather than five, because `pkg/jira/port.go` is a serial
+`contract` change that blocks other work while it lands and the owner would rather block it once.
+They cover every facet a filter picker narrows by, and each carries a trap the signature is shaped
+around:
+
+- **`FindPeople` does not rank.** Jira's matching is undocumented and is neither substring nor fuzzy;
+  it takes word prefixes, initials and email tokens in a combination no read reveals, so a needle two
+  letters longer can match what a shorter one did not. Type-ahead therefore goes back to the site
+  rather than narrowing what it holds, and the caller ranks the answer instead of presenting Jira's
+  order as its own. `PeopleQuery.Project` is worth setting wherever a project is in hand even when the
+  search is not about assigning: the assignable endpoint drops app accounts, which on the measured
+  site was ten of eleven.
+- **`User.Kind` labels; it never filters.** An app account is assigned work and reports issues exactly
+  as a person does, so hiding one loses rows — but a site that is ten robots and one human is
+  unreadable without the distinction, which is what a picker sinks and badges by. It is
+  `AccountUnknown` on any read that did not carry an `accountType`, which is most of them.
+- **`People` answers fewer accounts than it was asked for.** An id this site does not know comes back
+  as a JSON `null` inside the page, and a blank row is worse than an absence, so the result is keyed
+  by `AccountID` and never by position.
+- **`IssueTypeStatuses` carries ids** because a status name is localised *and* a team-managed project
+  mints project-scoped statuses reusing the stock names, so two distinct ids answer to one string on
+  one site. It is per issue type because two types in one project run different workflows.
+- **`Labels` pages and cannot be narrowed.** The endpoint takes no query and ignores one sent anyway,
+  so a caller filters what it walked.
+
+`CapPeople` is the site-wide *Browse users and groups* permission, which a perfectly ordinary token
+can lack. Like every other negative here it is a `Capability` carrying the site's own sentence, and
+the two people methods raise a `*CapabilityError` naming `CapPeople` so that a picker can offer the
+ids it already holds instead of disappearing.
 
 ### Roles: what a caller asks for
 
@@ -127,6 +169,8 @@ type Prober         interface{ Capabilities(ctx, projectKey) (Capabilities, erro
 type Identifier     interface{ Me(ctx) (User, error) }
 type Searcher       interface{ Search(ctx, Query) (Page[Issue], error) }
 type FieldCatalogue interface{ Fields(ctx) ([]Field, error) }
+type PeopleFinder   interface{ FindPeople; People }
+type FilterVocabulary interface{ IssueTypeStatuses; Priorities; Labels }
 // … SchemaReader, IssueWriter, Mover, CommentReader, Commenter
 
 // SessionClient is the union of every role the views in this build call.
@@ -186,6 +230,7 @@ type Capabilities struct {
 	Boards         Capability // project has at least one board
 	Attachments    Capability // instance-wide setting
 	DeleteIssues   Capability
+	People         Capability // Browse users and groups, site-wide
 	Graphics       GraphicsMode // kitty | iterm2 | halfblocks | none
 	TimeZone       *time.Location
 	TimeZoneReason string // why the zone is not the account's own; empty when it is
@@ -209,6 +254,13 @@ may be an hour out.
 The probe is scoped to a project, because three of these are: boards belong to a project, and Jira
 scopes Move, Delete and Create as project permissions, so one token answers differently in two
 projects on one site. Probing with no project leaves those three unavailable with a reason saying so.
+`People` is site-wide and is therefore answered either way.
+
+Two probes ask `mypermissions` and four call the endpoint they are about. Calling it is preferred
+where there is an endpoint cheap enough to call: the refusal is then the site's own sentence about the
+thing that was actually refused, and `mypermissions` fails the **whole** request with a 400 when one
+key in it is unrecognised — so folding a new key into the existing list would put Bulk Change and
+Delete Issues behind whether this site knows that key.
 
 ## The UI kernel and its registries
 
