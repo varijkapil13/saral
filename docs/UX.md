@@ -29,7 +29,7 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 | First minute | Onboarding writes the profile, then drops you on your own issues. `?` explains the current view only. |
 | First hour | The footer teaches the six keys that matter here. Mouse works, so nothing is blocked on learning. |
 | First week | Frecency: projects, assignees, versions and labels reorder so your usual choices are first. |
-| | Hints: after you reach an action through the palette three times, the status line notes its key. Built in P3.1 ([#12](https://github.com/varijkapil13/saral/issues/12)) rather than with the footer: the count, the call site and the frecency table are one piece of data, and P3.1 already owns it. `kernel.CommandRanMsg{ID, Keys}` is the signal it hangs on. |
+| | Hints: after you reach an action through the palette three times, the status line notes its key. Built in P3.1 ([#12](https://github.com/varijkapil13/saral/issues/12)) rather than with the footer: the count, the call site and the frecency table are one piece of data, and P3.1 already owns it. `kernel.CommandRanMsg{ID, Keys}` is the signal it hangs on, and `Command.Keys` is the key it names — a command nothing binds is never given one, and the line is said once rather than on every run after the third. |
 | Ongoing | JQL history with fuzzy recall; saved queries bound to `1`–`9` and kept in the profile. |
 | | Local fuzzy index — typing a key or a few words of a summary finds it with no round trip. |
 | | Session resume: reopening lands exactly where you left, including scroll and filter. |
@@ -37,6 +37,14 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 
 Frecency is a plain local table of `(item, count, lastUsed)` scored `count * decay(lastUsed)`. No
 telemetry leaves the machine, ever.
+
+The palette keeps its own table in a file of the palette's under the cache directory, beside where a
+comment draft goes: command IDs from this build and two numbers each, nothing from any site. It is
+not the profile, because `config.toml` has to stay safe to hand somebody, and a list of what you
+personally run most is not that; and it is not the issue cache, which has no record API and is
+absent exactly when a first run would most want to start learning. Half a use is worth what it was
+after a week, so yesterday's habit beats last month's. A session with nowhere to write it ranks by
+the registry's own order rather than refusing to open.
 
 ### What "only the keys that work" costs
 
@@ -77,6 +85,23 @@ refresh                r / R          current view / purge and refetch
 ```
 
 Vim keys and arrows are both always bound. `j/k` and `↑/↓` are not a preference to configure.
+
+### Inside the palette
+
+Every letter is the filter's, which is the one place `j` and `k` do not move a selection: `↑`/`↓` and
+`ctrl+p`/`ctrl+n` do, `enter` runs what is under the cursor and `esc` puts the palette away. A click
+selects a row and a second click on the selected one runs it, the same gesture the issue list uses.
+
+It offers what you can actually run. A command whose capability this site or token does not allow is
+not in the list — the registry deliberately filters nothing, because a registry that consulted the
+probe would be its own client — and when the filter matches only refused commands, their reason is
+what the palette says instead of "nothing matches". Filtering there and refusing in the kernel are
+the same sentence twice on purpose: the list is what you can see, and the kernel's refusal is what
+happens if the answer changes between opening the palette and pressing `enter`.
+
+The palette never runs a command itself. It names one, `kernel.RunCommandMsg` carries the name, and
+the kernel runs it against the deps it holds — see `docs/ARCHITECTURE.md`, which is also why a search
+run from the palette is scoped to the project the session is on now rather than the one it opened in.
 
 ### Who owns the number keys
 
