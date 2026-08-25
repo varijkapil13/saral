@@ -1,0 +1,29 @@
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "isLast": true,
+  "values": [
+    {
+      "id": 10007,
+      "key": "EX-7",
+      "self": "https://example.atlassian.net/rest/agile/1.0/epic/10007",
+      "name": "",
+      "summary": "Retry policy",
+      "color": {
+        "key": "color_4"
+      },
+      "done": false
+    },
+    {
+      "id": 10008,
+      "key": "EX-8",
+      "self": "https://example.atlassian.net/rest/agile/1.0/epic/10008",
+      "name": "",
+      "summary": "Offline cache",
+      "color": {
+        "key": "color_11"
+      },
+      "done": true
+    }
+  ]
+}

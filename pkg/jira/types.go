@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/varijkapil13/saral/pkg/adf"
 )
@@ -186,14 +187,17 @@ type Field struct {
 	Name string
 	// UntranslatedName is the name Jira gives the field regardless of site
 	// language, and it is what appears in ClauseNames. Jira sends it for custom
-	// fields only, so it is empty on every system field.
+	// fields only, so it is empty on every system field. It is not the field's
+	// English display name either: a field displayed as "Release Windows" can be
+	// "ReleaseWindows" here, on an English site and a German one alike.
 	UntranslatedName string
 	Custom           bool
 	Navigable        bool
 	Searchable       bool
 	Orderable        bool
 	// ClauseNames are the identifiers this field can be written as in JQL. They
-	// follow UntranslatedName, not Name.
+	// follow UntranslatedName, not Name. A field may send none, which is the
+	// site saying it cannot be named in JQL at all — not even as cf[NNNNN].
 	ClauseNames []string
 	// Schema is absent on a few system fields — parent, issuekey, thumbnail —
 	// which is Jira saying they are not written through the generic field path.
@@ -211,28 +215,117 @@ type FieldRef struct {
 	Schema FieldSchema
 }
 
-// FieldByName finds a field by name, case-insensitively.
+// FieldNameError reports that a name did not resolve to exactly one field on
+// this site.
 //
-// UntranslatedName is tried before Name, because Name is localised: a site in
-// German calls the story point field something else, and configuration that
-// names "Story Points" has to keep working there. Names are not unique either,
-// so the first match in catalogue order wins and a caller that cares should
-// disambiguate on Schema.
+// Matches holds the candidates when the name was ambiguous and is empty when no
+// field carried it at all. That is the distinction a caller has to be able to put
+// in front of somebody: one is a name to correct, the other is a name that has to
+// be said a different way.
+type FieldNameError struct {
+	Name    string
+	Matches []Field
+}
+
+// Ambiguous reports whether the name belongs to more than one field.
+func (e *FieldNameError) Ambiguous() bool { return len(e.Matches) > 1 }
+
+func (e *FieldNameError) Error() string {
+	if !e.Ambiguous() {
+		return fmt.Sprintf("no field on this site is called %q", e.Name)
+	}
+	ids := make([]string, 0, len(e.Matches))
+	for i := range e.Matches {
+		ids = append(ids, e.Matches[i].ID)
+	}
+	return fmt.Sprintf("%q is the name of %d fields on this site (%s), so it does not say which one",
+		e.Name, len(e.Matches), strings.Join(ids, ", "))
+}
+
+// ResolveField turns a field name written down somewhere — a profile, a saved
+// query, a board's estimation setting — into the one field on this site that it
+// means, or says why it cannot.
+//
+// A site spells one field's name up to three ways and shows only two of them at
+// a time. UntranslatedName does not move with the site language but is sent for
+// custom fields only, and it is not the English display name either: a field
+// displayed as "Release Windows" in English can be "Freigabefenster" in German
+// and "ReleaseWindows" in UntranslatedName on both. So a name is compared four
+// ways, in this order, and the first way that matches anything decides:
+//
+//  1. UntranslatedName, ignoring case
+//  2. Name, ignoring case
+//  3. UntranslatedName, ignoring case and every separator
+//  4. Name, ignoring case and every separator
+//
+// The last two are what carry a display name copied off an English site onto a
+// translated one. They come last so that a name a field really displays always
+// beats a name reconstructed from one.
+//
+// Two different fields matching at the same level is unresolvable rather than a
+// coin toss. Display names are not unique — a catalogue can hold two fields
+// called the same thing, and translation collapses distinct names into one — and
+// answering with either of them reads or writes a field nobody named.
+func ResolveField(fields []Field, name string) (Field, error) {
+	wanted := strings.TrimSpace(name)
+	if wanted == "" {
+		return Field{}, &FieldNameError{Name: name}
+	}
+	folded := foldFieldName(wanted)
+	for _, matches := range []func(Field) bool{
+		func(f Field) bool { return f.UntranslatedName != "" && strings.EqualFold(f.UntranslatedName, wanted) },
+		func(f Field) bool { return strings.EqualFold(f.Name, wanted) },
+		func(f Field) bool { return folded != "" && foldFieldName(f.UntranslatedName) == folded },
+		func(f Field) bool { return folded != "" && foldFieldName(f.Name) == folded },
+	} {
+		switch found := fieldsMatching(fields, matches); len(found) {
+		case 0:
+		case 1:
+			return found[0], nil
+		default:
+			return Field{}, &FieldNameError{Name: wanted, Matches: found}
+		}
+	}
+	return Field{}, &FieldNameError{Name: wanted}
+}
+
+// FieldByName finds the one field a name means, and reports whether exactly one
+// field means it. Prefer ResolveField where the caller can say something useful
+// about why a name did not resolve — an ambiguous name and an unknown one need
+// different answers from the person who wrote it down.
 func FieldByName(fields []Field, name string) (Field, bool) {
-	if strings.TrimSpace(name) == "" {
-		return Field{}, false
-	}
+	field, err := ResolveField(fields, name)
+	return field, err == nil
+}
+
+// fieldsMatching collects the distinct fields a rule matches. One field listed
+// twice is one field; two ids are two candidates.
+func fieldsMatching(fields []Field, matches func(Field) bool) []Field {
+	var out []Field
 	for i := range fields {
-		if fields[i].UntranslatedName != "" && strings.EqualFold(fields[i].UntranslatedName, name) {
-			return fields[i], true
+		if !matches(fields[i]) {
+			continue
+		}
+		if slices.ContainsFunc(out, func(seen Field) bool { return seen.ID == fields[i].ID }) {
+			continue
+		}
+		out = append(out, fields[i])
+	}
+	return out
+}
+
+// foldFieldName reduces a name to its letters and digits, lowercased, so that a
+// display name matches the compressed spelling UntranslatedName uses for the
+// same field.
+func foldFieldName(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(unicode.ToLower(r))
 		}
 	}
-	for i := range fields {
-		if strings.EqualFold(fields[i].Name, name) {
-			return fields[i], true
-		}
-	}
-	return Field{}, false
+	return b.String()
 }
 
 // FieldKind is which slot of a FieldValue carries the value.

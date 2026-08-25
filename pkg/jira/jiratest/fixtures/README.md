@@ -29,3 +29,35 @@ The `task_*.json` set describes one run of the operation Atlassian's docs point 
 replacing a custom-field select option across issues. It reuses the invented `Rollout Phase` field and
 its options from `createmeta_task.json`, and numbers its task differently from the bulk-move one —
 they are separate registries, and a shared id would read as one task answering at both endpoints.
+
+## The Agile API pages three different ways
+
+There is one envelope per shape here, because no endpoint announces which one it answers in and a
+decoder that reads only the common one comes back empty rather than failing:
+
+| fixture | array | `total` | `isLast` | stands for |
+|---|---|---|---|---|
+| `board_issues.json` | `issues` | yes | **no** | `/board/{id}/issue`, `/board/{id}/backlog` |
+| `board_epics.json` | `values` | **no** | yes | `/board/{id}/epic`, `/board/{id}/version` |
+| `sprint_page.json` | `values` | yes | yes | `/board/{id}/sprint`, `/board` |
+
+`board_issues.json` is served on both the board and the backlog route: the two answer the same
+envelope, and its issues carry an Agile `self` (`/rest/agile/1.0/issue/{id}`) with `/rest/api/2`
+links inside them, which is what that endpoint really sends.
+
+## A site refuses in two different envelopes
+
+`not_found_board.json` is the Agile one: `errorMessages` empty, and the sentence in `errors` under
+the name of a **URL parameter** rather than a field. Nothing keyed like that may become a form-field
+error — no input is called `rapidViewId`.
+
+`problem_no_endpoint.json` and `problem_method_not_allowed.json` are RFC 7807 `problem+json`, which is
+what answers a request that reached the site and no handler. `detail` is the only part that says
+anything; `title` is the status spelt out. The fixture server answers an unrouted path this way too,
+because a real site does.
+
+`field_localised.json` is the field catalogue as a site whose language is not English sends it: display
+names translated, `untranslatedName` not, one field spelling it as a single run-together word so it
+matches neither the translated name nor the English one, two fields whose display names have collapsed
+into a single string, and a field with an empty `clauseNames`, which is the site saying it cannot be
+named in JQL at all.

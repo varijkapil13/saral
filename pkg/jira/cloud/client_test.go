@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -811,6 +813,218 @@ func TestEncodeBody_MarshalsOnceAndPassesRawBytesThrough(t *testing.T) {
 	}
 }
 
+// The Agile API leaves errorMessages empty and writes its sentence into errors,
+// keyed by the name of a URL parameter. On a 404 that sentence is the only thing
+// that says which of "no such board" and "not yours" happened.
+func TestDo_KeepsTheSentenceAnAgile404WritesUnderAURLParameter(t *testing.T) {
+	t.Parallel()
+
+	const boardPath = "/rest/agile/1.0/board/99999/configuration"
+	s := jiratest.NewServer(jiratest.WithStatus(http.MethodGet, boardPath, http.StatusNotFound, "not_found_board.json"))
+	defer s.Close()
+
+	c, _ := testClient(t, s.URL(), WithRetry(RetryPolicy{Attempts: 1}))
+	_, err := c.do(t.Context(), request{method: http.MethodGet, path: boardPath, kind: "board", id: "99999"})
+
+	var missing *jira.NotFoundError
+	if !errors.As(err, &missing) {
+		t.Fatalf("got %T (%v), want a *jira.NotFoundError", err, err)
+	}
+	want := agileBoardReason(t)
+	if missing.Detail != want {
+		t.Errorf("Detail = %q, want the site's own sentence %q", missing.Detail, want)
+	}
+	said := missing.Error()
+	if !strings.Contains(said, want) {
+		t.Errorf("the sentence a user reads is %q, and the site's own is not in it", said)
+	}
+	if !strings.Contains(said, "board 99999") {
+		t.Errorf("the sentence no longer names what was looked for: %q", said)
+	}
+}
+
+// The same body under the statuses that mean "your values are wrong". rapidViewId
+// is a URL parameter, so its sentence is a reason: no form has an input by that
+// name.
+func TestDo_DoesNotTurnAURLParameterIntoAFieldError(t *testing.T) {
+	t.Parallel()
+
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			t.Parallel()
+
+			const boardPath = "/rest/agile/1.0/board/10/configuration"
+			s := jiratest.NewServer(jiratest.WithStatus(http.MethodGet, boardPath, status, "not_found_board.json"))
+			defer s.Close()
+
+			c, _ := testClient(t, s.URL(), WithRetry(RetryPolicy{Attempts: 1}))
+			_, err := c.do(t.Context(), request{method: http.MethodGet, path: boardPath})
+
+			var invalid *jira.ValidationError
+			if !errors.As(err, &invalid) {
+				t.Fatalf("got %T (%v), want a *jira.ValidationError", err, err)
+			}
+			if len(invalid.Fields) != 0 {
+				t.Errorf("Fields = %v, want none: rapidViewId is a URL parameter, not an input", invalid.Fields)
+			}
+			if _, ok := invalid.For("rapidViewId"); ok {
+				t.Error("a form asking about rapidViewId is told there is a message for it")
+			}
+			if want := agileBoardReason(t); !slices.Contains(invalid.Messages, want) {
+				t.Errorf("Messages = %v, want the site's sentence %q among them", invalid.Messages, want)
+			}
+		})
+	}
+}
+
+func TestParseErrorBody_SortsFieldKeysFromParameterKeys(t *testing.T) {
+	t.Parallel()
+
+	const body = `{"errors":{"summary":"a","customfield_10032":"b","fixVersions":"c","External Id":"d","rapidViewId":"e","boardId":"f","issueIdOrKey":"g"}}`
+
+	fields := func(status int) []string {
+		found := parseErrorBody(status, []byte(body)).fields
+		out := make([]string, 0, len(found))
+		for _, f := range found {
+			out = append(out, f.Field)
+		}
+		return out
+	}
+
+	wantFields := []string{"summary", "customfield_10032", "fixVersions", "External Id"}
+	if got := fields(http.StatusBadRequest); !slices.Equal(got, wantFields) {
+		t.Errorf("fields on a 400 = %v, want %v in Jira's own order", got, wantFields)
+	}
+	if got := fields(http.StatusNotFound); len(got) != 0 {
+		t.Errorf("fields on a 404 = %v, want none: a 404 is not a rejected value", got)
+	}
+
+	messages := parseErrorBody(http.StatusBadRequest, []byte(body)).messages
+	if want := []string{"e", "f", "g"}; !slices.Equal(messages, want) {
+		t.Errorf("messages = %v, want the parameter-keyed sentences %v", messages, want)
+	}
+}
+
+// Anything that reaches the site and no handler answers RFC 7807, where detail is
+// the only part that says anything.
+func TestDo_ReadsTheProblemJSONARoutingFailureAnswers(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		status  int
+		fixture string
+		assert  func(t *testing.T, err error)
+	}{
+		{
+			name:    "a path no endpoint serves",
+			status:  http.StatusNotFound,
+			fixture: "problem_no_endpoint.json",
+			assert: func(t *testing.T, err error) {
+				t.Helper()
+				var missing *jira.NotFoundError
+				if !errors.As(err, &missing) {
+					t.Fatalf("got %T (%v), want a *jira.NotFoundError", err, err)
+				}
+				if want := problemDetail(t, "problem_no_endpoint.json"); missing.Detail != want {
+					t.Errorf("Detail = %q, want the body's own detail %q", missing.Detail, want)
+				}
+			},
+		},
+		{
+			name:    "a method the endpoint does not take",
+			status:  http.StatusMethodNotAllowed,
+			fixture: "problem_method_not_allowed.json",
+			assert: func(t *testing.T, err error) {
+				t.Helper()
+				var broken *jira.TransportError
+				if !errors.As(err, &broken) {
+					t.Fatalf("got %T (%v), want a *jira.TransportError", err, err)
+				}
+				want := problemDetail(t, "problem_method_not_allowed.json")
+				if !strings.Contains(broken.Error(), want) {
+					t.Errorf("the sentence is %q, want the body's own detail %q in it", broken.Error(), want)
+				}
+				if strings.Contains(broken.Error(), http.StatusText(http.StatusMethodNotAllowed)) {
+					t.Errorf("the sentence fell back to the status text: %q", broken.Error())
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			const path = "/rest/agile/1.0/board/10/swimlane"
+			s := jiratest.NewServer(jiratest.WithStatus(http.MethodGet, path, tt.status, tt.fixture))
+			defer s.Close()
+
+			c, _ := testClient(t, s.URL(), WithRetry(RetryPolicy{Attempts: 1}))
+			_, err := c.do(t.Context(), request{method: http.MethodGet, path: path, kind: "swimlane", id: "10"})
+			if err == nil {
+				t.Fatalf("HTTP %d came back as a success", tt.status)
+			}
+			tt.assert(t, err)
+		})
+	}
+}
+
+// A problem body carrying nothing but a title has only the status spelt out to
+// offer, which still beats nothing.
+func TestParseErrorBody_FallsBackToTheProblemTitleAndNeverToItsInstance(t *testing.T) {
+	t.Parallel()
+
+	got := parseErrorBody(http.StatusNotFound, []byte(`{"type":"about:blank","title":"Not Found","status":404,"instance":"/rest/api/3/nope"}`))
+	if reason := got.reason(); reason != "Not Found" {
+		t.Errorf("reason = %q, want the title", reason)
+	}
+	withDetail := parseErrorBody(http.StatusNotFound, []byte(`{"title":"Not Found","detail":"No endpoint GET /x.","instance":"/x"}`))
+	if reason := withDetail.reason(); reason != "No endpoint GET /x." {
+		t.Errorf("reason = %q, want only the detail: the title adds nothing to it", reason)
+	}
+}
+
+// agileBoardReason is the sentence the fixture puts under its URL parameter, read
+// from the fixture so the assertion cannot drift from it.
+func agileBoardReason(t *testing.T) string {
+	t.Helper()
+	var body struct {
+		Errors map[string]string `json:"errors"`
+	}
+	if err := json.Unmarshal(fixtureBytes(t, "not_found_board.json"), &body); err != nil {
+		t.Fatalf("decoding not_found_board.json: %v", err)
+	}
+	reason, ok := body.Errors["rapidViewId"]
+	if !ok {
+		t.Fatal("not_found_board.json carries no rapidViewId, which is the shape being tested")
+	}
+	return reason
+}
+
+func problemDetail(t *testing.T, name string) string {
+	t.Helper()
+	var body struct {
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(fixtureBytes(t, name), &body); err != nil {
+		t.Fatalf("decoding %s: %v", name, err)
+	}
+	if body.Detail == "" {
+		t.Fatalf("%s carries no detail", name)
+	}
+	return body.Detail
+}
+
+func fixtureBytes(t *testing.T, name string) []byte {
+	t.Helper()
+	b, err := jiratest.Fixture(name)
+	if err != nil {
+		t.Fatalf("reading %s: %v", name, err)
+	}
+	return b
+}
+
 func TestParseFieldErrors_SurvivesAnErrorsKeyThatIsNotAnObject(t *testing.T) {
 	t.Parallel()
 
@@ -829,7 +1043,7 @@ func TestParseFieldErrors_SurvivesAnErrorsKeyThatIsNotAnObject(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := len(parseErrorBody([]byte(tt.body)).fields); got != tt.want {
+			if got := len(parseErrorBody(http.StatusBadRequest, []byte(tt.body)).fields); got != tt.want {
 				t.Errorf("got %d field messages out of %s, want %d", got, tt.body, tt.want)
 			}
 		})

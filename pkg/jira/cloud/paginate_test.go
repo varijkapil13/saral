@@ -365,6 +365,122 @@ func TestDecodeAgilePage_ReportsNoTotalWhenTheEndpointSendsNone(t *testing.T) {
 	}
 }
 
+// The two endpoints a board view is read from name their array issues, like
+// /search/jql does and unlike every other Agile endpoint.
+func TestDecodeAgilePage_ReadsTheIssuesKeyTheBoardEndpointsUse(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		body      string
+		wantItems int
+		wantTotal int
+		wantLast  bool
+	}{
+		{
+			name:      "the board's issues, counted and with no isLast",
+			body:      `{"expand":"schema,names","startAt":0,"maxResults":50,"total":2,"issues":[{"id":1},{"id":2}]}`,
+			wantItems: 2, wantTotal: 2,
+		},
+		{
+			name:      "the backlog, which answers the same shape",
+			body:      `{"expand":"schema,names","startAt":0,"maxResults":50,"total":1,"issues":[{"id":1}]}`,
+			wantItems: 1, wantTotal: 1,
+		},
+		{
+			name:      "an epic page, which names values and reports no total",
+			body:      `{"startAt":0,"maxResults":50,"isLast":true,"values":[{"id":1}]}`,
+			wantItems: 1, wantTotal: -1, wantLast: true,
+		},
+		{
+			name:      "an empty page of issues",
+			body:      `{"startAt":2,"maxResults":50,"total":2,"issues":[]}`,
+			wantItems: 0, wantTotal: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			items, total, last, err := decodeAgilePage[wireSprint](&response{status: http.StatusOK, body: []byte(tt.body)}, "GET /x")
+			if err != nil {
+				t.Fatalf("decoding %s: %v", tt.body, err)
+			}
+			if len(items) != tt.wantItems || total != tt.wantTotal || last != tt.wantLast {
+				t.Errorf("decoded %d items, total %d, isLast %t; want %d, %d, %t",
+					len(items), total, last, tt.wantItems, tt.wantTotal, tt.wantLast)
+			}
+		})
+	}
+}
+
+func TestOffsetPages_ExhaustsAnAgileEnvelopeMissingEitherKeyThatEndsAWalk(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		path      string
+		wantItems int
+		wantCount int
+	}{
+		{name: "board issues, which end the walk on a total and send no isLast", path: "/rest/agile/1.0/board/10/issue", wantItems: 3, wantCount: 3},
+		{name: "the backlog, the same shape again", path: "/rest/agile/1.0/board/10/backlog", wantItems: 3, wantCount: 3},
+		{name: "board epics, which end it on isLast and send no total", path: "/rest/agile/1.0/board/10/epic", wantItems: 2, wantCount: -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			s := jiratest.NewServer()
+			defer s.Close()
+
+			c, _ := testClient(t, s.URL())
+			first, err := offsetPages(t.Context(), c,
+				func(startAt int) request {
+					return request{method: http.MethodGet, path: tt.path, query: pagedQuery(nil, startAt, 50)}
+				},
+				func(resp *response) ([]wireIssue, int, bool, error) {
+					return decodeAgilePage[wireIssue](resp, http.MethodGet+" "+tt.path)
+				})
+			if err != nil {
+				t.Fatalf("reading the first page: %v", err)
+			}
+
+			if len(first.Items) != tt.wantItems {
+				t.Fatalf("decoded %d rows, want the %d in the fixture: %v", len(first.Items), tt.wantItems, keysOf(first.Items))
+			}
+			for i, issue := range first.Items {
+				if issue.Key == "" {
+					t.Errorf("row %d decoded with no key, so the array was read as the wrong shape", i)
+				}
+			}
+			count, counted := first.Count()
+			if counted != (tt.wantCount >= 0) {
+				t.Errorf("Count() reported %t, want %t", counted, tt.wantCount >= 0)
+			}
+			if counted && count != tt.wantCount {
+				t.Errorf("Count() = %d, want %d", count, tt.wantCount)
+			}
+			if first.HasMore() {
+				t.Error("the page reports more to fetch, and the fixture is the whole answer")
+			}
+
+			all, err := jira.Collect(t.Context(), first, 0)
+			if err != nil {
+				t.Fatalf("walking the pages: %v", err)
+			}
+			if len(all) != tt.wantItems {
+				t.Errorf("collected %d rows, want %d", len(all), tt.wantItems)
+			}
+			if served := len(s.Requests()); served != 1 {
+				t.Errorf("the site served %d requests, want the one page it takes", served)
+			}
+		})
+	}
+}
+
 func TestDecodeTokenPage_ReadsEitherItemsKeyAndHonoursIsLast(t *testing.T) {
 	t.Parallel()
 

@@ -111,12 +111,21 @@ func (e *TransportError) Unwrap() error { return e.Err }
 
 // NotFoundError reports a 404, which for Jira also covers "exists but you may
 // not see it" — the API deliberately does not distinguish the two.
+//
+// Detail is whatever the site said about it, in its own words and its own
+// language, and is empty when it said nothing. It is worth showing: a 404 is the
+// answer to both a wrong id and a missing permission, and the sentence is the
+// only thing that ever tells them apart.
 type NotFoundError struct {
-	Kind string
-	ID   string
+	Kind   string
+	ID     string
+	Detail string
 }
 
 func (e *NotFoundError) Error() string {
+	if e.Detail != "" {
+		return fmt.Sprintf("%s %s: %s", e.Kind, e.ID, e.Detail)
+	}
 	return fmt.Sprintf("%s %s does not exist, or you cannot see it", e.Kind, e.ID)
 }
 

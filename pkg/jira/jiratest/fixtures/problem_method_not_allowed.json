@@ -1,0 +1,7 @@
+{
+  "type": "about:blank",
+  "title": "Method Not Allowed",
+  "status": 405,
+  "detail": "Method 'POST' is not supported.",
+  "instance": "/rest/agile/1.0/board/10/configuration"
+}

@@ -1,0 +1,108 @@
+[
+  {
+    "id": "summary",
+    "key": "summary",
+    "name": "Kurztitel",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["summary"],
+    "schema": {
+      "type": "string",
+      "system": "summary"
+    }
+  },
+  {
+    "id": "duedate",
+    "key": "duedate",
+    "name": "Zieltag",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["due", "duedate"],
+    "schema": {
+      "type": "date",
+      "system": "duedate"
+    }
+  },
+  {
+    "id": "timeestimate",
+    "key": "timeestimate",
+    "name": "Restschätzung",
+    "custom": false,
+    "orderable": false,
+    "navigable": true,
+    "searchable": false,
+    "clauseNames": ["remainingEstimate", "timeestimate"],
+    "schema": {
+      "type": "number",
+      "system": "timeestimate"
+    }
+  },
+  {
+    "id": "aggregatetimeestimate",
+    "key": "aggregatetimeestimate",
+    "name": "Restschätzung",
+    "custom": false,
+    "orderable": false,
+    "navigable": true,
+    "searchable": false,
+    "clauseNames": [],
+    "schema": {
+      "type": "number",
+      "system": "aggregatetimeestimate"
+    }
+  },
+  {
+    "id": "customfield_10032",
+    "key": "customfield_10032",
+    "name": "Story-Punkte",
+    "untranslatedName": "Story Points",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10032]", "Story Points"],
+    "schema": {
+      "type": "number",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+      "customId": 10032
+    }
+  },
+  {
+    "id": "customfield_10071",
+    "key": "customfield_10071",
+    "name": "Freigabefenster",
+    "untranslatedName": "ReleaseWindows",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": ["cf[10071]", "ReleaseWindows"],
+    "schema": {
+      "type": "array",
+      "items": "Freigabefenster",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:release-windows",
+      "customId": 10071
+    }
+  },
+  {
+    "id": "customfield_10072",
+    "key": "customfield_10072",
+    "name": "Intake forms",
+    "untranslatedName": "Intake forms",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": [],
+    "schema": {
+      "type": "array",
+      "items": "Formulare",
+      "custom": "com.atlassian.jira.plugins.proforma-managed-fields:proforma-forms-field-cftype",
+      "customId": 10072
+    }
+  }
+]

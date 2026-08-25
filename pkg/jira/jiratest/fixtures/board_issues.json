@@ -1,0 +1,107 @@
+{
+  "expand": "schema,names",
+  "startAt": 0,
+  "maxResults": 50,
+  "total": 3,
+  "issues": [
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "10001",
+      "self": "https://example.atlassian.net/rest/agile/1.0/issue/10001",
+      "key": "EX-1",
+      "fields": {
+        "summary": "Retry a failed upload on a 502",
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/2/status/10001",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+          "name": "In Review",
+          "id": "10001",
+          "statusCategory": {
+            "self": "https://example.atlassian.net/rest/api/2/statuscategory/4",
+            "id": 4,
+            "key": "indeterminate",
+            "colorName": "yellow",
+            "name": "In Progress"
+          }
+        },
+        "issuetype": {
+          "self": "https://example.atlassian.net/rest/api/2/issuetype/10001",
+          "id": "10001",
+          "description": "A task that needs to be done.",
+          "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+          "name": "Task",
+          "subtask": false,
+          "hierarchyLevel": 0
+        },
+        "customfield_10032": 5.0
+      }
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "10002",
+      "self": "https://example.atlassian.net/rest/agile/1.0/issue/10002",
+      "key": "EX-2",
+      "fields": {
+        "summary": "Cache the field catalogue between runs",
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/2/status/10000",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+          "name": "Backlog",
+          "id": "10000",
+          "statusCategory": {
+            "self": "https://example.atlassian.net/rest/api/2/statuscategory/2",
+            "id": 2,
+            "key": "new",
+            "colorName": "blue-gray",
+            "name": "To Do"
+          }
+        },
+        "issuetype": {
+          "self": "https://example.atlassian.net/rest/api/2/issuetype/10001",
+          "id": "10001",
+          "description": "A task that needs to be done.",
+          "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+          "name": "Task",
+          "subtask": false,
+          "hierarchyLevel": 0
+        },
+        "customfield_10032": null
+      }
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "10003",
+      "self": "https://example.atlassian.net/rest/agile/1.0/issue/10003",
+      "key": "EX-3",
+      "fields": {
+        "summary": "Retire the legacy export job",
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/2/status/10002",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+          "name": "Released",
+          "id": "10002",
+          "statusCategory": {
+            "self": "https://example.atlassian.net/rest/api/2/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "green",
+            "name": "Done"
+          }
+        },
+        "issuetype": {
+          "self": "https://example.atlassian.net/rest/api/2/issuetype/10004",
+          "id": "10004",
+          "description": "A problem or error.",
+          "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10303?size=medium",
+          "name": "Bug",
+          "subtask": false,
+          "hierarchyLevel": 0
+        },
+        "customfield_10032": 2.0
+      }
+    }
+  ]
+}
