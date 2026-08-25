@@ -1,0 +1,29 @@
+My issues in PROJ                                                                                              no answer
+  KEY     SUMMARY                                                TYPE       STATUS        ASSIGNEE          UPDATED     
+  The search failed.
+  POST /rest/api/3/search/jql failed: dial tcp 127.0.0.1:62630: connect: connection refused
+  project = "PROJ" AND assignee = currentUser() ORDER BY updated DESC
+
+  r tries the search again.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

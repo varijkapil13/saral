@@ -723,6 +723,41 @@ func TestWithHTTPClient_SendsThroughTheCallersClientAndMapsItsTimeout(t *testing
 	}
 }
 
+// A status line is one line wide, and the sentence a site that is not listening
+// produces has to have said why by the end of it.
+func TestFailure_NamesTheReasonWithoutRepeatingTheURLTheOpAlreadyCarries(t *testing.T) {
+	t.Parallel()
+
+	const why = "dial tcp 127.0.0.1:62630: connect: connection refused"
+	doer := &stubDoer{err: &url.Error{
+		Op:  "Post",
+		URL: "http://127.0.0.1:62630/rest/api/3/search/jql?fields=summary%2Cstatus",
+		Err: errors.New(why),
+	}}
+	c, _ := testClient(t, "127.0.0.1:62630", WithHTTPClient(doer), WithRetry(RetryPolicy{Attempts: 1}))
+
+	_, err := c.do(t.Context(), request{method: http.MethodPost, path: "/rest/api/3/search/jql", repeatable: true})
+	if err == nil {
+		t.Fatal("a site that is not listening produced no error")
+	}
+	said := err.Error()
+
+	if !strings.Contains(said, why) {
+		t.Errorf("the sentence does not say why: %q", said)
+	}
+	if !strings.Contains(said, "POST /rest/api/3/search/jql") {
+		t.Errorf("the sentence no longer names the endpoint, which a bug report needs: %q", said)
+	}
+	if strings.Contains(said, "http://127.0.0.1:62630/rest") {
+		t.Errorf("the sentence repeats the URL the endpoint already names: %q", said)
+	}
+	// 100 columns is a narrow terminal, not a small one, and the reason has to
+	// have arrived by then.
+	if cut := 100; len(said) > cut || !strings.Contains(said[:min(len(said), cut)], "connection refused") {
+		t.Errorf("the reason is %d characters in, past where a status line ends: %q", strings.Index(said, why), said)
+	}
+}
+
 func TestDecode_LeavesTheTargetAloneWhenTheAnswerHasNoBody(t *testing.T) {
 	t.Parallel()
 

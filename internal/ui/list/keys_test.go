@@ -18,6 +18,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		state keyState
 	}{
 		{"browsing", keysBrowsing},
+		{"a filter kept on the rows", keysNarrowed},
 		{"filter open", keysFiltering},
 		{"picking the number key", keysPickingSlot},
 		{"confirming a number key that is taken", keysConfirmingSlot},
@@ -42,7 +43,8 @@ func TestLiveKeys_FollowWhatTheListIsDoing(t *testing.T) {
 		enter func()
 		state keyState
 	}{
-		{"browsing", func() { m.filtering, m.bind = false, bindNone }, keysBrowsing},
+		{"browsing", func() { m.filtering, m.bind, m.query = false, bindNone, "" }, keysBrowsing},
+		{"a filter kept on the rows", func() { m.query = "login" }, keysNarrowed},
 		{"filter open", func() { m.filtering = true }, keysFiltering},
 		{"picking a key", func() { m.filtering, m.bind = false, bindPick }, keysPickingSlot},
 		{"confirming a key", func() { m.bind = bindConfirm }, keysConfirmingSlot},
