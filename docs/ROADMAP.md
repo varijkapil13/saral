@@ -265,11 +265,34 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   [#81](https://github.com/varijkapil13/saral/issues/81).
 - [ ] **P3.3 — Mouse** · [#14](https://github.com/varijkapil13/saral/issues/14) · **owns** `internal/ui/widget/zone*.go` + zone wiring in own files
   Click, double-click, wheel-under-pointer, drag-to-resize, clickable chips and footer.
-- [ ] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/index.go` · **after P3.2**
-  Instant search over cached issues with no round trip; the thing that makes it feel faster than the web.
-  It reads through the cache P3.2 defines, so it follows P3.2 rather than running beside it: two
-  packets agreeing out of band on the kinds, the key format and the value codec is how the shape
-  comes out wrong.
+- [x] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/{index,match}.go`, their tests and benchmarks, `docs/{PERFORMANCE,ROADMAP}.md` · **after P3.2**
+  **This row used to promise "instant search over cached issues with no round trip".** Half of that
+  already shipped in P1.5: `internal/ui/list` filters as you type with no round trip and no
+  allocation — `refilter` reuses its slice over needles built once per page, and
+  `BenchmarkFilterKeystroke10k` guards it. What was missing is **ranking**, and **reach past the rows
+  on screen** — the second being the cache, which is why this followed P3.2 rather than running
+  beside it.
+  So this packet is two things. `internal/app/match.go` is the scorer: `app.Pattern`, a subsequence
+  match over **any string**, ranked whole candidate → prefix → word start → the initials of several
+  words → inside a word → scattered, ties going to the earlier match and then the shorter candidate.
+  It folds case without copying either side and allocates nothing, which is what let Batch 3 keep its
+  decision not to add `github.com/sahilm/fuzzy`: that API materialises a `[]string` of every target
+  and a `[]int` per hit, against a 16 ms keystroke budget.
+  `internal/app/index.go` is the corpus: `app.Index` over `IssueCorpus`, the two-method narrow
+  interface `app.Cache` already satisfies, rebuilt when `Generation()` moves and not otherwise. A
+  walk is a whole rebuild, because a counter says that something changed and not what — 795 µs and
+  one allocation at ten thousand issues, so the honest answer was to rebuild rather than invent a
+  delta the cache cannot express. `Hit` carries `HasSummary`, because PC.1's mask means a narrow read
+  stores an issue whose title nothing asked for, and `StoredAt`, so a caller badges age against
+  `Deps.Now` and the index needs no clock.
+  **The list's filter was deliberately left alone.** It is the budgeted keystroke path at 1 alloc/op
+  and another packet in this wave is in that directory; ranking it is
+  [#84](https://github.com/varijkapil13/saral/issues/84).
+  **Its consumer is P3.1** ([#12](https://github.com/varijkapil13/saral/issues/12)): the palette
+  ranks commands with `app.Pattern`, and the signature was published on #12 and #15 before this
+  packet was finished so it could be coded against. `app.Index` itself has no view yet —
+  [#85](https://github.com/varijkapil13/saral/issues/85) reaches it from the palette and
+  [#62](https://github.com/varijkapil13/saral/issues/62) from a key jump.
 - [x] **P3.5a — The contextual footer, the `?` overlay and the theme switch** · [#16](https://github.com/varijkapil13/saral/issues/16) · **owns** `internal/ui/kernel/{theme,chrome_test,theme_test}.go`, the chrome functions in `internal/ui/kernel/kernel.go`, the `KeyReporter` lines in `internal/ui/kernel/{view,registry}.go`, `internal/ui/kernel/testdata/**`, the `keys*.go` and `testdata/keys.golden` of `internal/ui/{list,issue,form,comment,onboarding}`, `internal/ui/livekeys_test.go`, `docs/{UX,ARCHITECTURE,ROADMAP}.md`
   Contextual footer showing only valid keys, `?` overlay from the key registry, light/dark/no-color
   themes switchable while the program runs.
