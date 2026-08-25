@@ -1,6 +1,6 @@
  saral | Commands                                                                          PROJ | example.atlassian.net 
 > what do you want to do?                                                                                               
------------------------------------------------------------------------------------------------------------- 22 commands
+------------------------------------------------------------------------------------------------------------ 25 commands
 > Follow the terminal's own colours             Appearance                                                              
   Turn colour off                               Appearance                                                              
   Use the dark theme                            Appearance                                                              
@@ -12,6 +12,9 @@
   Change this issue's status                    Issue                                                                  t
   Comment on this issue                         Issue                                                                  C
   Edit this issue                               Issue                                                                  e
+  Put the split back where the width chooses    Issue                                                                  =
+  Widen the description                         Issue                                                                  >
+  Widen the fields and the thread               Issue                                                                  <
   Clear the filter on these rows                Search                                                                  
   Edit this search                              Search                                                                 e
   Every issue in this project                   Search                                                                 a
@@ -23,8 +26,5 @@
   Show only rows with this row's status         Search                                                                  
   Show only rows with this row's type           Search                                                                  
   Unassigned issues                             Search                                                                  
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
                                                                                                                         
  Issues  enter run it  esc close                                                                                  ctrl+k

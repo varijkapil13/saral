@@ -20,6 +20,9 @@ t   change status    f/pgdn page down    g g       top                   esc   b
 C   comment          b/pgup page up      G         bottom                r     refresh
                      →/l    pan right    shift+tab previous pane         R     refetch everything
                      ←/h    pan left     z         expand or collapse
+                                         <         wider sidebar
+                                         >         wider description
+                                         =         reset the split
 
 issue.edit
 enter  change this field    ↓/j down    ←/h previous value    1-9   saved query           ctrl+k commands

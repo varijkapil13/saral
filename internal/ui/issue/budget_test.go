@@ -35,6 +35,44 @@ func TestSteadyFrame_CostsTheFrameAndTheThreadAndNothingElse(t *testing.T) {
 	}
 }
 
+// A drag is a stream of motion messages, so what it costs per message is the
+// thing to hold down. Three claims, in the order they matter:
+//
+// A frame drawn while the boundary is held costs what a frame at rest costs.
+// Holding one changes nothing about what is on screen, so nothing about drawing
+// it may change either.
+//
+// A motion that does not move the boundary — most of them, since a pointer
+// dragging a column wanders up and down it — costs no render. It is a keystroke
+// that moves no memo plus the two interface boxes a mouse message pays and a
+// keypress does not: the widget takes a tea.MouseMsg and the thread takes a
+// tea.Msg, and a message arrives here as neither.
+//
+// And a motion that does move it is a resize of two regions, which is what it
+// costs. There is no cheaper honest answer: both panes have a width they have
+// never been rendered at, and the lines are what a width means.
+func TestDrag_CostsAFrameWhileHeldAndAResizeWhileMoving(t *testing.T) {
+	t.Parallel()
+
+	rest := testing.Benchmark(BenchmarkIssueView).AllocsPerOp()
+	if held := testing.Benchmark(BenchmarkIssueDragFrame).AllocsPerOp(); held > rest {
+		t.Errorf("a frame with the boundary held allocates %d times against %d at rest", held, rest)
+	}
+
+	const boxes = 2
+	scrolling := testing.Benchmark(BenchmarkIssueScroll).AllocsPerOp()
+	if holding := testing.Benchmark(BenchmarkIssueDragHold).AllocsPerOp(); holding > scrolling+boxes {
+		t.Errorf("a motion that moves the boundary nowhere allocates %d times against %d for a keystroke "+
+			"that moves nothing, so something is being rendered per motion message", holding, scrolling)
+	}
+
+	resize := testing.Benchmark(BenchmarkIssueResize).AllocsPerOp()
+	if moving := testing.Benchmark(BenchmarkIssueDragMove).AllocsPerOp(); moving > resize {
+		t.Errorf("a motion that moves the boundary allocates %d times against %d for the resize it is",
+			moving, resize)
+	}
+}
+
 // A keystroke that only moves the description must not re-render anything: the
 // memo key has not moved, so a scroll costs a frame and the keypress itself.
 func TestScrolling_CostsNoMoreThanStandingStill(t *testing.T) {

@@ -21,9 +21,29 @@ type keyMap struct {
 	Pane     kernel.Binding
 	PrevPane kernel.Binding
 	Expands  kernel.Binding
+	Sidebar  kernel.Binding
+	Describe kernel.Binding
+	Reset    kernel.Binding
 	Edit     kernel.Binding
 	Move     kernel.Binding
 	Comments kernel.Binding
+}
+
+// The three strokes that move the boundary between the regions. Every letter
+// this pane has is spent on the document or on the issue, so punctuation is what
+// was left; < and > point the way the divider goes rather than naming a region,
+// which is the half that reads the same to a reader who came for the prose and
+// one who came for the fields.
+func sidebarBinding() kernel.Binding {
+	return kernel.Bind([]string{"<"}, "<", "wider sidebar")
+}
+
+func descriptionBinding() kernel.Binding {
+	return kernel.Bind([]string{">"}, ">", "wider description")
+}
+
+func resetBinding() kernel.Binding {
+	return kernel.Bind([]string{"="}, "=", "reset the split")
 }
 
 func defaultKeys() keyMap {
@@ -45,6 +65,9 @@ func defaultKeys() keyMap {
 		Pane:     kernel.Bind([]string{"tab"}, "tab", "next pane"),
 		PrevPane: kernel.Bind([]string{"shift+tab"}, "shift+tab", "previous pane"),
 		Expands:  kernel.Bind([]string{"z"}, "z", "expand or collapse"),
+		Sidebar:  sidebarBinding(),
+		Describe: descriptionBinding(),
+		Reset:    resetBinding(),
 		Edit:     editBinding(),
 		Move:     moveBinding(),
 		Comments: commentsBinding(),
@@ -71,6 +94,9 @@ const (
 	actPane
 	actPrevPane
 	actExpands
+	actSidebar
+	actDescribe
+	actReset
 	actEdit
 	actMove
 	actComments
@@ -108,6 +134,7 @@ var strokes = func() map[string]action {
 		{k.Go, actGo},
 		{k.Pane, actPane}, {k.PrevPane, actPrevPane},
 		{k.Expands, actExpands},
+		{k.Sidebar, actSidebar}, {k.Describe, actDescribe}, {k.Reset, actReset},
 		{k.Edit, actEdit}, {k.Move, actMove}, {k.Comments, actComments},
 	} {
 		for _, stroke := range pair.binding.Keys() {
@@ -125,7 +152,9 @@ var strokes = func() map[string]action {
 // only way to reach the fields and the thread at all, and above it the rails say
 // which region the keyboard is in. z is not: a description with no expand in it
 // has nothing for it to open, and the footer names what can be done rather than
-// every stroke the pane answers to.
+// every stroke the pane answers to. Nor are the three that move the divider:
+// below the breakpoint there is no divider on screen to move, and a row naming a
+// key that answers with a refusal is the failure principle 2 describes.
 func (k keyMap) keySet() kernel.KeySet {
 	return kernel.KeySet{
 		Acts: []kernel.Binding{
@@ -138,10 +167,13 @@ func (k keyMap) keySet() kernel.KeySet {
 		// columns shared with the globals, which take 47 of a 120-column screen,
 		// and the actions column another 21 — so a third motion column, or a
 		// description long enough to widen one of these two, pushes the globals
-		// off the right of it.
+		// off the right of it. The three splitting strokes go in the second
+		// column, whose key cell already holds shift+tab and whose widest
+		// sentence is still expand or collapse, so the row does not grow.
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp, k.Right, k.Left},
-			{k.HalfDown, k.HalfUp, k.Top, k.Bottom, k.PrevPane, k.Expands},
+			{k.HalfDown, k.HalfUp, k.Top, k.Bottom, k.PrevPane, k.Expands,
+				k.Sidebar, k.Describe, k.Reset},
 			{k.Pane, k.Edit, k.Move, k.Comments},
 		},
 	}

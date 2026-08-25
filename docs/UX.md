@@ -221,6 +221,32 @@ view rather than to the kernel, because what a pane is differs per view — and 
 action row rather than among the motions, because in the narrow mode it is the only way to reach two
 of the three regions at all.
 
+**And `<`, `>` and `=` move the boundary between them**, in the same view. The split used to be
+computed — a third of the pane, held between 35 and 45 cells — so a reader who wanted more prose, or a
+wider sidebar for a long custom field, had no way to ask. Now the boundary can be dragged and the
+three strokes move it four cells at a time, `=` gives it back to the width, and the choice is kept as
+a **share of the pane rather than a column count**, so it means the same thing in a window of another
+size. Two floors hold it: 53 cells of prose, below which the same paragraph loses about two words a
+line, and 34 for the sidebar, below which a label and its value stop fitting side by side. At 90
+columns those two meet, so there is exactly one legal split there and the gesture says so rather than
+pretending to move — as it does below 90, where the regions take the screen in turn and there is no
+boundary on it at all.
+
+The three strokes are on the `?` overlay and not on the footer's action row. The row names what can
+be done to the issue in front of you, the split is a property of the window rather than of the issue,
+and below the breakpoint the keys have nothing to move — a row naming them there would name keys that
+answer with a refusal, which is the failure principle 2 describes rather than a smaller version of it.
+
+**The ratio is kept per machine, not per profile.** It goes in `ui.toml` under the cache directory,
+beside where a comment draft goes and where the palette's own frecency table is to go, for the
+reasons that directory already holds them: a pane width belongs to the terminal it was chosen in and not to a Jira
+account, so two profiles on one machine want one answer and a `config.toml` handed to somebody else
+should not carry your proportions. It is also what onboarding would have eaten — setup rebuilds
+a profile from a zero value and drops everything it did not collect
+([#63](https://github.com/varijkapil13/saral/issues/63)), so a number kept there would go the next
+time anybody re-checked a token. That bug is neither fixed nor made worse here; the split is simply
+not in its way.
+
 The one thing this table still does not promise is jumping to an issue by key — typing `PROJ-142`, or
 pasting a Jira URL. That is not built; it is
 [#62](https://github.com/varijkapil13/saral/issues/62).
@@ -236,6 +262,7 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 | double-click a row | open it, same as `enter` — and only when both clicks are one gesture |
 | click a status, type or assignee cell | show only the rows with that value; click it again to show them all |
 | wheel | scroll the pane under the pointer, not the focused one |
+| drag the column between two panes | move the boundary; the panes follow the pointer and the ratio is kept |
 | click the line that names the search | show its JQL and offer to change it, the same as `e` |
 | click the footer's root cell | go back to that root, the same as `esc` from a pushed view |
 | click a footer action | do it — the view is handed the first stroke of the key that entry names |
@@ -264,13 +291,15 @@ the line under the rows too, `ctrl+g` clears it — the stroke `esc` already ans
 prompt is open, which is why it is not a new key to learn — and the palette carries *clear the filter
 on these rows*. The footer offers `ctrl+g` only while there is a filter to clear.
 
-Two gestures this table used to promise are not built, and are not being built here:
+**The divider is a column of blank, and it is deliberate that it stays blank.** The boundary between
+the issue pane's description and its sidebar is one column wide and carries no rule, because the
+sidebar's own gutter is the column next to it and two vertical lines side by side say less than one
+does. What tells a reader the boundary moves is `?`, the palette and the row in the table above, not
+a glyph.
+Everything a pointer can do to it, `<`, `>` and `=` do without one.
 
-- **Drag a divider to resize panes** — [#75](https://github.com/varijkapil13/saral/issues/75). The
-  issue detail pane has three regions now, but no divider to grab: its split is computed from the
-  width, clamped between 35 and 45 cells, rather than chosen. `widget.Drag` is the press-move-release
-  machine, tested and bound to nothing; whichever packet makes a split draggable binds it, along with
-  persisting the ratio.
+One gesture this table used to promise is not built, and is not being built here:
+
 - **Right-click for a context menu of the actions valid for a row** —
   [#76](https://github.com/varijkapil13/saral/issues/76). `kernel.Command` has no notion of what a
   command applies to, so "the actions valid for this row" has no data source, and the menu itself

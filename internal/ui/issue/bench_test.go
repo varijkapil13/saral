@@ -86,6 +86,21 @@ func settle(tb testing.TB, m *Model, cmd tea.Cmd) *Model {
 	return m
 }
 
+// benchDrag is the pane with its boundary held, which is the state a stream of
+// motion messages arrives in. The press is made on the widget directly, because
+// a benchmark has no zone manager for a hit test to resolve through.
+func benchDrag(tb testing.TB, w, h int) (m *Model, boundaryX int) {
+	tb.Helper()
+
+	m = benchPane(tb, w, h)
+	m.dragFrom, m.dragSide = m.split, sideWidth(m.width, m.split)
+	boundaryX = m.width - m.dragSide - divider
+	if !m.drag.Start(dividerZone, pressAt(boundaryX, headerHeight)) {
+		tb.Fatal("the press started no drag")
+	}
+	return m, boundaryX
+}
+
 func BenchmarkIssueView(b *testing.B) {
 	m := benchPane(b, 120, 40)
 	b.ReportAllocs()
@@ -126,6 +141,73 @@ func BenchmarkIssueScroll(b *testing.B) {
 			press = up
 		}
 		next, _ := m.Update(press)
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
+// BenchmarkIssueDragFrame is a frame drawn while the boundary is held. Holding
+// one is not a state the pane draws differently, so this is the frame at rest
+// with a gesture under way over it.
+func BenchmarkIssueDragFrame(b *testing.B) {
+	m, _ := benchDrag(b, 120, 40)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = m.View()
+	}
+}
+
+// BenchmarkIssueDragHold is the half of a drag that moves the pointer without
+// moving the boundary — up and down the column it grabbed. Most of the messages
+// a real gesture sends are these, and none of them may cost a render.
+func BenchmarkIssueDragHold(b *testing.B) {
+	m, x := benchDrag(b, 120, 40)
+	up, down := motionAt(x, headerHeight+1), motionAt(x, headerHeight+2)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		at := up
+		if i%2 == 1 {
+			at = down
+		}
+		next, _ := m.Update(at)
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
+// BenchmarkIssueDragMove is the other half: a motion that really does move the
+// boundary, which gives both panes a width they have not been rendered at. That
+// is a resize of two regions and costs what one costs, which is what
+// BenchmarkIssueResize is here to be compared against.
+func BenchmarkIssueDragMove(b *testing.B) {
+	m, x := benchDrag(b, 120, 40)
+	here, over := motionAt(x, headerHeight+1), motionAt(x-1, headerHeight+1)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		at := here
+		if i%2 == 1 {
+			at = over
+		}
+		next, _ := m.Update(at)
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
+func BenchmarkIssueResize(b *testing.B) {
+	m := benchPane(b, 120, 40)
+	wide, narrow := kernel.SizeMsg{Width: 120, Height: 40}, kernel.SizeMsg{Width: 118, Height: 40}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		to := wide
+		if i%2 == 1 {
+			to = narrow
+		}
+		next, _ := m.Update(to)
 		m, _ = next.(*Model)
 		_ = m.View()
 	}
