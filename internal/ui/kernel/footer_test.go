@@ -165,9 +165,9 @@ func TestFooter_AnActionThatLeftTheRowStopsAnsweringToWhereItWas(t *testing.T) {
 		t.Fatalf("s save still fits at %d columns, so this proves nothing:\n%s", MinWidth, row)
 	}
 
-	if now := m.deps.Zones.Get(prefix + actZone + "s"); !now.IsZero() {
-		t.Errorf("s save is off the row and still has bounds %+v", now)
-	}
+	// bubblezone purges the zones a frame no longer carries on its own
+	// goroutine, so the absence arrives after the frame does.
+	eventually(t, func() bool { return m.deps.Zones.Get(prefix + actZone + "s").IsZero() })
 
 	view.keys = nil
 	click := tea.MouseClickMsg{X: was.StartX, Y: was.StartY, Button: tea.MouseLeft}
