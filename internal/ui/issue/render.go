@@ -173,7 +173,7 @@ func (m *Model) View() string {
 			continue
 		}
 		buf = m.appendRegion(buf, regionDesc, row)
-		buf = append(buf, ' ')
+		buf = m.appendDivider(buf, row)
 		if at := row - m.lay.boxes[regionDetails].h; at >= 0 {
 			buf = m.appendRegion(buf, regionComments, at)
 			continue

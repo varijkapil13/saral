@@ -98,6 +98,25 @@ func (m *Model) appendRegion(buf []byte, r region, row int) []byte {
 	return buf
 }
 
+// appendDivider writes the column between the description and the sidebar, with
+// the zone marker at the top of it and again at the bottom so that the rectangle
+// bubblezone records is the whole boundary rather than one cell of it.
+//
+// The column itself stays blank. A rule drawn here would stand next to the
+// sidebar's own gutter, and two vertical lines in adjacent columns say less than
+// one — so what says the boundary can be moved is the ? overlay, the palette and
+// docs/UX.md's gesture table, not a glyph.
+func (m *Model) appendDivider(buf []byte, row int) []byte {
+	if row == 0 {
+		buf = append(buf, m.dividerMark...)
+	}
+	buf = append(buf, ' ')
+	if row == m.lay.paneH-1 {
+		buf = append(buf, m.dividerMark...)
+	}
+	return buf
+}
+
 // appendWindow writes the w cells of a line that start at pan, with the theme's
 // ellipsis where there is still more of it to the right. Cutting is done here and
 // never at build time, because the same rendered line is drawn at every pan.

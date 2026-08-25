@@ -17,16 +17,19 @@ import (
 // A command that reaches a view by its footer slot names the view; its key is
 // the gesture that slot is reached by.
 var keyOwners = map[string]string{
-	"comments.write":    comment.ViewID,
-	"comments.edit":     comment.ViewID,
-	"comments.delete":   comment.ViewID,
-	"issue.comments":    issue.ViewID,
-	"issue.edit":        issue.ViewID,
-	"issue.transition":  issue.ViewID,
-	"issues.save-query": list.ViewID,
-	"issues.edit-query": list.ViewID,
-	"issues.all":        list.ViewID,
-	"issues.open":       list.ViewID,
+	"comments.write":          comment.ViewID,
+	"comments.edit":           comment.ViewID,
+	"comments.delete":         comment.ViewID,
+	"issue.comments":          issue.ViewID,
+	"issue.edit":              issue.ViewID,
+	"issue.transition":        issue.ViewID,
+	"issue.split.sidebar":     issue.ViewID,
+	"issue.split.description": issue.ViewID,
+	"issue.split.reset":       issue.ViewID,
+	"issues.save-query":       list.ViewID,
+	"issues.edit-query":       list.ViewID,
+	"issues.all":              list.ViewID,
+	"issues.open":             list.ViewID,
 }
 
 func TestCommands_TeachTheKeyTheirViewActuallyShows(t *testing.T) {

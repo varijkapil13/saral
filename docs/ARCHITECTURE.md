@@ -506,8 +506,12 @@ view that minted the ids is the only thing that knows what they mean, so the hit
   click count and no timestamp, so a view cannot recognise one without a clock.
 - **`widget.Window`** — the slice of rendered lines a scrolled pane draws, with the one line that has
   to stay visible. It slices rather than copies, so a scrolled pane costs no allocation per frame.
-- **`widget.Drag`** — press, move, release, bound to nothing yet
-  ([#75](https://github.com/varijkapil13/saral/issues/75)).
+- **`widget.Drag`** — press, move, release. `internal/ui/issue` binds it to the boundary between its
+  description and its sidebar: the press decides what is being dragged and nothing after it can, so a
+  release outside the column still lands on that divider, and a resize, a key, a view switch or a
+  press elsewhere cancels a gesture rather than applying it. The column is marked as a zone the way
+  the regions are — the marker at the top of it and again at the bottom — so a one-column rectangle is
+  what a press resolves through.
 
 **Zone ids are never freed.** `Mark` fills a permanent id map in the manager, and nothing evicts from
 it. Every id in this tree is minted from a per-instance prefix and a stable name, so redrawing an
@@ -557,6 +561,32 @@ key  = 2                                 # the number key that runs it; omit for
 The queries are held by `app.SavedQueries` and validated by its rules rather than a second copy of
 them, so a file and a keypress cannot disagree about what a saved query is. The file refuses the two
 things a keyboard cannot express: two queries under one name, and two on one key.
+
+### What is not in the profile
+
+`config.UIState` is how a view remembers the way it was arranged, in `ui.toml` under the **cache**
+directory rather than beside `config.toml`:
+
+```toml
+# ~/.cache/saral/ui.toml
+[splits]
+issue = 433                              # the sidebar's share of the pane, out of config.SplitScale
+```
+
+Three reasons it is there and not in a `Profile`. A pane width belongs to the terminal it was chosen
+in and not to a Jira account, so two profiles on one machine want one answer and a `config.toml`
+copied to a laptop should not carry a desktop's proportions. `config.toml` is a file people hand-edit
+and hand to each other, which a number a drag rewrites several times a gesture is not. And onboarding
+rebuilds the profile it writes from a zero value and the four fields it collects, so anything else
+kept there is dropped the next time somebody re-runs setup to re-check a token
+([#63](https://github.com/varijkapil13/saral/issues/63)) — a bug this neither fixes nor feeds.
+
+A **share** rather than a column count, so the choice survives a window of another size. `SaveSplit`
+re-reads before it writes and holds a mutex over the pair, so one view's entry cannot lose another's;
+`LoadUIState` answers with nothing at all where it cannot read — a first run, an unwritable cache, a
+file edited into something TOML will not parse — because this is the program's own record of how a
+pane was left rather than anything a person wrote. Writing is a `tea.Cmd` like every other piece of
+IO, and a failure is reported once on the status line rather than undoing a split that already works.
 
 ## Decisions recorded separately
 

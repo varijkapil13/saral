@@ -18,11 +18,18 @@ const (
 	// rather than taking its turn in front of it.
 	wideAt = 90
 
-	// sideMin and sideMax bound the sidebar. Thirty-five is labelWidth plus a
-	// value somebody can read; past forty-five a column of short values is
-	// spending width the description wants.
+	// sideMin and sideMax bound the sidebar the width alone chooses. Thirty-five
+	// is labelWidth plus a value somebody can read; past forty-five a column of
+	// short values is spending width the description wants. A reader who asks for
+	// more than forty-five gets it: sideMax is where the arithmetic stops, not
+	// where the sidebar does.
 	sideMin = 35
 	sideMax = 45
+
+	// descMin is the description's floor, gutter included: fifty-three cells of
+	// prose. Below that the same paragraph loses about two words a line, which is
+	// what layout_test measures rather than assumes.
+	descMin = 54
 
 	// gutter is every region's leftmost column: the focus rail and the
 	// scrollbar in one, which costs a column instead of a title bar's whole row.
@@ -78,10 +85,23 @@ type layout struct {
 	boxes [regionCount]box
 }
 
-// sideWidth is the sidebar's width in the wide mode. It is a function of the
-// pane's width alone so that the fields can be rendered before the layout that
-// places them.
-func sideWidth(w int) int { return min(max(w/3, sideMin), sideMax) }
+// sideWidth is the sidebar's width in the wide mode: the share the reader chose
+// where there is one, and a third of the pane where there is not, held between
+// the two floors either way. It is a function of the pane's width and that share
+// alone, so that the fields can be rendered before the layout that places them.
+func sideWidth(w int, s split) int {
+	if s <= 0 {
+		return clampSide(w, min(max(w/3, sideMin), sideMax))
+	}
+	return clampSide(w, s.cells(w))
+}
+
+// clampSide keeps the sidebar wide enough for a label and a value, and the
+// description wide enough to read a paragraph in. At ninety columns the two
+// floors meet, so the split there has exactly one legal value.
+func clampSide(w, sideW int) int {
+	return min(max(sideW, sideMin), max(w-divider-descMin, sideMin))
+}
 
 // newLayout places the regions.
 //
@@ -93,7 +113,7 @@ func sideWidth(w int) int { return min(max(w/3, sideMin), sideMax) }
 // In the narrow mode every region gets the same full-width box even though only
 // the focused one is drawn. Sizing the thread to a box that appears and vanishes
 // with the focus would reflow its whole content on every tab.
-func newLayout(w, h, detailsNeed int, focus region) layout {
+func newLayout(w, h, detailsNeed int, focus region, s split) layout {
 	l := layout{wide: w >= wideAt, paneH: max(h-headerHeight, 0), focus: focus}
 	if !l.wide {
 		full := box{y: headerHeight, w: max(w, gutter+1), h: l.paneH}
@@ -102,7 +122,7 @@ func newLayout(w, h, detailsNeed int, focus region) layout {
 		}
 		return l
 	}
-	sideW := sideWidth(w)
+	sideW := sideWidth(w, s)
 	descW := max(w-sideW-divider, gutter+1)
 	floor := max(l.paneH/3, minThread)
 	detailsH := min(max(detailsNeed, 1), max(l.paneH-floor, 1))

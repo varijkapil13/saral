@@ -29,7 +29,7 @@ func TestLayout_TheBreakpointIsWhereTheSidebarStartsFitting(t *testing.T) {
 	} {
 		m := &Model{width: tc.w}
 		desc, side := m.contentWidths()
-		lay := newLayout(tc.w, 28, 4, regionDesc)
+		lay := newLayout(tc.w, 28, 4, regionDesc, 0)
 		switch {
 		case lay.wide != tc.wide:
 			t.Errorf("%d columns is wide=%v, want %v", tc.w, lay.wide, tc.wide)

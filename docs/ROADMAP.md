@@ -559,6 +559,38 @@ of headroom under the 15 MiB binary gate. So the display renderer is written her
   what a hue cannot. And because the renderer never wraps code, `h` and `l` pan: a realistic Go
   signature is 79 cells and the widest description box at 120 columns is 78, so a code block is cut at
   every width the sidebar leaves and something had to reach the rest of it.
+- [x] **R5 — Let the reader choose the split** · **owns** `internal/ui/issue/{layout,split}.go`,
+  `internal/ui/issue/**_test.go`, `internal/ui/issue/testdata/**`, `internal/config/**`, this row
+  R4's split was computed and could not be changed — `clamp(bodyW/3, 35, 45)` — so a reader who
+  wanted more prose, or a wider sidebar for one long custom field, had no way to ask.
+  **`widget.Drag` finally has something to drag.** P3.3 shipped the press-move-release machine bound
+  to nothing because no view had two panes; the column between the description and the sidebar is
+  marked as a zone and is now what it was waiting for. The press decides what is being held, so a
+  release outside the column still lands on the divider, and a resize, a key, a view switch or a
+  press elsewhere cancels the gesture rather than applying a delta measured against a pane that has
+  gone. That last one is not theoretical: the help overlay swallows every mouse message while it is
+  up, so a release really can go missing.
+  `<`, `>` and `=` are the keyboard route and three palette commands are the third, because a drag is
+  mouse-only and principle 3 asks for all three. They are on the `?` overlay and not the footer row:
+  the row names what can be done to the *issue*, and below 90 columns there is no boundary for them
+  to move — where they say so rather than doing nothing, as they do at 90 itself, where the two
+  floors meet and leave exactly one legal split.
+  **The floors are measured, not chosen**: 53 cells of prose, below which the same paragraph loses
+  about two words a line, and 34 for the sidebar, below which a label and its value stop fitting side
+  by side. `layout_test.go` measures both rather than trusting them.
+  **The ratio is per machine, in `ui.toml` under the cache directory, and deliberately not in the
+  profile.** A pane width belongs to the terminal it was chosen in rather than to a Jira account,
+  `config.toml` is a file people hand each other, and onboarding rebuilds a profile from a zero value
+  and drops what it did not collect ([#63](https://github.com/varijkapil13/saral/issues/63)) — so a
+  field added there would be lost the next time anybody re-checked a token. That bug is neither fixed
+  nor made worse; the split is simply not in its way, which `internal/config` asserts by running that
+  same overwrite over a profile and finding the split still there.
+  **A drag is a motion stream, so it was measured.** A frame drawn while the boundary is held costs
+  what a frame at rest costs — two allocations at 120×40, unchanged. A motion that moves the boundary
+  nowhere costs no render. A motion that does move it is a resize of two regions and costs slightly
+  less than one: 767 allocations against 807, because the panes have a width they have never been
+  rendered at and lines are what a width means. Closes
+  [#75](https://github.com/varijkapil13/saral/issues/75).
 
 ## Batch 4 — Attachments · parallel ×3
 

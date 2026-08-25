@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/comment"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/richtext"
@@ -63,6 +64,17 @@ type Model struct {
 	marks     [regionCount]string
 	pendingGo bool
 
+	// split is the share of the pane the sidebar takes, and the drag is the
+	// gesture that moves it. dragFrom and dragSide are what the press found, so
+	// that a resize, a key or a view switch can put the boundary back where it
+	// was rather than leaving it wherever the pointer had reached.
+	split       split
+	drag        widget.Drag
+	dragFrom    split
+	dragSide    int
+	dividerMark string
+	splitFailed bool
+
 	// open holds the expands the reader has opened, by the index the renderer
 	// gave them; folded counts the times that set has changed, because a memo
 	// keyed on a map would never see one.
@@ -91,13 +103,18 @@ type Model struct {
 //
 // The row is drawn immediately and the full issue replaces it when it arrives:
 // docs/UX.md asks for a first paint that never waits, and the list already has
-// the key, the summary and the status.
+// the key, the summary and the status. The split the reader last chose is read
+// here for the same reason: a constructor runs before the first frame and Init
+// does not.
 func New(d kernel.Deps, seed jira.Issue) kernel.View {
 	m := &Model{
 		deps:  d,
 		keys:  defaultKeys(),
 		issue: seed,
 		open:  map[int]bool{},
+	}
+	if share, chosen := config.LoadUIState().Split(ViewID); chosen {
+		m.split = split(share)
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
@@ -107,6 +124,7 @@ func New(d kernel.Deps, seed jira.Issue) kernel.View {
 	for r := range regionCount {
 		m.marks[r] = marker(m.zones, zoneNames[r])
 	}
+	m.dividerMark = marker(m.zones, dividerZone)
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
@@ -165,17 +183,33 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case comment.WriteMsg, comment.EditMsg, comment.DeleteMsg:
 		cmd = m.commentAction(msg)
 
+	case splitFailedMsg:
+		// Said once: the split works either way, and a warning on every stroke
+		// would bury whatever came before it.
+		m.splitFailed = true
+		cmd = kernel.Warn("this split is not being remembered: " + msg.err.Error())
+
 	case tea.KeyPressMsg:
+		// Any key ends a gesture the pointer is in the middle of, which is what
+		// keeps the boundary from following a pointer nobody is watching.
+		m.cancelDrag()
 		cmd = m.key(msg)
 
 	case tea.MouseClickMsg:
 		m.clicked(msg)
 
+	case tea.MouseMotionMsg:
+		m.dragDivider(msg)
+		cmd = m.tell(msg)
+
+	case tea.MouseReleaseMsg:
+		cmd = join(m.dropDivider(msg), m.tell(msg))
+
 	case tea.MouseWheelMsg:
 		cmd = m.wheel(msg)
 
 	default:
-		cmd = join(m.editMsg(msg), m.tell(msg))
+		cmd = join(m.splitMsg(msg), join(m.editMsg(msg), m.tell(msg)))
 	}
 	// The regions are laid out here rather than only in View so that a key
 	// pressed before the first frame moves the content that is already in hand,
@@ -223,8 +257,10 @@ func (m *Model) stop() {
 func (m *Model) focused(on bool) tea.Cmd {
 	if !on {
 		// A pushed view that loses focus has either been popped or been covered,
-		// and either way nobody is waiting for this issue.
+		// and either way nobody is waiting for this issue — or is still holding
+		// its divider.
 		m.stop()
+		m.cancelDrag()
 		return m.tell(kernel.FocusMsg{})
 	}
 	if m.pushed {
@@ -242,6 +278,9 @@ func (m *Model) resize(w, h int) {
 	if w == m.width && h == m.height {
 		return
 	}
+	// The boundary was grabbed at a width that has gone, so the delta measured
+	// from the press means nothing now.
+	m.cancelDrag()
 	m.width, m.height = w, h
 	if len(m.blank) < w {
 		m.blank = strings.Repeat(" ", w)
@@ -260,7 +299,7 @@ func (m *Model) build() {
 	}
 	descW, sideW := m.contentWidths()
 	m.refresh(regionDetails, sideW, m.detailContent)
-	m.lay = newLayout(m.width, m.height, len(m.panes[regionDetails].lines), m.focus)
+	m.lay = newLayout(m.width, m.height, len(m.panes[regionDetails].lines), m.focus, m.split)
 	m.refresh(regionDesc, descW, m.descLines)
 	m.buildHeader()
 	for r := range regionCount {
@@ -285,7 +324,7 @@ func (m *Model) contentWidths() (desc, side int) {
 		w := max(m.width-gutter, 1)
 		return w, w
 	}
-	side = sideWidth(m.width)
+	side = sideWidth(m.width, m.split)
 	return max(m.width-side-divider-gutter, 1), max(side-gutter, 1)
 }
 
@@ -353,6 +392,12 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.pan(m.focus, -1)
 	case actRight:
 		return m.pan(m.focus, 1)
+	case actSidebar:
+		return m.moveDivider(-splitStep)
+	case actDescribe:
+		return m.moveDivider(splitStep)
+	case actReset:
+		return m.resetSplit()
 	case actComments:
 		return m.openComments()
 	case actEdit, actMove:
@@ -444,6 +489,14 @@ func (m *Model) foldAt(msg tea.MouseMsg) bool {
 }
 
 func (m *Model) clicked(msg tea.MouseClickMsg) {
+	if m.grabDivider(msg) {
+		return
+	}
+	// A press anywhere else ends a gesture whose release never arrived. The help
+	// overlay swallows everything from the mouse while it is up, so a boundary
+	// grabbed before ? was pressed is still held after it, and the next release
+	// would otherwise apply a delta measured from a press two gestures ago.
+	m.cancelDrag()
 	r, ok := m.regionAt(msg)
 	if !ok {
 		return

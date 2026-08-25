@@ -523,11 +523,17 @@ func (c Config) Save(path string) error {
 	if err != nil {
 		return err
 	}
+	return writeAtomic(path, data)
+}
+
+// writeAtomic writes a file through a temporary one beside it, so an interrupted
+// write leaves what was there before rather than half of what replaces it.
+func writeAtomic(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return fmt.Errorf("creating %s: %w", dir, err)
 	}
-	tmp, err := os.CreateTemp(dir, ".config-*.toml")
+	tmp, err := os.CreateTemp(dir, ".saral-*.tmp")
 	if err != nil {
 		return fmt.Errorf("creating a temporary file in %s: %w", dir, err)
 	}
