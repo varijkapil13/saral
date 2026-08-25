@@ -1,0 +1,14 @@
+• first bullet
+  • nested bullet
+    • third level
+• second bullet with bold inside
+
+  │ shell
+  │ saral --help
+
+1. step one
+2. step two
+3. step three
+   1. substep
+
+7. a list that starts at seven

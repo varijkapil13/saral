@@ -1,0 +1,17 @@
+| i INFO
+| info panel
+
+| * NOTE
+| note panel
+
+| ! WARNING
+| warning panel
+
+| + SUCCESS
+| success panel
+
+| x ERROR
+| error panel with code in it
+
+| # PANEL
+| custom panel — note the colour comes back upper-cased

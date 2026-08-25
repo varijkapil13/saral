@@ -17,6 +17,7 @@ These are budgets, not aspirations: CI enforces the ones it can, and benchmarks 
 | Cache read for a view's first paint | < 5 ms | bbolt read benchmark |
 | Rank 10k cached issues against a keystroke | **< 16 ms**, 1 allocation | `BenchmarkIndexSearch10k`, asserted in `internal/app/index_budget_test.go` |
 | Rebuild the local index over 10k cached issues | < 16 ms | `BenchmarkIndexRebuild10k`, asserted beside it |
+| Render a description to styled lines | **≤ 8 allocations a line**, and linear in the lines | `BenchmarkRender`, asserted in `internal/ui/richtext/budget_test.go` |
 
 ## Where the time actually goes
 
@@ -82,6 +83,38 @@ rows, the prepared pattern, the ranking buffer — outlives the call or never le
 candidates it is run over. That is the property that made writing the scorer cheaper than taking
 `github.com/sahilm/fuzzy`, whose API materialises a `[]string` of every target and a `[]int` of
 matched offsets per hit.
+
+### What rendering a document costs today
+
+Measured on an M2 Pro over `internal/ui/richtext`, against the kitchen-sink description a real site
+stored: 40 blocks, 31 node types, 11 mark types, 117 lines at 80 columns.
+
+| Benchmark | ns/op | allocs/op |
+|---|---|---|
+| `BenchmarkRender/80` — a themed render, the width a pane usually has | 119,000 | 702 |
+| `BenchmarkRender/40` — the same document in a narrow pane, so more lines | 121,000 | 779 |
+| `BenchmarkRenderNoColor` — the same, in the no-colour theme | 109,000 | 525 |
+| `BenchmarkRenderLong` — five copies of it, the size a long description reaches | 352,000 | 2,179 |
+| `BenchmarkSummary` — a document flattened onto one 80-cell line | 2,000 | 6 |
+
+That is **six allocations a line**, and `internal/ui/richtext/budget_test.go` asserts a ceiling of
+eight per line with colour and six without, plus that the cost per line does not grow with the
+document. The floor is one a line: the lines are the answer the caller keeps.
+
+**A render is not a per-frame cost.** A pane memoizes it and re-renders on a resize or a change of
+data, which is what the ceiling is sized for. Three things were what made it worth measuring:
+
+- `strings.Builder.Reset` drops the buffer, so a builder reused for every line pays an allocation and
+  a regrow each time. A `[]byte` truncated to zero keeps its capacity.
+- Asking a `lipgloss.Style` to render a run costs a style walk per call, and for an underlined or
+  struck-through run lipgloss re-styles **every rune** — a thirteen-letter word comes back as
+  thirteen SGR pairs, with an escape sequence inside any grapheme cluster in it. The renderer asks a
+  style once what it puts around one rune and then puts that around the whole run, so a run is one
+  sequence and a joined emoji stays joined.
+- A closure per block is an allocation per block, and a document has a block for every paragraph.
+
+A summary stops at the width it was asked for rather than flattening 32,000 characters and cutting
+the result, which is what a list of twenty rows over long descriptions pays.
 
 ## Measuring for real
 

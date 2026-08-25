@@ -1,0 +1,10 @@
+Umlauts: Größe, Übermäßig, Weiß. CJK:
+日本語のテキスト、中文字符. Emoji: 🚀📊🐛. Combining: été.
+RTL: עברית.
+
+A wide-rune table cell is the thing that breaks a renderer
+that counts bytes.
+
+│ キー   │ Wert     │
+│────────│──────────│
+│ 日本語 │ Größe 🚀 │

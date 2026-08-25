@@ -474,6 +474,35 @@ feature. Each is one PR, small and tested, in the paths it names.
   so a board read decoded to no rows and reported no error. Three envelopes exist, one per shape, and
   there is now a fixture and a terminating walk for each.
 
+## Rendering wave · found by reading an issue against a site
+
+An issue's description came out as raw markdown — `##`, `**`, `[text](url)`, backticks, fences, pipe
+tables — because `internal/ui/issue` writes `adf.MarkdownWith` straight into its pager. That markdown
+is a serialisation for editing: it backs the `$EDITOR` handoff and P2.1's byte-stable round trip,
+`pkg/adf` is public API that must not import a UI library, and it deliberately does not escape prose.
+It was never a display format. Handing it to a markdown renderer would re-parse text that was never
+markdown and would arrive after the information a display needs is already gone — by then an error
+panel and a plain quote are the same node — and `chroma` alone is 5.11 MiB stripped against 4.57 MiB
+of headroom under the 15 MiB binary gate. So the display renderer is written here instead.
+
+- [x] **R1 — The display renderer** · **owns** `internal/ui/richtext/**` including its `testdata/**`,
+  `docs/PERFORMANCE.md`, this row
+  `internal/ui/richtext` walks an `adf.Doc` straight to styled terminal lines, importing only
+  `pkg/adf`, `charm.land/lipgloss/v2` and `x/ansi` — never the kernel, because the caller passes the
+  theme in as tokens, which is also what keeps the goldens a property of the document and lets the
+  issue and comment views share one renderer. It covers the 31 node types and 11 mark types a real
+  site stored, so a panel keeps its own marker and colour rather than becoming a quote, a status
+  lozenge keeps the colour enum it arrives with, an unknown node stays visibly unknown, and a media
+  node stays a placeholder with the id P4.3 will resolve.
+  **Styling happens after the break, never before.** `ansi.Wrap` does not re-open an SGR sequence on
+  a continuation line: a bold run wrapped at 20 columns opens bold on line 0, leaves lines 1 and 2
+  with no sequence at all and puts the reset on line 3, so a pane showing a window into the middle of
+  it draws the run unstyled and one starting at the reset opens with a stray reset. Every line is
+  built from independently painted spans and a test asserts that no line inherits or leaks a style.
+  Lines are not padded to `Width` — padding belongs to the pane — and `Widths` is reported so a pane
+  can clamp panning without measuring. Code is neither wrapped nor cut and a grid wraps inside its
+  columns, so the two constructs allowed past the width are the only ones that go past it.
+
 ## Batch 4 — Attachments · parallel ×3
 
 - [ ] **P4.1 — List and download** · [#17](https://github.com/varijkapil13/saral/issues/17) · **owns** `pkg/jira/cloud/attachment.go`

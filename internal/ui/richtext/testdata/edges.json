@@ -1,0 +1,193 @@
+{
+ "type": "doc",
+ "version": 1,
+ "content": [
+  {
+   "type": "heading",
+   "attrs": { "level": 3 },
+   "content": [{ "type": "text", "text": "Nodes a site keeps but never writes" }]
+  },
+  {
+   "type": "unsupportedBlock",
+   "attrs": {
+    "originalValue": {
+     "type": "futureBlock",
+     "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "held for the round trip" }] }]
+    }
+   }
+  },
+  {
+   "type": "futureBlock",
+   "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "a node type no schema published" }] }]
+  },
+  {
+   "type": "extension",
+   "attrs": { "extensionType": "com.example.app", "extensionKey": "roadmap-macro", "parameters": { "id": 7 } }
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    { "type": "text", "text": "inline: " },
+    { "type": "unsupportedInline", "attrs": { "originalValue": { "type": "futureInline" } } },
+    { "type": "text", "text": " and " },
+    { "type": "inlineExtension", "attrs": { "extensionKey": "chart", "extensionType": "com.example.app" } },
+    { "type": "text", "text": "." }
+   ]
+  },
+  {
+   "type": "heading",
+   "attrs": { "level": 3 },
+   "content": [{ "type": "text", "text": "Lozenges, in every colour the enum has" }]
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    { "type": "status", "attrs": { "text": "neutral", "color": "neutral" } },
+    { "type": "text", "text": " " },
+    { "type": "status", "attrs": { "text": "blue", "color": "blue" } },
+    { "type": "text", "text": " " },
+    { "type": "status", "attrs": { "text": "purple", "color": "purple" } },
+    { "type": "text", "text": " " },
+    { "type": "status", "attrs": { "text": "red", "color": "red" } },
+    { "type": "text", "text": " " },
+    { "type": "status", "attrs": { "text": "yellow", "color": "yellow" } },
+    { "type": "text", "text": " " },
+    { "type": "status", "attrs": { "text": "green", "color": "green" } },
+    { "type": "text", "text": " " },
+    { "type": "status", "attrs": { "text": "teal", "color": "teal" } },
+    { "type": "text", "text": " " },
+    { "type": "status", "attrs": { "color": "red" } }
+   ]
+  },
+  {
+   "type": "panel",
+   "attrs": { "panelType": "tip" },
+   "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "a tip is a success panel by another name" }] }]
+  },
+  {
+   "type": "panel",
+   "attrs": { "panelType": "somethingNew" },
+   "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "a panel kind this build has not met" }] }]
+  },
+  {
+   "type": "panel",
+   "attrs": { "panelType": "custom", "panelColor": "not-a-colour" },
+   "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "a colour that will not parse is no colour" }] }]
+  },
+  {
+   "type": "heading",
+   "attrs": { "level": 3 },
+   "content": [{ "type": "text", "text": "Things wider than the pane" }]
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    { "type": "text", "text": "See " },
+    {
+     "type": "text",
+     "marks": [{ "type": "link", "attrs": { "href": "https://example.atlassian.net/wiki/spaces/EX/pages/98304/the-runbook-for-a-basket-that-divides-by-zero" } }],
+     "text": "https://example.atlassian.net/wiki/spaces/EX/pages/98304/the-runbook-for-a-basket-that-divides-by-zero"
+    },
+    { "type": "text", "text": " first." }
+   ]
+  },
+  {
+   "type": "codeBlock",
+   "attrs": { "language": "sql" },
+   "content": [{ "type": "text", "text": "select key, summary, status from issue where project = 'EX' and status in ('open', 'in review') order by updated desc;\n\tindented with a tab" }]
+  },
+  {
+   "type": "table",
+   "content": [
+    {
+     "type": "tableRow",
+     "content": [
+      { "type": "tableHeader", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "one" }] }] },
+      { "type": "tableHeader", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "two" }] }] },
+      { "type": "tableHeader", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "three" }] }] },
+      { "type": "tableHeader", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "four" }] }] },
+      { "type": "tableHeader", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "five" }] }] },
+      { "type": "tableHeader", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "six" }] }] }
+     ]
+    },
+    {
+     "type": "tableRow",
+     "content": [
+      { "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "a sentence long enough to wrap inside its own column rather than be cut off" }] }] },
+      { "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "日本語のセルは二倍の幅" }] }] },
+      { "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "c" }] }] },
+      { "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "d" }] }] },
+      { "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "e" }] }] },
+      {
+       "type": "tableCell",
+       "content": [
+        {
+         "type": "nestedExpand",
+         "attrs": { "title": "in a cell" },
+         "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "a fold inside a grid" }] }]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "heading",
+   "attrs": { "level": 3 },
+   "content": [{ "type": "text", "text": "Media, folds and the half-written" }]
+  },
+  {
+   "type": "mediaGroup",
+   "content": [
+    { "type": "media", "attrs": { "id": "3f6b1c72-9d0e-4a55-b1b7-6c6b0a9f2e41", "type": "file", "collection": "attachments", "alt": "a screenshot" } },
+    { "type": "media", "attrs": { "id": "8a0c5d31-1b2e-4f77-9c3a-2d4e6f8a0b1c", "type": "file", "collection": "attachments" } }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "content": [
+    { "type": "text", "text": "inline media " },
+    { "type": "mediaInline", "attrs": { "id": "1c2b3a49-5d6e-4f80-9a1b-2c3d4e5f6071", "type": "file", "collection": "attachments" } },
+    { "type": "text", "text": ", a mention with nothing to show " },
+    { "type": "mention", "attrs": { "id": "5b10a2844c20165700ede21g" } },
+    { "type": "text", "text": ", an emoji with only a short name " },
+    { "type": "emoji", "attrs": { "shortName": ":sparkles:" } },
+    { "type": "text", "text": ", a date that will not parse " },
+    { "type": "date", "attrs": { "timestamp": "yesterday" } },
+    { "type": "text", "text": " and a placeholder " },
+    { "type": "placeholder", "attrs": { "text": "type something" } }
+   ]
+  },
+  {
+   "type": "expand",
+   "attrs": { "title": "a fold holding another fold" },
+   "content": [
+    { "type": "paragraph", "content": [{ "type": "text", "text": "the fold inside keeps its own number" }] },
+    {
+     "type": "nestedExpand",
+     "attrs": {},
+     "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "and has no title of its own" }] }]
+    }
+   ]
+  },
+  {
+   "type": "taskList",
+   "content": [
+    { "type": "taskItem", "attrs": { "state": "SOMETHING_ELSE" }, "content": [{ "type": "text", "text": "a state this build has not met is not done" }] },
+    { "type": "taskItem", "attrs": { "state": "done" }, "content": [{ "type": "text", "text": "the state is matched without regard to case" }] },
+    { "type": "taskItem", "attrs": { "state": "TODO" } }
+   ]
+  },
+  { "type": "paragraph" },
+  {
+   "type": "paragraph",
+   "content": [{ "type": "text", "text": "text carrying an escape \u001b[31m and a bell \u0007 must not repaint the screen" }]
+  },
+  {
+   "type": "paragraph",
+   "marks": [{ "type": "alignment", "attrs": { "align": "end" } }],
+   "content": [{ "type": "text", "text": "pushed to the right" }]
+  }
+ ]
+}

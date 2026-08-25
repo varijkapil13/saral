@@ -1,0 +1,14 @@
+▾ an expand — click to open
+  Expands may hold a table, but never another expand.
+
+  │ inside an expand │ yes │
+
+left column
+
+right column
+
+https://example.com/browse/ABC-1
+
+https://example.com/a-block-card
+
+https://example.com/an-embed
