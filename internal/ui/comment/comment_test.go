@@ -468,17 +468,47 @@ func TestThread_EveryRequestReportsWhatWentWrongInItsOwnWords(t *testing.T) {
 func TestThread_ReadingAThreadThatFailsSaysSoRatherThanShowingAnEmptyOne(t *testing.T) {
 	t.Parallel()
 
-	f := newFake(3)
-	comment(t, f, "PROJ-1", "unreachable")
-	f.FailNext(&jira.RateLimitError{RetryAfter: 12 * time.Second})
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "a refusal",
+			err:  &jira.CapabilityError{Reason: "you need Browse Projects to read this issue"},
+			want: "Browse Projects",
+		},
+		{
+			name: "a rate limit",
+			err:  &jira.RateLimitError{RetryAfter: 12 * time.Second},
+			want: "retry in 12s",
+		},
+		{
+			name: "a transport failure",
+			err:  &jira.TransportError{Op: "GET /comment", Err: errors.New("connection reset")},
+			want: "connection reset",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	dr := newDriver(t, testDeps(t, f), "PROJ-1", 100, 24)
+			f := newFake(3)
+			comment(t, f, "PROJ-1", "unreachable")
+			f.FailNext(tc.err)
 
-	if got := dr.lastStatus(); got.Level != kernel.LevelError || !strings.Contains(got.Text, "retry in 12s") {
-		t.Errorf("reading a rate-limited thread reported %+v", got)
-	}
-	if dr.m.loaded {
-		t.Error("a thread that never arrived is marked as loaded")
+			dr := newDriver(t, testDeps(t, f), "PROJ-1", 100, 24)
+
+			if got := dr.lastStatus(); got.Level != kernel.LevelError ||
+				!strings.Contains(got.Text, tc.want) {
+				t.Errorf("reading the thread reported %+v, want it to carry %q", got, tc.want)
+			}
+			if dr.m.loaded {
+				t.Error("a thread that never arrived is marked as loaded")
+			}
+			// The box still draws, and says it is still reading rather than
+			// claiming the issue has no comments.
+			mustContain(t, dr.view(), "reading the thread")
+		})
 	}
 }
 
@@ -628,10 +658,7 @@ func TestThread_RendersTheEditorAndTheConfirmation(t *testing.T) {
 func TestThread_DrawsNothingBeforeItHasBeenGivenASize(t *testing.T) {
 	t.Parallel()
 
-	view, ok := Thread(testDeps(t, newFake(3)), "PROJ-1").(*Model)
-	if !ok {
-		t.Fatal("Thread did not return a *Model")
-	}
+	view := Thread(testDeps(t, newFake(3)), "PROJ-1")
 	if got := view.View(); got != "" {
 		t.Errorf("a view with no size drew %q", got)
 	}

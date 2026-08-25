@@ -1,0 +1,23 @@
+PROJ-1 | 2 comments                                                                                  write  edit  delete
+------------------------------------------------------------------------------------------------------------------------
+  Sam Tester | 02 Mar 2026 09:00                                                                                        
+    What the log said                                                                                                   
+                                                                                                                        
+    The total is wrong past the rounding step, see the note (https://example.atlassian.net/wiki/x).                     
+                                                                                                                        
+    | go                                                                                                                
+    | func total(rows []Row) Money { return sum(rows).Round(2) } // the rounding that lies                              
+
+> Sam Tester | 02 Mar 2026 09:00                                                                                        
+    Fix is behind a flag until the migration lands.                                                                     
+
+
+
+
+
+
+
+
+
+A new comment on PROJ-1                                                            ctrl+s sends  esc keeps it as a draft
+Rounding is done in the adapter, not here.                                                                              

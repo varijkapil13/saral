@@ -513,6 +513,29 @@ of headroom under the 15 MiB binary gate. So the display renderer is written her
   Deliberately not `jira.FieldsNavigable`: a wildcard returns a value per field per issue with
   nothing to label any of them by, and it reports itself as a read of everything, which is how a
   narrow cached row starts looking wide. `Issue.Requested` still names exactly what was asked for.
+- [x] **R3 — One thread and one composer, in whatever box it is given** · **owns**
+  `internal/ui/comment/**` including its `testdata/**`, this row
+  The owner asked for comments beside the issue rather than over it, and for writing one not to take
+  the screen away from what it answers. Both are the same requirement: one `*comment.Model`, embedded
+  as a child by a sidebar and pushed whole-screen by the same instance, so there is one fetch, one
+  draft, one cursor and one composer with the text still in it. `Thread` therefore returns `*Model`
+  rather than `kernel.View`, and `Init` reads nothing until an issue is named, because a pane builds
+  the thread before it knows which issue it is showing.
+  **One layout, not two.** The thread is on top and the composer under it, at
+  `clamp(1+rows, 3, max(3, boxH/2))` — a ceiling of half the box, so a comment is never written on a
+  screen that hides what it is replying to, at any size. The composer spends one row on chrome and
+  not two (which comment, and the keys that finish it, on one line that degrades through terser
+  forms) so that `1+rows` is the draft's own rows rather than one short of them. `rows` comes from
+  the widget's `DynamicHeight`, because a textarea soft-wraps on words and dividing cells by the
+  width is a row out at every width but one.
+  Bodies are drawn through R1 instead of `adf.MarkdownWith`, which is what put `**` and `## ` on
+  screen, and the delete confirmation quotes its opening words through `richtext.Summary`.
+  **A line wider than the box is cut where it says so, and panned to.** R1 leaves code and grid rows
+  at their own width by design — wrapping code corrupts what a reader is about to copy — so at 34
+  columns most code blocks are wider than the pane. The pane marks the cut and binds `←/h` and `→/l`
+  to reach the rest; only the over-wide lines slide, because sliding the rest would take the author
+  and the date of the comment being read off the left edge. Truncating silently is the one answer
+  that was not available.
 
 ## Batch 4 — Attachments · parallel ×3
 

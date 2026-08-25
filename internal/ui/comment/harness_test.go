@@ -102,11 +102,7 @@ type driver struct {
 func newDriver(t *testing.T, d kernel.Deps, key string, w, h int) *driver {
 	t.Helper()
 
-	view, ok := Thread(d, key).(*Model)
-	if !ok {
-		t.Fatal("Thread did not return a *Model")
-	}
-	dr := &driver{t: t, m: view}
+	dr := &driver{t: t, m: Thread(d, key)}
 	dr.send(kernel.SizeMsg{Width: w, Height: h})
 	dr.run(dr.m.Init())
 	dr.send(kernel.FocusMsg{Focused: true})

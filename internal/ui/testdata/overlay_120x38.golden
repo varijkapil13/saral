@@ -3,7 +3,8 @@ a write a comment    ↓/j  down         ctrl+d half page down    1-9   saved qu
 e edit this one      ↑/k  up           ctrl+u half page up      g 1-9 switch view           ?      help
 d delete this one    pgdn page down    g g    oldest            esc   back                  q      quit
                      pgup page up      G      newest            r     refresh
-                                                                R     refetch everything
+                                       ←/h    pan left          R     refetch everything
+                                       →/l    pan right
 
 form
 enter use this issue type    ↓/j  down         1-9   saved query           ctrl+k commands
