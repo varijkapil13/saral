@@ -1,0 +1,6 @@
+{
+  "errorMessages": [],
+  "errors": {
+    "rapidViewId": "The board asked for cannot be opened: either there is no such board, or this account may not see it."
+  }
+}

@@ -55,6 +55,55 @@ func TestFields_ReadsTheCatalogueASiteSpecificIDIsResolvedThrough(t *testing.T) 
 	}
 }
 
+// The catalogue as a German site sends it. A profile is written once and used
+// against whatever site is configured, so the name in it is the English display
+// name — which is on neither the wire nor a translated screen.
+func TestFields_ResolveANameWrittenInEnglishAgainstALocalisedCatalogue(t *testing.T) {
+	t.Parallel()
+
+	s := jiratest.NewServer(jiratest.WithFixture(http.MethodGet, fieldPath, "field_localised.json"))
+	defer s.Close()
+
+	c, _ := testClient(t, s.URL())
+	got, err := c.Fields(t.Context())
+	if err != nil {
+		t.Fatalf("reading the catalogue: %v", err)
+	}
+
+	windows, err := jira.ResolveField(got, "Release Windows")
+	if err != nil {
+		t.Fatalf("resolving the English display name: %v; the catalogue reads %v", err, fieldNames(got))
+	}
+	if windows.ID != "customfield_10071" {
+		t.Errorf("Release Windows resolved to %q, want this site's own ID for it", windows.ID)
+	}
+	if windows.Name == "Release Windows" {
+		t.Error("the catalogue is not the localised one, so this proves nothing")
+	}
+
+	points, err := jira.ResolveField(got, "Story Points")
+	if err != nil {
+		t.Fatalf("resolving an untranslated name: %v", err)
+	}
+	if points.ID != "customfield_10032" {
+		t.Errorf("Story Points resolved to %q", points.ID)
+	}
+
+	// Two fields whose display names collapsed into one string under translation.
+	var shared *jira.FieldNameError
+	if _, err := jira.ResolveField(got, "Restschätzung"); !errors.As(err, &shared) || !shared.Ambiguous() {
+		t.Fatalf("resolving a name two fields share gave %v, want an ambiguous *jira.FieldNameError", err)
+	}
+
+	forms, err := jira.ResolveField(got, "Intake forms")
+	if err != nil {
+		t.Fatalf("resolving a field that sends no clause names: %v", err)
+	}
+	if len(forms.ClauseNames) != 0 {
+		t.Errorf("ClauseNames = %v, want none: this field cannot be named in JQL at all", forms.ClauseNames)
+	}
+}
+
 func TestFields_ReportsARefusalRateLimitAndTransportFailureAsThemselves(t *testing.T) {
 	t.Parallel()
 

@@ -95,12 +95,28 @@ func decodeTokenPage[W any](resp *response, op string) (items []W, next string, 
 // platform API never reports. Both total and isLast are pointers because an
 // endpoint may send neither, and a zero total means something different from a
 // missing one.
+//
+// There are three of these envelopes and no endpoint says which one it answers
+// in. /board/{id}/issue and /board/{id}/backlog name their array issues and send
+// no isLast; /board/{id}/version and /board/{id}/epic name theirs values and
+// send no total; the rest send all four keys. So every combination has to decode,
+// and the walk has to end on each of them.
 type agileEnvelope[W any] struct {
 	StartAt    int   `json:"startAt"`
 	MaxResults int   `json:"maxResults"`
 	Total      *int  `json:"total"`
 	IsLast     *bool `json:"isLast"`
+	Issues     []W   `json:"issues"`
 	Values     []W   `json:"values"`
+}
+
+// items is whichever array arrived. An endpoint sends one or the other and never
+// both, the same way the cursor-paginated endpoints do.
+func (e agileEnvelope[W]) items() []W {
+	if e.Issues != nil {
+		return e.Issues
+	}
+	return e.Values
 }
 
 // total is the count the endpoint reported, or a negative number when it
@@ -120,7 +136,7 @@ func decodeAgilePage[W any](resp *response, op string) (items []W, total int, is
 	if err := resp.decode(op, &envelope); err != nil {
 		return nil, -1, false, err
 	}
-	return envelope.Values, envelope.total(), envelope.last(), nil
+	return envelope.items(), envelope.total(), envelope.last(), nil
 }
 
 // pagedQuery copies a query and puts an offset on it, which is how every Agile

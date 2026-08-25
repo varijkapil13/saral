@@ -23,6 +23,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/varijkapil13/saral/pkg/jira"
 
@@ -450,7 +452,7 @@ func cause(err error) error {
 // apiError maps a response Jira refused. The status is the authority: a body
 // that will not parse costs the detail, never the classification.
 func (c *Client) apiError(r request, resp *response) error {
-	detail := parseErrorBody(resp.body)
+	detail := parseErrorBody(resp.status, resp.body)
 	kind, id := r.target()
 	switch resp.status {
 	case http.StatusBadRequest, http.StatusUnprocessableEntity:
@@ -462,7 +464,7 @@ func (c *Client) apiError(r request, resp *response) error {
 			Reason: detail.reasonOr("Jira refused " + r.op() + ": this token is not permitted to do it"),
 		}
 	case http.StatusNotFound, http.StatusGone:
-		return &jira.NotFoundError{Kind: kind, ID: id}
+		return &jira.NotFoundError{Kind: kind, ID: id, Detail: detail.reason()}
 	case http.StatusConflict:
 		return &jira.ConflictError{Resource: kind + " " + id, Detail: detail.reason()}
 	case http.StatusTooManyRequests:
@@ -479,9 +481,8 @@ func (c *Client) apiError(r request, resp *response) error {
 	}
 }
 
-// jiraError is the error envelope both APIs use: per-field messages under
-// errors, loose ones under errorMessages, and a bare message on the Agile
-// endpoints that answer in their own shape.
+// jiraError is what a refused response said, sorted into the messages to put in
+// front of somebody and the ones a form can attach to a widget.
 type jiraError struct {
 	fields   []jira.FieldError
 	messages []string
@@ -496,20 +497,68 @@ func (e jiraError) reasonOr(fallback string) string {
 	return fallback
 }
 
-func parseErrorBody(body []byte) jiraError {
+// parseErrorBody reads the three envelopes a Jira Cloud site refuses in.
+//
+// The platform API sends errorMessages and errors, the latter keyed by field.
+// The Agile API sends the same two keys but writes its sentence into errors
+// under the name of a URL parameter, leaving errorMessages empty. Anything that
+// never reaches a Jira handler at all — an unknown route, a method a route does
+// not take — answers RFC 7807 problem+json, where the sentence is detail and
+// title only spells out the status.
+//
+// Nothing here may read the text of a message: the messages are localised, so a
+// rule that depends on their wording holds on an English site only.
+func parseErrorBody(status int, body []byte) jiraError {
 	var envelope struct {
 		ErrorMessages []string        `json:"errorMessages"`
 		Errors        json.RawMessage `json:"errors"`
 		Message       string          `json:"message"`
+		Detail        string          `json:"detail"`
+		Title         string          `json:"title"`
 	}
 	if err := json.Unmarshal(body, &envelope); err != nil {
 		return jiraError{}
 	}
-	out := jiraError{messages: envelope.ErrorMessages, fields: parseFieldErrors(envelope.Errors)}
+	out := jiraError{messages: slices.Clone(envelope.ErrorMessages)}
 	if envelope.Message != "" {
 		out.messages = append(out.messages, envelope.Message)
 	}
+	if envelope.Detail != "" {
+		out.messages = append(out.messages, envelope.Detail)
+	}
+	if len(out.messages) == 0 && envelope.Title != "" {
+		out.messages = append(out.messages, envelope.Title)
+	}
+	for _, entry := range parseFieldErrors(envelope.Errors) {
+		if rejectsValues(status) && namesAField(entry.Field) {
+			out.fields = append(out.fields, entry)
+			continue
+		}
+		out.messages = append(out.messages, entry.Message)
+	}
 	return out
+}
+
+// rejectsValues reports whether this status is Jira saying the values in the
+// request are wrong, which is the only kind of refusal a field error can belong
+// to. On every other status an entry under errors is a reason.
+func rejectsValues(status int) bool {
+	return status == http.StatusBadRequest || status == http.StatusUnprocessableEntity
+}
+
+// namesAField reports whether a key under errors names something a form can
+// annotate. Jira spells a URL parameter in camel case ending in Id —
+// rapidViewId, boardId, sprintId — and no field in a site's catalogue is spelt
+// that way, while a display name ending in "Id" has a space before it. Anything
+// this turns down still reaches the user as a reason, which is the side to err on:
+// the other one puts a sentence on an input nobody can act on.
+func namesAField(key string) bool {
+	trimmed := strings.TrimSuffix(key, "OrKey")
+	if len(trimmed) < 3 || !strings.HasSuffix(trimmed, "Id") {
+		return key != ""
+	}
+	before, _ := utf8.DecodeLastRuneInString(strings.TrimSuffix(trimmed, "Id"))
+	return !unicode.IsLower(before) && !unicode.IsDigit(before)
 }
 
 // parseFieldErrors reads the errors object in the order Jira wrote it, which a

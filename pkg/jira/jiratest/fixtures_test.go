@@ -181,6 +181,8 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"board.json",
 		"board_config_estimation.json",
 		"board_config_no_estimation.json",
+		"board_epics.json",
+		"board_issues.json",
 		"bulkmove_submit.json",
 		"bulkmove_task_complete.json",
 		"bulkmove_task_enqueued.json",
@@ -192,12 +194,16 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"createmeta_issuetypes.json",
 		"createmeta_task.json",
 		"field.json",
+		"field_localised.json",
 		"issue_rich_adf.json",
 		"mypermissions_admin.json",
 		"mypermissions_basic.json",
 		"myself.json",
+		"not_found_board.json",
 		"plans_403.json",
 		"plans_ok.json",
+		"problem_method_not_allowed.json",
+		"problem_no_endpoint.json",
 		"rate_limited.json",
 		"search_page1.json",
 		"search_page2.json",
@@ -213,6 +219,193 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 	got := slices.Sorted(maps.Keys(srvJSONFixtures(t)))
 	if !slices.Equal(got, want) {
 		t.Errorf("fixture set drifted:\n got %v\nwant %v", got, want)
+	}
+}
+
+// Three paging envelopes, and no endpoint says which one it answers in.
+func TestFixtures_CoverAllThreeAgilePagingEnvelopes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		fixture  string
+		array    string
+		absent   []string
+		required []string
+	}{
+		{
+			name: "the board's issues and its backlog", fixture: "board_issues.json",
+			array: "issues", absent: []string{"isLast", "values"}, required: []string{"startAt", "maxResults", "total"},
+		},
+		{
+			name: "an epic page", fixture: "board_epics.json",
+			array: "values", absent: []string{"total", "issues"}, required: []string{"startAt", "maxResults", "isLast"},
+		},
+		{
+			name: "a sprint page, which sends all four", fixture: "sprint_page.json",
+			array: "values", absent: []string{"issues"}, required: []string{"startAt", "maxResults", "total", "isLast"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			body := srvDecode(t, srvFixture(t, tt.fixture))
+
+			rows, ok := body[tt.array].([]any)
+			if !ok {
+				t.Fatalf("%s does not name its array %q", tt.fixture, tt.array)
+			}
+			if len(rows) == 0 {
+				t.Errorf("%s has no rows, so nothing decodes it wrongly and passes", tt.fixture)
+			}
+			for _, key := range tt.required {
+				if _, ok := body[key]; !ok {
+					t.Errorf("%s sends no %s", tt.fixture, key)
+				}
+			}
+			for _, key := range tt.absent {
+				if _, ok := body[key]; ok {
+					t.Errorf("%s sends %s, and the endpoint it stands for does not", tt.fixture, key)
+				}
+			}
+		})
+	}
+}
+
+// The last page of a cursor walk says isLast and stops sending a token, so a
+// decoder that only reads one of the two still terminates.
+func TestFixtures_TheLastSearchPageSaysIsLastAndSendsNoToken(t *testing.T) {
+	t.Parallel()
+
+	last := srvDecode(t, srvFixture(t, "search_page2.json"))
+	if isLast, _ := last["isLast"].(bool); !isLast {
+		t.Errorf("search_page2.json isLast = %v, want true", last["isLast"])
+	}
+	if _, ok := last["nextPageToken"]; ok {
+		t.Error("the last page still carries a nextPageToken key, and a real one omits it entirely")
+	}
+
+	first := srvDecode(t, srvFixture(t, "search_page1.json"))
+	if token, _ := first["nextPageToken"].(string); token == "" {
+		t.Error("search_page1.json hands out no token, so the walk it stands for is one page long")
+	}
+}
+
+// The shapes a lookup by display name cannot resolve, all of which a real
+// catalogue carries.
+func TestFixtures_TheLocalisedCatalogueCarriesTheNamesThatDoNotResolve(t *testing.T) {
+	t.Parallel()
+
+	var fields []struct {
+		ID               string   `json:"id"`
+		Name             string   `json:"name"`
+		UntranslatedName string   `json:"untranslatedName"`
+		Custom           bool     `json:"custom"`
+		ClauseNames      []string `json:"clauseNames"`
+	}
+	if err := json.Unmarshal(srvFixture(t, "field_localised.json"), &fields); err != nil {
+		t.Fatalf("decoding field_localised.json: %v", err)
+	}
+
+	var compressed, unJQLable, translated int
+	names := make(map[string]int)
+	for _, f := range fields {
+		names[strings.ToLower(f.Name)]++
+		if f.ClauseNames != nil && len(f.ClauseNames) == 0 {
+			unJQLable++
+		}
+		if !f.Custom {
+			if f.UntranslatedName != "" {
+				t.Errorf("%s is a system field carrying an untranslatedName, which Jira sends on custom fields only", f.ID)
+			}
+			continue
+		}
+		if f.UntranslatedName == "" {
+			t.Errorf("%s is a custom field with no untranslatedName", f.ID)
+		}
+		if !strings.EqualFold(f.UntranslatedName, f.Name) {
+			translated++
+		}
+		if srvRunTogetherRe.MatchString(f.UntranslatedName) {
+			compressed++
+		}
+	}
+
+	if compressed == 0 {
+		t.Error("no field spells its untranslatedName as one run-together word, which is the case a lookup by display name misses: the English screen puts a space in it")
+	}
+	if unJQLable == 0 {
+		t.Error("no field sends an empty clauseNames, so nothing proves a field can be unaddressable in JQL")
+	}
+	if translated == 0 {
+		t.Error("no field's display name differs from its untranslated one, so this is not a localised catalogue")
+	}
+	var collisions int
+	for _, count := range names {
+		if count > 1 {
+			collisions++
+		}
+	}
+	if collisions == 0 {
+		t.Error("no two fields share a display name, which is what translation does to two of a site's statuses")
+	}
+}
+
+// srvRunTogetherRe is the compressed spelling untranslatedName uses: two words
+// with the separator taken out, which is never what a screen displays.
+var srvRunTogetherRe = regexp.MustCompile(`[a-z][A-Z]`)
+
+func TestFixtures_CarryBothEnvelopesASiteRefusesIn(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the Agile shape, whose sentence is under a URL parameter", func(t *testing.T) {
+		t.Parallel()
+		body := srvDecode(t, srvFixture(t, "not_found_board.json"))
+
+		if msgs, _ := body["errorMessages"].([]any); len(msgs) != 0 {
+			t.Errorf("errorMessages = %v, want the empty array the endpoint sends", msgs)
+		}
+		errs, ok := body["errors"].(map[string]any)
+		if !ok || len(errs) == 0 {
+			t.Fatalf("errors = %v, want the object holding the reason", body["errors"])
+		}
+		for key, value := range errs {
+			if !strings.HasSuffix(key, "Id") {
+				t.Errorf("errors is keyed by %q; the shape being pinned is a URL parameter name", key)
+			}
+			if sentence, _ := value.(string); len(sentence) < 20 {
+				t.Errorf("%q carries %q, which is not the sentence a user has to read", key, sentence)
+			}
+		}
+	})
+
+	for _, name := range []string{"problem_no_endpoint.json", "problem_method_not_allowed.json"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			body := srvDecode(t, srvFixture(t, name))
+
+			for _, key := range []string{"type", "title", "status", "detail", "instance"} {
+				if _, ok := body[key]; !ok {
+					t.Errorf("%s sends no %s", name, key)
+				}
+			}
+			for _, key := range []string{"errorMessages", "errors", "message"} {
+				if _, ok := body[key]; ok {
+					t.Errorf("%s carries %s, and a problem+json body does not", name, key)
+				}
+			}
+			if kind, _ := body["type"].(string); kind != "about:blank" {
+				t.Errorf("type = %q, want about:blank", kind)
+			}
+			status, _ := body["status"].(float64)
+			if title, _ := body["title"].(string); title != http.StatusText(int(status)) {
+				t.Errorf("title = %q, want the status %d spelt out", title, int(status))
+			}
+			if detail, _ := body["detail"].(string); detail == "" {
+				t.Errorf("%s carries no detail, which is the only part that says anything", name)
+			}
+		})
 	}
 }
 

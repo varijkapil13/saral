@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 	_ "time/tzdata"
@@ -938,7 +939,7 @@ func TestGraphicsMode_StringNamesEveryMode(t *testing.T) {
 	}
 }
 
-func TestFieldByName_IsCaseInsensitiveAndTakesTheFirstMatch(t *testing.T) {
+func TestFieldByName_IsCaseInsensitiveAndAnswersNothingForANameTwoFieldsShare(t *testing.T) {
 	t.Parallel()
 
 	catalogue := []jira.Field{
@@ -955,7 +956,7 @@ func TestFieldByName_IsCaseInsensitiveAndTakesTheFirstMatch(t *testing.T) {
 	}{
 		{name: "an exact name", lookup: "Summary", wantID: "summary", found: true},
 		{name: "a name in the wrong case", lookup: "sUmMaRy", wantID: "summary", found: true},
-		{name: "a name two fields share", lookup: "story points", wantID: "customfield_10016", found: true},
+		{name: "a name two fields share, which therefore names neither", lookup: "story points", found: false},
 		{name: "a name no field has", lookup: "Sprint", found: false},
 		{name: "no name at all", lookup: "", found: false},
 	}
@@ -1167,4 +1168,130 @@ func TestFieldByName_PrefersTheUntranslatedNameBecauseNameIsLocalised(t *testing
 func FieldByNameHelper(t *testing.T, fields []jira.Field, name string) (jira.Field, bool) {
 	t.Helper()
 	return jira.FieldByName(fields, name)
+}
+
+// A site spells one field's name three ways — the untranslated one, the display
+// name in English and the display name in the site's language — and puts only two
+// of them on the wire at a time. The untranslated one is not the English display
+// name, so a name copied off an English site has to be reachable from the pair a
+// German site sends.
+func TestResolveField_FindsAnEnglishDisplayNameOnASiteThatSendsNeither(t *testing.T) {
+	t.Parallel()
+
+	// A German read of a catalogue whose customfield_10071 is displayed as
+	// "Release Windows" on the English read of the same site.
+	fields := []jira.Field{
+		{ID: "summary", Name: "Kurztitel"},
+		{ID: "customfield_10032", Name: "Story-Punkte", UntranslatedName: "Story Points", Custom: true},
+		{ID: "customfield_10071", Name: "Freigabefenster", UntranslatedName: "ReleaseWindows", Custom: true},
+	}
+
+	tests := []struct {
+		name   string
+		lookup string
+		wantID string
+	}{
+		{name: "the untranslated name, which is what a portable profile writes", lookup: "Story Points", wantID: "customfield_10032"},
+		{name: "the name this site displays", lookup: "Freigabefenster", wantID: "customfield_10071"},
+		{name: "the name an English site displays", lookup: "Release Windows", wantID: "customfield_10071"},
+		{name: "the same, in the case somebody typed it in", lookup: "release windows", wantID: "customfield_10071"},
+		{name: "a system field, which sends no untranslated name at all", lookup: "Kurztitel", wantID: "summary"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := jira.ResolveField(fields, tt.lookup)
+			if err != nil {
+				t.Fatalf("ResolveField(%q): %v", tt.lookup, err)
+			}
+			if got.ID != tt.wantID {
+				t.Errorf("ResolveField(%q) = %q, want %q", tt.lookup, got.ID, tt.wantID)
+			}
+		})
+	}
+}
+
+func TestResolveField_SaysWhetherANameIsUnknownOrSharedByTwoFields(t *testing.T) {
+	t.Parallel()
+
+	// Two distinct fields whose display names have collapsed into one string,
+	// which is what translation does: two of a German site's statuses answer to
+	// one German word.
+	fields := []jira.Field{
+		{ID: "timeestimate", Name: "Restschätzung"},
+		{ID: "aggregatetimeestimate", Name: "Restschätzung"},
+		{ID: "customfield_10032", Name: "Story-Punkte", UntranslatedName: "Story Points", Custom: true},
+	}
+
+	tests := []struct {
+		name          string
+		lookup        string
+		wantAmbiguous bool
+		wantIDs       []string
+	}{
+		{
+			name: "a name two fields share", lookup: "Restschätzung",
+			wantAmbiguous: true, wantIDs: []string{"timeestimate", "aggregatetimeestimate"},
+		},
+		{
+			name: "the same name in another case", lookup: "restschätzung",
+			wantAmbiguous: true, wantIDs: []string{"timeestimate", "aggregatetimeestimate"},
+		},
+		{name: "a name nothing carries", lookup: "Sprint"},
+		{name: "no name at all", lookup: "  "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := jira.ResolveField(fields, tt.lookup)
+			if err == nil {
+				t.Fatalf("ResolveField(%q) = %q, want an error", tt.lookup, got.ID)
+			}
+			if got.ID != "" {
+				t.Errorf("ResolveField(%q) answered %q as well as failing", tt.lookup, got.ID)
+			}
+			var unresolved *jira.FieldNameError
+			if !errors.As(err, &unresolved) {
+				t.Fatalf("got %T (%v), want a *jira.FieldNameError", err, err)
+			}
+			if unresolved.Ambiguous() != tt.wantAmbiguous {
+				t.Errorf("Ambiguous() = %t, want %t: %v", unresolved.Ambiguous(), tt.wantAmbiguous, err)
+			}
+			ids := make([]string, 0, len(unresolved.Matches))
+			for _, f := range unresolved.Matches {
+				ids = append(ids, f.ID)
+			}
+			if !slices.Equal(ids, tt.wantIDs) {
+				t.Errorf("Matches = %v, want %v", ids, tt.wantIDs)
+			}
+			for _, id := range tt.wantIDs {
+				if !strings.Contains(err.Error(), id) {
+					t.Errorf("the message %q does not name the candidate %q", err, id)
+				}
+			}
+		})
+	}
+}
+
+// Ignoring separators is the last thing tried, so relaxing the comparison cannot
+// move a lookup that a name somebody can actually see already answered.
+func TestResolveField_TriesADisplayedNameBeforeOneReconstructedFromASeparator(t *testing.T) {
+	t.Parallel()
+
+	fields := []jira.Field{
+		{ID: "customfield_10080", Name: "Signoff tier", UntranslatedName: "Signoff-Tier", Custom: true},
+		{ID: "customfield_10081", Name: "SignoffTier", UntranslatedName: "Approval tier", Custom: true},
+	}
+
+	got, err := jira.ResolveField(fields, "signofftier")
+	if err != nil {
+		t.Fatalf("ResolveField: %v", err)
+	}
+	if got.ID != "customfield_10081" {
+		t.Errorf("ResolveField = %q, want the field that displays that name", got.ID)
+	}
 }

@@ -428,6 +428,30 @@ feature. Each is one PR, small and tested, in the paths it names.
   Adjacent, in the same path: a filter accepted with `enter` had the count reading `1 of 3` as its
   only trace and no way off it, since `esc` in a root view belongs to the kernel. It is named under
   the rows the way a clicked cell is, `ctrl+g` clears it, and the palette carries the same gesture.
+- [x] **F2 — What a real Jira answers, and what the fixtures invented** ·
+  [#98](https://github.com/varijkapil13/saral/issues/98),
+  [#99](https://github.com/varijkapil13/saral/issues/99),
+  [#100](https://github.com/varijkapil13/saral/issues/100),
+  [#101](https://github.com/varijkapil13/saral/issues/101) · **owns**
+  `pkg/jira/{types,errors}.go`, `pkg/jira/cloud/{client,paginate,field}.go`,
+  `pkg/jira/jiratest/{fixtures/**,server.go}` and the tests for all of those, `docs/ROADMAP.md`
+  A disposable Cloud site built to cover every shape this client claims to handle — three project
+  types, five boards, sprints in all three states, 15 custom field types and an en_US↔de_DE flip —
+  measured four things the fixtures had invented their way around. Every one of them got through
+  because the invented fixture was self-consistent, so the fixture shapes are corrected here as well.
+  A field name resolved through two spellings and a site sends three: `untranslatedName` is neither
+  the English display name nor the translated one, so a profile naming what an English screen shows
+  matched nothing on a German site. `jira.ResolveField` reaches the third spelling and says whether a
+  name is unknown or shared, because two distinct fields can answer to one string and returning
+  either is a value read from a field nobody named. `FieldByName` keeps its signature and refuses an
+  ambiguous name instead of taking the first.
+  The Agile API writes its sentence into `errors` under a **URL parameter** name, and routing-level
+  failures answer RFC 7807 instead of Jira's own envelope: `parseErrorBody` reads all three, a 404
+  now carries the site's own words, and nothing keyed like a parameter becomes a message on an input
+  the user cannot act on. No classification moved — the status stays the authority.
+  `/board/{id}/issue` and `/backlog` name their array `issues`, which the offset decoder did not read,
+  so a board read decoded to no rows and reported no error. Three envelopes exist, one per shape, and
+  there is now a fixture and a terminating walk for each.
 
 ## Batch 4 — Attachments · parallel ×3
 

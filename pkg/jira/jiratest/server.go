@@ -226,6 +226,12 @@ var srvDefaultRoutes = []srvRoute{
 	{http.MethodGet, "/rest/agile/1.0/board", srvFixtureHandler(http.StatusOK, "board.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/configuration", srvFixtureHandler(http.StatusOK, "board_config_estimation.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/sprint", srvFixtureHandler(http.StatusOK, "sprint_page.json")},
+	// Three Agile paging envelopes, one per shape: these two name their array
+	// issues and send no isLast, the epics send no total, and the sprints above
+	// send all four keys.
+	{http.MethodGet, "/rest/agile/1.0/board/{id}/issue", srvFixtureHandler(http.StatusOK, "board_issues.json")},
+	{http.MethodGet, "/rest/agile/1.0/board/{id}/backlog", srvFixtureHandler(http.StatusOK, "board_issues.json")},
+	{http.MethodGet, "/rest/agile/1.0/board/{id}/epic", srvFixtureHandler(http.StatusOK, "board_epics.json")},
 	// 403 is the normal answer — the Plans API needs Administer Jira — so it is
 	// the default. A test that wants the reachable case overrides the route:
 	//   WithFixture(http.MethodGet, "/rest/api/3/plans/plan", "plans_ok.json")
@@ -297,8 +303,11 @@ func srvCreateMeta(w http.ResponseWriter, r *http.Request) {
 	srvServeFixture(w, http.StatusOK, name)
 }
 
+// srvNotFound answers a path no route covers. A real site answers that in RFC
+// 7807 rather than in Jira's own error shape, because the request never reached a
+// Jira handler at all.
 func srvNotFound(w http.ResponseWriter, r *http.Request) {
-	srvWriteError(w, http.StatusNotFound, "No route matches "+r.Method+" "+r.URL.Path+" on this fixture server.")
+	srvWriteProblem(w, http.StatusNotFound, "No endpoint "+r.Method+" "+r.URL.Path+".", r.URL.Path)
 }
 
 func srvFixtureHandler(status int, fixture string) http.HandlerFunc {
@@ -340,6 +349,34 @@ func srvWriteError(w http.ResponseWriter, status int, message string) {
 		return
 	}
 	srvWriteJSON(w, status, body)
+}
+
+// srvProblemBody is RFC 7807, which is what answers a request that reached the
+// site and no handler. type is always about:blank and title is only the status
+// spelt out; detail is the only part that says anything.
+type srvProblemBody struct {
+	Type     string `json:"type"`
+	Title    string `json:"title"`
+	Status   int    `json:"status"`
+	Detail   string `json:"detail"`
+	Instance string `json:"instance"`
+}
+
+func srvWriteProblem(w http.ResponseWriter, status int, detail, instance string) {
+	body, err := json.Marshal(srvProblemBody{
+		Type:     "about:blank",
+		Title:    http.StatusText(status),
+		Status:   status,
+		Detail:   detail,
+		Instance: instance,
+	})
+	if err != nil {
+		http.Error(w, detail, status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(status)
+	_, _ = w.Write(body)
 }
 
 func srvWriteJSON(w http.ResponseWriter, status int, body []byte) {

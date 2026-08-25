@@ -92,6 +92,9 @@ func TestServer_ServesEveryDefaultRouteWithItsFixture(t *testing.T) {
 		{"boards", http.MethodGet, "/rest/agile/1.0/board?projectKeyOrId=EX", http.StatusOK, "board.json"},
 		{"board configuration", http.MethodGet, "/rest/agile/1.0/board/10/configuration", http.StatusOK, "board_config_estimation.json"},
 		{"board sprints", http.MethodGet, "/rest/agile/1.0/board/10/sprint", http.StatusOK, "sprint_page.json"},
+		{"board issues", http.MethodGet, "/rest/agile/1.0/board/10/issue", http.StatusOK, "board_issues.json"},
+		{"board backlog", http.MethodGet, "/rest/agile/1.0/board/10/backlog", http.StatusOK, "board_issues.json"},
+		{"board epics", http.MethodGet, "/rest/agile/1.0/board/10/epic", http.StatusOK, "board_epics.json"},
 		{"plans refused", http.MethodGet, "/rest/api/3/plans/plan", http.StatusForbidden, "plans_403.json"},
 		{"bulk move submitted", http.MethodPost, "/rest/api/3/bulk/issues/move", http.StatusCreated, "bulkmove_submit.json"},
 		{"generic task", http.MethodGet, "/rest/api/3/task/11072", http.StatusOK, "task_complete.json"},
@@ -159,23 +162,33 @@ func TestServer_RefusesAPageTokenItNeverIssued(t *testing.T) {
 	}
 }
 
-func TestServer_UnroutedPathAnswersAJiraShapedNotFound(t *testing.T) {
+// A request that reaches the site and no handler is answered in RFC 7807, not in
+// Jira's own error shape.
+func TestServer_UnroutedPathAnswersTheProblemJSONARealSiteAnswers(t *testing.T) {
 	t.Parallel()
 	s := srvNewServer(t)
 
-	got := srvDo(t, s, http.MethodGet, "/rest/api/3/there/is/no/such/thing", "")
+	const target = "/rest/api/3/there/is/no/such/thing"
+	got := srvDo(t, s, http.MethodGet, target, "")
 	if got.status != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", got.status)
 	}
-	if ct := got.header.Get("Content-Type"); ct != "application/json" {
-		t.Fatalf("Content-Type = %q, want application/json", ct)
+	if ct := got.header.Get("Content-Type"); ct != "application/problem+json" {
+		t.Fatalf("Content-Type = %q, want application/problem+json", ct)
 	}
 	body := srvDecode(t, got.body)
-	if msgs, _ := body["errorMessages"].([]any); len(msgs) == 0 {
-		t.Error("the 404 carries no errorMessages")
+	if _, ok := body["errorMessages"]; ok {
+		t.Error("the body carries errorMessages, which is the envelope a Jira handler answers in")
 	}
-	if _, ok := body["errors"]; !ok {
-		t.Error("the 404 has no errors object")
+	detail, _ := body["detail"].(string)
+	if !strings.Contains(detail, http.MethodGet) || !strings.Contains(detail, target) {
+		t.Errorf("detail = %q, want the method and path that reached no endpoint", detail)
+	}
+	if title, _ := body["title"].(string); title != http.StatusText(http.StatusNotFound) {
+		t.Errorf("title = %q, want the status spelt out", title)
+	}
+	if status, _ := body["status"].(float64); int(status) != http.StatusNotFound {
+		t.Errorf("status in the body = %v, want 404", status)
 	}
 }
 

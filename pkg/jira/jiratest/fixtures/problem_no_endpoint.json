@@ -1,0 +1,7 @@
+{
+  "type": "about:blank",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "No endpoint GET /rest/agile/1.0/board/10/swimlane.",
+  "instance": "/rest/agile/1.0/board/10/swimlane"
+}
