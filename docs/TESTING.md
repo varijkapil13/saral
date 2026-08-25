@@ -97,7 +97,7 @@ Bubble Tea's `teatest` drives full programs where an interaction sequence matter
 
 ## Import boundaries
 
-A test in `internal/arch` asserts the layering from `docs/ARCHITECTURE.md`. Five rules, one table
+A test in `internal/arch` asserts the layering from `docs/ARCHITECTURE.md`. Six rules, one table
 entry each:
 
 - `pkg/**` must not import `internal/**`
@@ -105,9 +105,7 @@ entry each:
 - only `cmd/**` and `internal/config` may construct a concrete adapter
 - `internal/app` must not import `internal/ui`
 - `pkg/adf` must not import `pkg/jira`
-
-The sixth rule the layer diagram implies — `internal/store` must not import `internal/ui` — waits for
-P3.2 to create the package; its case is already in the table, expecting nothing.
+- `internal/store` must not import `internal/ui`
 
 A second test reads the table itself, because a rule can be wrong in a way that only ever shows up as
 green: a duplicated name, a missing `why`, an exemption that no package the rule covers could match,

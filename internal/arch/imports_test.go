@@ -55,6 +55,12 @@ var importRules = []importRule{
 		forbid: "pkg/jira",
 		why:    "pkg/adf is an independent document library; the dependency runs the other way",
 	},
+	{
+		name:   "store-must-not-import-the-ui",
+		from:   "internal/store",
+		forbid: "internal/ui",
+		why:    "the cache is written to and read by the layers above it and never renders anything",
+	},
 }
 
 func underPath(p, prefix string) bool {
@@ -293,6 +299,12 @@ func TestBrokenRules_MatchTheOffendingPackagesAndNothingElse(t *testing.T) {
 			name:    "the store importing the ui",
 			pkgDir:  "internal/store",
 			imports: "internal/ui/kernel",
+			want:    []string{"store-must-not-import-the-ui"},
+		},
+		{
+			name:    "the store taking the port",
+			pkgDir:  "internal/store",
+			imports: "pkg/jira",
 			want:    nil,
 		},
 		{

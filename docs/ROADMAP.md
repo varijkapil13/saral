@@ -230,6 +230,10 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   consumer of PC.1's field-presence answer. **Adds the `internal/store` must-not-import-`internal/ui`
   rule to `internal/arch` in the same PR** — PC.4 adds its sibling and cannot add this one, because
   the package does not exist yet.
+  The dependency landed first and on its own, alongside the smallest `internal/store` that keeps it —
+  opening the file, closing it, naming buckets — and the import rule. CI runs `go mod tidy` before
+  anything else and that strips a `require` line nothing imports, so the package is what makes the
+  dependency real. The cache is what is left.
 - [ ] **P3.3 — Mouse** · [#14](https://github.com/varijkapil13/saral/issues/14) · **owns** `internal/ui/widget/zone*.go` + zone wiring in own files
   Click, double-click, wheel-under-pointer, drag-to-resize, clickable chips and footer.
 - [ ] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/index.go`
