@@ -37,10 +37,10 @@ Three constraints drive every decision below:
 Dependencies point **downward only**. `pkg/*` must never import `internal/*`; `internal/ui` must
 never import `pkg/jira/cloud` directly — it takes the port interface; only `cmd/*` and
 `internal/config` construct a concrete adapter; `internal/app` must never import `internal/ui`,
-because a use case is driven by a view and never reaches back up into one; and `pkg/adf` must never
-import `pkg/jira`, because the document library does not know about issues. All five are enforced in
-CI by an import-boundary test (see `docs/TESTING.md`). The sixth the diagram implies —
-`internal/store` must not import `internal/ui` — lands with the package, in P3.2.
+because a use case is driven by a view and never reaches back up into one; `pkg/adf` must never
+import `pkg/jira`, because the document library does not know about issues; and `internal/store` must
+never import `internal/ui`, because the cache is written to and read by the layers above it and never
+renders anything. All six are enforced in CI by an import-boundary test (see `docs/TESTING.md`).
 
 The "no IO libs" on `internal/app` is the one line above that no test can hold you to: the
 import-boundary test only sees imports within this module, so a `net/http` in a use case is invisible
