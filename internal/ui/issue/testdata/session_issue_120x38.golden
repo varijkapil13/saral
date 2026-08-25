@@ -1,38 +1,38 @@
- saral | PROJ-6                                                                            PROJ | example.atlassian.net 
-PROJ-6  Speed up session expiry                                                                                         
-Story | Triage | Urgent | Ada Lovelace | updated 02 Mar 2025 22:00                                                      
+ saral | PROJ-9                                                                            PROJ | example.atlassian.net 
+PROJ-9  Rework the mobile layout                                                                                        
+Story | Triage (to do) | Urgent | Ada Lovelace | updated 03 Mar 2025 04:00                                              
 ------------------------------------------------------------------------------------------------------------------------
-Speed up session expiry.                                                                                                
-                                                                                                                        
-- Filed against PROJ-6.                                                                                                 
-- Only happens for accounts created before the migration.                                                               
-                                                                                                                        
-Details                                                                                                                 
-  Reporter     Grace Hopper                                                                                             
-  Project      PROJ PROJ Project                                                                                        
-  Fix versions 1.0                                                                                                      
-  Due          2025-03-16                                                                                               
-  Created      02 Mar 2025 15:00                                                                                        
-                                                                                                                        
-Comments (1)                                                                                                            
-  Sam Tester | 02 Mar 2026 09:00                                                                                        
-    A comment worth a line or two, and a second sentence to wrap.                                                       
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
- Issues  e edit  t status  c comment                                                                               ? esc
+|Rework the mobile layout.                                                      |Details                                
+|                                                                               |  Project      PROJ PROJ Project       
+|- Filed against PROJ-9.                                                        |  Reporter     Grace Hopper            
+|- Small change, but it touches the shared client.                              |  Created      02 Mar 2025 18:00       
+|                                                                               |  Time         5h estimated, 2h30m r...
+|                                                                               |Fields                                 
+|                                                                               |  Rank         0|i00009:               
+|                                                                               |  5 more, all empty                    
+|                                                                               |PROJ-9 | 1 comment  write  edit  delete
+|                                                                               |---------------------------------------
+|                                                                               |> Sam Tester | 02 Mar 2026 09:00       
+|                                                                               |    A comment worth a line or two, and 
+|                                                                               |    a second sentence to wrap.         
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+|                                                                               |                                       
+ Issues  tab pane  e edit  t status  C comment                                                                     ? esc

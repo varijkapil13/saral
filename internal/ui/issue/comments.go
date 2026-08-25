@@ -7,20 +7,22 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
-// CommentsMsg asks whichever detail pane is open to put up the comment thread
-// for the issue it is showing. It is how the command palette reaches the same
-// gesture the key does rather than a second implementation of it: the palette
-// knows which command was run and never which issue is on screen.
+// CommentsMsg asks whichever detail pane is open to put the comment thread for
+// the issue it is showing on the whole screen. It is how the command palette
+// reaches the same gesture the key does rather than a second implementation of
+// it: the palette knows which command was run and never which issue is on
+// screen.
 type CommentsMsg struct{}
 
-// commentsBinding is the key the detail pane hangs the thread off. It lives here
-// with the rest of reaching the thread, and is named in the pane's keymap so the
-// footer and the help overlay advertise it.
+// commentsBinding is the key that gives the thread the whole screen. The sidebar
+// already shows it, so this is not "open the comments" — it is the size at which
+// one can be written, and the capital says it is the bigger version of what is
+// already there.
 //
 // "comment" and not "comments": one column longer drops the whole hint line in
 // an 80-column terminal, the smallest size docs/UX.md supports.
 func commentsBinding() kernel.Binding {
-	return kernel.Bind([]string{"c"}, "c", "comment")
+	return kernel.Bind([]string{"C"}, "C", "comment")
 }
 
 func init() {
@@ -33,12 +35,27 @@ func init() {
 	})
 }
 
-// openComments pushes the thread for the issue this pane is showing, so that esc
-// comes back to it. The read-only thread drawn inside the pane is a different
-// thing: that one is the first paint, this one can be written in.
+// openComments gives the thread the whole screen, pushing the very instance the
+// sidebar holds. Pushing a fresh one would read the thread again and land on the
+// first comment with an empty editor, so esc would not come back to where the
+// reader was; this way the kernel resizes the same model and popping restores
+// the box it had.
 func (m *Model) openComments() tea.Cmd {
-	if m.issue.Key == "" {
+	if m.issue.Key == "" || m.thread == nil || m.pushed {
 		return nil
 	}
-	return comment.Push(m.deps, m.issue.Key)
+	m.pushed = true
+	return kernel.Push(comment.ViewID, m.issue.Key, m.thread)
+}
+
+// commentAction answers the palette's write, edit and delete commands. They are
+// broadcasts, so they reach this pane whenever it is the one on top — and the
+// sidebar is no place for an editor, so the thread goes full screen first and is
+// handed the message there.
+func (m *Model) commentAction(msg tea.Msg) tea.Cmd {
+	if m.pushed || m.issue.Key == "" || m.thread == nil {
+		return nil
+	}
+	told := m.tell(msg)
+	return tea.Batch(told, m.openComments())
 }

@@ -14,11 +14,12 @@ enter use this issue type    ↓/j  down         1-9   saved query           ctr
                                                R     refetch everything
 
 issue
-e edit fields      ↓/j    down         d/ctrl+d half page down    1-9   saved query           ctrl+k commands
-t change status    ↑/k    up           u/ctrl+u half page up      g 1-9 switch view           ?      help
-c comment          f/pgdn page down    g g      top               esc   back                  q      quit
-                   b/pgup page up      G        bottom            r     refresh
-                                                                  R     refetch everything
+tab next pane        ↓/j    down         d/ctrl+d  half page down        1-9   saved query           ctrl+k commands
+e   edit fields      ↑/k    up           u/ctrl+u  half page up          g 1-9 switch view           ?      help
+t   change status    f/pgdn page down    g g       top                   esc   back                  q      quit
+C   comment          b/pgup page up      G         bottom                r     refresh
+                     →/l    pan right    shift+tab previous pane         R     refetch everything
+                     ←/h    pan left     z         expand or collapse
 
 issue.edit
 enter  change this field    ↓/j down    ←/h previous value    1-9   saved query           ctrl+k commands

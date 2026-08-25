@@ -3,7 +3,7 @@ comment
 form
  Issues  enter use this issue type                                                                          ? ctrl+k esc
 issue
- Issues  e edit  t status  c comment                                                                        ? ctrl+k esc
+ Issues  tab pane  e edit  t status  C comment                                                              ? ctrl+k esc
 issue.edit
  Issues  enter change  del empty  ctrl+s save  X discard                                                    ? ctrl+k esc
 issue.move

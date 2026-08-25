@@ -1,0 +1,28 @@
+ saral | PROJ-11                                             PROJ | example.atlassian.net 
+PROJ-11  Document the login flow                                                          
+Epic | Shipped (done) | Whenever | Alan Turing | updated 03 Mar 2025 08:00                
+------------------------------------------------------------------------------------------
+|Document the login flow.                              |Details                           
+|                                                      |  Project      PROJ PROJ Project  
+|- Filed against PROJ-11.                              |  Reporter     Ada Lovelace       
+|- Only happens for accounts created before the        |  Resolution   Won't do           
+|  migration.                                          |  Resolved     03 Mar 2025 08:00  
+|                                                      |  Created      02 Mar 2025 20:00  
+|                                                      |  Labels       flaky, frontend    
+|                                                      |Fields                            
+|                                                      |  Rank         0|i00011:          
+|                                                      |  5 more, all empty               
+|                                                      |PROJ-11 | 1 comment               
+|                                                      |----------------------------------
+|                                                      |> Sam Tester | 02 Mar 2026 09:00  
+|                                                      |    A comment worth a line or two,
+|                                                      |    and a second sentence to wrap.
+|                                                      |                                  
+|                                                      |                                  
+|                                                      |                                  
+|                                                      |                                  
+|                                                      |                                  
+|                                                      |                                  
+|                                                      |                                  
+|                                                      |                                  
+ Issues  tab pane  e edit  t status  C comment                                       ? esc

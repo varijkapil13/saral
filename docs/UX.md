@@ -75,7 +75,7 @@ at 80×20 the body is 17 rows with a status line up, and the issue list has as f
 | globals | `? ctrl+k esc`, or `q` at the bottom of the stack — bare keys, and never given up |
 
 ```
- Issues  e edit  t status  c comment  y copy  o open              ? ctrl+k esc
+ Issues  tab pane  e edit  t status  C comment                     ? ctrl+k esc
  Issues  enter open  c comment  e edit  t status  / filter  +3    ? ctrl+k q
 ```
 
@@ -114,6 +114,7 @@ A stack, not a graph — so "back" always means something.
 run a saved query      1 – 9          in a root view; the profile's own searches
 switch view            g then 1–9     from anywhere, including a pushed view
 push                   enter          open the thing under the cursor
+switch pane            tab            in a view with more than one; shift+tab goes back round
 pop                    esc            back, never quits from a pushed view
 quit                   q / ctrl+c     only from a root view, and only when nothing on the stack
                                       is holding a draft
@@ -204,16 +205,24 @@ enforced rather than merely written down — but it is written down so that six 
 each pick a number.
 
 A view that cannot be built without knowing what it is about is reached from the view that knows.
-The comment thread is the case: `c` on the issue detail pane pushes the thread for the issue on
-screen, so `esc` lands back on that issue, and the palette's *comment on this issue* is the same
-gesture reached without the key — it is a broadcast, because the palette knows which command was run
-and never which issue is on screen. Nothing offers to open the thread with no issue behind it. A
+The comment thread is the case: the issue detail pane draws it in its own sidebar and `C` hands the
+kernel **that same model** for the whole screen, so `esc` lands back on the issue with the thread on
+the comment it was left on and the draft still in it; the palette's *comment on this issue* is the
+same gesture reached without the key — it is a broadcast, because the palette knows which command was
+run and never which issue is on screen. Nothing offers to open the thread with no issue behind it. A
 pane that has to say "open an issue and come back" is a dead end when nothing can come back to it,
 and `kernel.Open` on such a view is how one gets built.
 
-Two things this table does not promise. There is no `tab`: no view has two panes yet, and the gesture
-that moves focus between them belongs to the first one that grows a second pane. And jumping to an
-issue by key — typing `PROJ-142`, or pasting a Jira URL — is not built; it is
+**`tab` moves the keyboard between panes**, in the one view that has more than one: the issue detail
+pane, whose description, fields and thread each take it in turn. At 90 columns and up all three are
+on screen and `tab` moves which one a motion is aimed at; below that there is room for one at a time
+and `tab` is what brings the next one up. `shift+tab` goes back round. The gesture belongs to the
+view rather than to the kernel, because what a pane is differs per view — and it is on the footer's
+action row rather than among the motions, because in the narrow mode it is the only way to reach two
+of the three regions at all.
+
+The one thing this table still does not promise is jumping to an issue by key — typing `PROJ-142`, or
+pasting a Jira URL. That is not built; it is
 [#62](https://github.com/varijkapil13/saral/issues/62).
 
 ## Mouse
@@ -257,10 +266,11 @@ on these rows*. The footer offers `ctrl+g` only while there is a filter to clear
 
 Two gestures this table used to promise are not built, and are not being built here:
 
-- **Drag a divider to resize panes** — [#75](https://github.com/varijkapil13/saral/issues/75). There
-  is no divider: no view has two panes, which is also why there is no `tab`. `widget.Drag` is the
-  press-move-release machine, tested and bound to nothing; P6.3 binds it to the first pane divider,
-  along with persisting the ratio.
+- **Drag a divider to resize panes** — [#75](https://github.com/varijkapil13/saral/issues/75). The
+  issue detail pane has three regions now, but no divider to grab: its split is computed from the
+  width, clamped between 35 and 45 cells, rather than chosen. `widget.Drag` is the press-move-release
+  machine, tested and bound to nothing; whichever packet makes a split draggable binds it, along with
+  persisting the ratio.
 - **Right-click for a context menu of the actions valid for a row** —
   [#76](https://github.com/varijkapil13/saral/issues/76). `kernel.Command` has no notion of what a
   command applies to, so "the actions valid for this row" has no data source, and the menu itself
@@ -294,6 +304,12 @@ the mouse — click, wheel, drag or release — reaches the view while the help 
   width-aware truncation helper everywhere; never `len()` on a display string.
 - **Resize is not a redraw hack.** Layout is computed from the current size on every `WindowSizeMsg`,
   and the minimum usable size is 80×20 with a legible message below that rather than a broken frame.
+- **A region says where it is in one column, not one row.** A pane with more than one region gives
+  each its leftmost column as a rail: the theme's accent where the region has the keyboard and its
+  muted token where it does not, with a scrollbar thumb at the proportional position and no thumb
+  when the content fits. It costs a column instead of a title bar's whole row, it says "there is more
+  below" for every region at once, and in `no-color` the thumb's position carries the meaning where
+  the hue cannot.
 - **Inline graphics are optional.** Kitty protocol, then iTerm2, then chafa half-blocks, then text.
   Detect once at startup and cache the answer.
 

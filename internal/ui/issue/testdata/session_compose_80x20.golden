@@ -14,7 +14,7 @@ PROJ-12 | 1 comment                                          write  edit  delete
                                                                                 
                                                                                 
                                                                                 
+A new comment on PROJ-12                   ctrl+s sends  esc keeps it as a draft
+Half of what I meant to say                                                     
                                                                                 
-                                                                                
-                                                                                
- Issues  a write  e edit  d delete                                         ? esc
+ Issues  ctrl+s send  esc put it aside

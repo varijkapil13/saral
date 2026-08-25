@@ -115,8 +115,8 @@ func (s *session) footer() string {
 
 func (s *session) title() string { return strings.SplitN(s.frame(), "\n", 2)[0] }
 
-// The gesture through the whole program: the thread opens over the issue, and
-// esc lands back on the issue rather than walking past it.
+// The gesture through the whole program: the thread takes the whole screen over
+// the issue, and esc lands back on the issue rather than walking past it.
 func TestSession_TheThreadOpensOverTheIssueAndEscComesBack(t *testing.T) {
 	t.Parallel()
 
@@ -124,37 +124,41 @@ func TestSession_TheThreadOpensOverTheIssueAndEscComesBack(t *testing.T) {
 	addComment(t, f, "PROJ-2", "The conversation you came for.")
 	s := boot(t, testDeps(f), seedOf(t, f, "PROJ-2"), 120, 30)
 	mustContain(t, s.title(), "PROJ-2")
+	// The sidebar already holds the thread, so the gesture is about the size it
+	// can be written at rather than about opening it at all.
+	mustContain(t, s.frame(), "The conversation you came for.")
 
-	s.press("c")
+	s.press("C")
 	mustContain(t, s.frame(), "The conversation you came for.")
 	mustContain(t, s.title(), "PROJ-2")
 	mustContain(t, s.footer(), "a write")
 
 	s.press("esc")
-	mustContain(t, s.frame(), "PROJ-2", "Comments (1)")
-	mustContain(t, s.footer(), "c comment")
+	mustContain(t, s.frame(), "PROJ-2", "The conversation you came for.")
+	mustContain(t, s.footer(), "C comment")
 	mustNotContain(t, s.footer(), "a write")
 
 	s.press("esc")
 	mustContain(t, s.frame(), "the rows this issue was opened from")
 }
 
-// docs/UX.md principle 2: the footer names c where it opens the thread, and does
-// not name it in the thread, where c is the thread's own key for writing one.
+// docs/UX.md principle 2: the footer names C where it gives the thread the whole
+// screen, and does not name it in the thread, where the keys are the thread's
+// own.
 func TestSession_TheFooterNamesTheKeyOnlyWhereItOpensTheThread(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(12)
 	addComment(t, f, "PROJ-3", "Something to read.")
 	s := boot(t, testDeps(f), seedOf(t, f, "PROJ-3"), 120, 30)
-	mustContain(t, s.footer(), "c comment")
+	mustContain(t, s.footer(), "C comment")
 
-	s.press("c")
+	s.press("C")
 	mustContain(t, s.footer(), "a write")
-	mustNotContain(t, s.footer(), "c comment")
+	mustNotContain(t, s.footer(), "C comment")
 
 	s.press("esc")
-	mustContain(t, s.footer(), "c comment")
+	mustContain(t, s.footer(), "C comment")
 }
 
 // The help overlay is the other half of the footer, and answers for the view it
@@ -165,33 +169,35 @@ func TestSession_TheHelpOverlayListsTheKeyForTheViewItIsCovering(t *testing.T) {
 	f := newFake(12)
 	s := boot(t, testDeps(f), seedOf(t, f, "PROJ-4"), 120, 30)
 
+	// The overlay pads the key column to its widest entry, so what is asserted
+	// here is the description only the overlay has room for.
 	s.press("?")
-	mustContain(t, s.frame(), "c comment")
+	mustContain(t, s.frame(), "edit fields", "change status", "next pane")
 
-	s.press("?", "c", "?")
-	mustContain(t, s.frame(), "a write a comment")
-	mustNotContain(t, s.frame(), "c comment")
+	s.press("?", "C", "?")
+	mustContain(t, s.frame(), "write a comment")
+	mustNotContain(t, s.frame(), "edit fields", "next pane")
 }
 
-// A comment written from the issue reaches the read-only thread the detail pane
-// draws, because coming back refetches what the pane is showing.
+// A comment written full screen is in the sidebar when you come back, because
+// the sidebar holds the very model that was written in.
 func TestSession_WhatIsWrittenInTheThreadIsThereWhenYouComeBack(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(12)
 	s := boot(t, testDeps(f), seedOf(t, f, "PROJ-5"), 120, 30)
-	mustContain(t, s.frame(), "Nobody has commented.")
+	mustContain(t, s.frame(), "Nobody has commented on PROJ-5")
 
-	s.press("c")
+	s.press("C")
 	s.press("a")
 	for _, r := range "Written without leaving the issue." {
 		s.send(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
 	s.press("ctrl+s")
 	s.press("esc")
-	s.press("r")
 
-	mustContain(t, s.frame(), "Comments (1)", "Written without leaving the issue.")
+	mustContain(t, s.frame(), "Written without leaving")
+	mustNotContain(t, s.frame(), "Nobody has commented")
 }
 
 // The row is one line shared by three cells, and the smallest terminal
@@ -204,24 +210,36 @@ func TestSession_TheSmallestTerminalStillTeachesThePanesKeys(t *testing.T) {
 	f := newFake(12)
 	s := boot(t, testDeps(f), seedOf(t, f, "PROJ-7"), kernel.MinWidth, kernel.MinHeight)
 
-	mustContain(t, s.footer(), "Issues", "e edit", "t status", "c comment", "? esc")
+	mustContain(t, s.footer(), "Issues", "tab pane", "e edit", "t status", "C comment", "? esc")
 	mustNotContain(t, s.footer(), "…")
 }
 
 func TestSession_Frames(t *testing.T) {
 	t.Parallel()
 
-	for _, size := range []struct{ w, h int }{{120, 38}, {100, 28}, {80, 20}} {
+	// An unsent comment lives on disk, keyed by the issue it is about, so each
+	// size composes on an issue of its own: four parallel subtests writing one
+	// draft file would each be typing into the last one's.
+	for _, size := range []struct {
+		w, h int
+		key  string
+	}{{120, 38, "PROJ-9"}, {100, 28, "PROJ-10"}, {90, 28, "PROJ-11"}, {80, 20, "PROJ-12"}} {
 		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
 			t.Parallel()
 
 			f := newFake(12)
-			addComment(t, f, "PROJ-6", "A comment worth a line or two, and a second sentence to wrap.")
-			s := boot(t, testDeps(f), seedOf(t, f, "PROJ-6"), size.w, size.h)
+			addComment(t, f, size.key, "A comment worth a line or two, and a second sentence to wrap.")
+			s := boot(t, testDeps(f), seedOf(t, f, size.key), size.w, size.h)
 			golden(t, fmt.Sprintf("session_issue_%dx%d.golden", size.w, size.h), s.frame())
 
-			s.press("c")
+			s.press("C")
 			golden(t, fmt.Sprintf("session_thread_%dx%d.golden", size.w, size.h), s.frame())
+
+			s.press("a")
+			for _, r := range "Half of what I meant to say" {
+				s.send(tea.KeyPressMsg{Code: r, Text: string(r)})
+			}
+			golden(t, fmt.Sprintf("session_compose_%dx%d.golden", size.w, size.h), s.frame())
 		})
 	}
 }

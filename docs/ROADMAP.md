@@ -536,6 +536,29 @@ of headroom under the 15 MiB binary gate. So the display renderer is written her
   to reach the rest; only the over-wide lines slide, because sliding the rest would take the author
   and the date of the comment being read off the left edge. Truncating silently is the one answer
   that was not available.
+- [x] **R4 — The two-pane issue view** · **owns** `internal/ui/issue/{issue,render,keys,cmds,register,comments,layout,sidebar,fields}.go`,
+  `internal/ui/issue/**_test.go`, `internal/ui/issue/testdata/**`, this row
+  The fields were at the bottom of a single scrolling column, under the description and above the
+  thread, so an issue screen answered *what is this about* and buried *what is it*. The pane is three
+  regions now: the description on the left, and the fields and the comment thread stacked in a sidebar
+  beside it at 90 columns and up. Below that there is room for one at a time and `tab` brings up the
+  next — the gesture P3.5a deleted from `docs/UX.md` because no view had two panes.
+  **The thread in the sidebar is the comment view itself**, sized with its own `SizeMsg` for its box,
+  and `C` hands the kernel that same model for the whole screen: the footer and `?` are then the
+  thread's own keys, and `esc` comes back to the issue with the thread still on the comment it was
+  left on and the draft still in it.
+  It draws what the screen was missing: every custom field the site defines, named from
+  `app.FieldLabels` because `customfield_13401` is not a name and the label is translated; `Resolved`,
+  which R2 fetched and nothing drew; the status category on the identity line, because "Building" says
+  nothing about whether that counts as started; and the parent, subtasks and links as `KEY status
+  summary` rather than the comma-joined bare keys they were, since an `IssueRef` already carries both.
+  A field the read never asked for says so rather than drawing blank, which is what PC.1's mask is for.
+  **The description goes through R1's renderer**, which is the report this wave started from.
+  **Every region's leftmost column is its gutter**: the focus rail and the scrollbar in one, so the
+  pane spends a column instead of three title bars, and in `no-color` the thumb's position carries
+  what a hue cannot. And because the renderer never wraps code, `h` and `l` pan: a realistic Go
+  signature is 79 cells and the widest description box at 120 columns is 78, so a code block is cut at
+  every width the sidebar leaves and something had to reach the rest of it.
 
 ## Batch 4 — Attachments · parallel ×3
 
