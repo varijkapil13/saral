@@ -1,6 +1,6 @@
  saral | Commands                                                                          PROJ | example.atlassian.net 
 > what do you want to do?                                                                                               
------------------------------------------------------------------------------------------------------------- 11 commands
+------------------------------------------------------------------------------------------------------------ 15 commands
 > Follow the terminal's own colours             Appearance                                                              
   Turn colour off                               Appearance                                                              
   Use the dark theme                            Appearance                                                              
@@ -11,11 +11,11 @@
   Issues I reported                             Search                                                                  
   My issues                                     Search                                                                  
   Save this query to a number key               Search                                                                 s
+  Show every row again                          Search                                                                  
+  Show only rows with this row's assignee       Search                                                                  
+  Show only rows with this row's status         Search                                                                  
+  Show only rows with this row's type           Search                                                                  
   Unassigned issues                             Search                                                                  
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         
