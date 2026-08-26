@@ -137,6 +137,14 @@ func guardsInTheDocument(t *testing.T, root string) []guard {
 	return out
 }
 
+// skipWalk keeps the walk inside this checkout. A dot-directory is where a
+// nested worktree lives, and every guard in it is a second copy of one already
+// counted — internal/arch's walker skips the same shapes for the same reason.
+func skipWalk(name string) bool {
+	return name == "testdata" || name == "vendor" ||
+		strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
+}
+
 func guardsInTheTree(t *testing.T, root string) []guard {
 	t.Helper()
 
@@ -145,7 +153,7 @@ func guardsInTheTree(t *testing.T, root string) []guard {
 		switch {
 		case err != nil:
 			return err
-		case d.IsDir() && (d.Name() == ".git" || d.Name() == "testdata"):
+		case d.IsDir() && skipWalk(d.Name()):
 			return fs.SkipDir
 		case d.IsDir() || !strings.HasSuffix(d.Name(), "_test.go"):
 			return nil
