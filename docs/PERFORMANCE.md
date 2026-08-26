@@ -97,7 +97,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameUnderAFilterThatHasBeenAccepted` |
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameUnderTermsInForce` |
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameWithTheMouseOn` |
-| `internal/ui/list` | `TestBudget_WalkingIntoFreshRowsCostsTheFrameAndNothingElse` |
+| `internal/ui/list` | `TestBudget_WalkingIntoFreshRowsCostsLittleMoreThanTheFrame` |
 | `internal/ui/richtext` | `TestBudget_Render` |
 | `internal/ui/richtext` | `TestBudget_ScalesWithTheDocument` |
 | `internal/ui/richtext` | `TestBudget_Summary` |

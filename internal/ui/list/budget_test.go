@@ -71,10 +71,16 @@ func TestBudget_ScrollingCostsTheSameUnderAFilterThatHasBeenAccepted(t *testing.
 
 // Walking a fresh row into view on every frame misses the memo by construction,
 // so this is the one that says the miss itself is cheap: a row is built into a
-// buffer the view reuses, and the frame string is what is left.
-func TestBudget_WalkingIntoFreshRowsCostsTheFrameAndNothingElse(t *testing.T) {
-	if got := testing.Benchmark(BenchmarkListWalk10k).AllocsPerOp(); got > 1 {
-		t.Errorf("a frame that renders a row it has never rendered allocates %d times, want the frame string alone", got)
+// buffer the view reuses, and the frame string is most of what is left.
+//
+// Two rather than one because this is the only budget here whose count differs
+// by architecture — arm64 measures 1 and amd64 measures 2, every run of each. A
+// ceiling that holds on both is worth more than one that is exact on the machine
+// it was written on and red on the machine CI has.
+func TestBudget_WalkingIntoFreshRowsCostsLittleMoreThanTheFrame(t *testing.T) {
+	if got := testing.Benchmark(BenchmarkListWalk10k).AllocsPerOp(); got > 2 {
+		t.Errorf("a frame that renders a row it has never rendered allocates %d times, "+
+			"want the frame string and at most one more", got)
 	}
 }
 
