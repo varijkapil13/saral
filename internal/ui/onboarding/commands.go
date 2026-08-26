@@ -10,6 +10,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/config"
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -111,9 +112,9 @@ func (m *Model) configLoaded(msg configLoadedMsg) tea.Cmd {
 	return nil
 }
 
-// stop cancels whatever is in the air, which is what closing or looking away
-// from this view has to do: a verification the user has walked away from must
-// not still be running.
+// stop cancels whatever is in the air. It is what starting the next question
+// does, and not what losing the keyboard does: a palette opened over a token
+// being checked must not cancel the check.
 func (m *Model) stop() {
 	if m.cancel != nil {
 		m.cancel()
@@ -137,10 +138,12 @@ func (m *Model) start(kind busy, run func(context.Context, int) tea.Msg) tea.Cmd
 	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
 	m.cancel, m.busy, m.last = cancel, kind, kind
 	m.problem, m.note = "", ""
-	return tea.Batch(m.spin.Tick, func() tea.Msg {
+	// The spinner's tick is left where it is: it belongs to whoever is on screen.
+	// The call itself is this view's own answer and is addressed to it.
+	return tea.Batch(m.spin.Tick, kernel.Reply(func() tea.Msg {
 		defer cancel()
 		return run(ctx, seq)
-	})
+	}, m.addr))
 }
 
 func (m *Model) verify() tea.Cmd {
@@ -217,14 +220,14 @@ func (m *Model) suggest() tea.Cmd {
 	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
 	m.cancelBg = cancel
 	m.looking, m.suggested, m.lookup = true, nil, ""
-	return func() tea.Msg {
+	return kernel.Reply(func() tea.Msg {
 		defer cancel()
 		keys, err := recentProjects(ctx, search)
 		if err != nil {
 			return projectsUnknownMsg{seq: seq, err: err}
 		}
 		return projectsFoundMsg{seq: seq, keys: keys}
-	}
+	}, m.addr)
 }
 
 // suggestionLimit is how many issues the picker reads to find project keys. It

@@ -15,6 +15,7 @@ import (
 var (
 	_ kernel.View        = (*moveModel)(nil)
 	_ kernel.KeyCapturer = (*moveModel)(nil)
+	_ kernel.Addressed   = (*moveModel)(nil)
 )
 
 type moveStage uint8
@@ -65,7 +66,12 @@ type moveModel struct {
 
 	gen    int
 	cancel context.CancelFunc
+	addr   kernel.Addr
 }
+
+// Addr is where the kernel delivers the transitions this picker asked for and
+// the move it is applying, whatever has since been pushed over it.
+func (m *moveModel) Addr() kernel.Addr { return m.addr }
 
 // moveField is one required field of a transition screen. A screen field with
 // no allowed values is one this pane cannot fill: there is nothing to choose
@@ -94,7 +100,7 @@ func (f *moveField) name() string {
 
 // NewMove builds the transition picker for one issue.
 func NewMove(d kernel.Deps, iss jira.Issue) kernel.View {
-	m := &moveModel{deps: d, keys: defaultMoveKeys(), issue: iss}
+	m := &moveModel{deps: d, keys: defaultMoveKeys(), issue: iss, addr: kernel.NewAddr()}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
@@ -120,11 +126,6 @@ func (m *moveModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	switch msg := msg.(type) {
 	case kernel.SizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-
-	case kernel.FocusMsg:
-		if !msg.Focused {
-			m.stop()
-		}
 
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
@@ -172,6 +173,15 @@ func (m *moveModel) stop() {
 	}
 }
 
+// reply puts this picker's address on a command, so what it asked for comes
+// back here rather than to whatever the stack has on top by then.
+func (m *moveModel) reply(cmd tea.Cmd) tea.Cmd { return kernel.Reply(cmd, m.addr) }
+
+// Close lets go of the transitions read, and of a move that is still being
+// applied. The picker is only ever pushed, so this is the whole of its life
+// ending.
+func (m *moveModel) Close() { m.stop() }
+
 func (m *moveModel) fetch() tea.Cmd {
 	if m.deps.Jira == nil || m.issue.Key == "" {
 		return nil
@@ -180,7 +190,7 @@ func (m *moveModel) fetch() tea.Cmd {
 	m.gen++
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	return loadMoves(ctx, m.deps.Jira, m.issue.Key, m.gen)
+	return m.reply(loadMoves(ctx, m.deps.Jira, m.issue.Key, m.gen))
 }
 
 func (m *moveModel) key(msg tea.KeyPressMsg) tea.Cmd {
@@ -312,7 +322,7 @@ func (m *moveModel) apply() tea.Cmd {
 	m.gen++
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	return applyMove(ctx, m.deps.Jira, m.issue.Key, move.ID, m.screenPatch(), m.gen)
+	return m.reply(applyMove(ctx, m.deps.Jira, m.issue.Key, move.ID, m.screenPatch(), m.gen))
 }
 
 // screenPatch carries the screen's answers by field id and option id, which is

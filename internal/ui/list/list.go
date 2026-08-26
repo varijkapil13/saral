@@ -43,6 +43,8 @@ var _ kernel.View = (*Model)(nil)
 
 var _ kernel.KeyCapturer = (*Model)(nil)
 
+var _ kernel.Addressed = (*Model)(nil)
+
 // Model is the issue list.
 type Model struct {
 	deps     kernel.Deps
@@ -128,6 +130,7 @@ type Model struct {
 	loaded  bool
 	gen     int
 	cancel  context.CancelFunc
+	addr    kernel.Addr
 
 	// failure is why the search on screen brought back no rows. The status line
 	// kernel.Fail writes is replaced by the next keypress, so the pane keeps its
@@ -183,6 +186,7 @@ func (m *Model) WantsRawKeys() bool { return m.filtering || m.asking || m.bind !
 func New(d kernel.Deps) kernel.View {
 	m := &Model{
 		deps:   d,
+		addr:   kernel.NewAddr(),
 		cache:  d.Cache,
 		styles: newStyles(d.Theme),
 		rows:   newRowCache(rowCacheLimit),
@@ -449,6 +453,18 @@ func (m *Model) stop() {
 	m.loading = false
 }
 
+// Addr is where the kernel delivers the pages and the poll this list asked for,
+// whatever has since been pushed over it and whichever root is on screen.
+func (m *Model) Addr() kernel.Addr { return m.addr }
+
+// reply puts this list's address on a command, so what it asked for comes back
+// here rather than to whatever the stack has on top by then. The list is a root:
+// the detail pane is pushed over it and the palette over that, and it is parked
+// off screen whenever another root is shown.
+func (m *Model) reply(cmd tea.Cmd) tea.Cmd {
+	return kernel.Reply(withCancel(m.cancel, cmd), m.addr)
+}
+
 func (m *Model) current(gen int) bool { return gen == m.gen }
 
 func (m *Model) load() tea.Cmd { return m.loadFor(whyOpen) }
@@ -458,7 +474,7 @@ func (m *Model) loadFor(w why) tea.Cmd {
 		return nil
 	}
 	ctx, gen := m.begin()
-	return withCancel(m.cancel, load(ctx, m.search, m.cache, m.jql, gen, w))
+	return m.reply(load(ctx, m.search, m.cache, m.jql, gen, w))
 }
 
 func (m *Model) refresh(purge bool) tea.Cmd {
@@ -488,7 +504,7 @@ func (m *Model) refetch(w why) tea.Cmd {
 		return tea.Batch(said, m.loadFor(w))
 	}
 	ctx, gen := m.begin()
-	return tea.Batch(said, withCancel(m.cancel, reload(ctx, m.search, m.cache, m.jql, len(m.issues), gen, w)))
+	return tea.Batch(said, m.reply(reload(ctx, m.search, m.cache, m.jql, len(m.issues), gen, w)))
 }
 
 func (m *Model) retarget(msg QueryMsg) tea.Cmd {
@@ -655,9 +671,9 @@ func (m *Model) pageAheadIfNeeded() tea.Cmd {
 	// Rows that came off disk carry no cursor to follow, so the page after them
 	// is reached by asking the search again and walking to where they end.
 	if !m.page.HasMore() {
-		return withCancel(m.cancel, reload(ctx, m.search, m.cache, m.jql, len(m.issues)+pageSize, gen, whyPage))
+		return m.reply(reload(ctx, m.search, m.cache, m.jql, len(m.issues)+pageSize, gen, whyPage))
 	}
-	return withCancel(m.cancel, more(ctx, m.cache, m.jql, m.issues, m.page, gen))
+	return m.reply(more(ctx, m.cache, m.jql, m.issues, m.page, gen))
 }
 
 // hasMore reports whether anything is left to fetch, from the live page or from

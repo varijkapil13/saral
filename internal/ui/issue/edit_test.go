@@ -1,6 +1,7 @@
 package issue
 
 import (
+	"context"
 	"errors"
 	"os"
 	"slices"
@@ -785,5 +786,42 @@ func TestDetail_KeepsItsOwnGestureOnG(t *testing.T) {
 	p.keys("g", "e")
 	if len(p.pushes) != 0 {
 		t.Error("g then e opened the editor; it is the gesture that goes to the end of the issue")
+	}
+}
+
+// The editor re-reads the issue for the fields it can change. The palette opens
+// over it, so a read given up on a blur is one nothing asks for again — but a
+// pane the kernel has thrown away lets it go.
+func TestEdit_KeepsItsReadOnABlurAndDropsItOnAClose(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(6)
+	iss := seedOf(t, f, "PROJ-2")
+
+	kept := NewEdit(testDeps(f), iss, withDrafts(tempDrafts(t)))
+	kept, _ = kept.Update(kernel.SizeMsg{Width: 100, Height: 28})
+	reading := kept.Init()
+	if _, more := kept.Update(kernel.FocusMsg{Focused: false}); more != nil {
+		t.Fatal("losing the keyboard asked for more work")
+	}
+	if _, gaveUp := answer(reading).(editFailedMsg); gaveUp {
+		t.Error("the editor gave up its re-read when it merely lost the keyboard")
+	}
+
+	dropped := NewEdit(testDeps(f), iss, withDrafts(tempDrafts(t)))
+	dropped, _ = dropped.Update(kernel.SizeMsg{Width: 100, Height: 28})
+	cmd := dropped.Init()
+	closer, ok := dropped.(kernel.Closer)
+	if !ok {
+		t.Fatal("the editor does not implement kernel.Closer, so nothing stops its re-read")
+	}
+	closer.Close()
+
+	failed, ok := answer(cmd).(editFailedMsg)
+	if !ok {
+		t.Fatalf("the re-read came back as %T, want the failure a cancelled context produces", answer(cmd))
+	}
+	if !errors.Is(failed.err, context.Canceled) {
+		t.Errorf("err = %v, want the context's own error", failed.err)
 	}
 }

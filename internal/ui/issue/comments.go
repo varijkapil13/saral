@@ -35,17 +35,21 @@ func init() {
 	})
 }
 
-// openComments gives the thread the whole screen, pushing the very instance the
+// openComments gives the thread the whole screen, lending the very instance the
 // sidebar holds. Pushing a fresh one would read the thread again and land on the
 // first comment with an empty editor, so esc would not come back to where the
 // reader was; this way the kernel resizes the same model and popping restores
 // the box it had.
+//
+// Lent and not pushed, because this pane keeps it: a kernel that closed it on
+// esc would cancel the read the sidebar is still waiting for, and the sidebar
+// would then show an empty thread for as long as the issue is open.
 func (m *Model) openComments() tea.Cmd {
 	if m.issue.Key == "" || m.thread == nil || m.pushed {
 		return nil
 	}
 	m.pushed = true
-	return kernel.Push(comment.ViewID, m.issue.Key, m.thread)
+	return kernel.Lend(comment.ViewID, m.issue.Key, m.thread)
 }
 
 // commentAction answers the palette's write, edit and delete commands. They are

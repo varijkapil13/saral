@@ -77,6 +77,7 @@ func NewWith(d kernel.Deps, connect Connector) kernel.View {
 		connect: connect,
 		cfg:     config.Config{Mouse: true},
 		cache:   &renderCache{},
+		addr:    kernel.NewAddr(),
 	}
 	m.zones = widget.NewZoner(d.Zones)
 	m.restyle()
@@ -98,6 +99,8 @@ var _ kernel.View = Model{}
 var _ kernel.Blocker = Model{}
 
 var _ kernel.KeyCapturer = Model{}
+
+var _ kernel.Addressed = Model{}
 
 // Model is the onboarding view: a state machine over five text inputs and one
 // choice, with a verification between the steps that need one.
@@ -121,6 +124,7 @@ type Model struct {
 
 	cancel   context.CancelFunc
 	cancelBg context.CancelFunc
+	addr     kernel.Addr
 
 	problem string
 	note    string
@@ -158,7 +162,12 @@ func (m Model) WantsRawKeys() bool {
 // Init loads the config file that may already exist, because onboarding also
 // adds a profile to one, and because writing over a file this build cannot
 // parse would lose whatever is in it.
-func (m Model) Init() tea.Cmd { return loadConfig }
+func (m Model) Init() tea.Cmd { return kernel.Reply(loadConfig, m.addr) }
+
+// Addr is where the kernel delivers what this view asked the site for. It is a
+// root, so nothing discards it — but the palette opens over it, and a token
+// being checked while that is up is an answer this view still needs.
+func (m Model) Addr() kernel.Addr { return m.addr }
 
 // Update routes one message. Every outcome has its own message type, and each
 // carries the sequence number of the operation that produced it so that a
@@ -172,7 +181,6 @@ func (m Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case kernel.FocusMsg:
 		if !msg.Focused {
-			m.stop()
 			m.blurField()
 			return m, nil
 		}

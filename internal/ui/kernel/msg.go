@@ -13,6 +13,11 @@ type PushMsg struct {
 	View  View
 	ID    string
 	Title string
+	// Lent says the pusher goes on holding this view after the stack drops it,
+	// so taking it off is not discarding it and the kernel must not close it.
+	// The default is the common case: a view built for the push, which the
+	// kernel then owns.
+	Lent bool
 }
 
 // PopMsg takes the top view off the stack.
@@ -24,6 +29,17 @@ type OpenMsg struct{ ID string }
 // BroadcastMsg carries a message to every view on the stack, which is how one
 // view tells another that something changed without holding a pointer to it.
 type BroadcastMsg struct{ Msg tea.Msg }
+
+// ReplyMsg carries a view's own answer back to the view that asked for it.
+//
+// To is that view first and whatever holds it after, so a view the kernel cannot
+// see — the comment thread inside the issue pane's sidebar is one — is reached
+// through the entry that can, which passes it on. The kernel delivers Msg to the
+// first address it can resolve and drops it when it can resolve none.
+type ReplyMsg struct {
+	To  []Addr
+	Msg tea.Msg
+}
 
 // RunCommandMsg asks the kernel to run a registered command, named by ID. It is
 // how the palette runs one: the kernel holds the deps a command is given, so
@@ -94,9 +110,51 @@ type StatusMsg struct {
 	Level StatusLevel
 }
 
-// Push returns a command that pushes a view onto the stack.
+// Push returns a command that pushes a view onto the stack. The kernel takes it
+// over: popping it discards it, and a view implementing Closer is told so.
 func Push(id, title string, v View) tea.Cmd {
 	return func() tea.Msg { return PushMsg{View: v, ID: id, Title: title} }
+}
+
+// Lend returns a command that puts a view the caller keeps on the stack. The
+// kernel draws it and routes keys to it like any other entry and drops it on
+// esc without closing it, because the caller is still holding it — the issue
+// pane hands over the very thread its sidebar draws, and closing that would
+// cancel a read the sidebar is still waiting for. The lender owes the view a
+// Close of its own when it is discarded in turn.
+func Lend(id, title string, v View) tea.Cmd {
+	return func() tea.Msg { return PushMsg{View: v, ID: id, Title: title, Lent: true} }
+}
+
+// Reply wraps a command so that what it comes back with is delivered to the view
+// that issued it, wherever that view has got to by then, rather than to whatever
+// is on top of the stack when it lands.
+//
+// A view addresses itself first and names whatever holds it after, so that a
+// view the kernel never sees is still reachable through the one it does. An
+// answer for a view that has been discarded resolves to nothing and is dropped.
+//
+// It is for a view's own answers and not for everything it returns. A kernel
+// command — a push, a pop, a status line — is addressed to the kernel and must
+// not be wrapped, and neither must a widget's own tick: a cursor blink belongs to
+// whoever is being looked at, which is exactly where the top of the stack puts
+// it.
+func Reply(cmd tea.Cmd, to ...Addr) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	return func() tea.Msg { return ReplyTo(cmd(), to...) }
+}
+
+// ReplyTo addresses a message a view has already produced. It is what a view
+// wraps a callback's answer in where Reply cannot reach — the editor handoff
+// hands tea.ExecProcess a function rather than a command, and wrapping the
+// command itself would put an envelope round the exec the runtime has to see.
+func ReplyTo(msg tea.Msg, to ...Addr) tea.Msg {
+	if msg == nil {
+		return nil
+	}
+	return ReplyMsg{To: to, Msg: msg}
 }
 
 // Pop returns a command that goes back one view.

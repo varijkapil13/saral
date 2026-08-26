@@ -292,8 +292,8 @@ func TestMove_ReportsEveryWayTheMoveItselfCanFail(t *testing.T) {
 }
 
 // TestMove_StopsReadingWhenThePaneIsClosed is the contract every view here
-// keeps: a pane nobody is looking at cancels what it asked for rather than
-// leaving a request running for an answer that has nowhere to go.
+// keeps: a pane the kernel has thrown away cancels what it asked for rather
+// than leaving a request running for an answer that has nowhere to go.
 func TestMove_StopsReadingWhenThePaneIsClosed(t *testing.T) {
 	t.Parallel()
 
@@ -302,17 +302,44 @@ func TestMove_StopsReadingWhenThePaneIsClosed(t *testing.T) {
 	view := NewMove(testDeps(f), iss)
 	view, _ = view.Update(kernel.SizeMsg{Width: 100, Height: 28})
 	cmd := view.Init()
-	if _, closed := view.Update(kernel.FocusMsg{Focused: false}); closed != nil {
-		t.Fatal("closing the pane asked for more work")
-	}
 
-	failed, ok := cmd().(editFailedMsg)
+	closer, ok := view.(kernel.Closer)
 	if !ok {
-		t.Fatalf("the read came back as %T, want the failure a cancelled context produces", cmd())
+		t.Fatal("the transition picker does not implement kernel.Closer, so nothing stops its read")
+	}
+	closer.Close()
+
+	failed, ok := answer(cmd).(editFailedMsg)
+	if !ok {
+		t.Fatalf("the read came back as %T, want the failure a cancelled context produces", answer(cmd))
 	}
 	if !errors.Is(failed.err, context.Canceled) {
 		t.Errorf("err = %v, want the context's own error", failed.err)
 	}
+}
+
+// The other half of the same contract: the palette opens over this pane, and a
+// read given up there is a read nothing asks for again.
+func TestMove_LosingTheKeyboardDoesNotGiveUpTheRead(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(6)
+	iss := fullIssue(t, f, "PROJ-3")
+	view := NewMove(testDeps(f), iss)
+	view, _ = view.Update(kernel.SizeMsg{Width: 100, Height: 28})
+	cmd := view.Init()
+
+	if _, more := view.Update(kernel.FocusMsg{Focused: false}); more != nil {
+		t.Fatal("losing the keyboard asked for more work")
+	}
+	if got := answer(cmd); !isMovesLoaded(got) {
+		t.Errorf("the read came back as %T, want the transitions it went for", got)
+	}
+}
+
+func isMovesLoaded(msg any) bool {
+	_, ok := msg.(movesLoadedMsg)
+	return ok
 }
 
 type failureCase struct {

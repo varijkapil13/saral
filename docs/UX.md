@@ -132,6 +132,35 @@ refresh                r / R          current view / purge and refetch. both say
 
 Vim keys and arrows are both always bound. `j/k` and `↑/↓` are not a preference to configure.
 
+### What happens to a view you leave
+
+Three of these gestures take a view off the screen and they do not mean the same thing, which is
+visible in what happens to whatever it was fetching.
+
+| Gesture | The view you were in | Its in-flight read |
+|---|---|---|
+| `ctrl+k`, or anything else pushed over it | still there, underneath | carries on, and lands in it |
+| `g` and a digit, to another root | kept, and comes back on its own digit with the same row under the cursor | carries on, and lands in it |
+| `esc` from a pushed view | gone | given up |
+
+The first row is the one worth stating out loud: **opening the palette over something that is still
+loading must not cancel the load.** It used to, because the only thing a view was told was that it
+had lost the keyboard, and a thread in a sidebar loses that whenever the pane beside it takes it.
+Nothing about losing the keys means nobody wants the answer.
+
+The last row is the other half. A pushed view that `esc` takes away is not coming back — the next
+`enter` builds a new one — so the request it is waiting on is one nobody will ever draw, and it is
+cut short rather than left to finish into nothing. The same is true of everything stacked over a root
+when you switch away with `g`: that stack is gone, and only the root underneath is kept.
+
+`q` and `ctrl+c` end the program, which throws every view away and stops nothing on the way out:
+there is no next frame for an answer to land in.
+
+And what a view was waiting for arrives in the view that asked for it, whatever is on screen by then.
+Open the palette over a loading issue, read a command, press `esc`, and the issue is there — it
+finished loading while you were reading, underneath. Nothing is asked for twice on the way back, so
+coming out of the palette never costs a second round trip to the site.
+
 ### Inside the palette
 
 Every letter is the filter's, which is the one place `j` and `k` do not move a selection: `↑`/`↓` and

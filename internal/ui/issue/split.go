@@ -215,12 +215,12 @@ func (m *Model) keepSplit() tea.Cmd {
 		return nil
 	}
 	share := int(m.split)
-	return func() tea.Msg {
+	return kernel.Reply(func() tea.Msg {
 		if err := config.SaveSplit(ViewID, share); err != nil {
 			return splitFailedMsg{err: err}
 		}
 		return nil
-	}
+	}, m.addr)
 }
 
 // splitFailedMsg reports that the split on screen is not the one the next

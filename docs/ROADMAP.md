@@ -680,6 +680,81 @@ lands first, because `pkg/jira/port.go` blocks everyone while it is open.
   is unchanged at 297, and the picker is virtualized and memoized — 3 allocations a frame scrolling
   two thousand labels, 94µs from keystroke to frame.
 
+## Kernel · being covered is not being thrown away
+
+Found while building the comment thread. The kernel said one thing — `FocusMsg{Focused: false}` — in
+three situations that mean three different things, and every view had to guess which it was in.
+
+- [x] **K1 — A view learns when it is being discarded** · [#124](https://github.com/varijkapil13/saral/issues/124) ·
+  **owns** `internal/ui/kernel/**`, the focus and fetch handling of
+  `internal/ui/{list,issue,comment,form,filter,onboarding}`, `internal/ui/livekeys_test.go`,
+  `docs/{ARCHITECTURE,UX,ROADMAP}.md`
+  A view pushed over is still there, a root switched away from is parked and comes back on its digit,
+  and a popped view is gone — and one message covered all three. `internal/ui/comment` had cancelled
+  its read on blur, so **opening the palette over a loading thread cancelled the load**; the fix was
+  to stop cancelling on blur at all, which left every discarded view fetching for an answer nothing
+  would draw. `internal/ui/issue`'s detail pane, field editor and transition picker and
+  `internal/ui/onboarding` all still had the original bug, and the editor and the picker never
+  re-read on coming back, so `ctrl+k` over a loading one left it loading for as long as it was open.
+  **`kernel.Closer` is the fourth optional interface and not a fourth shape**, next to `KeyCapturer`,
+  `Blocker` and `KeyReporter`. `Blocker` refuses a close; `Closer` is told about the one that
+  happened. A call and not a message, because `Update` hands back a `View` the kernel is about to drop
+  — so anything a discarded view records there is thrown away with it — and because a message is
+  broadcastable, which would let any view tell every other one it was finished.
+  **Two paths call it and no others**: the entry a pop takes off, and everything above entry zero
+  that a root switch throws away. A parked root is never closed, a project switch discards nothing —
+  every view hears `ProjectMsg` and stays — and nothing evicts a view from `live` to rebuild it.
+  Quitting discards everything and tells nobody: the process is ending, so every context it would
+  cancel dies with it and no command it returned would run.
+  **`kernel.Lend` is the push that keeps the view.** The issue pane hands the kernel the very thread
+  its sidebar draws, so closing it on `esc` would cancel a read the sidebar is still waiting for. The
+  kernel drops a lent entry without closing it and leaves that to the lender, which does it in its own
+  `Close`. Six adopters: the thread, the detail pane, the field editor, the transition picker, the
+  create form and the filter picker. The issue list and onboarding are listed as exempt with the
+  reason — nothing pushes either, so a discard never reaches them — and
+  `internal/ui/livekeys_test.go` fails on a seventh view that is in neither half.
+  **Necessary and not sufficient**: not cancelling the read only helps if the answer then reaches the
+  view that asked, which it did not — see K2 below, which ships in the same pull request because
+  without it this packet is a regression.
+
+- [x] **K2 — A view's own answer is delivered to the view that asked for it** ·
+  [#125](https://github.com/varijkapil13/saral/issues/125) ·
+  **owns** `internal/ui/kernel/**`, the fetch handling of
+  `internal/ui/{list,issue,comment,form,filter,onboarding}`, `internal/ui/*_test.go`,
+  `docs/{ARCHITECTURE,UX,ROADMAP}.md`
+  `Model.route`'s default is `forwardTop`, so a message the kernel does not recognise goes to
+  whatever is on top **when it lands** — and a view is blurred by exactly the thing that makes it not
+  the top. So every answer arriving while the palette was up was delivered to the palette and
+  dropped. Cancelling on blur had been hiding it: the pane cancelled, and on regaining focus
+  `!m.loadedIssue` sent it to read again, which recovered the answer. K1 removed the cancel and
+  guarded that recovery with `!m.loadingIssue` — a flag only `loadedMsg` and `failedMsg` clear, which
+  are the very messages the palette ate. **The pane never asked again.**
+  **`kernel.Reply` and `kernel.Addressed` are the fifth optional interface and its command wrapper.**
+  A view mints a `kernel.Addr` for itself and wraps its own commands in it; the kernel takes the
+  envelope off and delivers to the view holding that address, wherever it is on the stack or parked
+  in `live`, and drops it when no address resolves. **Opt-in on purpose**: everything unaddressed
+  still goes to the top, which is where a `bubbles` cursor blink and a spinner tick belong, and
+  addressing those would blink every input in the program and walk the session under every tick.
+  The address is a number rather than the `View` because a view need not be a pointer — onboarding is
+  a struct the kernel copies on every `Update` — and `==` on two interfaces holding the same
+  non-comparable type panics rather than answering.
+  **`To` is a list, most particular first.** The comment thread in the issue pane's sidebar is a
+  model inside a view and never an entry, so the kernel cannot deliver to it at all: its answer names
+  itself and then the pane, and the kernel takes the first address it can see — the thread while `C`
+  has it lent to the whole screen, the pane otherwise, which forwards what it does not recognise.
+  **The recovery is gone rather than renamed.** The detail pane no longer re-reads on regaining
+  focus and `loadingIssue` is deleted; the editor, the transition picker, the create form and the
+  filter picker never had a recovery and no longer need one. Eight adopters, one per key scope, and
+  `internal/ui/livekeys_test.go` fails on a ninth view in neither half of the table. The list's poll
+  tick is addressed too — `pollArmed` is cleared by the tick and by nothing else, so one eaten by the
+  palette stopped the poller for the rest of the session.
+  Held to it by `internal/ui/reply_test.go`, which drives the whole program — the kernel, the real
+  palette on `ctrl+k` — for each of the list, the detail pane, the field editor, the transition
+  picker, the filter picker, the create form and the thread in both the places it is drawn, holding
+  each answer back until the palette is up so that the delivery decision is really made with the view
+  underneath. Every guard was checked by mutation: removing the kernel's routing, and dropping the
+  address from any one view, turns exactly that view's case red.
+
 ## Batch 4 — Attachments · parallel ×3
 
 - [ ] **P4.1 — List and download** · [#17](https://github.com/varijkapil13/saral/issues/17) · **owns** `pkg/jira/cloud/attachment.go`

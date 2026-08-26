@@ -46,6 +46,7 @@ const maxLabels = 2000
 var (
 	_ kernel.View        = (*Model)(nil)
 	_ kernel.KeyCapturer = (*Model)(nil)
+	_ kernel.Addressed   = (*Model)(nil)
 )
 
 // state is which of the picker's two screens is up.
@@ -116,6 +117,7 @@ type Model struct {
 	failure error
 	gen     int
 	cancel  context.CancelFunc
+	addr    kernel.Addr
 
 	styles *styles
 	memo   *rowCache
@@ -133,7 +135,7 @@ type Model struct {
 // New builds the picker. It opens on the facets, which need nothing of the
 // site, so its first frame costs no round trip.
 func New(d kernel.Deps, opts ...Option) kernel.View {
-	m := &Model{deps: d, input: newInput()}
+	m := &Model{deps: d, input: newInput(), addr: kernel.NewAddr()}
 	for _, opt := range opts {
 		opt(m)
 	}
@@ -430,6 +432,20 @@ func (m *Model) stop() {
 	m.loading = false
 }
 
+// Addr is where the kernel delivers the vocabulary and the accounts this picker
+// asked for, whatever has since been pushed over it.
+func (m *Model) Addr() kernel.Addr { return m.addr }
+
+// reply puts this picker's address on a command, so what it asked for comes
+// back here rather than to whatever the stack has on top by then.
+func (m *Model) reply(cmd tea.Cmd) tea.Cmd {
+	return kernel.Reply(withCancel(m.cancel, cmd), m.addr)
+}
+
+// Close lets go of the vocabulary read and of an account search still out with
+// the site. A picker that has been thrown away has nothing to rank.
+func (m *Model) Close() { m.stop() }
+
 // fetch asks the site for the facet on screen. needle is only ever non-empty
 // for the accounts, which are the one vocabulary this site will not let anybody
 // narrow locally.
@@ -441,11 +457,11 @@ func (m *Model) fetch(needle string) tea.Cmd {
 	facet := m.facet
 	if facet.people() {
 		m.asked[needle] = true
-		return withCancel(m.cancel, findPeople(ctx, m.deps.Jira, facet, jira.PeopleQuery{
+		return m.reply(findPeople(ctx, m.deps.Jira, facet, jira.PeopleQuery{
 			Match: needle, Project: m.peopleProject(facet), Limit: peopleLimit,
 		}, m.inForceIDs(facet), gen))
 	}
-	return withCancel(m.cancel, vocabulary(ctx, m.deps.Jira, facet, m.deps.Project, gen))
+	return m.reply(vocabulary(ctx, m.deps.Jira, facet, m.deps.Project, gen))
 }
 
 // inForceIDs are the accounts this facet is already being filtered by, which

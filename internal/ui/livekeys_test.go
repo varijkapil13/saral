@@ -183,6 +183,180 @@ func TestLiveKeys_EveryAdvertisedActionCanBeClicked(t *testing.T) {
 	}
 }
 
+// closers names the views a discard can reach — everything something pushes —
+// and parked names the ones nothing pushes, which the kernel therefore never
+// discards. Like keyReporters above, the kernel cannot hold the views to this —
+// it may not import one — and a view checking itself is the drift, so the sweep
+// lives here.
+//
+// Every scope in the key registry has to appear in exactly one half, so a
+// seventh view fails this until somebody has decided which.
+var closers = map[string]func(kernel.Deps) kernel.View{
+	filter.ViewID:    func(d kernel.Deps) kernel.View { return filter.New(d) },
+	form.ViewID:      form.New,
+	comment.ViewID:   comment.New,
+	issue.ViewID:     func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
+	issue.EditViewID: func(d kernel.Deps) kernel.View { return issue.NewEdit(d, seed()) },
+	issue.MoveViewID: func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
+}
+
+// parked are the views nothing ever pushes, each with the reason. A root the
+// user switches away from is kept and comes back on its digit, so a discard
+// never reaches one and a Close on it would be a method nobody calls. A view
+// lands here because of that and not because nobody got round to it: the day
+// something pushes one of these, it owes the interface.
+var parked = map[string]struct {
+	build func(kernel.Deps) kernel.View
+	why   string
+}{
+	list.ViewID: {
+		build: list.New,
+		why:   "the issue list holds a footer slot and nothing pushes it, so it is only ever a root",
+	},
+	onboarding.ViewID: {
+		build: onboarding.New,
+		why:   "setup is where the program starts and what the palette reopens, and neither of those is a push",
+	},
+}
+
+func TestClose_EveryViewADiscardCanReachStopsItsWork(t *testing.T) {
+	sweepEnv(t)
+	scopes := kernel.KeyScopes()
+	if len(scopes) == 0 {
+		t.Fatal("no view registered any keys, so this sweep is checking nothing")
+	}
+
+	for _, scope := range scopes {
+		build, pushed := closers[scope]
+		root, isRoot := parked[scope]
+		switch {
+		case pushed && isRoot:
+			t.Errorf("%s is in both halves of the table", scope)
+			continue
+		case !pushed && !isRoot:
+			t.Errorf("%s is a view and this sweep does not know whether anything pushes it; add it to "+
+				"closers, or to parked with the reason a discard never reaches it", scope)
+			continue
+		case isRoot:
+			build = root.build
+			if root.why == "" {
+				t.Errorf("%s is exempt with no reason given", scope)
+			}
+		}
+
+		_, implements := build(depsFor(t)).(kernel.Closer)
+		switch {
+		case pushed && !implements:
+			t.Errorf("%s can be discarded and does not implement kernel.Closer, so a read it started "+
+				"goes on running for an answer the kernel has thrown the view away for", scope)
+		case isRoot && implements:
+			t.Errorf("%s implements kernel.Closer and nothing would ever call it: %s", scope, root.why)
+		}
+	}
+
+	for scope := range closers {
+		if !known(scopes, scope) {
+			t.Errorf("closers names %q, which is no longer a view", scope)
+		}
+	}
+	for scope := range parked {
+		if !known(scopes, scope) {
+			t.Errorf("parked names %q, which is no longer a view", scope)
+		}
+	}
+}
+
+// answerable names the views that ask the site for something and therefore owe
+// the kernel an address. An answer is delivered to the view that asked for it,
+// and a view with no address can only be handed one by happening to be on top of
+// the stack when it lands. Like the two sweeps above, the kernel cannot hold the
+// views to this, so the sweep lives here.
+//
+// The command palette is the one view in this build that asks the site for
+// nothing: its commands come out of the registry and its issues out of the local
+// index, both inside the keystroke. It registers no keys, so it is named here
+// rather than listed below.
+var answerable = map[string]func(kernel.Deps) kernel.View{
+	list.ViewID:       list.New,
+	filter.ViewID:     func(d kernel.Deps) kernel.View { return filter.New(d) },
+	form.ViewID:       form.New,
+	comment.ViewID:    comment.New,
+	onboarding.ViewID: onboarding.New,
+	issue.ViewID:      func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
+	issue.EditViewID:  func(d kernel.Deps) kernel.View { return issue.NewEdit(d, seed()) },
+	issue.MoveViewID:  func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
+}
+
+// synchronous are the views that answer every question they are asked without
+// leaving the frame, each with the reason. A view lands here because nothing it
+// does outlives a keystroke, not because nobody got round to giving it an
+// address.
+var synchronous = map[string]struct {
+	build func(kernel.Deps) kernel.View
+	why   string
+}{}
+
+func TestAddressed_EveryViewThatAsksTheSiteForSomethingCanBeAnsweredWhereItIs(t *testing.T) {
+	sweepEnv(t)
+	scopes := kernel.KeyScopes()
+	if len(scopes) == 0 {
+		t.Fatal("no view registered any keys, so this sweep is checking nothing")
+	}
+
+	for _, scope := range scopes {
+		build, asks := answerable[scope]
+		local, isLocal := synchronous[scope]
+		switch {
+		case asks && isLocal:
+			t.Errorf("%s is in both halves of the table", scope)
+			continue
+		case !asks && !isLocal:
+			t.Errorf("%s is a view and this sweep does not know whether it asks the site for anything; "+
+				"add it to answerable, or to synchronous with the reason nothing it does outlives a frame", scope)
+			continue
+		case isLocal:
+			build = local.build
+			if local.why == "" {
+				t.Errorf("%s is exempt with no reason given", scope)
+			}
+		}
+
+		view := build(depsFor(t))
+		addressed, implements := view.(kernel.Addressed)
+		switch {
+		case asks && !implements:
+			t.Errorf("%s asks the site for things and does not implement kernel.Addressed, so its answers "+
+				"go to whatever the stack has on top when they land", scope)
+			continue
+		case isLocal && implements:
+			t.Errorf("%s implements kernel.Addressed and has no answer to deliver: %s", scope, local.why)
+			continue
+		case isLocal:
+			continue
+		}
+
+		if addressed.Addr() == 0 {
+			t.Errorf("%s answers to the zero address, which the kernel resolves to nothing, so its "+
+				"answers are dropped rather than delivered", scope)
+		}
+		other, _ := build(depsFor(t)).(kernel.Addressed)
+		if other != nil && other.Addr() == addressed.Addr() {
+			t.Errorf("%s hands two instances the same address, so an answer to one is drawn into the other", scope)
+		}
+	}
+
+	for scope := range answerable {
+		if !known(scopes, scope) {
+			t.Errorf("answerable names %q, which is no longer a view", scope)
+		}
+	}
+	for scope := range synchronous {
+		if !known(scopes, scope) {
+			t.Errorf("synchronous names %q, which is no longer a view", scope)
+		}
+	}
+}
+
 // seed is the row a list would have handed over: a key and nothing else, which
 // is all these panes need to be built.
 func seed() jira.Issue {

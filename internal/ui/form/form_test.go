@@ -718,3 +718,48 @@ func clickIn(t *testing.T, d kernel.Deps, m *Model, frame, name string) tea.Mous
 	at := d.Zones.Get(id)
 	return tea.MouseClickMsg{Button: tea.MouseLeft, X: at.StartX + 2, Y: at.StartY}
 }
+
+// The palette opens over the create screen, so a read given up on a blur is one
+// nothing asks for again. A screen the kernel has thrown away lets it go.
+func TestForm_KeepsItsReadOnABlurAndDropsItOnAClose(t *testing.T) {
+	t.Parallel()
+
+	c := newFake(20)
+
+	kept := New(testDeps(c))
+	kept, _ = kept.Update(kernel.SizeMsg{Width: 100, Height: 24})
+	reading := kept.Init()
+	if _, more := kept.Update(kernel.FocusMsg{}); more != nil {
+		t.Fatal("losing the keyboard asked for more work")
+	}
+	if _, gaveUp := answer(reading).(typesFailedMsg); gaveUp {
+		t.Error("the create screen gave up its read when it merely lost the keyboard")
+	}
+
+	dropped := New(testDeps(c))
+	dropped, _ = dropped.Update(kernel.SizeMsg{Width: 100, Height: 24})
+	cmd := dropped.Init()
+	closer, ok := dropped.(kernel.Closer)
+	if !ok {
+		t.Fatal("the create screen does not implement kernel.Closer, so nothing stops its read")
+	}
+	closer.Close()
+
+	failed, ok := answer(cmd).(typesFailedMsg)
+	if !ok {
+		t.Fatalf("the read came back as %T, want the failure a cancelled context produces", answer(cmd))
+	}
+	if !errors.Is(failed.err, context.Canceled) {
+		t.Errorf("err = %v, want the context's own error", failed.err)
+	}
+}
+
+// answer is what the kernel hands a view: the command's own reply with the
+// envelope the kernel addresses it by taken off.
+func answer(cmd tea.Cmd) tea.Msg {
+	msg := cmd()
+	if reply, addressed := msg.(kernel.ReplyMsg); addressed {
+		return reply.Msg
+	}
+	return msg
+}

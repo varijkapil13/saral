@@ -110,6 +110,10 @@ func (d *driver) run(cmd tea.Cmd) {
 		for _, c := range msg {
 			d.run(c)
 		}
+	// The kernel takes the envelope off a view's own answer and hands the message
+	// inside to the view the address names. There is one view here.
+	case kernel.ReplyMsg:
+		d.send(msg.Msg)
 	case spinner.TickMsg:
 	case tea.QuitMsg:
 		d.quit = true

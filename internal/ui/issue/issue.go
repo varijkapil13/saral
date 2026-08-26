@@ -35,7 +35,11 @@ var zoneNames = [regionCount]string{
 	regionComments: "region:comments",
 }
 
-var _ kernel.View = (*Model)(nil)
+var (
+	_ kernel.View      = (*Model)(nil)
+	_ kernel.Closer    = (*Model)(nil)
+	_ kernel.Addressed = (*Model)(nil)
+)
 
 // Model is the issue detail pane.
 type Model struct {
@@ -97,7 +101,16 @@ type Model struct {
 	search *app.Search
 	gen    int
 	cancel context.CancelFunc
+
+	// addr is where this pane's own answers come back to, and what the thread it
+	// holds names as its holder: the sidebar is not a stack entry, so the kernel
+	// reaches it through this pane.
+	addr kernel.Addr
 }
+
+// Addr is where the kernel delivers what this pane asked the site for, whatever
+// has been pushed over it since.
+func (m *Model) Addr() kernel.Addr { return m.addr }
 
 // New builds the detail pane around the row the user opened.
 //
@@ -112,6 +125,7 @@ func New(d kernel.Deps, seed jira.Issue) kernel.View {
 		keys:  defaultKeys(),
 		issue: seed,
 		open:  map[int]bool{},
+		addr:  kernel.NewAddr(),
 	}
 	if share, chosen := config.LoadUIState().Split(ViewID); chosen {
 		m.split = split(share)
@@ -128,7 +142,7 @@ func New(d kernel.Deps, seed jira.Issue) kernel.View {
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
-	m.thread = comment.Thread(m.deps, seed.Key)
+	m.thread = comment.Thread(m.deps, seed.Key, m.addr)
 	return m
 }
 
@@ -241,7 +255,7 @@ func (m *Model) fetch() tea.Cmd {
 	m.gen++
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	return load(ctx, m.search, m.issue.Key, m.gen)
+	return kernel.Reply(load(ctx, m.search, m.issue.Key, m.gen), m.addr)
 }
 
 func (m *Model) stop() {
@@ -251,15 +265,22 @@ func (m *Model) stop() {
 	}
 }
 
+// Close cuts the read short, and the thread's with it: the sidebar holds that
+// model and nothing else does, so a pane thrown away takes it along.
+func (m *Model) Close() {
+	m.stop()
+	if m.thread != nil {
+		kernel.CloseView(m.thread)
+	}
+}
+
 // focused answers the kernel telling this pane whether it is the one taking
 // keys. Coming back from the full-screen thread is where the thread's box has to
 // be put back: the kernel gave it the whole screen on the way there.
 func (m *Model) focused(on bool) tea.Cmd {
 	if !on {
-		// A pushed view that loses focus has either been popped or been covered,
-		// and either way nobody is waiting for this issue — or is still holding
-		// its divider.
-		m.stop()
+		// The read carries on: a palette opened over a loading pane must not
+		// cancel what it is loading. Nobody is holding the divider, though.
 		m.cancelDrag()
 		return m.tell(kernel.FocusMsg{})
 	}
@@ -267,11 +288,7 @@ func (m *Model) focused(on bool) tea.Cmd {
 		m.pushed = false
 		m.threadAt.w, m.threadAt.h = 0, 0
 	}
-	cmds := []tea.Cmd{m.tell(kernel.FocusMsg{Focused: true})}
-	if !m.loadedIssue {
-		cmds = append(cmds, m.fetch())
-	}
-	return tea.Batch(cmds...)
+	return m.tell(kernel.FocusMsg{Focused: true})
 }
 
 func (m *Model) resize(w, h int) {

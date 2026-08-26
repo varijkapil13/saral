@@ -5,6 +5,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
 // pollEvery is how often a focused list re-reads itself, or zero for never,
@@ -41,7 +43,10 @@ func (m *Model) pollTick() tea.Cmd {
 	}
 	m.pollArmed = true
 	gen := m.gen
-	return tea.Tick(m.poll, func(time.Time) tea.Msg { return pollMsg{gen: gen} })
+	// Addressed like a read and unlike a widget's tick: this one is the list's
+	// own, and a tick that came due while the palette was up would otherwise be
+	// eaten there and leave the poller armed for good.
+	return kernel.Reply(tea.Tick(m.poll, func(time.Time) tea.Msg { return pollMsg{gen: gen} }), m.addr)
 }
 
 // polled acts on a tick: re-read what is on screen, which patches the rows and

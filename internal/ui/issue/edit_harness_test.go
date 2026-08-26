@@ -105,6 +105,11 @@ func (p *panel) run(cmd tea.Cmd) {
 			queue = append(queue, cmds...)
 			continue
 		}
+		// The kernel takes the envelope off a view's own answer and hands the
+		// message inside to the view the address names. There is one view here.
+		if reply, addressed := msg.(kernel.ReplyMsg); addressed {
+			msg = reply.Msg
+		}
 		switch msg := msg.(type) {
 		case kernel.StatusMsg:
 			p.statuses = append(p.statuses, msg)
@@ -369,3 +374,13 @@ func docWith(paragraph string) adf.Doc {
 }
 
 func projectionMask() jira.FieldMask { return jira.NewFieldMask(app.ListProjection().IDs) }
+
+// answer is what the kernel hands a view: the command's own reply with the
+// envelope the kernel addresses it by taken off.
+func answer(cmd tea.Cmd) tea.Msg {
+	msg := cmd()
+	if reply, addressed := msg.(kernel.ReplyMsg); addressed {
+		return reply.Msg
+	}
+	return msg
+}
