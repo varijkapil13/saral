@@ -2,11 +2,19 @@
 
 package issue
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // The race detector allocates on its own account, so an allocation ceiling run
 // under -race measures the detector rather than the pane, which is what the
-// build tag above is for.
+// build tag above is for. The tag alone would mean these never ran anywhere, so
+// ci.yml has a lane without the detector that runs exactly them.
+//
+// None of them may be parallel either. An allocation count comes from
+// process-wide MemStats, so a benchmark run beside another test is handed that
+// test's allocations divided by its own iteration count.
 //
 // Below the breakpoint the thread is off screen and a frame costs one
 // allocation: the string the caller keeps. The description, the fields and the
@@ -18,9 +26,7 @@ import "testing"
 // building its own frame afresh on every call. Splitting that frame into rows is
 // skipped while it has not changed, so the extra one is its own and not the
 // split.
-func TestSteadyFrame_CostsTheFrameAndTheThreadAndNothingElse(t *testing.T) {
-	t.Parallel()
-
+func TestBudget_SteadyFrameCostsTheFrameAndTheThreadAndNothingElse(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		bench   func(*testing.B)
@@ -51,9 +57,7 @@ func TestSteadyFrame_CostsTheFrameAndTheThreadAndNothingElse(t *testing.T) {
 // And a motion that does move it is a resize of two regions, which is what it
 // costs. There is no cheaper honest answer: both panes have a width they have
 // never been rendered at, and the lines are what a width means.
-func TestDrag_CostsAFrameWhileHeldAndAResizeWhileMoving(t *testing.T) {
-	t.Parallel()
-
+func TestBudget_DragCostsAFrameWhileHeldAndAResizeWhileMoving(t *testing.T) {
 	rest := testing.Benchmark(BenchmarkIssueView).AllocsPerOp()
 	if held := testing.Benchmark(BenchmarkIssueDragFrame).AllocsPerOp(); held > rest {
 		t.Errorf("a frame with the boundary held allocates %d times against %d at rest", held, rest)
@@ -75,13 +79,25 @@ func TestDrag_CostsAFrameWhileHeldAndAResizeWhileMoving(t *testing.T) {
 
 // A keystroke that only moves the description must not re-render anything: the
 // memo key has not moved, so a scroll costs a frame and the keypress itself.
-func TestScrolling_CostsNoMoreThanStandingStill(t *testing.T) {
-	t.Parallel()
-
+func TestBudget_ScrollingCostsNoMoreThanStandingStill(t *testing.T) {
 	still := testing.Benchmark(BenchmarkIssueView).AllocsPerOp()
 	scrolling := testing.Benchmark(BenchmarkIssueScroll).AllocsPerOp()
 	if scrolling > still+1 {
 		t.Errorf("scrolling allocates %d times against %d standing still, so a memo is being rebuilt per keystroke",
 			scrolling, still)
+	}
+}
+
+func TestBudget_KeystrokeToFrame(t *testing.T) {
+	res := testing.Benchmark(BenchmarkIssueScroll)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("keystroke to frame took %s, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+}
+
+func TestBudget_FullRedrawAt200x60(t *testing.T) {
+	res := testing.Benchmark(BenchmarkIssueRedraw200x60)
+	if per := time.Duration(res.NsPerOp()); per > 4*time.Millisecond {
+		t.Errorf("a full redraw at 200x60 took %s, want under the 4ms in docs/PERFORMANCE.md", per)
 	}
 }

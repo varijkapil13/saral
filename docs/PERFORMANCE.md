@@ -1,23 +1,120 @@
 # Performance
 
 Saral should feel instant on a 10,000-issue project and start faster than a browser tab can paint.
-These are budgets, not aspirations: CI enforces the ones it can, and benchmarks guard the rest.
+
+These are budgets, not aspirations — but only where the **Guarded by** column below says so. A
+benchmark on its own guards nothing: it prints a number, and for three batches the frame budgets were
+held because a person ran `make bench` and read the output after each merge. Remove the person and
+the budget is a comment. Every row that says *measured, not guarded* is one no build will fail on
+today; comparing a run against a baseline is P9.2
+([#30](https://github.com/varijkapil13/saral/issues/30)) and is the thing that will close them.
 
 ## Budgets
 
-| Metric | Budget | How it is measured |
+| Metric | Budget | Guarded by |
 |---|---|---|
-| Cold start → first paint (warm cache) | **< 60 ms** | `hyperfine` on `saral --bench-first-paint` |
-| Cold start → first paint (no cache) | < 250 ms | same, cache purged; network excluded |
-| Keystroke → frame, steady state | **p99 < 16 ms** | benchmark over `Update`+`View` at 10k rows |
-| Scroll a 10k-row list | 0 allocations per frame | `-benchmem`, `allocs/op` asserted in the test |
-| Full redraw at 200×60 | < 4 ms | render benchmark |
-| RSS with 10k issues cached | **< 60 MB** | measured in the bench harness |
-| Stripped binary | **< 15 MiB** | enforced in CI (`ci.yml`) |
-| Cache read for a view's first paint | < 5 ms | bbolt read benchmark |
-| Rank 10k cached issues against a keystroke | **< 16 ms**, 1 allocation | `BenchmarkIndexSearch10k`, asserted in `internal/app/index_budget_test.go` |
-| Rebuild the local index over 10k cached issues | < 16 ms | `BenchmarkIndexRebuild10k`, asserted beside it |
-| Render a description to styled lines | **≤ 8 allocations a line**, and linear in the lines | `BenchmarkRender`, asserted in `internal/ui/richtext/budget_test.go` |
+| Cold start → first paint (no cache) | **< 250 ms** | `ci.yml`, best of five `saral --bench-first-paint` runs against an empty cache directory |
+| Cold start → first paint (warm cache) | < 60 ms | *measured, not guarded.* `hyperfine` on `saral --bench-first-paint`. Warming the cache needs a site, so CI cannot; the in-process half is `TestBudget_FirstPaintFromCache` |
+| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, so p99 waits on #30 |
+| Scroll a 10k-row list | 1 allocation a frame | the frame string `View` returns, and nothing behind it. Asserted with the mouse on, under a kept filter and under terms in force |
+| Frame allocations at 200×60 | ceilings in `internal/ui/kernel/budget_test.go` | 297 for a frame, 310 for a keystroke and its frame, 324 with the mouse on, each held to a ceiling about a tenth above |
+| Full redraw at 200×60 | < 4 ms | asserted in list, issue, comment, filter and the kernel chrome |
+| RSS with 10k issues cached | < 60 MB | *measured, not guarded.* Nothing reads the number; the harness that would is #30 |
+| Stripped binary | **< 15 MiB** | `ci.yml`'s size step |
+| Cache read for a view's first paint | < 5 ms | `BenchmarkCacheReadFirstPaint` |
+| Rank 10k cached issues against a keystroke | **< 16 ms**, 1 allocation | `BenchmarkIndexSearch10k` and its two siblings |
+| Rebuild the local index over 10k cached issues | < 16 ms | `BenchmarkIndexRebuild10k` |
+| Render a description to styled lines | **≤ 8 allocations a line**, and linear in the lines | `BenchmarkRender`, over four widths and both palettes |
+
+## How a budget is guarded
+
+A guard is a test named `TestBudget_*` that runs a benchmark and fails on the number it comes back
+with. Three things make one of them worth trusting, and each of them was got wrong once here:
+
+- **It is absolute, with headroom.** A guard that only compares two benchmarks against each other
+  catches a memo that stopped being hit and passes just as happily at nine hundred allocations a
+  frame. The frame ceilings are numbers, set about a tenth above what the machine measures. The
+  counts are exact rather than noisy — five runs of each produce the same figure — so a tenth is room
+  for a compiler release to move one and not room for a regression to hide in. Tightening a ceiling
+  after a real improvement is a judgement call and deliberately not automatic.
+- **It runs without the race detector, and CI runs it anyway.** The detector puts about twenty times
+  the cost on these paths, so a time budget under `-race` measures the instrumentation. Every guard
+  is therefore built `//go:build !race` — and a `!race` tag on its own means a test that runs
+  *nowhere*, because the only suite CI ran was the race one. The `budgets` job exists to close that:
+  it runs the guards without the detector, inside the same loopback-only namespace the race suite
+  uses, and proves the namespace isolates before it trusts it.
+- **It is not parallel.** An allocation count comes from process-wide `MemStats`, so a benchmark run
+  beside another test is handed that test's allocations divided by its own iteration count. Measured
+  here: a scroll that costs 1 allocation a frame reports **733** when one neighbouring parallel test
+  allocates hard for the same second. That is what made four list guards fail on a runner and pass on
+  a laptop — not the detector's own allocations, but the detector slowing the benchmark to a twelfth
+  of its iterations, so a twelfth of the divisor hid a twelfth as much of the noise.
+
+Run them the way CI does:
+
+```sh
+go test -count=1 -parallel 1 -run '^TestBudget_' ./...
+```
+
+### The guards
+
+Every `TestBudget_*` in the tree is listed here, and the list is checked both ways: `internal/app`
+fails if a name here has no test or a test is missing from here, and the `budgets` job fails if the
+set that actually ran is not this one. So a guard cannot be deleted quietly — only by editing this
+table, which is the same thing as writing down that the budget is no longer held.
+
+<!-- budget-guards -->
+
+| Package | Guard |
+|---|---|
+| `internal/app` | `TestBudget_CacheReadForAViewsFirstPaint` |
+| `internal/app` | `TestBudget_CIRunsTheGuardsWithoutTheDetector` |
+| `internal/app` | `TestBudget_IndexRebuildAtTenThousandIssues` |
+| `internal/app` | `TestBudget_IndexSearchAllocatesOnlyTheAnswerItHandsBack` |
+| `internal/app` | `TestBudget_IndexSearchAtTenThousandIssues` |
+| `internal/app` | `TestBudget_TheDocumentNamesEveryGuardAndOnlyRealOnes` |
+| `internal/ui/comment` | `TestBudget_FullRedrawAt200x60` |
+| `internal/ui/comment` | `TestBudget_KeystrokeToFrameOnATenThousandCommentThread` |
+| `internal/ui/comment` | `TestBudget_ScrollingCostsTheSameOnTenThousandCommentsAsOnTwenty` |
+| `internal/ui/filter` | `TestBudget_PickerFullRedrawAt200x60` |
+| `internal/ui/filter` | `TestBudget_PickerKeystrokeToFrame` |
+| `internal/ui/filter` | `TestBudget_PickerRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/filter` | `TestBudget_PickerScrollingCostsTheSameOnTwoThousandRowsAsOnTwenty` |
+| `internal/ui/filter` | `TestBudget_RankingReusesItsBuffers` |
+| `internal/ui/issue` | `TestBudget_DragCostsAFrameWhileHeldAndAResizeWhileMoving` |
+| `internal/ui/issue` | `TestBudget_FullRedrawAt200x60` |
+| `internal/ui/issue` | `TestBudget_KeystrokeToFrame` |
+| `internal/ui/issue` | `TestBudget_ScrollingCostsNoMoreThanStandingStill` |
+| `internal/ui/issue` | `TestBudget_SteadyFrameCostsTheFrameAndTheThreadAndNothingElse` |
+| `internal/ui/kernel` | `TestBudget_AFrameCostsWhatTheChromeCosts` |
+| `internal/ui/kernel` | `TestBudget_FullRedrawAt200x60` |
+| `internal/ui/kernel` | `TestBudget_KeystrokeToFrame` |
+| `internal/ui/list` | `TestBudget_FirstPaintFromCache` |
+| `internal/ui/list` | `TestBudget_FullRedrawAt200x60` |
+| `internal/ui/list` | `TestBudget_KeystrokeToFrameAtTenThousandRows` |
+| `internal/ui/list` | `TestBudget_RowRenderingCostsNothingOnceMemoized` |
+| `internal/ui/list` | `TestBudget_ScrollingCostsTheSameOnTenThousandRowsAsOnTwenty` |
+| `internal/ui/list` | `TestBudget_ScrollingCostsTheSameUnderAFilterThatHasBeenAccepted` |
+| `internal/ui/list` | `TestBudget_ScrollingCostsTheSameUnderTermsInForce` |
+| `internal/ui/list` | `TestBudget_ScrollingCostsTheSameWithTheMouseOn` |
+| `internal/ui/list` | `TestBudget_WalkingIntoFreshRowsCostsTheFrameAndNothingElse` |
+| `internal/ui/richtext` | `TestBudget_Render` |
+| `internal/ui/richtext` | `TestBudget_ScalesWithTheDocument` |
+| `internal/ui/richtext` | `TestBudget_Summary` |
+
+<!-- /budget-guards -->
+
+### What is still only measured
+
+`make bench` prints these and nothing reads them. They are here so that the list of what is unguarded
+is as visible as the list of what is:
+
+- **RSS with 10k issues cached.** No harness measures it.
+- **Cold start with a warm cache.** The cache has to be filled from a site first.
+- **p99 of anything.** `testing.Benchmark` reports a mean over its iterations and throws the
+  distribution away.
+- **Every benchmark outside the table** — `pkg/adf`, `pkg/jira/cloud`'s decode, the palette and the
+  form — which are watched by eye and by #30 when it lands.
 
 ## Where the time actually goes
 
@@ -54,15 +151,19 @@ unmeasurable, so it is part of the kernel rather than a later addition.
 
 ## Benchmark harness
 
-Every packet touching a render path or a list adds benchmarks next to its code:
+Every packet touching a render path or a list adds benchmarks next to its code, and a `TestBudget_*`
+beside them that fails on what they report:
 
 ```go
-func BenchmarkBoardView10k(b *testing.B) { ... }   // asserts allocs/op == 0 in steady state
+func BenchmarkBoardView10k(b *testing.B) { ... }
 func BenchmarkRowRender(b *testing.B)    { ... }
+
+func TestBudget_BoardScrollCostsTheFrameAndNothingElse(t *testing.T) { ... }
 ```
 
-`make bench` runs them all. P9.2 wires `benchstat` into CI to fail a PR that regresses a budgeted
-path by more than 10%.
+`make bench` runs the benchmarks; the `budgets` job runs the guards. P9.2 wires `benchstat` into CI
+to fail a PR that regresses a budgeted path by more than 10%, which is the piece that turns a
+slow slide into a failure rather than only a step change past a ceiling.
 
 ### What the local index costs today
 

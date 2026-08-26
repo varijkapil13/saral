@@ -58,6 +58,117 @@ jobs:
             echo "::error::binary exceeds 15 MiB budget (see docs/PERFORMANCE.md)"
             exit 1
           fi
+      - name: cold start budget
+        run: |
+          SARAL_CONFIG_DIR="$RUNNER_TEMP/saral-config"
+          SARAL_CACHE_DIR="$RUNNER_TEMP/saral-cache"
+          export SARAL_CONFIG_DIR SARAL_CACHE_DIR
+          mkdir -p "$SARAL_CONFIG_DIR" "$SARAL_CACHE_DIR"
+          best=
+          for _ in 1 2 3 4 5; do
+            from=$(date +%s%N)
+            ./saral --bench-first-paint >/dev/null
+            to=$(date +%s%N)
+            took=$(( (to - from) / 1000000 ))
+            echo "start to first paint: ${took} ms"
+            if [ -z "$best" ] || [ "$took" -lt "$best" ]; then best=$took; fi
+          done
+          echo "best of five: ${best} ms"
+          if [ "$best" -gt 250 ]; then
+            echo "::error::cold start to first paint took ${best} ms with an empty cache, over the 250 ms budget (see docs/PERFORMANCE.md)"
+            exit 1
+          fi
+
+  budgets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: warm the caches while the network is still there
+        run: go test -count=1 -run '^$' ./...
+      # Every guard is built `!race`, so this is the only lane that runs one. It
+      # drops the detector because the detector is what the numbers would
+      # otherwise measure, and keeps the namespace because dropping it here is
+      # the one place a test could reach the network unwatched.
+      - name: hold the budgets, without the detector and on a loopback-only network
+        run: |
+          sudo env "PATH=$PATH" "HOME=$HOME" \
+            "GOCACHE=$(go env GOCACHE)" "GOMODCACHE=$(go env GOMODCACHE)" \
+            GOPROXY=off GOTOOLCHAIN=local \
+            unshare -n -- sh -euc '
+              ip link set lo up
+              ip -o link show lo | grep -qw UP || { echo "::error::loopback is down inside the namespace"; exit 1; }
+              command -v curl >/dev/null || { echo "::error::no curl to prove the namespace isolates"; exit 1; }
+              if curl -sS --max-time 5 -o /dev/null https://proxy.golang.org; then
+                echo "::error::a request left the namespace, so this check proves nothing"
+                exit 1
+              fi
+              go test -count=1 -parallel 1 -json -run "^TestBudget_" ./... > budgets.json
+            '
+      - name: the guards that ran are the ones docs/PERFORMANCE.md names
+        if: always()
+        run: |
+          python3 - budgets.json docs/PERFORMANCE.md <<'PY'
+          import json, re, sys
+
+          results, doc = sys.argv[1], sys.argv[2]
+
+          module = ""
+          for line in open("go.mod"):
+              if line.startswith("module "):
+                  module = line.split()[1]
+                  break
+
+          ran, failed, output = set(), set(), {}
+          for line in open(results):
+              try:
+                  ev = json.loads(line)
+              except ValueError:
+                  continue
+              test = ev.get("Test", "")
+              if not test.startswith("TestBudget_") or "/" in test:
+                  continue
+              pkg = ev["Package"].removeprefix(module).lstrip("/")
+              if ev["Action"] in ("pass", "fail", "skip"):
+                  ran.add((pkg, test))
+              if ev["Action"] == "fail":
+                  failed.add((pkg, test))
+              if ev["Action"] == "output":
+                  output.setdefault((pkg, test), []).append(ev["Output"])
+
+          table = re.search(r"<!-- budget-guards -->(.*?)<!-- /budget-guards -->", open(doc).read(), re.S)
+          if table is None:
+              sys.exit("%s has no guard table between the budget-guards markers" % doc)
+          named = set()
+          for row in table.group(1).splitlines():
+              cells = [c.strip().strip("`") for c in row.strip().split("|")]
+              if len(cells) == 4 and cells[2].startswith("TestBudget_"):
+                  named.add((cells[1], cells[2]))
+
+          for pkg, test in sorted(failed):
+              print("::group::%s %s" % (pkg, test))
+              print("".join(output.get((pkg, test), [])))
+              print("::endgroup::")
+
+          bad = False
+          for pkg, test in sorted(named - ran):
+              bad = True
+              print("::error::%s names %s in %s and it did not run. A guard nothing runs is a comment." % (doc, test, pkg))
+          for pkg, test in sorted(ran - named):
+              bad = True
+              print("::error::%s ran in %s and %s does not name it. Add the row, so the document stays the inventory of what holds the budgets." % (test, pkg, doc))
+          if failed:
+              bad = True
+              print("::error::%d budget guard(s) failed; the groups above have the numbers." % len(failed))
+          print("%d guards ran, %d named in %s" % (len(ran), len(named), doc))
+          sys.exit(1 if bad else 0)
+          PY
+      - name: give the caches back to the runner
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" "$(go env GOCACHE)" "$(go env GOMODCACHE)"
 
   fixtures:
     runs-on: ubuntu-latest
