@@ -29,7 +29,7 @@ today; comparing a run against a baseline is P9.2
 ## How a budget is guarded
 
 A guard is a test named `TestBudget_*` that runs a benchmark and fails on the number it comes back
-with. Three things make one of them worth trusting, and each of them was got wrong once here:
+with. Four things make one of them worth trusting, and each was got wrong once here:
 
 - **It is absolute, with headroom.** A guard that only compares two benchmarks against each other
   catches a memo that stopped being hit and passes just as happily at nine hundred allocations a
@@ -46,9 +46,15 @@ with. Three things make one of them worth trusting, and each of them was got wro
 - **It is not parallel.** An allocation count comes from process-wide `MemStats`, so a benchmark run
   beside another test is handed that test's allocations divided by its own iteration count. Measured
   here: a scroll that costs 1 allocation a frame reports **733** when one neighbouring parallel test
-  allocates hard for the same second. That is what made four list guards fail on a runner and pass on
-  a laptop — not the detector's own allocations, but the detector slowing the benchmark to a twelfth
-  of its iterations, so a twelfth of the divisor hid a twelfth as much of the noise.
+  allocates hard for the same second, and **226** without the detector. That is what made four list
+  guards fail on a runner and pass on a laptop, and the detector's part in it was not its own
+  allocations — it was slowing the benchmark from 617,000 iterations a second to 52,000, so the
+  neighbours' noise was divided by a twelfth as much.
+- **Its number is one every architecture reaches.** Almost all of these counts are identical on
+  arm64 and amd64, which is why the ceilings can be tight. One is not: a list frame that renders a
+  row it has never rendered costs 1 allocation on arm64 and 2 on amd64, every run of each. A guard
+  written on a laptop and never checked with `GOARCH=amd64` is a guard that goes red on the runner
+  for a reason that has nothing to do with the code.
 
 Run them the way CI does:
 
