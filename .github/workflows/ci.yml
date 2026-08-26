@@ -59,6 +59,16 @@ jobs:
             exit 1
           fi
 
+  fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # In this order: a check that has never been seen to fail proves nothing green.
+      - name: the leak check catches what it claims to
+        run: python3 scripts/checkleak_test.py
+      - name: nothing from a real instance reached the fixtures
+        run: python3 scripts/checkleak.py
+
   lint:
     runs-on: ubuntu-latest
     steps:
