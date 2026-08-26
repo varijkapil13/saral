@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -75,11 +76,13 @@ type Model struct {
 
 	// lines is the frame under construction, kept between frames so that
 	// drawing a screen does not allocate one slice per frame.
-	lines   []string
-	summary string
-	sumKey  summaryKey
-	chip    string
-	chipKey chipKey
+	lines      []string
+	summary    string
+	sumKey     summaryKey
+	chip       string
+	chipAt     chipKey
+	filterLine string
+	filterAt   chipKey
 
 	filtering bool
 	filter    textinput.Model
@@ -91,9 +94,15 @@ type Model struct {
 	asking bool
 	ask    textinput.Model
 
-	// facet is the cell somebody clicked, and what the rows stay narrowed to
-	// until they click it again.
-	facet facet
+	// terms are what the search on screen is narrowed by: a person, a status, a
+	// type, a priority or a label, each held by the id the site gave it. They
+	// compose into the query rather than into a pass over the rows already
+	// loaded, so a term reaches an issue this session has never fetched.
+	//
+	// termsGen counts the changes to them, because a slice cannot be part of the
+	// comparable key the line naming them is memoized on.
+	terms    filter.Terms
+	termsGen int
 
 	// defaulted records that the search on screen is still the one this view
 	// chose from the session's project. A project switch retargets that search
@@ -308,6 +317,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case FacetMsg:
 		cmd = m.facetMsg(msg)
 
+	case OpenFilterMsg:
+		cmd = m.openFilter()
+
+	case filter.ChosenMsg:
+		cmd = m.applyTerm(msg.Term)
+
 	case ClearFilterMsg:
 		cmd = m.clearFilter()
 
@@ -399,7 +414,7 @@ func (m *Model) widestKey() int {
 // column captions and whichever of the four lines below the rows are drawn.
 func (m *Model) rowsHeight() int {
 	h := m.height - 2
-	if m.facet.on() {
+	if len(m.terms) > 0 {
 		h--
 	}
 	if m.keptFilter() {
@@ -487,7 +502,19 @@ func (m *Model) reproject(project string) tea.Cmd {
 	if project == m.deps.Project {
 		return nil
 	}
+	was := m.deps.Project
 	m.deps.Project = project
+	// Terms cannot follow a project switch: a status and an issue type are
+	// minted per project, so the ids in force name values the new project has
+	// never heard of. They go, and the switch says so rather than leaving a
+	// search about somewhere else under a header naming here.
+	if len(m.terms) > 0 {
+		m.widened = false
+		jql, title := defaultQuery(project)
+		return tea.Batch(
+			kernel.Status("the filters were about "+was+", so they came off with it"),
+			m.setQuery(jql, title, true))
+	}
 	if !m.defaulted {
 		return nil
 	}
@@ -509,7 +536,7 @@ func (m *Model) setQuery(jql, title string, byDefault bool) tea.Cmd {
 	m.cursor, m.top, m.loaded = 0, 0, false
 	m.cachedMore, m.stale, m.failure = false, false, nil
 	m.checked = time.Time{}
-	m.facet = facet{}
+	m.terms, m.termsGen = nil, m.termsGen+1
 	m.rows.reset()
 	m.refilter()
 	m.fromCache()
@@ -684,16 +711,14 @@ func (m *Model) refilter() {
 	needle := strings.ToLower(m.query)
 	if needle == "" {
 		for i := range m.issues {
-			if m.facet.matches(&m.issues[i]) {
-				m.view = append(m.view, i)
-			}
+			m.view = append(m.view, i)
 		}
 		m.restore(under)
 		return
 	}
 	m.buildNeedles()
 	for i := range m.issues {
-		if strings.Contains(m.needles[i], needle) && m.facet.matches(&m.issues[i]) {
+		if strings.Contains(m.needles[i], needle) {
 			m.view = append(m.view, i)
 		}
 	}
@@ -798,6 +823,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.clearFilter()
 	case actAll:
 		return m.showEverything()
+	case actFilterBy:
+		return m.openFilter()
 	case actEdit:
 		return m.startAsk()
 	case actSave:
@@ -940,6 +967,10 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		m.clicks.Forget()
 		return m.startAsk()
 	}
+	if cmd, dropped := m.clickTerm(msg); dropped {
+		m.clicks.Forget()
+		return cmd
+	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.view)); i++ {
 		iss := &m.issues[m.view[i]]
 		if cmd, narrowed := m.clickFacet(msg, iss); narrowed {
@@ -998,8 +1029,8 @@ func (m *Model) View() string {
 		}
 		m.warm(end)
 	}
-	if m.facet.on() {
-		lines = append(lines, m.facetPrompt())
+	if len(m.terms) > 0 {
+		lines = append(lines, m.termsLine())
 	}
 	if m.keptFilter() {
 		lines = append(lines, m.filterChip())
@@ -1155,7 +1186,7 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 	case !m.loaded:
 		lines = append(lines, m.styles.muted.Render("  Nothing has been asked of Jira yet."))
 	case m.filtered():
-		lines = append(lines, m.styles.muted.Render("  No loaded row matches "+m.filterWords()+"."))
+		lines = append(lines, m.styles.muted.Render("  No loaded row matches "+strconv.Quote(m.query)+"."))
 	default:
 		lines = append(lines, m.styles.muted.Render("  Nothing matches this search."),
 			m.styles.muted.Render("  "+m.jql))
@@ -1187,29 +1218,6 @@ func (m *Model) appendFailure(lines []string, h int) []string {
 // keptFilter reports that a filter is narrowing the rows while nothing is being
 // typed into it, which is the state with no prompt of its own to show it.
 func (m *Model) keptFilter() bool { return m.query != "" && !m.filtering }
-
-// chipKey is everything the accepted-filter line is built from, so that
-// scrolling under one costs what scrolling without one costs.
-type chipKey struct {
-	query      string
-	width, gen int
-}
-
-// filterChip names the filter the rows are being narrowed by, and the key that
-// takes it off — the same answer facetPrompt gives for a clicked cell, and for
-// the same reason.
-func (m *Model) filterChip() string {
-	key := chipKey{query: m.query, width: m.width, gen: m.styles.gen}
-	if m.chip != "" && key == m.chipKey {
-		return m.chip
-	}
-	label := "only rows matching " + strconv.Quote(m.query)
-	room := max(m.width-ansi.StringWidth(clearHint), 8)
-	m.chip = m.styles.prompt.Render(ansi.Truncate(label, room, m.deps.Theme.Glyphs.Ellipsis)) +
-		m.styles.muted.Render(clearHint)
-	m.chipKey = key
-	return m.chip
-}
 
 // The two sentences that name a key, spelt from the binding rather than written
 // out. The retry names the kernel's own refresh, which this view registers

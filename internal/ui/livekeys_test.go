@@ -8,6 +8,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/comment"
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -25,6 +26,7 @@ import (
 // until somebody has decided which half of the table it belongs in.
 var keyReporters = map[string]func(kernel.Deps) kernel.View{
 	list.ViewID:       list.New,
+	filter.ViewID:     func(d kernel.Deps) kernel.View { return filter.New(d) },
 	form.ViewID:       form.New,
 	comment.ViewID:    comment.New,
 	onboarding.ViewID: onboarding.New,

@@ -6,6 +6,14 @@ d delete this one    pgdn page down    g g    oldest            esc   back      
                                        ←/h    pan left          R     refetch everything
                                        →/l    pan right
 
+filter
+enter choose what to filter by    ↓/j  down         1-9   saved query           ctrl+k commands
+                                  ↑/k  up           g 1-9 switch view           ?      help
+                                  pgdn page down    esc   back                  q      quit
+                                  pgup page up      r     refresh
+                                  home first row    R     refetch everything
+                                  end  last row
+
 form
 enter use this issue type    ↓/j  down         1-9   saved query           ctrl+k commands
                              ↑/k  up           g 1-9 switch view           ?      help
@@ -39,9 +47,10 @@ enter choose    ↓/j down    1-9   saved query           ctrl+k commands
                             R     refetch everything
 
 list
-enter open                        ↓/j  down         ctrl+d half page down    1-9   saved query           ctrl+k commands
-/     filter                      ↑/k  up           ctrl+u half page up      g 1-9 switch view           ?      help
-a     all issues                  pgdn page down    g g    first row         esc   back                  q      quit
-e     edit this search            pgup page up      G      last row          r     refresh
-s     save this query to a key                                               R     refetch everything
+enter open                                     ↓/j  down         ctrl+d half page down    1-9   saved query        ...
+f     filter by a person, a status, a label    ↑/k  up           ctrl+u half page up      g 1-9 switch view
+/     filter                                   pgdn page down    g g    first row         esc   back
+a     all issues                               pgup page up      G      last row          r     refresh
+e     edit this search                                                                    R     refetch everything
+s     save this query to a key
 

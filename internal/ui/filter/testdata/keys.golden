@@ -1,0 +1,11 @@
+choosing what to filter by
+  acts   enter choose
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, end last row]
+  full   [enter choose what to filter by]
+typing for a value
+  acts   enter use it · esc facets
+  full   [↓ down, ↑ up, pgdn page down, pgup page up]
+  full   [enter filter by this value, esc back to the facets]
+nothing on offer
+  acts   esc facets
+  full   [esc back to the facets]

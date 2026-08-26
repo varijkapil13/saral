@@ -630,6 +630,56 @@ lands first, because `pkg/jira/port.go` blocks everyone while it is open.
   than blank, a `Limit` is a ceiling, a refusal names `CapPeople`, a status is identified by its id,
   and both sites hold two ids under one display name.
 
+- [x] **FP.2 — The filter picker** · **owns** `internal/ui/filter/**` including `testdata/**`,
+  `internal/ui/list/**` including `testdata/**`, the blank import in `internal/ui/views.go`,
+  `internal/ui/{keys_test,livekeys_test}.go`, `internal/ui/testdata/{footer,overlay}_*.golden`,
+  `internal/ui/palette/testdata/session_120x30.golden`, the JQL subset in
+  `pkg/jira/jiratest/fake.go` and its tests, `docs/{UX,ROADMAP}.md`
+  **The consumer that makes FP.1 real.** `f` in the issue list opens a picker: choose a facet, then
+  choose one of the values this site actually holds. All five port methods are called — `FindPeople`,
+  `People`, `IssueTypeStatuses`, `Priorities` and `Labels` — along with `PeopleQuery`, `CapPeople` and
+  `AccountKind`.
+  **A chosen value is a query, not a pass over the rows in hand.** `internal/ui/list/facet.go`
+  narrowed loaded rows by **display name**, which could not reach an unfetched issue and matched a
+  localised string two statuses on one project can share. That is gone: clicking a cell and choosing
+  in the picker are one term model, keyed by id, composed into the JQL and run against the site. Two
+  facets AND, two values of one facet OR, `assignee IS EMPTY` for nobody, and the clause is written in
+  a fixed facet order so two routes to one filter ask one question and store under one cache key.
+  Three of eleven account ids on the measured site carry a colon, so every value is quoted and the
+  quoting is tested.
+  **The terms are on screen as chips and a click drops one**, because [#105](https://github.com/varijkapil13/saral/issues/105)
+  settled that a filter you cannot see is one you cannot escape. `a` is the no-terms state rather than
+  a second clear. A project switch takes the terms with it: statuses and types are minted per project.
+  **Where the values come from is what makes it fast.** Statuses, types, priorities and labels are
+  read once when the facet opens and a keystroke then ranks what is held with `app.Pattern` — no round
+  trip, no allocation (`BenchmarkRankValues`, 0 allocs/op over two thousand values). Accounts cannot
+  be ranked locally, because Jira's matching is neither substring nor fuzzy and is undocumented, so
+  the site is asked once on open and again only when what is held runs thin — never twice for one
+  needle, and never at all while the first search returned the whole directory. The assignee search is
+  project-scoped so Jira drops the app accounts; the reporter search is not, because a reporter need
+  not be assignable, and what it drags in is badged and sunk instead. An account already in force that
+  the search does not answer with is drawn back by id through `People`, which is the one way a filter
+  on a robot can be taken off again.
+  **Version, component and sprint are not offered** and the docs say why: none can be read through
+  `jira.SessionClient`, so a row for one would be a facet with nowhere to get its values from.
+  **A late answer does not move the cursor.** `shown` holds indices into `all`, and an account search
+  landing appends to `all` and sorts it — so reading the row under the cursor *after* that read a
+  different value, slid the highlight one row, and left `enter` filtering by somebody the user never
+  chose, silently. The row is now named before anything reorders the set and restored by id, which is
+  what `docs/UX.md` principle 5 asks for.
+  **The fake can run what the picker writes.** `jiratest`'s JQL knew `project`, `key`, `status`,
+  `assignee` and `labels` compared with `=`, `IS EMPTY` and `IS NOT EMPTY` joined by `AND` — so a
+  clause on a reporter, a type or a priority, and every multi-value `IN`, was refused by the fake and
+  could only be tested as a string. It also reads `reporter`, `issuetype`/`type`, `priority`,
+  `IN (a, b)`, `currentUser()` on either account field, and an `OR` **inside one pair of brackets**,
+  which is the whole of what `Terms.Clause()` composes. Nothing else moved: an unbracketed `OR`, `~`,
+  an inequality, `NOT` and a date function are still refused, because a query the fake cannot honour
+  must never pass as one that matched everything. Every facet is now asserted on the issues it
+  selects rather than on the clause it emits.
+  Budgets held: the list's steady scroll is 1 allocation a frame with terms in force, `BenchmarkFrame`
+  is unchanged at 297, and the picker is virtualized and memoized — 3 allocations a frame scrolling
+  two thousand labels, 94µs from keystroke to frame.
+
 ## Batch 4 — Attachments · parallel ×3
 
 - [ ] **P4.1 — List and download** · [#17](https://github.com/varijkapil13/saral/issues/17) · **owns** `pkg/jira/cloud/attachment.go`

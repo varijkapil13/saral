@@ -1,5 +1,7 @@
 comment
  Issues  a write  e edit  d delete                                  ? ctrl+k esc
+filter
+ Issues  enter choose                                               ? ctrl+k esc
 form
  Issues  enter use this issue type                                  ? ctrl+k esc
 issue
@@ -9,7 +11,7 @@ issue.edit
 issue.move
  Issues  enter choose                                               ? ctrl+k esc
 list
- Issues  enter open  / filter  a all  e search  s save                ? ctrl+k q
+ Issues  enter open  f filter by  / filter  a all  e search  s save   ? ctrl+k q
 onboarding
  Issues  enter continue                                                   ctrl+k
 palette

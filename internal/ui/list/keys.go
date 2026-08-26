@@ -16,6 +16,10 @@ type keyMap struct {
 	Bottom   kernel.Binding
 	Open     kernel.Binding
 	Filter   kernel.Binding
+	// FilterBy opens the picker: a facet, then one of the values this site
+	// actually holds for it. It is a different thing from Filter, which narrows
+	// the rows already loaded by what is typed.
+	FilterBy kernel.Binding
 	All      kernel.Binding
 	Edit     kernel.Binding
 	Save     kernel.Binding
@@ -51,6 +55,7 @@ func defaultKeys() keyMap {
 		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "last row"),
 		Open:     kernel.Bind([]string{"enter"}, "enter", "open"),
 		Filter:   kernel.Bind([]string{"/"}, "/", "filter"),
+		FilterBy: kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),
 		All:      kernel.Bind([]string{"a"}, "a", "all issues"),
 		Edit:     kernel.Bind([]string{"e"}, "e", "edit this search"),
 		Save:     kernel.Bind([]string{"s"}, "s", "save this query to a key"),
@@ -80,11 +85,12 @@ func (k keyMap) keySet() kernel.KeySet { return k.browsing(false) }
 // into a +N, and the overlay lists it.
 func (k keyMap) browsing(narrowed bool) kernel.KeySet {
 	all, search, save := kernel.Terse(k.All, "all"), kernel.Terse(k.Edit, "search"), kernel.Terse(k.Save, "save")
-	acts := []kernel.Binding{k.Open, k.Filter, all, search, save}
-	actions := []kernel.Binding{k.Open, k.Filter, k.All, k.Edit, k.Save}
+	by := kernel.Terse(k.FilterBy, "filter by")
+	acts := []kernel.Binding{k.Open, by, k.Filter, all, search, save}
+	actions := []kernel.Binding{k.Open, k.FilterBy, k.Filter, k.All, k.Edit, k.Save}
 	if narrowed {
-		acts = []kernel.Binding{k.Open, k.Filter, kernel.Terse(k.Unfilter, "clear"), all, search, save}
-		actions = []kernel.Binding{k.Open, k.Filter, k.Unfilter, k.All, k.Edit, k.Save}
+		acts = []kernel.Binding{k.Open, by, k.Filter, kernel.Terse(k.Unfilter, "clear"), all, search, save}
+		actions = []kernel.Binding{k.Open, k.FilterBy, k.Filter, k.Unfilter, k.All, k.Edit, k.Save}
 	}
 	return kernel.KeySet{
 		Acts: acts,
@@ -176,6 +182,7 @@ const (
 	actBottom
 	actOpen
 	actFilter
+	actFilterBy
 	actAll
 	actEdit
 	actSave
@@ -196,7 +203,7 @@ func (k keyMap) tables() (normal, filtering, asking map[string]action) {
 		binding{k.HalfDown, actHalfDown}, binding{k.HalfUp, actHalfUp},
 		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
 		binding{k.Open, actOpen}, binding{k.Filter, actFilter},
-		binding{k.Unfilter, actClear},
+		binding{k.FilterBy, actFilterBy}, binding{k.Unfilter, actClear},
 		binding{k.All, actAll}, binding{k.Edit, actEdit},
 		binding{k.Save, actSave},
 	)

@@ -80,11 +80,21 @@ func (f *Fake) Fields(ctx context.Context) ([]jira.Field, error) {
 	return fakeCloneFields(f.fields), nil
 }
 
-// Search runs the subset of JQL the fake understands: project, key, status,
-// assignee and labels compared with =, IS EMPTY or IS NOT EMPTY, joined by AND,
-// with an optional ORDER BY. Anything else is a *jira.ValidationError naming
-// jql, so a query the fake cannot honour never passes as a query that matched
-// everything.
+// Search runs the subset of JQL the fake understands. It is deliberately small
+// — it exists so that a view's own query can be run against the fake, not to be
+// a query engine — and it is exactly this:
+//
+//   - the fields project, key, issuekey, status, issuetype, type, priority,
+//     assignee, reporter and labels, each matching on the site's id or on the
+//     display name;
+//   - the operators = , IN (a, b, ...), IS EMPTY and IS NOT EMPTY;
+//   - currentUser() as a value on assignee and reporter;
+//   - clauses joined by AND, or by OR inside one pair of brackets;
+//   - an optional trailing ORDER BY <field> [ASC|DESC].
+//
+// Anything else — an unbracketed OR, ~, an inequality, a date function, NOT, a
+// field not on that list — is a *jira.ValidationError naming jql, so a query the
+// fake cannot honour never passes as a query that matched everything.
 func (f *Fake) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue], error) {
 	mask := jira.NewFieldMask(q.Fields)
 	return jira.Cursor(ctx, func(ctx context.Context, token string) ([]jira.Issue, string, error) {
@@ -1502,18 +1512,25 @@ func fakeDecodeCursor(token string) (int, error) {
 }
 
 type fakeClause struct {
-	field string
-	op    string
-	value string
+	field  string
+	op     string
+	values []string
 }
+
+// fakeGroup is one AND term of a query: a single clause, or several joined by
+// OR inside brackets, which is the only place the fake reads an OR.
+type fakeGroup []fakeClause
 
 type fakeQueryPlan struct {
-	clauses []fakeClause
-	order   string
-	desc    bool
+	groups []fakeGroup
+	order  string
+	desc   bool
 }
 
-var fakeJQLFields = []string{"project", "key", "issuekey", "status", "assignee", "labels"}
+var fakeJQLFields = []string{
+	"project", "key", "issuekey", "status", "issuetype", "type",
+	"priority", "assignee", "reporter", "labels",
+}
 
 var fakeJQLOrders = []string{"key", "created", "updated", "summary", "status", "priority", "assignee", "project"}
 
@@ -1555,13 +1572,74 @@ func fakeParseJQL(q string) (fakeQueryPlan, error) {
 		return plan, nil
 	}
 	for _, part := range fakeSplitWord(body, "and") {
-		c, err := fakeParseClause(part)
+		g, err := fakeParseGroup(part)
 		if err != nil {
 			return plan, err
 		}
-		plan.clauses = append(plan.clauses, c)
+		plan.groups = append(plan.groups, g)
 	}
 	return plan, nil
+}
+
+// fakeParseGroup reads one AND term. Brackets round the whole of it mean its
+// clauses are joined by OR, which is the shape a filter writes for "nobody, or
+// this person". An OR anywhere else is outside the subset.
+func fakeParseGroup(s string) (fakeGroup, error) {
+	body, bracketed := fakeUnbracket(s)
+	if !bracketed {
+		c, err := fakeParseClause(s)
+		if err != nil {
+			return nil, err
+		}
+		return fakeGroup{c}, nil
+	}
+	var out fakeGroup
+	for _, part := range fakeSplitWord(body, "or") {
+		c, err := fakeParseClause(part)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+// fakeUnbracket strips the pair of brackets that wraps the whole of s. A
+// leading and a trailing bracket that are not each other's — "(a) OR (b)" —
+// leave s alone, so it is refused as a clause rather than read as a group.
+func fakeUnbracket(s string) (string, bool) {
+	body := strings.TrimSpace(s)
+	if len(body) < 2 || body[0] != '(' || body[len(body)-1] != ')' {
+		return body, false
+	}
+	inner := body[1 : len(body)-1]
+	if !fakeBalanced(inner) {
+		return body, false
+	}
+	return inner, true
+}
+
+// fakeBalanced reports whether every bracket and quote in s is closed inside it.
+func fakeBalanced(s string) bool {
+	quote, depth := byte(0), 0
+	for i := range len(s) {
+		switch {
+		case quote != 0:
+			if s[i] == quote {
+				quote = 0
+			}
+		case s[i] == '"' || s[i] == '\'':
+			quote = s[i]
+		case s[i] == '(':
+			depth++
+		case s[i] == ')':
+			depth--
+			if depth < 0 {
+				return false
+			}
+		}
+	}
+	return depth == 0 && quote == 0
 }
 
 func fakeParseClause(s string) (fakeClause, error) {
@@ -1570,7 +1648,7 @@ func fakeParseClause(s string) (fakeClause, error) {
 		return fakeClause{}, err
 	}
 	unsupported := func() error {
-		return fakeJQLError("cannot parse %q; the fake understands <field> = <value>, IS EMPTY and IS NOT EMPTY joined by AND", strings.TrimSpace(s))
+		return fakeJQLError("cannot parse %q; the fake understands <field> = <value>, <field> IN (<value>, ...), IS EMPTY and IS NOT EMPTY, joined by AND or by OR inside brackets", strings.TrimSpace(s))
 	}
 	if len(toks) == 0 {
 		return fakeClause{}, unsupported()
@@ -1578,26 +1656,54 @@ func fakeParseClause(s string) (fakeClause, error) {
 	field := strings.ToLower(toks[0])
 	switch {
 	case len(toks) == 3 && toks[1] == "=":
-		return fakeNewClause(field, "=", toks[2], unsupported)
+		return fakeNewClause(field, "=", []string{toks[2]}, unsupported)
 	case len(toks) == 5 && toks[1] == "=" && toks[3] == "(" && toks[4] == ")":
-		return fakeNewClause(field, "=", toks[2]+"()", unsupported)
+		return fakeNewClause(field, "=", []string{toks[2] + "()"}, unsupported)
+	case len(toks) >= 5 && strings.EqualFold(toks[1], "in") && toks[2] == "(" && toks[len(toks)-1] == ")":
+		values, ok := fakeListValues(toks[3 : len(toks)-1])
+		if !ok {
+			return fakeClause{}, unsupported()
+		}
+		return fakeNewClause(field, "in", values, unsupported)
 	case len(toks) == 3 && strings.EqualFold(toks[1], "is") && strings.EqualFold(toks[2], "empty"):
-		return fakeNewClause(field, "is empty", "", unsupported)
+		return fakeNewClause(field, "is empty", nil, unsupported)
 	case len(toks) == 4 && strings.EqualFold(toks[1], "is") && strings.EqualFold(toks[2], "not") && strings.EqualFold(toks[3], "empty"):
-		return fakeNewClause(field, "is not empty", "", unsupported)
+		return fakeNewClause(field, "is not empty", nil, unsupported)
 	default:
 		return fakeClause{}, unsupported()
 	}
 }
 
-func fakeNewClause(field, op, value string, unsupported func() error) (fakeClause, error) {
+// fakeListValues reads the inside of an IN list: values separated by single
+// commas, and nothing else — no nesting, no function call, no trailing comma.
+func fakeListValues(toks []string) ([]string, bool) {
+	if len(toks)%2 == 0 {
+		return nil, false
+	}
+	out := make([]string, 0, (len(toks)+1)/2)
+	for i, tok := range toks {
+		if i%2 == 1 {
+			if tok != "," {
+				return nil, false
+			}
+			continue
+		}
+		if tok == "," || tok == "(" || tok == ")" {
+			return nil, false
+		}
+		out = append(out, tok)
+	}
+	return out, true
+}
+
+func fakeNewClause(field, op string, values []string, unsupported func() error) (fakeClause, error) {
 	if !slices.Contains(fakeJQLFields, field) {
 		return fakeClause{}, fakeJQLError("the fake cannot filter on %q; it knows %s", field, strings.Join(fakeJQLFields, ", "))
 	}
-	if op == "=" && value == "" {
+	if (op == "=" || op == "in") && (len(values) == 0 || slices.Contains(values, "")) {
 		return fakeClause{}, unsupported()
 	}
-	return fakeClause{field: field, op: op, value: value}, nil
+	return fakeClause{field: field, op: op, values: values}, nil
 }
 
 // fakeTokenize splits one clause into words, quoted strings and operators.
@@ -1718,8 +1824,8 @@ func (f *Fake) fakeMatchIssues(plan fakeQueryPlan) []*jira.Issue {
 	for _, key := range f.issueKeys {
 		iss := f.issues[key]
 		keep := true
-		for _, c := range plan.clauses {
-			if !f.fakeMatchClause(iss, c) {
+		for _, g := range plan.groups {
+			if !f.fakeMatchGroup(iss, g) {
 				keep = false
 				break
 			}
@@ -1739,6 +1845,16 @@ func (f *Fake) fakeMatchIssues(plan fakeQueryPlan) []*jira.Issue {
 	return out
 }
 
+// fakeMatchGroup is an OR: one clause answering is the whole group answering.
+func (f *Fake) fakeMatchGroup(iss *jira.Issue, g fakeGroup) bool {
+	for _, c := range g {
+		if f.fakeMatchClause(iss, c) {
+			return true
+		}
+	}
+	return false
+}
+
 func (f *Fake) fakeMatchClause(iss *jira.Issue, c fakeClause) bool {
 	values := fakeClauseValues(iss, c.field)
 	switch c.op {
@@ -1747,13 +1863,19 @@ func (f *Fake) fakeMatchClause(iss *jira.Issue, c fakeClause) bool {
 	case "is not empty":
 		return len(values) > 0
 	default:
-		want := c.value
-		if c.field == "assignee" && strings.EqualFold(want, "currentUser()") {
-			want = f.me.AccountID
+		for _, want := range c.values {
+			if fakeAccountField(c.field) && strings.EqualFold(want, "currentUser()") {
+				want = f.me.AccountID
+			}
+			if slices.ContainsFunc(values, func(v string) bool { return strings.EqualFold(v, want) }) {
+				return true
+			}
 		}
-		return slices.ContainsFunc(values, func(v string) bool { return strings.EqualFold(v, want) })
+		return false
 	}
 }
+
+func fakeAccountField(field string) bool { return field == "assignee" || field == "reporter" }
 
 func fakeClauseValues(iss *jira.Issue, field string) []string {
 	switch field {
@@ -1763,11 +1885,23 @@ func fakeClauseValues(iss *jira.Issue, field string) []string {
 		return []string{iss.Key, iss.ID}
 	case "status":
 		return []string{iss.Status.Name, iss.Status.ID}
+	case "issuetype", "type":
+		return []string{iss.Type.Name, iss.Type.ID}
+	case "priority":
+		if iss.Priority == nil {
+			return nil
+		}
+		return []string{iss.Priority.Name, iss.Priority.ID}
 	case "assignee":
 		if iss.Assignee == nil {
 			return nil
 		}
 		return []string{iss.Assignee.AccountID, iss.Assignee.DisplayName}
+	case "reporter":
+		if iss.Reporter == nil {
+			return nil
+		}
+		return []string{iss.Reporter.AccountID, iss.Reporter.DisplayName}
 	case "labels":
 		return iss.Labels
 	default:

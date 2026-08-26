@@ -1,12 +1,14 @@
-package list
+package filter
 
 import (
+	"context"
 	"flag"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -22,15 +24,6 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
-// allJQL asks for the whole project in key order. The query the view opens on
-// is the account's own work, which is the right default and the wrong fixture:
-// it depends on who the fake says you are.
-const allJQL = `project = "PROJ" ORDER BY key`
-
-// allUpdated is the search a is bound to, and the one a term set with nothing
-// left in it lands back on.
-const allUpdated = `project = "PROJ" ORDER BY updated DESC`
-
 func fullCaps() jira.Capabilities {
 	ok := jira.Capability{OK: true}
 	return jira.Capabilities{
@@ -39,7 +32,7 @@ func fullCaps() jira.Capabilities {
 	}
 }
 
-func testDeps(client jira.Client) kernel.Deps {
+func testDeps(client jira.SessionClient) kernel.Deps {
 	return kernel.Deps{
 		Jira:    client,
 		Caps:    fullCaps(),
@@ -47,7 +40,7 @@ func testDeps(client jira.Client) kernel.Deps {
 		Theme:   kernel.NewTheme(kernel.ThemeNoColor, true, kernel.ASCIIGlyphs()),
 		Zones:   zone.New(),
 		Site:    "example.atlassian.net",
-		Now:     func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
+		Now:     func() time.Time { return time.Date(2026, time.March, 5, 9, 0, 0, 0, time.UTC) },
 	}
 }
 
@@ -58,19 +51,45 @@ func newFake(issues int, opts ...jiratest.Option) *jiratest.Fake {
 	}, opts...)...)
 }
 
-// driver runs the view the way the kernel would, but keeps the messages the
-// view sends upward — a status line, a pushed pane — instead of acting on them,
-// so a test can assert what the view asked for.
-type driver struct {
-	t        *testing.T
-	m        *Model
-	statuses []kernel.StatusMsg
-	pushes   []kernel.PushMsg
+// watcher records every account search the picker makes, which is the only way
+// to hold it to asking the site once rather than once per keystroke, and to
+// asking the assignable search for an assignee and the site-wide one for a
+// reporter.
+type watcher struct {
+	*jiratest.Fake
+	mu      sync.Mutex
+	queries []jira.PeopleQuery
 }
 
-func newDriver(t *testing.T, d kernel.Deps, w, h int) *driver {
+func watching(f *jiratest.Fake) *watcher { return &watcher{Fake: f} }
+
+func (w *watcher) FindPeople(ctx context.Context, q jira.PeopleQuery) ([]jira.User, error) {
+	w.mu.Lock()
+	w.queries = append(w.queries, q)
+	w.mu.Unlock()
+	return w.Fake.FindPeople(ctx, q)
+}
+
+func (w *watcher) asked() []jira.PeopleQuery {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]jira.PeopleQuery(nil), w.queries...)
+}
+
+// driver runs the picker the way the kernel would, but keeps the messages it
+// sends upward instead of acting on them, so a test can assert what it asked
+// for.
+type driver struct {
+	t          *testing.T
+	m          *Model
+	statuses   []kernel.StatusMsg
+	pops       int
+	broadcasts []tea.Msg
+}
+
+func newDriver(t *testing.T, d kernel.Deps, w, h int, opts ...Option) *driver {
 	t.Helper()
-	view, ok := New(d).(*Model)
+	view, ok := New(d, opts...).(*Model)
 	if !ok {
 		t.Fatal("New did not return a *Model")
 	}
@@ -78,15 +97,6 @@ func newDriver(t *testing.T, d kernel.Deps, w, h int) *driver {
 	dr.send(kernel.SizeMsg{Width: w, Height: h})
 	dr.send(kernel.FocusMsg{Focused: true})
 	dr.run(dr.m.Init())
-	return dr
-}
-
-// open is a driver on every issue in the project rather than on the account's
-// own, which is what the fixtures want.
-func openAll(t *testing.T, d kernel.Deps, w, h int) *driver {
-	t.Helper()
-	dr := newDriver(t, d, w, h)
-	dr.send(QueryMsg{JQL: allJQL, Title: "All issues"})
 	return dr
 }
 
@@ -126,8 +136,10 @@ func (d *driver) run(cmd tea.Cmd) {
 		switch msg := msg.(type) {
 		case kernel.StatusMsg:
 			d.statuses = append(d.statuses, msg)
-		case kernel.PushMsg:
-			d.pushes = append(d.pushes, msg)
+		case kernel.PopMsg:
+			d.pops++
+		case kernel.BroadcastMsg:
+			d.broadcasts = append(d.broadcasts, msg.Msg)
 		default:
 			view, follow := d.m.Update(msg)
 			model, ok := view.(*Model)
@@ -154,6 +166,17 @@ func (d *driver) typeText(text string) {
 	}
 }
 
+// pick opens the facet by name, the way somebody would: move down to it and
+// press enter.
+func (d *driver) pick(f Facet) {
+	d.t.Helper()
+	d.send(keyPress("home"))
+	for i := 0; i < d.m.facetAt(f); i++ {
+		d.send(keyPress("j"))
+	}
+	d.send(keyPress("enter"))
+}
+
 func (d *driver) view() string { return ansi.Strip(d.m.View()) }
 
 func (d *driver) lastStatus() kernel.StatusMsg {
@@ -163,62 +186,25 @@ func (d *driver) lastStatus() kernel.StatusMsg {
 	return d.statuses[len(d.statuses)-1]
 }
 
-// start builds the kernel around the registered list view, sizes it and lets
-// the first search settle, exactly as a running program would.
-func start(t *testing.T, d kernel.Deps, w, h int, opts ...kernel.Option) kernel.Model {
-	t.Helper()
-	m, err := kernel.New(d, append([]kernel.Option{kernel.WithSize(w, h)}, opts...)...)
-	if err != nil {
-		t.Fatalf("kernel.New: %v", err)
+// chosen is the term the picker was closed on, and false when it has not been.
+func (d *driver) chosen() (Term, bool) {
+	for i := len(d.broadcasts) - 1; i >= 0; i-- {
+		if msg, ok := d.broadcasts[i].(ChosenMsg); ok {
+			return msg.Term, true
+		}
 	}
-	next, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
-	return drain(t, next.(kernel.Model), next.(kernel.Model).Init())
+	return Term{}, false
 }
 
-func startAll(t *testing.T, d kernel.Deps, w, h int, opts ...kernel.Option) kernel.Model {
-	t.Helper()
-	m := start(t, d, w, h, opts...)
-	return send(t, m, kernel.BroadcastMsg{Msg: QueryMsg{JQL: allJQL, Title: "All issues"}})
-}
-
-func send(t *testing.T, m kernel.Model, msg tea.Msg) kernel.Model {
-	t.Helper()
-	next, cmd := m.Update(msg)
-	return drain(t, next.(kernel.Model), cmd)
-}
-
-// drain runs commands to exhaustion against the kernel, which is what the
-// Bubble Tea runtime does for a real program.
-func drain(t *testing.T, m kernel.Model, cmd tea.Cmd) kernel.Model {
-	t.Helper()
-	queue := []tea.Cmd{cmd}
-	for steps := 0; len(queue) > 0; steps++ {
-		if steps > 4000 {
-			t.Fatal("commands never settled")
-		}
-		next := queue[0]
-		queue = queue[1:]
-		if next == nil {
-			continue
-		}
-		msg := next()
-		if msg == nil {
-			continue
-		}
-		if cmds, ok := unwrapCmds(msg); ok {
-			queue = append(queue, cmds...)
-			continue
-		}
-		updated, follow := m.Update(msg)
-		m = updated.(kernel.Model)
-		queue = append(queue, follow)
+// labels is what the rows on offer say, in the order they are offered.
+func (d *driver) labels() []string {
+	out := make([]string, 0, len(d.m.shown))
+	for _, at := range d.m.shown {
+		out = append(out, d.m.all[at].term.Label)
 	}
-	return m
+	return out
 }
 
-// unwrapCmds opens a batch or a sequence. Bubble Tea exports the first as
-// BatchMsg and keeps the second unexported, so both are recognised by shape
-// rather than by name.
 func unwrapCmds(msg tea.Msg) ([]tea.Cmd, bool) {
 	v := reflect.ValueOf(msg)
 	if v.Kind() != reflect.Slice || v.Type().Elem() != reflect.TypeOf(tea.Cmd(nil)) {
@@ -250,19 +236,13 @@ func keyPress(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyPgDown}
 	case "pgup":
 		return tea.KeyPressMsg{Code: tea.KeyPgUp}
-	case "ctrl+g":
-		return tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}
-	case "ctrl+d":
-		return tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}
-	case "ctrl+u":
-		return tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl}
+	case "backspace":
+		return tea.KeyPressMsg{Code: tea.KeyBackspace}
 	default:
 		r, _ := utf8.DecodeRuneInString(s)
 		return tea.KeyPressMsg{Code: r, Text: s}
 	}
 }
-
-func frame(m kernel.Model) string { return ansi.Strip(m.Frame()) }
 
 func golden(t *testing.T, name, got string) {
 	t.Helper()
@@ -278,7 +258,7 @@ func golden(t *testing.T, name, got string) {
 	}
 	want, err := os.ReadFile(path) //nolint:gosec // the path is a literal under testdata
 	if err != nil {
-		t.Fatalf("%v — run: go test ./internal/ui/list -update", err)
+		t.Fatalf("%v — run: go test ./internal/ui/filter -update", err)
 	}
 	if string(want) != got {
 		t.Errorf("frame differs from %s\n--- want ---\n%s\n--- got ---\n%s", path, want, got)

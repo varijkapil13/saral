@@ -191,6 +191,10 @@ func TestSearch_RefusesJQLItCannotParseRatherThanMatchingEverything(t *testing.T
 		{"a field the fake does not index", `sprint = 4`},
 		{"a function call as a value", `created >= -7d`},
 		{"an OR", `project = PROJ OR project = OTHER`},
+		{"an OR between two bracketed clauses", `(status = "10201") OR (status = "10203")`},
+		{"an IN list with a trailing comma", `status IN ("10201",)`},
+		{"an IN list with nothing in it", `status IN ()`},
+		{"a field the picker does not offer either", `component = "web"`},
 		{"an unterminated quote", `status = "Triage`},
 		{"an order by field the fake cannot sort on", `project = PROJ ORDER BY rank`},
 		{"a nonsense sort direction", `project = PROJ ORDER BY key sideways`},
@@ -326,6 +330,103 @@ func TestSearch_FiltersOnTheJQLSubsetItSupports(t *testing.T) {
 			tc.check(t, page.Items)
 		})
 	}
+}
+
+// The filter picker composes a clause over any of six facets and runs it at the
+// site, so the fake has to answer for all six — and for the IN list two values
+// of one facet compose to, and the bracketed OR that lets "nobody" sit beside a
+// named person. A shape the fake refuses is a facet whose rows nothing checks.
+func TestSearch_SelectsTheRightIssuesForEveryFieldAFilterComposes(t *testing.T) {
+	t.Parallel()
+	const issues = 30
+	c := fakeNewWithIssues(t, issues, jiratest.WithPageSize(100))
+	fields := []string{"summary", "status", "assignee", "reporter", "labels", "priority", "issuetype"}
+
+	cases := []struct {
+		name  string
+		jql   string
+		match func(iss *jira.Issue) bool
+	}{
+		{
+			name: "a reporter by account id",
+			jql:  `reporter = "acct-grace"`,
+			match: func(iss *jira.Issue) bool {
+				return iss.Reporter != nil && iss.Reporter.AccountID == "acct-grace"
+			},
+		},
+		{
+			name:  "an issue type by the id the site minted",
+			jql:   `issuetype = "10302"`,
+			match: func(iss *jira.Issue) bool { return iss.Type.ID == "10302" },
+		},
+		{
+			name:  "an issue type by its name, under the spelling JQL also takes",
+			jql:   `type = "Story"`,
+			match: func(iss *jira.Issue) bool { return iss.Type.Name == "Story" },
+		},
+		{
+			name:  "a priority by name",
+			jql:   `priority = "Normal"`,
+			match: func(iss *jira.Issue) bool { return iss.Priority != nil && iss.Priority.Name == "Normal" },
+		},
+		{
+			name:  "two statuses, which is what two values of one facet compose to",
+			jql:   `status IN ("10201", "10203")`,
+			match: func(iss *jira.Issue) bool { return iss.Status.ID == "10201" || iss.Status.ID == "10203" },
+		},
+		{
+			name: "two accounts",
+			jql:  `assignee IN ("acct-ada", "acct-grace")`,
+			match: func(iss *jira.Issue) bool {
+				return iss.Assignee != nil &&
+					(iss.Assignee.AccountID == "acct-ada" || iss.Assignee.AccountID == "acct-grace")
+			},
+		},
+		{
+			name: "nobody, or one named person",
+			jql:  `(assignee = "acct-ada" OR assignee IS EMPTY)`,
+			match: func(iss *jira.Issue) bool {
+				return iss.Assignee == nil || iss.Assignee.AccountID == "acct-ada"
+			},
+		},
+		{
+			name: "a facet and a person together",
+			jql:  `priority = "10401" AND reporter = "acct-grace"`,
+			match: func(iss *jira.Issue) bool {
+				return iss.Priority != nil && iss.Priority.ID == "10401" &&
+					iss.Reporter != nil && iss.Reporter.AccountID == "acct-grace"
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			want := fakeKeysMatching(jiratest.Gen(issues), tc.match)
+			if len(want) == 0 || len(want) == issues {
+				t.Fatalf("%q matches %d of %d issues, so it would pass against a fake that filtered nothing",
+					tc.jql, len(want), issues)
+			}
+			page, err := c.Search(t.Context(), jira.Query{JQL: tc.jql, Fields: fields})
+			if err != nil {
+				t.Fatalf("Search(%q): %v", tc.jql, err)
+			}
+			if got := fakeKeysMatching(page.Items, func(*jira.Issue) bool { return true }); !slices.Equal(got, want) {
+				t.Errorf("%q selected %v, want %v", tc.jql, got, want)
+			}
+		})
+	}
+}
+
+// fakeKeysMatching is the keys of the issues a predicate keeps, in the order
+// they were given, which is the order a search with no ORDER BY answers in.
+func fakeKeysMatching(issues []jira.Issue, match func(iss *jira.Issue) bool) []string {
+	out := make([]string, 0, len(issues))
+	for i := range issues {
+		if match(&issues[i]) {
+			out = append(out, issues[i].Key)
+		}
+	}
+	return out
 }
 
 func TestSearch_OrdersDescendingWhenTheQuerySaysSo(t *testing.T) {

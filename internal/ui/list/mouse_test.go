@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -46,53 +47,107 @@ func pressOn(t *testing.T, d kernel.Deps, dr *driver, name string) {
 	dr.send(tea.MouseClickMsg{X: at.StartX, Y: at.StartY, Button: tea.MouseLeft})
 }
 
-func TestList_ClickingACellNarrowsTheRowsToItAndClickingItAgainClears(t *testing.T) {
+// Clicking a cell asks the site again rather than narrowing the rows already
+// loaded, and it asks by the id the row carries: a display name is localised,
+// two statuses on one project can share one, and a pass over what is loaded
+// cannot reach an issue this session never fetched.
+func TestList_ClickingACellAsksTheSiteForThatValueAndClickingItAgainDropsIt(t *testing.T) {
 	t.Parallel()
 
 	for name, tc := range map[string]struct {
 		zone  func(string) string
 		key   string
-		kind  Facet
-		value string
+		kind  filter.Facet
+		label string
+		jql   string
 	}{
-		"a status chip": {zone: statusZone, key: "PROJ-2", kind: FacetStatus, value: "Shipped"},
-		"a type chip":   {zone: typeZone, key: "PROJ-2", kind: FacetType, value: "Chore"},
-		"an assignee":   {zone: whoZone, key: "PROJ-2", kind: FacetAssignee, value: "Alan Turing"},
-		"nobody at all": {zone: whoZone, key: "PROJ-4", kind: FacetAssignee, value: unassigned},
+		"a status chip": {
+			zone: statusZone, key: "PROJ-2", kind: filter.FacetStatus, label: "Shipped",
+			jql: `project = "PROJ" AND status = "10203" ORDER BY updated DESC`,
+		},
+		"a type chip": {
+			zone: typeZone, key: "PROJ-2", kind: filter.FacetType, label: "Chore",
+			jql: `project = "PROJ" AND issuetype = "10303" ORDER BY updated DESC`,
+		},
+		"an assignee": {
+			zone: whoZone, key: "PROJ-2", kind: filter.FacetAssignee, label: "Alan Turing",
+			jql: `project = "PROJ" AND assignee = "acct-alan" ORDER BY updated DESC`,
+		},
+		"nobody at all": {
+			zone: whoZone, key: "PROJ-4", kind: filter.FacetAssignee, label: unassigned,
+			jql: `project = "PROJ" AND assignee IS EMPTY ORDER BY updated DESC`,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			d := testDeps(newFake(20))
 			dr := openAll(t, d, 120, 30)
-			all := len(dr.m.view)
 
 			pressOn(t, d, dr, tc.zone(tc.key))
 
-			if got := (facet{kind: tc.kind, value: tc.value}); dr.m.facet != got {
-				t.Fatalf("the rows are narrowed to %+v, want %+v", dr.m.facet, got)
+			if got := dr.m.jql; got != tc.jql {
+				t.Fatalf("the click asked for %q, want %q", got, tc.jql)
 			}
-			if len(dr.m.view) == 0 || len(dr.m.view) >= all {
-				t.Fatalf("%d of %d rows survived the narrowing, want some but not all", len(dr.m.view), all)
+			if len(dr.m.terms) != 1 || dr.m.terms[0].Facet != tc.kind || dr.m.terms[0].Label != tc.label {
+				t.Fatalf("the terms in force are %+v, want one %s named %q", dr.m.terms, tc.kind.Label(), tc.label)
 			}
-			for _, at := range dr.m.view {
-				iss := &dr.m.issues[at]
-				if got := facetValue(iss, tc.kind); got != tc.value {
-					t.Errorf("%s is still shown with %s %q, want only %q", iss.Key, tc.kind.label(), got, tc.value)
-				}
-			}
-			mustContain(t, dr.view(), "only "+tc.kind.label()+" \""+tc.value+"\"")
+			mustContain(t, dr.view(), tc.kind.Label()+" \""+tc.label+"\"")
 
-			pressOn(t, d, dr, tc.zone(tc.key))
+			// The chip is the one way off a term that is there whatever the
+			// search came back with, which a cell of a row is not.
+			pressOn(t, d, dr, termZone(0))
 
-			if dr.m.facet.on() {
-				t.Fatalf("a second click left the rows narrowed to %+v", dr.m.facet)
+			if len(dr.m.terms) != 0 {
+				t.Fatalf("clicking the chip left %+v in force", dr.m.terms)
 			}
-			if len(dr.m.view) != all {
-				t.Errorf("%d rows came back, want all %d", len(dr.m.view), all)
+			if got := dr.m.jql; got != allUpdated {
+				t.Errorf("dropping the term asked for %q, want the whole project again: %q", got, allUpdated)
 			}
-			mustNotContain(t, dr.view(), "only "+tc.kind.label())
+			mustNotContain(t, dr.view(), tc.kind.Label()+" \""+tc.label+"\"")
 		})
+	}
+}
+
+// The same cell twice is the gesture docs/UX.md promises: put it on, take it
+// off again.
+func TestList_ClickingTheSameCellTwiceDropsTheTerm(t *testing.T) {
+	t.Parallel()
+
+	d := testDeps(newFake(20))
+	dr := openAll(t, d, 120, 30)
+
+	pressOn(t, d, dr, statusZone("PROJ-2"))
+	if len(dr.m.terms) != 1 {
+		t.Fatalf("the first click put %+v in force, want one term", dr.m.terms)
+	}
+	pressOn(t, d, dr, statusZone("PROJ-2"))
+
+	if len(dr.m.terms) != 0 {
+		t.Errorf("a second click on the same cell left %+v in force", dr.m.terms)
+	}
+	if got := dr.m.jql; got != allUpdated {
+		t.Errorf("the search is %q, want the whole project again: %q", got, allUpdated)
+	}
+}
+
+// The rows really do come back narrowed, for a facet the fake's JQL knows.
+func TestList_ATermNarrowsTheRowsTheSiteAnswersWith(t *testing.T) {
+	t.Parallel()
+
+	d := testDeps(newFake(20))
+	dr := openAll(t, d, 120, 30)
+	all := len(dr.m.view)
+
+	pressOn(t, d, dr, statusZone("PROJ-2"))
+
+	if len(dr.m.view) == 0 || len(dr.m.view) >= all {
+		t.Fatalf("%d of %d rows came back, want some but not all", len(dr.m.view), all)
+	}
+	for _, at := range dr.m.view {
+		if got := dr.m.issues[at].Status.ID; got != "10203" {
+			t.Errorf("%s came back with status %q, want only 10203", dr.m.issues[at].Key, got)
+		}
 	}
 }
 
@@ -112,14 +167,15 @@ func TestList_TheChipsOnTheSelectedRowAreStillWhereTheyLook(t *testing.T) {
 
 	pressOn(t, d, dr, statusZone("PROJ-2"))
 
-	if got := (facet{kind: FacetStatus, value: "Shipped"}); dr.m.facet != got {
-		t.Errorf("clicking the selected row's status narrowed to %+v, want %+v", dr.m.facet, got)
+	if len(dr.m.terms) != 1 || dr.m.terms[0].ID != "10203" {
+		t.Errorf("clicking the selected row's status put %+v in force, want the status 10203", dr.m.terms)
 	}
 }
 
-// The narrowing and the local filter are two different things being left out at
-// once, and the row that survives has to satisfy both.
-func TestList_NarrowingAndTheFilterApplyTogether(t *testing.T) {
+// A term and the local filter are two different things being left out at once:
+// the term is what the site was asked, and the filter is what is kept of the
+// answer. A row has to survive both.
+func TestList_ATermAndTheFilterApplyTogether(t *testing.T) {
 	t.Parallel()
 
 	d := testDeps(newFake(30))
@@ -130,12 +186,12 @@ func TestList_NarrowingAndTheFilterApplyTogether(t *testing.T) {
 	dr.typeText("PROJ-2")
 
 	if len(dr.m.view) == 0 {
-		t.Fatal("nothing survived a narrowing and a filter that both match PROJ-2")
+		t.Fatal("nothing survived a status term and a filter that both match PROJ-2")
 	}
 	for _, at := range dr.m.view {
 		iss := &dr.m.issues[at]
-		if iss.Status.Name != "Shipped" || !strings.Contains(iss.Key, "PROJ-2") {
-			t.Errorf("%s (%s) survived both a status narrowing and a key filter", iss.Key, iss.Status.Name)
+		if iss.Status.ID != "10203" || !strings.Contains(iss.Key, "PROJ-2") {
+			t.Errorf("%s (%s) survived both a status term and a key filter", iss.Key, iss.Status.Name)
 		}
 	}
 }
@@ -221,8 +277,8 @@ func TestList_WithTheMouseOffTheFrameCarriesNoMarkerAndNoCellNarrows(t *testing.
 	// must still miss: the manager is disabled, so it recorded no zone to hit.
 	_ = off.Scan(frame)
 	dr.send(tea.MouseClickMsg{X: 60, Y: 3, Button: tea.MouseLeft})
-	if dr.m.facet.on() {
-		t.Errorf("a click narrowed the rows to %+v with the mouse off", dr.m.facet)
+	if len(dr.m.terms) != 0 {
+		t.Errorf("a click put %+v in force with the mouse off", dr.m.terms)
 	}
 	if len(dr.pushes) != 0 {
 		t.Errorf("a click opened %d panes with the mouse off", len(dr.pushes))
@@ -251,27 +307,20 @@ func TestList_ThePaletteNarrowsToTheRowUnderTheCursor(t *testing.T) {
 	d := testDeps(newFake(20))
 	dr := openAll(t, d, 120, 30)
 	dr.key("j", "j")
-	under := dr.m.selectedKey()
+	want := dr.m.selectedIssue().Status.ID
 
-	dr.send(FacetMsg{Kind: FacetStatus})
+	dr.send(FacetMsg{Kind: filter.FacetStatus})
 
-	if !dr.m.facet.on() {
-		t.Fatal("the palette narrowed nothing")
-	}
-	if got, want := dr.m.facet.value, facetValue(dr.m.selectedIssue(), FacetStatus); got != want {
-		t.Errorf("the rows are narrowed to %q, want the status of %s, %q", got, under, want)
-	}
-
-	// The command is named after what it shows, so running it twice must not
-	// undo it the way a second click does.
-	dr.send(FacetMsg{Kind: FacetStatus})
-	if !dr.m.facet.on() {
-		t.Error("running the command twice cleared the narrowing")
+	if len(dr.m.terms) != 1 || dr.m.terms[0].ID != want {
+		t.Fatalf("the palette put %+v in force, want the status %q of the row under the cursor", dr.m.terms, want)
 	}
 
 	dr.send(FacetMsg{})
-	if dr.m.facet.on() {
-		t.Errorf("the rows are still narrowed to %+v after being told to show everything", dr.m.facet)
+	if len(dr.m.terms) != 0 {
+		t.Errorf("%+v is still in force after being told to drop every filter", dr.m.terms)
+	}
+	if got := dr.m.jql; got != allUpdated {
+		t.Errorf("dropping every filter asked for %q, want %q", got, allUpdated)
 	}
 }
 
@@ -281,9 +330,9 @@ func TestList_ThePaletteSaysSoWhenThereIsNoRowToNarrowBy(t *testing.T) {
 	d := testDeps(newFake(0))
 	dr := openAll(t, d, 120, 30)
 
-	dr.send(FacetMsg{Kind: FacetStatus})
+	dr.send(FacetMsg{Kind: filter.FacetStatus})
 
-	if dr.m.facet.on() {
+	if len(dr.m.terms) != 0 {
 		t.Fatal("an empty list narrowed itself to a row that does not exist")
 	}
 	if got := dr.lastStatus().Text; !strings.Contains(got, "no row") {
@@ -298,7 +347,7 @@ func TestList_GoldenWhileNarrowedToACell(t *testing.T) {
 	dr := openAll(t, d, 120, 30)
 	pressOn(t, d, dr, statusZone("PROJ-2"))
 
-	golden(t, "list_facet_120x30.golden", dr.view())
+	golden(t, "list_terms_120x30.golden", dr.view())
 }
 
 // The wheel scrolls the rows and leaves the selection alone, which is what a
