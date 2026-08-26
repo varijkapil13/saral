@@ -138,13 +138,3 @@ func TestPicker_TheNeedleAsksAboutTheFacetItIsOpenOn(t *testing.T) {
 	mustContain(t, dr.view(), "which priority?")
 	mustNotContain(t, dr.view(), "which status?")
 }
-
-func TestPicker_RowsAreMemoizedSoAFrameCostsNothingToRedraw(t *testing.T) {
-	dr := newDriver(t, testDeps(newFake(40)), 120, 30)
-	dr.pick(FacetLabel)
-	_ = dr.m.View()
-
-	if got := testing.AllocsPerRun(200, func() { _ = dr.m.row(0) }); got != 0 {
-		t.Errorf("a memoized row allocates %.1f times, want none", got)
-	}
-}

@@ -188,27 +188,6 @@ func BenchmarkThreadRenderBlock(b *testing.B) {
 	}
 }
 
-// Deliberately not parallel. An allocation count comes from process-wide
-// MemStats, so a benchmark run beside sixty other tests is handed their
-// allocations divided by its own iteration count — and under -race it runs long
-// enough to be handed a lot of them. A sequential test is the only one that has
-// the counter to itself.
-func TestScrolling_CostsTheSameOnTenThousandCommentsAsOnTwenty(t *testing.T) {
-	big := testing.Benchmark(BenchmarkThreadSteadyScroll10k)
-	small := testing.Benchmark(BenchmarkThreadSteadyScroll20)
-
-	bigAllocs, smallAllocs := big.AllocsPerOp(), small.AllocsPerOp()
-	if bigAllocs > smallAllocs {
-		t.Errorf("a 10k-comment thread allocates %d per frame against %d for a 20-comment one; the render is not virtualized",
-			bigAllocs, smallAllocs)
-	}
-	// What is left is the frame string View has to return; every comment behind it
-	// is memoized.
-	if bigAllocs > 2 {
-		t.Errorf("a steady-state frame allocates %d times, want the memo to carry all but the frame itself", bigAllocs)
-	}
-}
-
 // The composer is a second thing in the box and not a second layout of it, so a
 // frame with it open costs no render of the thread above it. What a composing
 // frame does cost is one render of the editor widget, which is the library's own

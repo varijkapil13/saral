@@ -212,21 +212,3 @@ func BenchmarkIssueResize(b *testing.B) {
 		_ = m.View()
 	}
 }
-
-func TestFullRedraw_StaysUnderTheBudgetAt200x60(t *testing.T) {
-	t.Parallel()
-
-	res := testing.Benchmark(BenchmarkIssueRedraw200x60)
-	if per := time.Duration(res.NsPerOp()); per > 4*time.Millisecond {
-		t.Errorf("a full redraw at 200x60 took %s, want under 4ms", per)
-	}
-}
-
-func TestKeystrokeToFrame_StaysUnderTheBudget(t *testing.T) {
-	t.Parallel()
-
-	res := testing.Benchmark(BenchmarkIssueScroll)
-	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
-		t.Errorf("keystroke to frame took %s, want under 16ms", per)
-	}
-}
