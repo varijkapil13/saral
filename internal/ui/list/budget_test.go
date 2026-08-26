@@ -14,10 +14,11 @@ import (
 //
 // None of these may be parallel. An allocation count comes from process-wide
 // MemStats, so a benchmark run beside another test is handed that test's
-// allocations divided by its own iteration count. That is what made these four
-// fail on a runner and pass on a laptop: the detector slows a frame down twenty
-// times, the benchmark reaches a twelfth of the iterations in its second, and
-// the neighbours' allocations divided by that are what the assertion read.
+// allocations divided by its own iteration count. That is what made the four
+// this file inherited fail on a runner and pass on a laptop: the detector slows
+// a frame down twenty times, so the benchmark reaches a twelfth of the
+// iterations in its second and divides the neighbours' noise by a twelfth as
+// much.
 
 func TestBudget_ScrollingCostsTheSameOnTenThousandRowsAsOnTwenty(t *testing.T) {
 	big := testing.Benchmark(BenchmarkListSteadyScroll10k)
@@ -70,17 +71,18 @@ func TestBudget_ScrollingCostsTheSameUnderAFilterThatHasBeenAccepted(t *testing.
 }
 
 // Walking a fresh row into view on every frame misses the memo by construction,
-// so this is the one that says the miss itself is cheap: a row is built into a
-// buffer the view reuses, and the frame string is most of what is left.
+// which is what says the miss itself is bounded: one row is rendered and the
+// window around it is not. A row costs what BenchmarkRowRender says it costs,
+// the marks on it are inside that, and the frame string is the rest.
 //
-// Two rather than one because this is the only budget here whose count differs
-// by architecture — arm64 measures 1 and amd64 measures 2, every run of each. A
-// ceiling that holds on both is worth more than one that is exact on the machine
-// it was written on and red on the machine CI has.
-func TestBudget_WalkingIntoFreshRowsCostsLittleMoreThanTheFrame(t *testing.T) {
-	if got := testing.Benchmark(BenchmarkListWalk10k).AllocsPerOp(); got > 2 {
-		t.Errorf("a frame that renders a row it has never rendered allocates %d times, "+
-			"want the frame string and at most one more", got)
+// 42 on an M2 Pro and 42 compiled for amd64, every run of each.
+func TestBudget_AMemoMissCostsOneRowAndNotAWindow(t *testing.T) {
+	got := testing.Benchmark(BenchmarkListWalk10k).AllocsPerOp()
+	t.Logf("a frame that renders one fresh row: %d allocations, ceiling 48", got)
+	if got > 48 {
+		t.Errorf("a frame that renders a row it has never rendered allocates %d times, over the "+
+			"ceiling of 48; it measured 42 when the ceiling was set, and a window of forty rows "+
+			"would be an order of magnitude more", got)
 	}
 }
 

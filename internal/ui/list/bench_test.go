@@ -127,15 +127,25 @@ func narrowed(tb testing.TB, n, w, h int) *Model {
 
 // BenchmarkListWalk10k walks a fresh row into view on every frame, which is the
 // worst case: every frame misses the memo by construction.
+//
+// It goes back to the top on reaching the bottom. Without that the cursor stops
+// on the last row and every iteration after the ten thousandth is a memo hit, so
+// what the benchmark reports is a blend of walking and standing still, weighted
+// by how many iterations the machine got through — which is a number about the
+// machine and not about the code.
 func BenchmarkListWalk10k(b *testing.B) {
 	m := loaded(b, 10000, 120, 40)
-	var down tea.Msg = keyPress("j")
+	var down, top tea.Msg = keyPress("j"), keyPress("home")
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
 		next, _ := m.Update(down)
 		m, _ = next.(*Model)
 		_ = m.View()
+		if m.cursor >= len(m.view)-1 {
+			next, _ = m.Update(top)
+			m, _ = next.(*Model)
+		}
 	}
 }
 

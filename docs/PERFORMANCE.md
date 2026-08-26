@@ -50,11 +50,14 @@ with. Four things make one of them worth trusting, and each was got wrong once h
   guards fail on a runner and pass on a laptop, and the detector's part in it was not its own
   allocations — it was slowing the benchmark from 617,000 iterations a second to 52,000, so the
   neighbours' noise was divided by a twelfth as much.
-- **Its number is one every architecture reaches.** Almost all of these counts are identical on
-  arm64 and amd64, which is why the ceilings can be tight. One is not: a list frame that renders a
-  row it has never rendered costs 1 allocation on arm64 and 2 on amd64, every run of each. A guard
-  written on a laptop and never checked with `GOARCH=amd64` is a guard that goes red on the runner
-  for a reason that has nothing to do with the code.
+- **It measures one state, not a blend of two.** `BenchmarkListWalk10k` held `j` down and stopped
+  at the last row, so every iteration past the ten thousandth was a memo hit rather than the memo
+  miss the benchmark said it was measuring. What it reported was the two states averaged, weighted
+  by how many iterations the machine got through in its second — 1 allocation a frame on an M2 Pro,
+  2 compiled for amd64, 3 on the runner, none of them a fact about the code. It goes back to the top
+  on reaching the bottom now, and reports 42 everywhere. A budget over a number that moves with the
+  machine is not a budget, and the way that shows up is a ceiling that is red on the runner and green
+  on the laptop it was written on.
 
 Run them the way CI does:
 
@@ -103,7 +106,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameUnderAFilterThatHasBeenAccepted` |
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameUnderTermsInForce` |
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameWithTheMouseOn` |
-| `internal/ui/list` | `TestBudget_WalkingIntoFreshRowsCostsLittleMoreThanTheFrame` |
+| `internal/ui/list` | `TestBudget_AMemoMissCostsOneRowAndNotAWindow` |
 | `internal/ui/richtext` | `TestBudget_Render` |
 | `internal/ui/richtext` | `TestBudget_ScalesWithTheDocument` |
 | `internal/ui/richtext` | `TestBudget_Summary` |
