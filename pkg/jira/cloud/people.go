@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -57,7 +56,7 @@ func (c *Client) FindPeople(ctx context.Context, q jira.PeopleQuery) ([]jira.Use
 		r.path, r.kind, r.id = peopleAssignablePath, "project", project
 	}
 
-	var body []peopleAccount
+	var body []apiUser
 	if err := c.doJSON(ctx, r, &body); err != nil {
 		return nil, peopleRefusal(err)
 	}
@@ -138,7 +137,7 @@ func (c *Client) peopleChunk(ctx context.Context, chunk []string) ([]jira.User, 
 // short page — so a chunk whose last ten ids are all unknown would stop the walk
 // with the rest of the ids unread.
 func peopleDecodeBulk(resp *response) (items []jira.User, total int, isLast bool, err error) {
-	slots, total, isLast, err := decodeAgilePage[*peopleAccount](resp, http.MethodGet+" "+peopleBulkPath)
+	slots, total, isLast, err := decodeAgilePage[*apiUser](resp, http.MethodGet+" "+peopleBulkPath)
 	if err != nil {
 		return nil, -1, false, err
 	}
@@ -201,41 +200,4 @@ func peopleRefusal(err error) error {
 		return err
 	}
 	return &jira.CapabilityError{Capability: jira.CapPeople, Reason: refused.Reason}
-}
-
-// peopleAccount is a user as the people endpoints send one. The issue reader has
-// a decoder of its own that does not read accountType, so an account off an issue
-// carries no Kind and one from here does.
-type peopleAccount struct {
-	AccountID   string            `json:"accountId"`
-	AccountType string            `json:"accountType"`
-	DisplayName string            `json:"displayName"`
-	Email       string            `json:"emailAddress"`
-	Active      bool              `json:"active"`
-	TimeZone    string            `json:"timeZone"`
-	AvatarURLs  map[string]string `json:"avatarUrls"`
-}
-
-func (a peopleAccount) domain() jira.User {
-	out := jira.User{
-		AccountID:   a.AccountID,
-		DisplayName: a.DisplayName,
-		Email:       a.Email,
-		Active:      a.Active,
-		Kind:        jira.ParseAccountKind(a.AccountType),
-	}
-	for _, size := range avatarSizes {
-		if link := a.AvatarURLs[size]; link != "" {
-			out.AvatarURL = link
-			break
-		}
-	}
-	// A zone this machine has no database for is a rendering detail, never a
-	// reason to lose the account it belongs to.
-	if a.TimeZone != "" {
-		if loc, err := time.LoadLocation(a.TimeZone); err == nil {
-			out.TimeZone = loc
-		}
-	}
-	return out
 }

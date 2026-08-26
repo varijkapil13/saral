@@ -85,6 +85,14 @@ Bubble Tea's `teatest` drives full programs where an interaction sequence matter
 - No `time.Sleep` in tests. Inject a clock; `jiratest.Delay` plus `teatest`'s wait helpers cover the
   async cases. `app.WithClock` is there for exactly this: every cache TTL is checked by winding a
   clock forward, never by waiting for one.
+- **A test that parks a handler has to be able to fail.** `httptest.Server.Close` waits for every
+  handler still running, so one parked on a channel nothing closes holds `Close` there until `go
+  test` gives up on the entire package — ten minutes, reported as a hang rather than as the
+  assertion that failed. `pkg/jira/cloud` has three helpers for the shape: `gate`, whose release is
+  idempotent and is deferred *after* the server's close so that it runs first; `receive` in place of
+  a bare channel receive; and `closeServer` in place of `s.Close`. A handler says it arrived by
+  closing a channel and never by sending on one — a send nobody is left to receive cannot be freed
+  by anything, which is how the coalescing test wedged a CI job for its full timeout.
 - No network in any test, and CI is what makes that true. The race suite runs inside a network
   namespace with only loopback up, so a test that reaches for a real host fails the build instead of
   passing for whoever wrote it. A step before it compiles every test binary while the network is
@@ -147,5 +155,9 @@ that names the method — `jira.Identifier` for `Me`. Each case builds a site in
 terms (a replay server for `cloud`, an option for `jiratest`) and then asserts the same thing about
 the answer, so a divergence fails on the adapter that has it.
 
-It covers `Me`. A new adapter method is a new table beside that one; a harness over all 34 port
-methods is [#74](https://github.com/varijkapil13/saral/issues/74) and deliberately not this.
+Three tables stand beside each other today: `Me` in `conformance_test.go`, the five methods a filter
+picker calls in `conformance_people_test.go`, and the account on an issue in
+`conformance_search_test.go` — the last because the adapter dropped `accountType` from an issue read
+while the picker badged app accounts by it, so one screen said an account was an app and the next
+said nothing. A new adapter method is a new table beside them; a harness over all 34 port methods is
+[#74](https://github.com/varijkapil13/saral/issues/74) and deliberately not this.

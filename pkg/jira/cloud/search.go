@@ -520,8 +520,12 @@ func (s apiStatus) domain() jira.Status {
 	return out
 }
 
+// apiUser is an account as any endpoint sends one: the same keys arrive on an
+// issue's assignee, on a comment's author, on /myself and on the people
+// endpoints, so one decoder reads them all.
 type apiUser struct {
 	AccountID   string            `json:"accountId"`
+	AccountType string            `json:"accountType"`
 	DisplayName string            `json:"displayName"`
 	Email       string            `json:"emailAddress"`
 	Active      bool              `json:"active"`
@@ -530,7 +534,7 @@ type apiUser struct {
 }
 
 // avatarSizes are read in this order so that the URL chosen does not depend on
-// map iteration. A search response carries no avatars at all.
+// map iteration.
 var avatarSizes = []string{"48x48", "32x32", "24x24", "16x16"}
 
 func (u apiUser) domain() jira.User {
@@ -539,6 +543,7 @@ func (u apiUser) domain() jira.User {
 		DisplayName: u.DisplayName,
 		Email:       u.Email,
 		Active:      u.Active,
+		Kind:        jira.ParseAccountKind(u.AccountType),
 	}
 	for _, size := range avatarSizes {
 		if url := u.AvatarURLs[size]; url != "" {

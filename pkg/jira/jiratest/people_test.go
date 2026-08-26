@@ -2,6 +2,7 @@ package jiratest_test
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 
@@ -333,4 +334,95 @@ func TestWithPeople_SurvivesAReset(t *testing.T) {
 	if got := peopleFound(t, f, jira.PeopleQuery{}); len(got) != 0 {
 		t.Errorf("Reset did not re-apply WithPeople: %v", peopleNamesOf(got))
 	}
+}
+
+// A site states what kind of account it is answering on the assignee and the
+// reporter of an issue, exactly as it does in a picker. An issue seed that left
+// the kind out would badge an app account in the picker and not on the issue it
+// is assigned to, which reads as the account changing kind between two screens.
+func TestSearch_NamesTheKindOfEveryAccountTheDirectoryAlsoKnows(t *testing.T) {
+	t.Parallel()
+
+	f := jiratest.New(jiratest.WithIssues(jiratest.Gen(30)))
+	page, err := f.Search(t.Context(), jira.Query{JQL: "project = PROJ", Fields: []string{"assignee", "reporter"}})
+	if err != nil {
+		t.Fatalf("searching: %v", err)
+	}
+	issues, err := jira.Collect(t.Context(), page, 0)
+	if err != nil {
+		t.Fatalf("walking the search: %v", err)
+	}
+
+	onIssues := make(map[string]jira.AccountKind)
+	for _, iss := range issues {
+		for _, u := range []*jira.User{iss.Assignee, iss.Reporter} {
+			if u == nil {
+				continue
+			}
+			if u.Kind == jira.AccountUnknown {
+				t.Errorf("%s names %s (%s) with no kind at all", iss.Key, u.DisplayName, u.AccountID)
+			}
+			onIssues[u.AccountID] = u.Kind
+		}
+	}
+	if len(onIssues) == 0 {
+		t.Fatal("no issue named an account, so nothing here was checked")
+	}
+
+	ids := slices.Sorted(maps.Keys(onIssues))
+	directory, err := f.People(t.Context(), ids)
+	if err != nil {
+		t.Fatalf("resolving the accounts the issues name: %v", err)
+	}
+	if len(directory) != len(ids) {
+		t.Errorf("the directory knows %v of the %v the issues name", peopleIDsOf(directory), ids)
+	}
+	for _, u := range directory {
+		if want := onIssues[u.AccountID]; u.Kind != want {
+			t.Errorf("%s is %v in the directory and %v on an issue", u.AccountID, u.Kind, want)
+		}
+	}
+}
+
+func TestUpdateIssue_AssignsAnAccountAsTheDirectoryDescribesIt(t *testing.T) {
+	t.Parallel()
+
+	f := jiratest.New(jiratest.WithIssues(jiratest.Gen(3)))
+	app, ok := peopleOneOfKind(peopleFound(t, f, jira.PeopleQuery{}), jira.AccountApp)
+	if !ok {
+		t.Fatal("the directory holds no app account, and a real site's is mostly app accounts")
+	}
+
+	if err := f.UpdateIssue(t.Context(), "PROJ-1", jira.IssuePatch{Assignee: &app.AccountID}); err != nil {
+		t.Fatalf("assigning %s: %v", app.AccountID, err)
+	}
+	got, err := f.Issue(t.Context(), "PROJ-1")
+	if err != nil {
+		t.Fatalf("reading the issue back: %v", err)
+	}
+
+	if got.Assignee == nil {
+		t.Fatal("the issue came back unassigned")
+	}
+	if got.Assignee.Kind != jira.AccountApp || got.Assignee.DisplayName != app.DisplayName {
+		t.Errorf("the assignee reads as %+v, want the account the directory describes: %+v", got.Assignee, app)
+	}
+}
+
+func peopleIDsOf(users []jira.User) []string {
+	out := make([]string, 0, len(users))
+	for _, u := range users {
+		out = append(out, u.AccountID)
+	}
+	slices.Sort(out)
+	return out
+}
+
+func peopleOneOfKind(users []jira.User, kind jira.AccountKind) (jira.User, bool) {
+	for _, u := range users {
+		if u.Kind == kind {
+			return u, true
+		}
+	}
+	return jira.User{}, false
 }

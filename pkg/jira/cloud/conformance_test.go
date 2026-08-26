@@ -117,6 +117,9 @@ func assertWholeAccount(t *testing.T, got jira.User, err error) {
 	if got.AvatarURL == "" {
 		unset = append(unset, "AvatarURL")
 	}
+	if got.Kind == jira.AccountUnknown {
+		unset = append(unset, "Kind")
+	}
 	if len(unset) > 0 {
 		t.Errorf("the account came back with %v unset: %+v", unset, got)
 	}

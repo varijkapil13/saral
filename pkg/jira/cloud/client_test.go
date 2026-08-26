@@ -85,17 +85,68 @@ func testClient(t *testing.T, site string, opts ...Option) (*Client, *testClock)
 	return c, clock
 }
 
+// wedgeBound is how long a test waits on another goroutine before calling the
+// wait a failure, so that a goroutine which never arrives costs one named
+// failure rather than go test's ten-minute timeout and a hung package.
+const wedgeBound = 10 * time.Second
+
 // waitUntil blocks until cond holds, without a sleep and without a fixed number
 // of spins: what it is waiting for is another goroutine reaching a state.
 func waitUntil(t *testing.T, what string, cond func() bool) {
 	t.Helper()
 
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(wedgeBound)
 	for !cond() {
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out waiting for %s", what)
 		}
 		runtime.Gosched()
+	}
+}
+
+// gate hands out a channel and the one function that closes it, however many
+// goroutines call it and however often. A handler parks on the channel, or
+// closes it to announce that it arrived; neither blocks on a send, which is what
+// leaves a handler freeable. Defer the release *after* the server's own close so
+// that it runs first, or a t.Fatal leaves httptest waiting on a parked handler.
+func gate() (parked <-chan struct{}, release func()) {
+	ch := make(chan struct{})
+	var once sync.Once
+	return ch, func() { once.Do(func() { close(ch) }) }
+}
+
+// receive returns what ch sends, or fails the test: a bare receive from a
+// goroutine that never sends reports a hung package instead of the assertion
+// that would have named the problem.
+func receive[T any](t *testing.T, what string, ch <-chan T) T {
+	t.Helper()
+
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(wedgeBound):
+		t.Fatalf("timed out waiting for %s", what)
+		var zero T
+		return zero
+	}
+}
+
+// closeServer shuts a fixture server down without letting it take the package
+// with it: httptest waits for every handler still running, so one parked on a
+// channel nothing closes holds Close until go test gives up on every test at
+// once.
+func closeServer(t *testing.T, s *jiratest.Server) {
+	t.Helper()
+
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		s.Close()
+	}()
+	select {
+	case <-closed:
+	case <-time.After(wedgeBound):
+		t.Errorf("the fixture server was still closing after %s: a handler is parked on something nothing closes", wedgeBound)
 	}
 }
 
@@ -480,12 +531,17 @@ func TestDo_TreatsADialFailureAsATransportFailure(t *testing.T) {
 func TestDo_ReturnsTheContextErrorWhenTheCallerCancelsMidFlight(t *testing.T) {
 	t.Parallel()
 
-	arrived := make(chan struct{}, 1)
+	arrived, announce := gate()
+	release, letGo := gate()
 	s := jiratest.NewServer(jiratest.WithHandler(http.MethodGet, "/rest/api/3/field", func(_ http.ResponseWriter, r *http.Request) {
-		arrived <- struct{}{}
-		<-r.Context().Done()
+		announce()
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
 	}))
-	defer s.Close()
+	defer closeServer(t, s)
+	defer letGo()
 
 	c, _ := testClient(t, s.URL())
 	ctx, cancel := context.WithCancel(t.Context())
@@ -495,9 +551,9 @@ func TestDo_ReturnsTheContextErrorWhenTheCallerCancelsMidFlight(t *testing.T) {
 		failed <- err
 	}()
 
-	<-arrived
+	receive(t, "the request to reach the site", arrived)
 	cancel()
-	err := <-failed
+	err := receive(t, "the cancelled call to come back", failed)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v, want the context's own error", err)
 	}
@@ -510,15 +566,16 @@ func TestDo_ReturnsTheContextErrorWhenTheCallerCancelsMidFlight(t *testing.T) {
 func TestDo_CoalescesIdenticalRequestsThatAreInFlightAtOnce(t *testing.T) {
 	t.Parallel()
 
-	arrived := make(chan struct{}, 1)
-	release := make(chan struct{})
+	arrived, announce := gate()
+	release, letGo := gate()
 	s := jiratest.NewServer(jiratest.WithHandler(http.MethodGet, "/rest/api/3/field", func(w http.ResponseWriter, _ *http.Request) {
-		arrived <- struct{}{}
+		announce()
 		<-release
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`[{"id":"summary"}]`))
 	}))
-	defer s.Close()
+	defer closeServer(t, s)
+	defer letGo()
 
 	c, _ := testClient(t, s.URL())
 	r := fieldRequest()
@@ -532,15 +589,15 @@ func TestDo_CoalescesIdenticalRequestsThatAreInFlightAtOnce(t *testing.T) {
 		}()
 	}
 
-	<-arrived
+	receive(t, "the one request to reach the site", arrived)
 	// Give the four followers time to reach the coalescer; if they had not, the
 	// site would see more than one request and the assertion below would say so.
 	waitUntil(t, "every caller to be waiting on the one call in flight", func() bool {
 		return runtime.NumGoroutine() > 0 && len(s.Requests()) == 1
 	})
-	close(release)
+	letGo()
 	for range callers {
-		if err := <-results; err != nil {
+		if err := receive(t, "a coalesced caller to come back", results); err != nil {
 			t.Fatalf("a coalesced caller failed: %v", err)
 		}
 	}
@@ -556,6 +613,52 @@ func TestDo_CoalescesIdenticalRequestsThatAreInFlightAtOnce(t *testing.T) {
 	}
 	if served := len(s.Requests()); served != 2 {
 		t.Errorf("the site served %d requests, want 2: the second ask is a new call", served)
+	}
+}
+
+// The coalescing test above wedged a CI job for its full timeout when a runner
+// was slow enough for a second request to get past the coalescer: the extra
+// handler blocked announcing itself, so nothing could free it and Close waited
+// on it for ten minutes.
+//
+// This is that shape without the coalescer: more handlers park than the test
+// ever receives arrivals from, and it still has to finish.
+func TestParkedHandlers_NeverOutliveTheTestThatParkedThem(t *testing.T) {
+	t.Parallel()
+
+	const callers = 3
+	arrived, announce := gate()
+	release, letGo := gate()
+	s := jiratest.NewServer(jiratest.WithHandler(http.MethodPost, "/rest/api/3/issue", func(w http.ResponseWriter, _ *http.Request) {
+		announce()
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"key":"EX-1"}`))
+	}))
+	defer closeServer(t, s)
+	defer letGo()
+
+	c, _ := testClient(t, s.URL())
+	// A write is never coalesced, so every caller reaches the handler.
+	r := request{method: http.MethodPost, path: "/rest/api/3/issue", body: map[string]string{"summary": "one of several alike"}}
+	done := make(chan error, callers)
+	for range callers {
+		go func() {
+			_, err := c.do(t.Context(), r)
+			done <- err
+		}()
+	}
+
+	receive(t, "the first request to reach the site", arrived)
+	waitUntil(t, "every caller to be in the handler", func() bool {
+		return len(s.Requests()) == callers
+	})
+
+	letGo()
+	for range callers {
+		if err := receive(t, "a parked caller to come back", done); err != nil {
+			t.Fatalf("a parked caller failed: %v", err)
+		}
 	}
 }
 
@@ -592,10 +695,10 @@ func TestDo_NeverCoalescesAWrite(t *testing.T) {
 func TestDo_TakesOverACallTheStartingCallerAbandoned(t *testing.T) {
 	t.Parallel()
 
-	arrived := make(chan struct{}, 2)
-	release := make(chan struct{})
+	arrived, announce := gate()
+	release, letGo := gate()
 	s := jiratest.NewServer(jiratest.WithHandler(http.MethodGet, "/rest/api/3/field", func(w http.ResponseWriter, r *http.Request) {
-		arrived <- struct{}{}
+		announce()
 		select {
 		case <-release:
 			w.Header().Set("Content-Type", "application/json")
@@ -603,7 +706,8 @@ func TestDo_TakesOverACallTheStartingCallerAbandoned(t *testing.T) {
 		case <-r.Context().Done():
 		}
 	}))
-	defer s.Close()
+	defer closeServer(t, s)
+	defer letGo()
 
 	c, _ := testClient(t, s.URL())
 	r := fieldRequest()
@@ -614,7 +718,7 @@ func TestDo_TakesOverACallTheStartingCallerAbandoned(t *testing.T) {
 		_, err := c.do(leaderCtx, r)
 		leaderDone <- err
 	}()
-	<-arrived
+	receive(t, "the leader's request to reach the site", arrived)
 
 	followerDone := make(chan error, 1)
 	go func() {
@@ -626,11 +730,11 @@ func TestDo_TakesOverACallTheStartingCallerAbandoned(t *testing.T) {
 	})
 
 	cancelLeader()
-	if err := <-leaderDone; !errors.Is(err, context.Canceled) {
+	if err := receive(t, "the abandoning caller to come back", leaderDone); !errors.Is(err, context.Canceled) {
 		t.Fatalf("the abandoning caller got %v, want its own context error", err)
 	}
-	close(release)
-	if err := <-followerDone; err != nil {
+	letGo()
+	if err := receive(t, "the waiting caller to come back", followerDone); err != nil {
 		t.Fatalf("the caller still waiting got %v, want the page it asked for", err)
 	}
 	// The site is asked twice here, and that is the point: the first ask went
