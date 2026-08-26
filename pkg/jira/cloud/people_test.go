@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -432,20 +431,19 @@ func TestPeople_ReportsARefusalRateLimitAndTransportFailureAsThemselves(t *testi
 func TestFindPeople_HonoursACancelledContext(t *testing.T) {
 	t.Parallel()
 
-	release := make(chan struct{})
-	arrived := make(chan struct{})
-	var once sync.Once
+	arrived, announce := gate()
+	release, letGo := gate()
 
 	s := jiratest.NewServer(jiratest.WithHandler(http.MethodGet, peopleSearchPath, func(w http.ResponseWriter, r *http.Request) {
-		once.Do(func() { close(arrived) })
+		announce()
 		select {
 		case <-release:
 		case <-r.Context().Done():
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer s.Close()
-	defer close(release)
+	defer closeServer(t, s)
+	defer letGo()
 
 	ctx, cancel := context.WithCancel(t.Context())
 	c, _ := testClient(t, s.URL())
@@ -456,10 +454,10 @@ func TestFindPeople_HonoursACancelledContext(t *testing.T) {
 		errs <- err
 	}()
 
-	<-arrived
+	receive(t, "the request to reach the site", arrived)
 	cancel()
 
-	if err := <-errs; !errors.Is(err, context.Canceled) {
+	if err := receive(t, "the cancelled call to come back", errs); !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v, want the caller's own cancellation", err)
 	}
 }

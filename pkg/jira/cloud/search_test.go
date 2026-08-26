@@ -540,6 +540,12 @@ func TestSearch_ReadsAnIssueShapedLikeARealOne(t *testing.T) {
 	if got.Assignee == nil || got.Assignee.AvatarURL != "" {
 		t.Errorf("the assignee read as %+v; the fixture carries no avatars", got.Assignee)
 	}
+	if got.Assignee == nil || got.Assignee.Kind != jira.AccountPerson {
+		t.Errorf("the assignee read as %+v; the fixture says what kind of account it is", got.Assignee)
+	}
+	if got.Reporter == nil || got.Reporter.Kind != jira.AccountPerson {
+		t.Errorf("the reporter read as %+v; the fixture says what kind of account it is", got.Reporter)
+	}
 
 	// The custom fields have no schema here, so they are read by shape.
 	if points, ok := got.Fields.Number(jira.FieldRef{ID: "customfield_10032"}); !ok || points != 5 {

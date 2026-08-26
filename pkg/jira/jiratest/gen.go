@@ -57,10 +57,13 @@ var fakeResolutions = []jira.Resolution{
 	{ID: "10502", Name: "Won't do"},
 }
 
+// fakeUsers are the accounts the generated issues are assigned to and reported
+// by. An issue read states the kind of account it names, so these carry one and
+// have to agree with the directory below about the accounts that are in both.
 var fakeUsers = []jira.User{
-	{AccountID: "acct-ada", DisplayName: "Ada Lovelace", Active: true, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/ada"},
-	{AccountID: "acct-grace", DisplayName: "Grace Hopper", Active: true, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/grace"},
-	{AccountID: "acct-alan", DisplayName: "Alan Turing", Active: false, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/alan"},
+	{AccountID: "acct-ada", DisplayName: "Ada Lovelace", Active: true, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/ada", Kind: jira.AccountPerson},
+	{AccountID: "acct-grace", DisplayName: "Grace Hopper", Active: true, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/grace", Kind: jira.AccountPerson},
+	{AccountID: "acct-alan", DisplayName: "Alan Turing", Active: false, TimeZone: time.UTC, AvatarURL: fakeBaseURL + "/avatar/alan", Kind: jira.AccountPerson},
 }
 
 var fakeDefaultMe = jira.User{
@@ -70,12 +73,12 @@ var fakeDefaultMe = jira.User{
 	TimeZone:    time.UTC,
 	Active:      true,
 	AvatarURL:   fakeBaseURL + "/avatar/me",
+	Kind:        jira.AccountPerson,
 }
 
-// fakePeople is the fake site's account directory, and deliberately not the same
-// list as fakeUsers: an account read through a people endpoint says what kind of
-// account it is, and one read off an issue does not, so the accounts that appear
-// in both places appear with a Kind in one and without in the other.
+// fakePeople is the fake site's account directory, and deliberately a longer
+// list than fakeUsers: a site holds accounts that no generated issue names, and
+// an assignment to one of them answers with what the directory knows about it.
 //
 // It holds an account that is not a person because a real site does — on the one
 // this was measured against, ten of the eleven accounts were apps — and one whose

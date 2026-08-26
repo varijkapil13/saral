@@ -1040,6 +1040,14 @@ func (f *Fake) fakeUser(accountID string) *jira.User {
 			return &u
 		}
 	}
+	// A site does not forget what kind of account it is because an issue is what
+	// named it, so the directory answers before anything is invented.
+	for i := range f.people {
+		if f.people[i].AccountID == accountID {
+			u := f.people[i]
+			return &u
+		}
+	}
 	return &jira.User{AccountID: accountID, DisplayName: accountID, Active: true, TimeZone: time.UTC}
 }
 

@@ -721,24 +721,26 @@ func TestIssueCalls_ReturnTheContextErrorWhenTheCallerCancelsMidFlight(t *testin
 		t.Run(call.name, func(t *testing.T) {
 			t.Parallel()
 
-			arrived := make(chan struct{}, 1)
+			arrived, announce := gate()
+			release, letGo := gate()
 			s := issueServer(jiratest.WithHandler(call.method, call.route, func(_ http.ResponseWriter, r *http.Request) {
+				announce()
 				select {
-				case arrived <- struct{}{}:
-				default:
+				case <-r.Context().Done():
+				case <-release:
 				}
-				<-r.Context().Done()
 			}))
-			defer s.Close()
+			defer closeServer(t, s)
+			defer letGo()
 
 			c, _ := testClient(t, s.URL())
 			ctx, cancel := context.WithCancel(t.Context())
 			failed := make(chan error, 1)
 			go func() { failed <- call.run(ctx, c) }()
 
-			<-arrived
+			receive(t, "the request to reach the site", arrived)
 			cancel()
-			if err := <-failed; !errors.Is(err, context.Canceled) {
+			if err := receive(t, "the cancelled call to come back", failed); !errors.Is(err, context.Canceled) {
 				t.Fatalf("got %v, want the context's own error", err)
 			}
 		})
