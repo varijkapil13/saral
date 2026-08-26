@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -227,7 +228,14 @@ func TestIssue_SaysSoWhenTheIssueIsGone(t *testing.T) {
 
 // The pane is blurred whenever anything is pushed over it — the palette, the
 // editor, the thread on the whole screen — and none of those is the pane being
-// thrown away. A read given up there is a read nothing asks for again.
+// thrown away. The read carries on, and it carries this pane's address, so the
+// kernel has somewhere to deliver it other than whatever ends up on top.
+//
+// Coming back therefore asks for nothing: there is an answer on its way. That
+// the answer really arrives is asserted through the kernel, in
+// TestSession_AnAnswerLandingWhileThePaneIsCoveredStillReachesThePane — here it
+// would be this test handing the pane its own message, which is exactly the step
+// the kernel used not to take.
 func TestIssue_LosingTheKeyboardDoesNotGiveUpTheRead(t *testing.T) {
 	t.Parallel()
 
@@ -247,8 +255,8 @@ func TestIssue_LosingTheKeyboardDoesNotGiveUpTheRead(t *testing.T) {
 	m, _ = next.(*Model)
 
 	msgs := collect(cmd)
-	if !readTheIssue(msgs) {
-		t.Errorf("the read did not survive the pane losing the keyboard: %+v", msgs)
+	if !readTheIssue(msgs, m.Addr()) {
+		t.Errorf("the read did not survive the pane losing the keyboard, addressed to it: %+v", msgs)
 	}
 
 	gen := m.gen
@@ -258,13 +266,6 @@ func TestIssue_LosingTheKeyboardDoesNotGiveUpTheRead(t *testing.T) {
 		t.Errorf("coming back asked a second time while the first read was still out: generation %d, was %d",
 			dr.m.gen, gen)
 	}
-	for _, msg := range msgs {
-		dr.send(msg)
-	}
-	if !dr.m.loadedIssue {
-		t.Error("the answer to the read issued before the blur was not taken")
-	}
-	mustContain(t, dr.view(), seed.Summary)
 }
 
 // A pane that really has been discarded stops, and takes the thread it holds
@@ -288,14 +289,11 @@ func TestIssue_ClosingStopsTheReadAndTheThreadItHolds(t *testing.T) {
 	m.thread = thread
 	m.Close()
 
-	if msgs := collect(cmd); !allCancelled(msgs) {
+	if msgs := answers(collect(cmd)); !allCancelled(msgs) {
 		t.Errorf("a discarded pane went on reading: %+v", msgs)
 	}
 	if thread.closed != 1 {
 		t.Errorf("the thread was closed %d times, want once", thread.closed)
-	}
-	if m.loadingIssue {
-		t.Error("a closed pane still reports a read in flight")
 	}
 }
 
@@ -308,13 +306,33 @@ func (s *closeSpy) Update(tea.Msg) (kernel.View, tea.Cmd) { return s, nil }
 func (s *closeSpy) View() string                          { return "" }
 func (s *closeSpy) Close()                                { s.closed++ }
 
-func readTheIssue(msgs []tea.Msg) bool {
+// readTheIssue holds the read to two things at once: that it answered with the
+// issue rather than with a cancellation, and that it named this pane on the way
+// out. An answer with no address is one the kernel can only give to the top of
+// the stack, which is the whole of the bug.
+func readTheIssue(msgs []tea.Msg, addr kernel.Addr) bool {
 	for _, msg := range msgs {
-		if _, ok := msg.(loadedMsg); ok {
+		reply, sent := msg.(kernel.ReplyMsg)
+		if !sent || !slices.Contains(reply.To, addr) {
+			continue
+		}
+		if _, ok := reply.Msg.(loadedMsg); ok {
 			return true
 		}
 	}
 	return false
+}
+
+// answers is what the kernel hands a view: the envelope off, the message inside.
+func answers(msgs []tea.Msg) []tea.Msg {
+	out := make([]tea.Msg, 0, len(msgs))
+	for _, msg := range msgs {
+		if reply, sent := msg.(kernel.ReplyMsg); sent {
+			msg = reply.Msg
+		}
+		out = append(out, msg)
+	}
+	return out
 }
 
 func collect(cmd tea.Cmd) []tea.Msg {

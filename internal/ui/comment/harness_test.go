@@ -142,6 +142,11 @@ func (d *driver) run(cmd tea.Cmd) {
 			queue = append(queue, cmds...)
 			continue
 		}
+		// The kernel takes the envelope off a view's own answer and hands the
+		// message inside to the view the address names. There is one view here.
+		if reply, addressed := msg.(kernel.ReplyMsg); addressed {
+			msg = reply.Msg
+		}
 		if status, ok := msg.(kernel.StatusMsg); ok {
 			d.statuses = append(d.statuses, status)
 			continue

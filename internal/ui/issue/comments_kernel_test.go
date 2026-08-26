@@ -10,6 +10,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
+	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
 // rowsViewID is a root view standing in for the issue list. The list is what
@@ -39,9 +40,25 @@ func init() {
 type session struct {
 	t *testing.T
 	m kernel.Model
+
+	// held keeps what a command answered with instead of delivering it, which is
+	// how a read still out when something is pushed over the view that asked for
+	// it is arranged. Delivery is the kernel's decision and it has to be made
+	// after the push, not before.
+	holding bool
+	held    []tea.Msg
 }
 
 func boot(t *testing.T, d kernel.Deps, seed jira.Issue, w, h int) *session {
+	t.Helper()
+
+	s := bootRoot(t, d, w, h)
+	s.send(kernel.PushMsg{ID: ViewID, Title: seed.Key, View: New(d, seed)})
+	return s
+}
+
+// bootRoot is the program with the list standing in and nothing pushed over it.
+func bootRoot(t *testing.T, d kernel.Deps, w, h int) *session {
 	t.Helper()
 
 	m, err := kernel.New(d, kernel.WithSize(w, h), kernel.WithInitialView(rowsViewID), kernel.WithMouse(false))
@@ -51,8 +68,21 @@ func boot(t *testing.T, d kernel.Deps, seed jira.Issue, w, h int) *session {
 	s := &session{t: t, m: m}
 	s.send(tea.WindowSizeMsg{Width: w, Height: h})
 	s.run(s.m.Init())
-	s.send(kernel.PushMsg{ID: ViewID, Title: seed.Key, View: New(d, seed)})
 	return s
+}
+
+func (s *session) hold() { s.holding = true }
+
+// release hands everything that was held to the kernel, in the order it came
+// back, and lets the kernel decide where each of them goes.
+func (s *session) release() {
+	s.t.Helper()
+
+	held := s.held
+	s.holding, s.held = false, nil
+	for _, msg := range held {
+		s.send(msg)
+	}
 }
 
 func (s *session) send(msg tea.Msg) {
@@ -88,6 +118,10 @@ func (s *session) run(cmd tea.Cmd) {
 			queue = append(queue, cmds...)
 			continue
 		}
+		if s.holding {
+			s.held = append(s.held, msg)
+			continue
+		}
 		updated, follow := s.m.Update(msg)
 		model, ok := updated.(kernel.Model)
 		if !ok {
@@ -114,6 +148,56 @@ func (s *session) footer() string {
 }
 
 func (s *session) title() string { return strings.SplitN(s.frame(), "\n", 2)[0] }
+
+// cover stands in for anything the kernel pushes over the pane — the palette is
+// the one a user meets, and this package may not import it. What matters is that
+// it is on top and that it ignores every message a detail pane would have taken.
+type cover struct{}
+
+func (cover) Init() tea.Cmd                         { return nil }
+func (cover) Update(tea.Msg) (kernel.View, tea.Cmd) { return cover{}, nil }
+func (cover) View() string                          { return "something else entirely" }
+
+// Through the real kernel: the pane asks, something is pushed over it while the
+// answer is still out, and the answer arrives to find the pane no longer on top.
+// It belongs to the pane either way.
+//
+// Nothing here hands the pane its own answer. The kernel is given the message
+// the read produced and decides where it goes, which is the step that was
+// missing when the pane recovered by asking again.
+func TestSession_AnAnswerLandingWhileThePaneIsCoveredStillReachesThePane(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(20)
+	seed := seedOf(t, f, "PROJ-8")
+	s := bootRoot(t, testDeps(f), 120, 30)
+
+	s.hold()
+	s.send(kernel.PushMsg{ID: ViewID, Title: seed.Key, View: New(testDeps(f), seed)})
+	s.send(kernel.PushMsg{ID: "cover", Title: "Cover", View: cover{}})
+	mustContain(t, s.frame(), "something else entirely")
+
+	reads := countCalls(f, "Search")
+	s.release()
+	s.send(kernel.PopMsg{})
+
+	// The description, and not the summary: the summary was in the row the pane
+	// was built from and is on screen whether or not the read ever landed.
+	mustContain(t, s.frame(), "Filed against PROJ-8.")
+	if got := countCalls(f, "Search") - reads; got != 0 {
+		t.Errorf("coming back read the issue again %d times; the answer to the first read was delivered", got)
+	}
+}
+
+func countCalls(f *jiratest.Fake, name string) int {
+	n := 0
+	for _, call := range f.Calls() {
+		if call == name {
+			n++
+		}
+	}
+	return n
+}
 
 // The gesture through the whole program: the thread takes the whole screen over
 // the issue, and esc lands back on the issue rather than walking past it.

@@ -36,8 +36,9 @@ var zoneNames = [regionCount]string{
 }
 
 var (
-	_ kernel.View   = (*Model)(nil)
-	_ kernel.Closer = (*Model)(nil)
+	_ kernel.View      = (*Model)(nil)
+	_ kernel.Closer    = (*Model)(nil)
+	_ kernel.Addressed = (*Model)(nil)
 )
 
 // Model is the issue detail pane.
@@ -46,10 +47,9 @@ type Model struct {
 	keys   keyMap
 	styles *styles
 
-	issue        jira.Issue
-	labels       app.FieldLabels
-	loadedIssue  bool
-	loadingIssue bool
+	issue       jira.Issue
+	labels      app.FieldLabels
+	loadedIssue bool
 
 	// thread is the comment view itself rather than a second rendering of one.
 	// The full-screen gesture hands this same instance to the kernel, so the
@@ -101,7 +101,16 @@ type Model struct {
 	search *app.Search
 	gen    int
 	cancel context.CancelFunc
+
+	// addr is where this pane's own answers come back to, and what the thread it
+	// holds names as its holder: the sidebar is not a stack entry, so the kernel
+	// reaches it through this pane.
+	addr kernel.Addr
 }
+
+// Addr is where the kernel delivers what this pane asked the site for, whatever
+// has been pushed over it since.
+func (m *Model) Addr() kernel.Addr { return m.addr }
 
 // New builds the detail pane around the row the user opened.
 //
@@ -116,6 +125,7 @@ func New(d kernel.Deps, seed jira.Issue) kernel.View {
 		keys:  defaultKeys(),
 		issue: seed,
 		open:  map[int]bool{},
+		addr:  kernel.NewAddr(),
 	}
 	if share, chosen := config.LoadUIState().Split(ViewID); chosen {
 		m.split = split(share)
@@ -132,7 +142,7 @@ func New(d kernel.Deps, seed jira.Issue) kernel.View {
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
-	m.thread = comment.Thread(m.deps, seed.Key)
+	m.thread = comment.Thread(m.deps, seed.Key, m.addr)
 	return m
 }
 
@@ -173,13 +183,11 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case loadedMsg:
 		if m.current(msg.gen) {
 			m.issue, m.labels, m.loadedIssue = msg.issue, msg.labels, true
-			m.loadingIssue = false
 			m.dataGen++
 		}
 
 	case failedMsg:
 		if m.current(msg.gen) {
-			m.loadingIssue = false
 			cmd = kernel.Fail(msg.err)
 		}
 
@@ -247,8 +255,7 @@ func (m *Model) fetch() tea.Cmd {
 	m.gen++
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	m.loadingIssue = true
-	return load(ctx, m.search, m.issue.Key, m.gen)
+	return kernel.Reply(load(ctx, m.search, m.issue.Key, m.gen), m.addr)
 }
 
 func (m *Model) stop() {
@@ -256,7 +263,6 @@ func (m *Model) stop() {
 		m.cancel()
 		m.cancel = nil
 	}
-	m.loadingIssue = false
 }
 
 // Close cuts the read short, and the thread's with it: the sidebar holds that
@@ -282,13 +288,7 @@ func (m *Model) focused(on bool) tea.Cmd {
 		m.pushed = false
 		m.threadAt.w, m.threadAt.h = 0, 0
 	}
-	cmds := []tea.Cmd{m.tell(kernel.FocusMsg{Focused: true})}
-	// An answer that landed while this pane was covered went to whatever was on
-	// top, so a pane with nothing and nothing coming asks again.
-	if !m.loadedIssue && !m.loadingIssue {
-		cmds = append(cmds, m.fetch())
-	}
-	return tea.Batch(cmds...)
+	return m.tell(kernel.FocusMsg{Focused: true})
 }
 
 func (m *Model) resize(w, h int) {

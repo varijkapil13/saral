@@ -504,6 +504,9 @@ func collect(cmd tea.Cmd) []tea.Msg {
 			queue = append(queue, cmds...)
 			continue
 		}
+		if reply, addressed := msg.(kernel.ReplyMsg); addressed {
+			msg = reply.Msg
+		}
 		out = append(out, msg)
 	}
 	return out

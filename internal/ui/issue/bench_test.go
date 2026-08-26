@@ -76,6 +76,9 @@ func settle(tb testing.TB, m *Model, cmd tea.Cmd) *Model {
 			queue = append(queue, cmds...)
 			continue
 		}
+		if reply, addressed := msg.(kernel.ReplyMsg); addressed {
+			msg = reply.Msg
+		}
 		if _, isStatus := msg.(kernel.StatusMsg); isStatus {
 			continue
 		}

@@ -1,9 +1,11 @@
 package list
 
 import (
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -51,6 +53,31 @@ func TestPoller_OnlyRunsForTheViewWithTheKeyboard(t *testing.T) {
 	dr.m.focused = false
 	if cmd := dr.m.pollTick(); cmd != nil {
 		t.Error("a list nobody is looking at scheduled a poll")
+	}
+}
+
+// A tick is the poller's own answer and not a widget's: pollArmed is cleared by
+// the tick arriving and by nothing else, so one delivered to whatever the
+// palette put on top would stop the poller for the rest of the session.
+func TestPoller_ATickIsAddressedToTheListThatArmedIt(t *testing.T) {
+	t.Parallel()
+
+	dr := openAll(t, testDeps(newFake(10)), 120, 20)
+	dr.m.poll = time.Millisecond
+
+	cmd := dr.m.pollTick()
+	if cmd == nil {
+		t.Fatal("a focused list with polling on scheduled nothing")
+	}
+	reply, addressed := cmd().(kernel.ReplyMsg)
+	if !addressed {
+		t.Fatalf("the tick came back as %T, want it addressed to the list that armed it", cmd())
+	}
+	if !slices.Contains(reply.To, dr.m.Addr()) {
+		t.Errorf("the tick is addressed to %v, which does not include the list at %v", reply.To, dr.m.Addr())
+	}
+	if _, due := reply.Msg.(pollMsg); !due {
+		t.Errorf("the tick carries a %T, want the poll coming due", reply.Msg)
 	}
 }
 

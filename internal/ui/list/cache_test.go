@@ -521,6 +521,11 @@ func firstMsg(t *testing.T, cmd tea.Cmd) tea.Msg {
 			queue = append(queue, cmds...)
 			continue
 		}
+		// The kernel takes the envelope off a view's own answer before it hands
+		// the message inside to the view the address names.
+		if reply, addressed := msg.(kernel.ReplyMsg); addressed {
+			return reply.Msg
+		}
 		return msg
 	}
 	t.Fatal("the command produced no message")

@@ -804,7 +804,7 @@ func TestEdit_KeepsItsReadOnABlurAndDropsItOnAClose(t *testing.T) {
 	if _, more := kept.Update(kernel.FocusMsg{Focused: false}); more != nil {
 		t.Fatal("losing the keyboard asked for more work")
 	}
-	if _, gaveUp := reading().(editFailedMsg); gaveUp {
+	if _, gaveUp := answer(reading).(editFailedMsg); gaveUp {
 		t.Error("the editor gave up its re-read when it merely lost the keyboard")
 	}
 
@@ -817,9 +817,9 @@ func TestEdit_KeepsItsReadOnABlurAndDropsItOnAClose(t *testing.T) {
 	}
 	closer.Close()
 
-	failed, ok := cmd().(editFailedMsg)
+	failed, ok := answer(cmd).(editFailedMsg)
 	if !ok {
-		t.Fatalf("the re-read came back as %T, want the failure a cancelled context produces", cmd())
+		t.Fatalf("the re-read came back as %T, want the failure a cancelled context produces", answer(cmd))
 	}
 	if !errors.Is(failed.err, context.Canceled) {
 		t.Errorf("err = %v, want the context's own error", failed.err)

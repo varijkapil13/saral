@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -91,6 +92,47 @@ func CloseView(v View) {
 	if c, ok := v.(Closer); ok {
 		c.Close()
 	}
+}
+
+// Addr is where a view's own answers come back to. A view mints one for itself
+// and hands it to Reply along with the command it is issuing; the kernel gives
+// the answer to the view holding that address wherever it is on the stack, and
+// drops it when that view is gone.
+//
+// It is a number and not the View itself because a view need not be a pointer —
+// onboarding is a struct the kernel copies on every Update — and comparing two
+// interfaces holding the same non-comparable type panics rather than answering.
+// The zero value addresses nothing, which is what a view holding no question of
+// its own has and what Reply skips.
+type Addr uint64
+
+var lastAddr atomic.Uint64
+
+// NewAddr mints an address for one view instance. Two instances never share
+// one: a second detail pane pushed over the first is asking its own question,
+// and the answer to it belongs to whichever asked.
+func NewAddr() Addr { return Addr(lastAddr.Add(1)) }
+
+// Addressed is the optional interface a view implements when the answers to the
+// commands it issues have to reach it rather than whatever has since been put on
+// top of it. It is the pair to Reply: a view that wraps a command in one and does
+// not implement the other is asking a question whose answer nothing can deliver.
+//
+// It is opt-in, and deliberately narrow. The kernel forwards an unrecognised
+// message to the top of the stack, and that is also where every widget's own
+// message goes — a cursor blink, a spinner tick. Those belong to the view that is
+// being looked at and are right where they are; what needs an address is the
+// answer to a question a view asked the site.
+type Addressed interface {
+	Addr() Addr
+}
+
+// addrOf is the address a view answers to, or zero for one that answers to none.
+func addrOf(v View) Addr {
+	if a, ok := v.(Addressed); ok {
+		return a.Addr()
+	}
+	return 0
 }
 
 type stackEntry struct {
@@ -382,6 +424,9 @@ func (m Model) route(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case BroadcastMsg:
 		return m.forwardAll(msg.Msg)
+
+	case ReplyMsg:
+		return m.reply(msg)
 
 	// Every kind, not just the click: a wheel or a drag reaching the view under
 	// the help overlay scrolls something nobody can see.
@@ -863,6 +908,66 @@ func (m Model) resizeAll() tea.Cmd {
 
 func (m Model) forwardTop(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m.forwardTopWith(msg, nil)
+}
+
+// reply hands a view the answer to something it asked for, rather than handing
+// it to whatever the stack has on top by the time it lands.
+//
+// The addresses are tried in order, most particular first, so an answer for a
+// view the kernel is holding goes straight to it and one for a view held by
+// another — the comment thread the issue pane draws in its sidebar is the only
+// one today — is delivered to the holder, whose own Update passes it on. An
+// answer nothing is waiting for any more is dropped: the view that asked has
+// been discarded, and there is nowhere for it to be drawn.
+func (m Model) reply(msg ReplyMsg) (tea.Model, tea.Cmd) {
+	for _, to := range msg.To {
+		if to == 0 {
+			continue
+		}
+		if at := m.entryAt(to); at >= 0 {
+			return m.forwardAt(at, msg.Msg)
+		}
+		if id, parked := m.parkedAt(to); parked {
+			view, cmd := m.live[id].Update(msg.Msg)
+			m.live[id] = view
+			return m, cmd
+		}
+	}
+	return m, nil
+}
+
+// entryAt is where on the stack a given address is, top first, or -1.
+func (m Model) entryAt(to Addr) int {
+	for i := len(m.stack) - 1; i >= 0; i-- {
+		if addrOf(m.stack[i].view) == to {
+			return i
+		}
+	}
+	return -1
+}
+
+// parkedAt is the root kept off screen at a given address. A root switched away
+// from is still alive and still waiting for what it asked for, so its answer is
+// there when it comes back rather than lost for having been away.
+func (m Model) parkedAt(to Addr) (string, bool) {
+	for id, view := range m.live {
+		if addrOf(view) == to {
+			return id, true
+		}
+	}
+	return "", false
+}
+
+// forwardAt delivers to one entry wherever it is, which is what a reply needs
+// and what nothing else does: every other message the kernel forwards goes to
+// the top or to all of them.
+func (m Model) forwardAt(at int, msg tea.Msg) (tea.Model, tea.Cmd) {
+	stack := append([]stackEntry(nil), m.stack...)
+	view, cmd := stack[at].view.Update(msg)
+	stack[at].view = view
+	m.stack = stack
+	m.keepRoot()
+	return m, cmd
 }
 
 func (m Model) forwardTopWith(msg tea.Msg, extra tea.Cmd) (tea.Model, tea.Cmd) {

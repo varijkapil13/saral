@@ -216,6 +216,25 @@ type kernelDriver struct {
 	t      *testing.T
 	model  tea.Model
 	frames []string
+
+	// held keeps what a command answered with instead of delivering it. An
+	// answer that has already landed cannot be covered by anything, so this is
+	// the only way to arrange the case the palette makes: the check waits,
+	// something is pushed over this view, and only then does the kernel get the
+	// message and decide where it belongs.
+	holding bool
+	held    []tea.Msg
+}
+
+func (k *kernelDriver) hold() { k.holding = true }
+
+func (k *kernelDriver) release() {
+	k.t.Helper()
+	held := k.held
+	k.holding, k.held = false, nil
+	for _, msg := range held {
+		k.send(msg)
+	}
 }
 
 func (k *kernelDriver) send(msg tea.Msg) {
@@ -239,6 +258,10 @@ func (k *kernelDriver) run(cmd tea.Cmd) {
 		}
 	case spinner.TickMsg:
 	default:
+		if k.holding {
+			k.held = append(k.held, msg)
+			return
+		}
 		k.send(msg)
 	}
 }
@@ -259,4 +282,55 @@ func (k *kernelDriver) press(keys ...string) {
 
 func (k *kernelDriver) frame() string {
 	return ansi.Strip(k.model.(kernel.Model).Frame())
+}
+
+// cover stands in for the palette, which this package may not import. What
+// matters is that it is on top and answers for none of setup's messages.
+type cover struct{}
+
+func (cover) Init() tea.Cmd                         { return nil }
+func (cover) Update(tea.Msg) (kernel.View, tea.Cmd) { return cover{}, nil }
+func (cover) View() string                          { return "something else entirely" }
+
+// Setup is a root and is never discarded, but the palette opens over it like it
+// opens over anything else. A token being checked when that happens is an answer
+// this view still needs, and it belongs to this view rather than to whatever was
+// put on top of it.
+func TestKernel_AnAnswerLandingWhileSetupIsCoveredStillReachesIt(t *testing.T) {
+	keyring.MockInit()
+	t.Cleanup(keyring.MockInit)
+	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+
+	fake := testFake()
+	SetConnector(func(string, string, string) (jira.SessionClient, error) { return fake, nil })
+	t.Cleanup(func() { SetConnector(nil) })
+
+	root, err := kernel.New(testDeps(), kernel.WithSize(100, 30), kernel.WithInitialView(ViewID), kernel.WithMouse(false))
+	if err != nil {
+		t.Fatalf("kernel.New: %v", err)
+	}
+	k := &kernelDriver{t: t, model: root}
+	k.send(tea.WindowSizeMsg{Width: 100, Height: 30})
+	k.run(root.Init())
+	k.typeIn(testSite)
+	k.press("enter")
+	k.typeIn(testEmail)
+	k.press("enter")
+	k.typeIn(testToken)
+
+	k.hold()
+	k.press("enter")
+	k.send(kernel.PushMsg{ID: "cover", Title: "Cover", View: cover{}})
+	if !strings.Contains(k.frame(), "something else entirely") {
+		t.Fatalf("nothing was pushed over setup:\n%s", k.frame())
+	}
+
+	k.release()
+	k.send(kernel.PopMsg{})
+
+	// The token's own step says who it verified as, and nothing says that until
+	// the check has answered.
+	if !strings.Contains(k.frame(), "verified as Sam Tester") {
+		t.Errorf("the check that was in flight never reached setup:\n%s", k.frame())
+	}
 }

@@ -139,8 +139,8 @@ visible in what happens to whatever it was fetching.
 
 | Gesture | The view you were in | Its in-flight read |
 |---|---|---|
-| `ctrl+k`, or anything else pushed over it | still there, underneath | carries on |
-| `g` and a digit, to another root | kept, and comes back on its own digit with the same row under the cursor | carries on |
+| `ctrl+k`, or anything else pushed over it | still there, underneath | carries on, and lands in it |
+| `g` and a digit, to another root | kept, and comes back on its own digit with the same row under the cursor | carries on, and lands in it |
 | `esc` from a pushed view | gone | given up |
 
 The first row is the one worth stating out loud: **opening the palette over something that is still
@@ -155,6 +155,11 @@ when you switch away with `g`: that stack is gone, and only the root underneath 
 
 `q` and `ctrl+c` end the program, which throws every view away and stops nothing on the way out:
 there is no next frame for an answer to land in.
+
+And what a view was waiting for arrives in the view that asked for it, whatever is on screen by then.
+Open the palette over a loading issue, read a command, press `esc`, and the issue is there — it
+finished loading while you were reading, underneath. Nothing is asked for twice on the way back, so
+coming out of the palette never costs a second round trip to the site.
 
 ### Inside the palette
 

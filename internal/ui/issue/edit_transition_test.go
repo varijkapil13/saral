@@ -309,9 +309,9 @@ func TestMove_StopsReadingWhenThePaneIsClosed(t *testing.T) {
 	}
 	closer.Close()
 
-	failed, ok := cmd().(editFailedMsg)
+	failed, ok := answer(cmd).(editFailedMsg)
 	if !ok {
-		t.Fatalf("the read came back as %T, want the failure a cancelled context produces", cmd())
+		t.Fatalf("the read came back as %T, want the failure a cancelled context produces", answer(cmd))
 	}
 	if !errors.Is(failed.err, context.Canceled) {
 		t.Errorf("err = %v, want the context's own error", failed.err)
@@ -332,7 +332,7 @@ func TestMove_LosingTheKeyboardDoesNotGiveUpTheRead(t *testing.T) {
 	if _, more := view.Update(kernel.FocusMsg{Focused: false}); more != nil {
 		t.Fatal("losing the keyboard asked for more work")
 	}
-	if got := cmd(); !isMovesLoaded(got) {
+	if got := answer(cmd); !isMovesLoaded(got) {
 		t.Errorf("the read came back as %T, want the transitions it went for", got)
 	}
 }

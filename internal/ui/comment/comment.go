@@ -72,6 +72,7 @@ var (
 	_ kernel.View        = (*Model)(nil)
 	_ kernel.KeyCapturer = (*Model)(nil)
 	_ kernel.Blocker     = (*Model)(nil)
+	_ kernel.Addressed   = (*Model)(nil)
 )
 
 // ThreadMsg points the view at an issue's thread. It is exported so that a view
@@ -148,6 +149,13 @@ type Model struct {
 	gen           int
 	cancel        context.CancelFunc
 
+	// addr is where this thread's own answers come back to, and holder is the
+	// view drawing it when that view is a pane rather than the kernel. A thread
+	// in a sidebar is not on the stack, so its answer reaches it through the
+	// pane, which forwards everything it does not know.
+	addr   kernel.Addr
+	holder kernel.Addr
+
 	zones  widget.Zoner
 	clicks *widget.Clicks
 }
@@ -156,6 +164,10 @@ type Model struct {
 // the view is reachable by name and from the palette, and is told which issue
 // it is about by a ThreadMsg.
 func New(d kernel.Deps) kernel.View { return build(d, "") }
+
+// Addr is where the kernel delivers what this thread asked the site for,
+// whatever has since been pushed over it.
+func (m *Model) Addr() kernel.Addr { return m.addr }
 
 // Thread builds the thread for one issue, which is how a view holding an issue
 // opens it — pushed over that view, or held as a child model inside it.
@@ -166,7 +178,17 @@ func New(d kernel.Deps) kernel.View { return build(d, "") }
 // Everything else — one fetch, one draft, one cursor, one composer with the text
 // still in it — follows from there being one of these however many boxes it is
 // drawn in.
-func Thread(d kernel.Deps, key string) *Model { return build(d, key) }
+// held names the view drawing this one when a pane embeds it instead of
+// pushing it. The kernel cannot see a model inside another, so an answer is
+// addressed to this thread first and to its holder after, and the holder hands
+// it on.
+func Thread(d kernel.Deps, key string, held ...kernel.Addr) *Model {
+	m := build(d, key)
+	if len(held) > 0 {
+		m.holder = held[0]
+	}
+	return m
+}
 
 // Push returns the command that opens the thread for one issue on top of
 // whatever is on screen.
@@ -182,6 +204,7 @@ func build(d kernel.Deps, key string) *Model {
 		drafts: openDrafts(),
 		issue:  strings.TrimSpace(key),
 		editor: newEditor(),
+		addr:   kernel.NewAddr(),
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
@@ -376,6 +399,12 @@ func (m *Model) stop() {
 	m.loading = false
 }
 
+// reply puts this thread's address on a command, and its holder's after, so the
+// answer comes back here rather than to whatever the stack has on top by then.
+func (m *Model) reply(cmd tea.Cmd) tea.Cmd {
+	return kernel.Reply(withCancel(m.cancel, cmd), m.addr, m.holder)
+}
+
 // Close lets go of the read, the paging and the send. A thread the kernel has
 // discarded is one nothing can draw the answer into; a pane that embeds one is
 // lending it instead, so this is not reached by esc coming back from the whole
@@ -390,7 +419,7 @@ func (m *Model) load() tea.Cmd {
 	}
 	ctx, gen := m.begin()
 	m.loading = true
-	return withCancel(m.cancel, load(ctx, m.deps.Jira, m.issue, gen))
+	return m.reply(load(ctx, m.deps.Jira, m.issue, gen))
 }
 
 func (m *Model) loadedPage(msg loadedMsg) tea.Cmd {
@@ -443,7 +472,7 @@ func (m *Model) pageAheadIfNeeded() tea.Cmd {
 	}
 	ctx, gen := m.begin()
 	m.loading = true
-	return withCancel(m.cancel, more(ctx, m.page, gen))
+	return m.reply(more(ctx, m.page, gen))
 }
 
 func (m *Model) failed(msg failedMsg) tea.Cmd {
@@ -573,9 +602,9 @@ func (m *Model) send() tea.Cmd {
 	m.sending = true
 	ctx, gen := m.begin()
 	if m.editing == "" {
-		return withCancel(m.cancel, add(ctx, m.deps.Jira, m.issue, body, gen))
+		return m.reply(add(ctx, m.deps.Jira, m.issue, body, gen))
 	}
-	return withCancel(m.cancel, edit(ctx, m.deps.Jira, m.issue, m.editing, body, gen))
+	return m.reply(edit(ctx, m.deps.Jira, m.issue, m.editing, body, gen))
 }
 
 // unreadable turns a parse failure into the sentence a user reads: which line
@@ -642,7 +671,7 @@ func (m *Model) confirmDelete() tea.Cmd {
 	}
 	ctx, gen := m.begin()
 	m.loading = true
-	return withCancel(m.cancel, remove(ctx, m.deps.Jira, m.issue, id, gen))
+	return m.reply(remove(ctx, m.deps.Jira, m.issue, id, gen))
 }
 
 func (m *Model) deleted(msg deletedMsg) tea.Cmd {

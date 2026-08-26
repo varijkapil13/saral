@@ -713,11 +713,47 @@ three situations that mean three different things, and every view had to guess w
   create form and the filter picker. The issue list and onboarding are listed as exempt with the
   reason — nothing pushes either, so a discard never reaches them — and
   `internal/ui/livekeys_test.go` fails on a seventh view that is in neither half.
-  **Not fixed here, and filed instead**: a view's own answer is delivered to whatever is on top of the
-  stack when it lands ([#125](https://github.com/varijkapil13/saral/issues/125)), so an answer
-  arriving while the palette is up still reaches the palette. Not cancelling the read is necessary
-  but not sufficient for that case, and the delivery half has to keep a spinner tick apart from a
-  search result without walking every view under every tick.
+  **Necessary and not sufficient**: not cancelling the read only helps if the answer then reaches the
+  view that asked, which it did not — see K2 below, which ships in the same pull request because
+  without it this packet is a regression.
+
+- [x] **K2 — A view's own answer is delivered to the view that asked for it** ·
+  [#125](https://github.com/varijkapil13/saral/issues/125) ·
+  **owns** `internal/ui/kernel/**`, the fetch handling of
+  `internal/ui/{list,issue,comment,form,filter,onboarding}`, `internal/ui/*_test.go`,
+  `docs/{ARCHITECTURE,UX,ROADMAP}.md`
+  `Model.route`'s default is `forwardTop`, so a message the kernel does not recognise goes to
+  whatever is on top **when it lands** — and a view is blurred by exactly the thing that makes it not
+  the top. So every answer arriving while the palette was up was delivered to the palette and
+  dropped. Cancelling on blur had been hiding it: the pane cancelled, and on regaining focus
+  `!m.loadedIssue` sent it to read again, which recovered the answer. K1 removed the cancel and
+  guarded that recovery with `!m.loadingIssue` — a flag only `loadedMsg` and `failedMsg` clear, which
+  are the very messages the palette ate. **The pane never asked again.**
+  **`kernel.Reply` and `kernel.Addressed` are the fifth optional interface and its command wrapper.**
+  A view mints a `kernel.Addr` for itself and wraps its own commands in it; the kernel takes the
+  envelope off and delivers to the view holding that address, wherever it is on the stack or parked
+  in `live`, and drops it when no address resolves. **Opt-in on purpose**: everything unaddressed
+  still goes to the top, which is where a `bubbles` cursor blink and a spinner tick belong, and
+  addressing those would blink every input in the program and walk the session under every tick.
+  The address is a number rather than the `View` because a view need not be a pointer — onboarding is
+  a struct the kernel copies on every `Update` — and `==` on two interfaces holding the same
+  non-comparable type panics rather than answering.
+  **`To` is a list, most particular first.** The comment thread in the issue pane's sidebar is a
+  model inside a view and never an entry, so the kernel cannot deliver to it at all: its answer names
+  itself and then the pane, and the kernel takes the first address it can see — the thread while `C`
+  has it lent to the whole screen, the pane otherwise, which forwards what it does not recognise.
+  **The recovery is gone rather than renamed.** The detail pane no longer re-reads on regaining
+  focus and `loadingIssue` is deleted; the editor, the transition picker, the create form and the
+  filter picker never had a recovery and no longer need one. Eight adopters, one per key scope, and
+  `internal/ui/livekeys_test.go` fails on a ninth view in neither half of the table. The list's poll
+  tick is addressed too — `pollArmed` is cleared by the tick and by nothing else, so one eaten by the
+  palette stopped the poller for the rest of the session.
+  Held to it by `internal/ui/reply_test.go`, which drives the whole program — the kernel, the real
+  palette on `ctrl+k` — for each of the list, the detail pane, the field editor, the transition
+  picker, the filter picker, the create form and the thread in both the places it is drawn, holding
+  each answer back until the palette is up so that the delivery decision is really made with the view
+  underneath. Every guard was checked by mutation: removing the kernel's routing, and dropping the
+  address from any one view, turns exactly that view's case red.
 
 ## Batch 4 — Attachments · parallel ×3
 

@@ -39,6 +39,7 @@ var (
 	_ kernel.View        = (*Model)(nil)
 	_ kernel.KeyCapturer = (*Model)(nil)
 	_ kernel.Blocker     = (*Model)(nil)
+	_ kernel.Addressed   = (*Model)(nil)
 )
 
 // stage is which half of the flow the form is in: an issue type has to be
@@ -118,6 +119,7 @@ type Model struct {
 
 	gen    int
 	cancel context.CancelFunc
+	addr   kernel.Addr
 
 	// lines is the frame under construction and head the caption above it, kept
 	// between frames so that drawing a screen allocates neither.
@@ -144,12 +146,17 @@ type choice struct {
 // New builds the create form for the project this session is scoped to.
 func New(d kernel.Deps) kernel.View { return newWith(d, schemas, drafts) }
 
+// Addr is where the kernel delivers the issue types, the create screen and the
+// issue this form asked for, whatever has since been pushed over it.
+func (m *Model) Addr() kernel.Addr { return m.addr }
+
 func newWith(d kernel.Deps, cache *schemaCache, store *draftStore) *Model {
 	if d.Theme == nil {
 		d.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
 	m := &Model{
 		deps:    d,
+		addr:    kernel.NewAddr(),
 		cache:   cache,
 		drafts:  store,
 		styles:  newStyles(d.Theme),
@@ -321,6 +328,12 @@ func (m *Model) stop() {
 	m.loading, m.busy = false, false
 }
 
+// reply puts this form's address on a command, so what it asked for comes back
+// here rather than to whatever the stack has on top by then.
+func (m *Model) reply(cmd tea.Cmd) tea.Cmd {
+	return kernel.Reply(withCancel(m.cancel, cmd), m.addr)
+}
+
 // Close lets go of the issue types and the field schema behind them. A create
 // screen that has been thrown away has nowhere to draw either.
 func (m *Model) Close() { m.stop() }
@@ -338,7 +351,7 @@ func (m *Model) loadTypes() tea.Cmd {
 	}
 	ctx, gen := m.begin()
 	m.loading, m.stage = true, stageTypes
-	return withCancel(m.cancel, loadTypes(ctx, m.search, m.project, gen))
+	return m.reply(loadTypes(ctx, m.search, m.project, gen))
 }
 
 func (m *Model) typesFound(msg typesFoundMsg) tea.Cmd {
@@ -398,9 +411,9 @@ func (m *Model) openType(typ jira.IssueType) tea.Cmd {
 	m.chosen = typ
 	ctx, gen := m.begin()
 	m.loading = true
-	cmds := []tea.Cmd{withCancel(m.cancel, loadSchema(ctx, m.deps.Jira, m.cache, m.screenKey(), gen))}
+	cmds := []tea.Cmd{m.reply(loadSchema(ctx, m.deps.Jira, m.cache, m.screenKey(), gen))}
 	if !m.haveMe {
-		cmds = append(cmds, loadAccount(context.WithoutCancel(ctx), m.deps.Jira, gen))
+		cmds = append(cmds, kernel.Reply(loadAccount(context.WithoutCancel(ctx), m.deps.Jira, gen), m.addr))
 	}
 	return tea.Batch(cmds...)
 }
@@ -993,7 +1006,7 @@ func (m *Model) submit() tea.Cmd {
 	in := m.issueInput()
 	ctx, gen := m.begin()
 	m.busy = true
-	return withCancel(m.cancel, create(ctx, m.deps.Jira, in, gen))
+	return m.reply(create(ctx, m.deps.Jira, in, gen))
 }
 
 // missingRequired names the fields Jira requires that the form does not offer.

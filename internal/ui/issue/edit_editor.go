@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/adf"
 )
 
@@ -62,14 +63,14 @@ func lookEditor(name, env string) error {
 // The markdown is rendered with the zero options on purpose. A width-bounded
 // render truncates a table's cells with an ellipsis, and an edit anywhere in
 // that document would write the truncation back into Jira.
-func handOffToEditor(launch editorLauncher, gen int, key string, original adf.Doc) tea.Cmd {
+func handOffToEditor(launch editorLauncher, addr kernel.Addr, gen int, key string, original adf.Doc) tea.Cmd {
 	rendered := adf.Markdown(original)
 	path, err := writeHandoff(key, rendered)
 	if err != nil {
-		return func() tea.Msg { return editedMsg{gen: gen, err: err} }
+		return func() tea.Msg { return kernel.ReplyTo(editedMsg{gen: gen, err: err}, addr) }
 	}
 	return launch(path, func(runErr error) tea.Msg {
-		return readHandoff(gen, original, rendered, path, runErr)
+		return kernel.ReplyTo(readHandoff(gen, original, rendered, path, runErr), addr)
 	})
 }
 

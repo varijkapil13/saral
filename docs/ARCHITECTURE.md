@@ -374,6 +374,57 @@ Which views owe the interface is not something the kernel can check — it may n
 `internal/ui/livekeys_test.go` holds the table: every view something pushes implements `Closer`, and
 every view nothing pushes is listed with the reason a discard never reaches it.
 
+### A view's own answer belongs to the view that asked
+
+`Model.route`'s default is `forwardTop`, so a message the kernel does not recognise goes to whatever
+is on top of the stack. That is right for a widget's own message — a cursor blink, a spinner tick
+belongs to whoever is being looked at — and wrong for the answer to a question a view asked the site,
+because **a view is blurred by exactly the thing that makes it not the top.** Every answer landing
+while the palette was up was delivered to the palette and dropped.
+
+A view that asks the site for something therefore mints an address for itself and wraps the command
+in it:
+
+```go
+type Addr uint64
+
+func NewAddr() Addr
+func Reply(cmd tea.Cmd, to ...Addr) tea.Cmd
+
+type Addressed interface {
+	Addr() Addr
+}
+```
+
+`Reply` puts a `ReplyMsg` envelope around whatever the command comes back with. The kernel takes the
+envelope off and delivers the message to the view holding that address — wherever it is on the stack,
+or parked in `live` after a root switch — and **drops it when no address resolves**, because a
+discarded view has no frame left to draw the answer into. `Addressed` is how the kernel finds the
+view without knowing a single one of its message types.
+
+Three consequences, each of them the reason for a part of the shape:
+
+- **It is opt-in.** Everything unaddressed still goes to the top, so a `bubbles` tick stays exactly
+  where it was. Addressing them instead would blink every input in the program.
+- **The address is a number and not the `View`.** A view need not be a pointer — onboarding is a
+  struct the kernel copies on every `Update` — and comparing two interfaces holding the same
+  non-comparable type panics rather than answering.
+- **`To` is a list, most particular first.** The issue pane draws the comment thread in its sidebar
+  and that thread is a model inside a view, never an entry on the stack, so the kernel cannot deliver
+  to it at all. Its answer names itself and then the pane, and the kernel takes the first address it
+  can see: the thread itself while `C` has it lent to the whole screen, and the pane otherwise, whose
+  `Update` forwards what it does not recognise to the thread. A view that holds a child hands it
+  nothing but its own address.
+
+The recovery this replaces was a view re-reading on regaining focus when it had nothing — which the
+detail pane did and the editor, the transition picker and the create form did not. There is no such
+recovery anywhere now: an answer arrives, so there is nothing to ask for a second time.
+
+`internal/ui/livekeys_test.go` holds the table of which views owe an address, beside the `Closer` and
+`KeyReporter` ones. `internal/ui/reply_test.go` drives the whole program — the kernel, the real
+palette on `ctrl+k` — for every view that asks the site for anything, and holds the answer back until
+the palette is up so the delivery decision is really made with the view underneath.
+
 A view whose keys move with its state implements `kernel.KeyReporter`:
 
 ```go
@@ -484,12 +535,15 @@ directly.
 KeyPressMsg / MouseClickMsg
         │
         ▼
-  kernel.Update ──► focused view.Update ──► tea.Cmd (async IO)
+  kernel.Update ──► focused view.Update ──► kernel.Reply(cmd, addr)
         │                                        │
         │                                        ▼
         │                                  jira.Client call
         │                                        │
-        └──────────◄── typed result Msg ◄────────┘
+        └──◄── ReplyMsg{To: addr} ───────────────┘
+        │
+        ▼
+  the view at that address, wherever it is now
 ```
 
 Conventions:
@@ -497,7 +551,8 @@ Conventions:
 - One message type per outcome, named for the outcome: `IssuesLoadedMsg`, `IssueLoadFailedMsg`.
   Never a generic `DataMsg` with an `error` field and a switch on nil.
 - Commands are pure functions returning `tea.Cmd`; they close over a context tied to the view's
-  lifetime.
+  lifetime, and a view wraps its own in `kernel.Reply` with its address so that the answer comes back
+  to it rather than to whatever the stack has on top when it lands.
 - Cross-view effects go through `kernel.Broadcast` (e.g. an issue edited in the detail view tells
   the board to refresh that one row) — not by holding a pointer to another model.
 - **Request coalescing:** identical in-flight requests are deduplicated in `internal/app` with a

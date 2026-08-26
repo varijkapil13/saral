@@ -19,6 +19,7 @@ var (
 	_ kernel.View        = (*editModel)(nil)
 	_ kernel.KeyCapturer = (*editModel)(nil)
 	_ kernel.Blocker     = (*editModel)(nil)
+	_ kernel.Addressed   = (*editModel)(nil)
 )
 
 // editStage is what the pane is doing, which decides both what a key means and
@@ -76,7 +77,12 @@ type editModel struct {
 
 	gen    int
 	cancel context.CancelFunc
+	addr   kernel.Addr
 }
+
+// Addr is where the kernel delivers this pane's re-read and the create screen
+// behind its pickers, whatever has since been pushed over it.
+func (m *editModel) Addr() kernel.Addr { return m.addr }
 
 // editOption configures the pane at construction. Nothing outside the package
 // builds one; the tests use it to stand in for the user's editor.
@@ -104,6 +110,7 @@ func NewEdit(d kernel.Deps, iss jira.Issue, opts ...editOption) kernel.View {
 		issue:  iss,
 		input:  newEditInput(),
 		launch: launchEditor,
+		addr:   kernel.NewAddr(),
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
@@ -212,6 +219,10 @@ func (m *editModel) stop() {
 	}
 }
 
+// reply puts this pane's address on a command, so what it asked for comes back
+// here rather than to whatever the stack has on top by then.
+func (m *editModel) reply(cmd tea.Cmd) tea.Cmd { return kernel.Reply(cmd, m.addr) }
+
 // Close lets go of the re-read and the schema behind it. The pane is only ever
 // pushed, so this is the whole of its life ending.
 func (m *editModel) Close() { m.stop() }
@@ -232,7 +243,7 @@ func (m *editModel) fetch() tea.Cmd {
 		return m.loadSchema()
 	}
 	ctx, gen := m.begin()
-	return loadForEdit(ctx, m.search, m.issue.Key, gen)
+	return m.reply(loadForEdit(ctx, m.search, m.issue.Key, gen))
 }
 
 // covered reports whether the issue was read with every field the pane offers,
@@ -254,7 +265,7 @@ func (m *editModel) loadSchema() tea.Cmd {
 		return nil
 	}
 	ctx, gen := m.begin()
-	return loadEditSchema(ctx, m.deps.Jira, m.issue.Project.Key, m.issue.Type.ID, gen)
+	return m.reply(loadEditSchema(ctx, m.deps.Jira, m.issue.Project.Key, m.issue.Type.ID, gen))
 }
 
 // loaded takes the re-read issue, keeping whatever the user has already typed.
@@ -489,7 +500,7 @@ func (m *editModel) reread() tea.Cmd {
 	m.stage = stageBrowse
 	m.note = "re-reading " + m.issue.Key + " and putting your edits back on top"
 	ctx, gen := m.begin()
-	return loadForEdit(ctx, m.search, m.issue.Key, gen)
+	return m.reply(loadForEdit(ctx, m.search, m.issue.Key, gen))
 }
 
 // click puts the cursor on the row under the pointer, and opens it on a
@@ -532,7 +543,7 @@ func (m *editModel) wheel(msg tea.MouseWheelMsg) {
 
 func (m *editModel) handOff(row *editRow) tea.Cmd {
 	_, gen := m.begin()
-	return handOffToEditor(m.launch, gen, m.issue.Key, row.documentNow())
+	return handOffToEditor(m.launch, m.addr, gen, m.issue.Key, row.documentNow())
 }
 
 func (m *editModel) edited(msg editedMsg) tea.Cmd {
@@ -584,7 +595,7 @@ func (m *editModel) save() tea.Cmd {
 	m.stage = stageSaving
 	m.fail = ""
 	ctx, gen := m.begin()
-	return saveEdit(ctx, m.deps.Jira, m.issue.Key, patch, gen)
+	return m.reply(saveEdit(ctx, m.deps.Jira, m.issue.Key, patch, gen))
 }
 
 func (m *editModel) saved(msg editSavedMsg) tea.Cmd {

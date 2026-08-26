@@ -817,7 +817,7 @@ func TestThread_KeepsItsReadOnABlurAndDropsItOnAClose(t *testing.T) {
 	if _, more := kept.Update(kernel.FocusMsg{}); more != nil {
 		t.Fatal("losing the keyboard asked for more work")
 	}
-	if _, gaveUp := reading().(failedMsg); gaveUp {
+	if _, gaveUp := answer(reading).(failedMsg); gaveUp {
 		t.Error("the thread gave up its read when it merely lost the keyboard")
 	}
 
@@ -830,11 +830,21 @@ func TestThread_KeepsItsReadOnABlurAndDropsItOnAClose(t *testing.T) {
 	}
 	closer.Close()
 
-	failed, ok := cmd().(failedMsg)
+	failed, ok := answer(cmd).(failedMsg)
 	if !ok {
-		t.Fatalf("the read came back as %T, want the failure a cancelled context produces", cmd())
+		t.Fatalf("the read came back as %T, want the failure a cancelled context produces", answer(cmd))
 	}
 	if !errors.Is(failed.err, context.Canceled) {
 		t.Errorf("err = %v, want the context's own error", failed.err)
 	}
+}
+
+// answer is what the kernel hands a view: the command's own reply with the
+// envelope the kernel addresses it by taken off.
+func answer(cmd tea.Cmd) tea.Msg {
+	msg := cmd()
+	if reply, addressed := msg.(kernel.ReplyMsg); addressed {
+		return reply.Msg
+	}
+	return msg
 }

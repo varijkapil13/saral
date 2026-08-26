@@ -88,7 +88,7 @@ func msgName(msg tea.Msg) string {
 	}
 }
 
-func spec(id string, slot int, requires jira.CapabilityKey, v *stubView) ViewSpec {
+func spec(id string, slot int, requires jira.CapabilityKey, v View) ViewSpec {
 	return ViewSpec{
 		ID:       id,
 		Title:    strings.ToUpper(id[:1]) + id[1:],
