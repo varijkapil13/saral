@@ -56,8 +56,9 @@ A packet is done when all of these hold. A PR missing any of them is not ready f
 - [ ] Public API in `pkg/**` has doc comments; `internal/**` does not need them
 - [ ] Keybindings registered, not hardcoded; mouse zones added for anything clickable
 - [ ] Benchmarks added if the packet touches a render path or a list
-- [ ] Nothing from a real instance in the diff — `scripts/checkleak.py` clean, and the fixtures you
-      touched still describe the invented site
+- [ ] Nothing from a real instance in the diff — CI runs the half of `scripts/checkleak.py` that
+      needs no capture; if you took one, `scripts/checkleak.py --require-capture` is yours to run
+      and no runner can run it for you
 - [ ] Every consumer of anything shared you changed has actually adopted it, by name
 - [ ] `docs/ROADMAP.md` checkbox ticked in the same PR
 

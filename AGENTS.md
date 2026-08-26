@@ -32,9 +32,12 @@ You are one of several agents working on this repository at the same time. Read 
   gitignored and stays that way. `pkg/jira/jiratest/fixtures/**` is synthetic: a capture is used to
   correct the *shape* of a fixture — keys, nesting, types, date formats, paging envelopes — and the
   words are invented. The scrubber is best-effort and cannot remove prose: ticket summaries, release
-  names, board names and custom field names are all somebody's private information. Run
-  `scripts/checkleak.py` before you commit, read the diff, and never `git add -A` when a capture has
-  been run in this tree.
+  names, board names and custom field names are all somebody's private information. CI runs
+  `scripts/checkleak.py` on every pull request, which fails on a fixture naming any host but the
+  invented site, on a capture that reached the index, and on `testdata/live/` losing its ignore rule.
+  The half of it that compares the fixtures against a capture can only run where the capture is, so
+  after one, run `scripts/checkleak.py --require-capture` yourself, read the diff, and never
+  `git add -A` when a capture has been run in this tree.
 - **Never expose a raw destructive API shape.** The canonical example: `PUT` on a sprint nulls every
   omitted field, so the port exposes `StartSprint`/`CompleteSprint`/`UpdateSprint` instead.
 - **Tests must not touch the network.** Use `pkg/jira/jiratest`. CI runs the race suite inside a

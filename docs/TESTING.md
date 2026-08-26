@@ -42,9 +42,23 @@ different and much smaller problem.
 
 What a capture is for is the **shape**: the keys, the nesting, the types, the date formats, the paging
 envelopes. When a committed fixture is wrong about one of those, correct it from the capture and
-invent the words. `scripts/checkleak.py` then proves no string of yours came across; run it before
-committing. There are also tests asserting no fixture contains an `@` beyond the placeholder, a host
-other than `example.atlassian.net`, or anything shaped like a live Atlassian account ID.
+invent the words.
+
+`scripts/checkleak.py` is what proves the second half happened, and it runs in two halves because
+only one of them can be mechanical. The half CI runs on every pull request needs no capture: the
+fixture tree has to be non-empty, every file in it has to parse, every absolute URL has to name the
+invented site, and `testdata/live/` has to be both untracked and still ignored — deleting that
+ignore rule is the quiet way a capture ends up in the history, because nothing breaks until the next
+`git add -A`. `pkg/jira/jiratest/fixtures_test.go` asserts the rest of the shape rules over the same
+tree: no `@` beyond the placeholder, no host other than `example.atlassian.net`, nothing shaped like
+a live Atlassian account ID or a credential.
+
+The other half compares the committed fixtures against your capture, string by string, ignoring the
+vocabulary Jira and HTTP ship identically everywhere. **No runner can run it** — a capture only
+exists on the machine that took one, and a CI step over that half would be green for the same reason
+it was green before anyone wrote it. So it is yours: `scripts/checkleak.py --require-capture` after a
+capture, which fails rather than skips when there is nothing to compare against. `scripts/checkleak_test.py`
+covers both halves against planted leaks, and CI runs it before it runs the check.
 
 Fixtures to keep, at minimum: a rich ADF description, a paginated search response and its second
 page, `createmeta` for two different projects, a board configuration with and without estimation,
