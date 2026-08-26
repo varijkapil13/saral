@@ -430,6 +430,10 @@ func (m *Model) stop() {
 	m.loading = false
 }
 
+// Close lets go of the vocabulary read and of an account search still out with
+// the site. A picker that has been thrown away has nothing to rank.
+func (m *Model) Close() { m.stop() }
+
 // fetch asks the site for the facet on screen. needle is only ever non-empty
 // for the accounts, which are the one vocabulary this site will not let anybody
 // narrow locally.

@@ -321,6 +321,10 @@ func (m *Model) stop() {
 	m.loading, m.busy = false, false
 }
 
+// Close lets go of the issue types and the field schema behind them. A create
+// screen that has been thrown away has nowhere to draw either.
+func (m *Model) Close() { m.stop() }
+
 func (m *Model) current(gen int) bool { return gen == m.gen }
 
 func (m *Model) loadTypes() tea.Cmd {

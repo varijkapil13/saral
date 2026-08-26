@@ -121,11 +121,6 @@ func (m *moveModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.SizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 
-	case kernel.FocusMsg:
-		if !msg.Focused {
-			m.stop()
-		}
-
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newEditStyles(msg.Theme)
@@ -171,6 +166,11 @@ func (m *moveModel) stop() {
 		m.cancel = nil
 	}
 }
+
+// Close lets go of the transitions read, and of a move that is still being
+// applied. The picker is only ever pushed, so this is the whole of its life
+// ending.
+func (m *moveModel) Close() { m.stop() }
 
 func (m *moveModel) fetch() tea.Cmd {
 	if m.deps.Jira == nil || m.issue.Key == "" {

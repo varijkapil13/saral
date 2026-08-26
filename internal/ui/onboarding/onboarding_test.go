@@ -547,7 +547,7 @@ func TestSave_NamesASecondProfileForTheSameSiteWithoutOverwritingTheFirst(t *tes
 	}
 }
 
-func TestFocus_CancelsWhatIsInTheAirWhenTheViewStopsBeingLookedAt(t *testing.T) {
+func TestStop_CancelsWhatIsInTheAir(t *testing.T) {
 	t.Parallel()
 
 	fake := testFake()
@@ -572,6 +572,33 @@ func TestFocus_CancelsWhatIsInTheAirWhenTheViewStopsBeingLookedAt(t *testing.T) 
 	}
 	if m.busy != busyNone {
 		t.Error("the view still thinks something is in the air")
+	}
+}
+
+// Losing the keyboard is not the same thing. This view is only ever a root, so
+// it is parked rather than discarded, and the palette opens over it: a token
+// being checked must survive both.
+func TestFocus_LosingTheKeyboardDoesNotCancelACheckInFlight(t *testing.T) {
+	t.Parallel()
+
+	d := newDriver(t, testFake())
+	d.typeIn(testSite)
+	d.press("enter")
+	d.typeIn(testEmail)
+	d.press("enter")
+	d.typeIn(testToken)
+
+	m := d.model()
+	cancelled := false
+	m.busy, m.seq = busyProbe, 7
+	m.cancel = func() { cancelled = true }
+
+	blurred, _ := m.Update(kernel.FocusMsg{})
+	if cancelled {
+		t.Error("the check was cancelled by the view merely losing the keyboard")
+	}
+	if got := blurred.(Model).busy; got != busyProbe {
+		t.Errorf("the view says it is %d, want it to still be checking", got)
 	}
 }
 

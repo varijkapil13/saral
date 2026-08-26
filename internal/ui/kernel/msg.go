@@ -13,6 +13,11 @@ type PushMsg struct {
 	View  View
 	ID    string
 	Title string
+	// Lent says the pusher goes on holding this view after the stack drops it,
+	// so taking it off is not discarding it and the kernel must not close it.
+	// The default is the common case: a view built for the push, which the
+	// kernel then owns.
+	Lent bool
 }
 
 // PopMsg takes the top view off the stack.
@@ -94,9 +99,20 @@ type StatusMsg struct {
 	Level StatusLevel
 }
 
-// Push returns a command that pushes a view onto the stack.
+// Push returns a command that pushes a view onto the stack. The kernel takes it
+// over: popping it discards it, and a view implementing Closer is told so.
 func Push(id, title string, v View) tea.Cmd {
 	return func() tea.Msg { return PushMsg{View: v, ID: id, Title: title} }
+}
+
+// Lend returns a command that puts a view the caller keeps on the stack. The
+// kernel draws it and routes keys to it like any other entry and drops it on
+// esc without closing it, because the caller is still holding it — the issue
+// pane hands over the very thread its sidebar draws, and closing that would
+// cancel a read the sidebar is still waiting for. The lender owes the view a
+// Close of its own when it is discarded in turn.
+func Lend(id, title string, v View) tea.Cmd {
+	return func() tea.Msg { return PushMsg{View: v, ID: id, Title: title, Lent: true} }
 }
 
 // Pop returns a command that goes back one view.

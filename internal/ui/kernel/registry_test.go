@@ -18,6 +18,7 @@ type stubView struct {
 	content   string
 	blocks    string
 	capturing bool
+	closed    int
 }
 
 func (s *stubView) Init() tea.Cmd { return nil }
@@ -45,6 +46,8 @@ func (s *stubView) BlocksClose() (string, bool) {
 	}
 	return s.blocks, true
 }
+
+func (s *stubView) Close() { s.closed++ }
 
 func msgName(msg tea.Msg) string {
 	switch m := msg.(type) {

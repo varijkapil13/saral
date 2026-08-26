@@ -225,7 +225,10 @@ func TestIssue_SaysSoWhenTheIssueIsGone(t *testing.T) {
 	}
 }
 
-func TestIssue_LosingFocusStopsTheWorkAndGettingItBackStartsItAgain(t *testing.T) {
+// The pane is blurred whenever anything is pushed over it — the palette, the
+// editor, the thread on the whole screen — and none of those is the pane being
+// thrown away. A read given up there is a read nothing asks for again.
+func TestIssue_LosingTheKeyboardDoesNotGiveUpTheRead(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(20)
@@ -242,17 +245,76 @@ func TestIssue_LosingFocusStopsTheWorkAndGettingItBackStartsItAgain(t *testing.T
 
 	next, _ = m.Update(kernel.FocusMsg{})
 	m, _ = next.(*Model)
-	if msgs := collect(cmd); !allCancelled(msgs) {
-		t.Errorf("the in-flight requests survived the pane losing focus: %+v", msgs)
+
+	msgs := collect(cmd)
+	if !readTheIssue(msgs) {
+		t.Errorf("the read did not survive the pane losing the keyboard: %+v", msgs)
 	}
 
-	f.Delay(0)
+	gen := m.gen
 	dr := &driver{t: t, m: m}
 	dr.send(kernel.FocusMsg{Focused: true})
+	if dr.m.gen != gen {
+		t.Errorf("coming back asked a second time while the first read was still out: generation %d, was %d",
+			dr.m.gen, gen)
+	}
+	for _, msg := range msgs {
+		dr.send(msg)
+	}
 	if !dr.m.loadedIssue {
-		t.Error("getting focus back did not read the issue again")
+		t.Error("the answer to the read issued before the blur was not taken")
 	}
 	mustContain(t, dr.view(), seed.Summary)
+}
+
+// A pane that really has been discarded stops, and takes the thread it holds
+// with it: the sidebar is the only thing drawing that model.
+func TestIssue_ClosingStopsTheReadAndTheThreadItHolds(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(20)
+	seed := seedOf(t, f, "PROJ-8")
+	f.Delay(50 * time.Millisecond)
+
+	view, ok := New(testDeps(f), seed).(*Model)
+	if !ok {
+		t.Fatal("New did not return a *Model")
+	}
+	next, _ := view.Update(kernel.SizeMsg{Width: 120, Height: 30})
+	m, _ := next.(*Model)
+	cmd := m.fetch()
+
+	thread := &closeSpy{}
+	m.thread = thread
+	m.Close()
+
+	if msgs := collect(cmd); !allCancelled(msgs) {
+		t.Errorf("a discarded pane went on reading: %+v", msgs)
+	}
+	if thread.closed != 1 {
+		t.Errorf("the thread was closed %d times, want once", thread.closed)
+	}
+	if m.loadingIssue {
+		t.Error("a closed pane still reports a read in flight")
+	}
+}
+
+// closeSpy stands in for the thread, which answers with a message type this
+// package cannot see into.
+type closeSpy struct{ closed int }
+
+func (s *closeSpy) Init() tea.Cmd                         { return nil }
+func (s *closeSpy) Update(tea.Msg) (kernel.View, tea.Cmd) { return s, nil }
+func (s *closeSpy) View() string                          { return "" }
+func (s *closeSpy) Close()                                { s.closed++ }
+
+func readTheIssue(msgs []tea.Msg) bool {
+	for _, msg := range msgs {
+		if _, ok := msg.(loadedMsg); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func collect(cmd tea.Cmd) []tea.Msg {

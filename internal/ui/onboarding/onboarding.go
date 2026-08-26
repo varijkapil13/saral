@@ -172,7 +172,6 @@ func (m Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case kernel.FocusMsg:
 		if !msg.Focused {
-			m.stop()
 			m.blurField()
 			return m, nil
 		}

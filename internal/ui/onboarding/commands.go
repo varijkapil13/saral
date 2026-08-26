@@ -111,9 +111,9 @@ func (m *Model) configLoaded(msg configLoadedMsg) tea.Cmd {
 	return nil
 }
 
-// stop cancels whatever is in the air, which is what closing or looking away
-// from this view has to do: a verification the user has walked away from must
-// not still be running.
+// stop cancels whatever is in the air. It is what starting the next question
+// does, and not what losing the keyboard does: a palette opened over a token
+// being checked must not cancel the check.
 func (m *Model) stop() {
 	if m.cancel != nil {
 		m.cancel()

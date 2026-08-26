@@ -2,6 +2,7 @@ package comment
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -799,4 +800,41 @@ func countCalls(f *jiratest.Fake, name string) int {
 		}
 	}
 	return n
+}
+
+// The thread loses the keyboard whenever the pane beside it takes them, whenever
+// something is pushed over it, and when it is thrown away, and only the last of
+// those is a reason to give up the read.
+func TestThread_KeepsItsReadOnABlurAndDropsItOnAClose(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(4)
+	comment(t, f, "PROJ-1", "Something to read.")
+
+	var kept kernel.View = Thread(testDeps(t, f), "PROJ-1")
+	kept, _ = kept.Update(kernel.SizeMsg{Width: 100, Height: 30})
+	reading := kept.Init()
+	if _, more := kept.Update(kernel.FocusMsg{}); more != nil {
+		t.Fatal("losing the keyboard asked for more work")
+	}
+	if _, gaveUp := reading().(failedMsg); gaveUp {
+		t.Error("the thread gave up its read when it merely lost the keyboard")
+	}
+
+	var dropped kernel.View = Thread(testDeps(t, f), "PROJ-1")
+	dropped, _ = dropped.Update(kernel.SizeMsg{Width: 100, Height: 30})
+	cmd := dropped.Init()
+	closer, ok := dropped.(kernel.Closer)
+	if !ok {
+		t.Fatal("the thread does not implement kernel.Closer, so nothing stops its read")
+	}
+	closer.Close()
+
+	failed, ok := cmd().(failedMsg)
+	if !ok {
+		t.Fatalf("the read came back as %T, want the failure a cancelled context produces", cmd())
+	}
+	if !errors.Is(failed.err, context.Canceled) {
+		t.Errorf("err = %v, want the context's own error", failed.err)
+	}
 }

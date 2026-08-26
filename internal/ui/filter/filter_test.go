@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -657,4 +658,58 @@ func TestPicker_AnAnswerThatLandsLateLeavesTheCursorOnTheSameValue(t *testing.T)
 			}
 		})
 	}
+}
+
+// The picker is pushed over the list and the palette is pushed over the picker,
+// so a vocabulary read given up on a blur is one nothing asks for again. A
+// picker the kernel has thrown away lets it go.
+func TestPicker_KeepsItsReadOnABlurAndDropsItOnAClose(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(20)
+
+	kept := openOnAFacet(t, testDeps(f))
+	reading := kept.cmd
+	if _, more := kept.view.Update(kernel.FocusMsg{}); more != nil {
+		t.Fatal("losing the keyboard asked for more work")
+	}
+	if _, gaveUp := reading().(failedMsg); gaveUp {
+		t.Error("the picker gave up its read when it merely lost the keyboard")
+	}
+
+	dropped := openOnAFacet(t, testDeps(f))
+	closer, ok := dropped.view.(kernel.Closer)
+	if !ok {
+		t.Fatal("the picker does not implement kernel.Closer, so nothing stops its read")
+	}
+	closer.Close()
+
+	failed, ok := dropped.cmd().(failedMsg)
+	if !ok {
+		t.Fatalf("the read came back as %T, want the failure a cancelled context produces", dropped.cmd())
+	}
+	if !errors.Is(failed.err, context.Canceled) {
+		t.Errorf("err = %v, want the context's own error", failed.err)
+	}
+}
+
+// openOnAFacet drives the picker to the state where it has asked the site for a
+// vocabulary, and hands back the command carrying that read rather than running
+// it, so a test can decide what happens to it first.
+type facetOpen struct {
+	view kernel.View
+	cmd  tea.Cmd
+}
+
+func openOnAFacet(t *testing.T, d kernel.Deps) facetOpen {
+	t.Helper()
+
+	view := New(d)
+	view, _ = view.Update(kernel.SizeMsg{Width: 120, Height: 30})
+	view, _ = view.Update(kernel.FocusMsg{Focused: true})
+	view, cmd := view.Update(keyPress("enter"))
+	if cmd == nil {
+		t.Fatal("choosing a facet asked the site for nothing")
+	}
+	return facetOpen{view: view, cmd: cmd}
 }

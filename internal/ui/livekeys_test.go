@@ -183,6 +183,89 @@ func TestLiveKeys_EveryAdvertisedActionCanBeClicked(t *testing.T) {
 	}
 }
 
+// closers names the views a discard can reach — everything something pushes —
+// and parked names the ones nothing pushes, which the kernel therefore never
+// discards. Like keyReporters above, the kernel cannot hold the views to this —
+// it may not import one — and a view checking itself is the drift, so the sweep
+// lives here.
+//
+// Every scope in the key registry has to appear in exactly one half, so a
+// seventh view fails this until somebody has decided which.
+var closers = map[string]func(kernel.Deps) kernel.View{
+	filter.ViewID:    func(d kernel.Deps) kernel.View { return filter.New(d) },
+	form.ViewID:      form.New,
+	comment.ViewID:   comment.New,
+	issue.ViewID:     func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
+	issue.EditViewID: func(d kernel.Deps) kernel.View { return issue.NewEdit(d, seed()) },
+	issue.MoveViewID: func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
+}
+
+// parked are the views nothing ever pushes, each with the reason. A root the
+// user switches away from is kept and comes back on its digit, so a discard
+// never reaches one and a Close on it would be a method nobody calls. A view
+// lands here because of that and not because nobody got round to it: the day
+// something pushes one of these, it owes the interface.
+var parked = map[string]struct {
+	build func(kernel.Deps) kernel.View
+	why   string
+}{
+	list.ViewID: {
+		build: list.New,
+		why:   "the issue list holds a footer slot and nothing pushes it, so it is only ever a root",
+	},
+	onboarding.ViewID: {
+		build: onboarding.New,
+		why:   "setup is where the program starts and what the palette reopens, and neither of those is a push",
+	},
+}
+
+func TestClose_EveryViewADiscardCanReachStopsItsWork(t *testing.T) {
+	sweepEnv(t)
+	scopes := kernel.KeyScopes()
+	if len(scopes) == 0 {
+		t.Fatal("no view registered any keys, so this sweep is checking nothing")
+	}
+
+	for _, scope := range scopes {
+		build, pushed := closers[scope]
+		root, isRoot := parked[scope]
+		switch {
+		case pushed && isRoot:
+			t.Errorf("%s is in both halves of the table", scope)
+			continue
+		case !pushed && !isRoot:
+			t.Errorf("%s is a view and this sweep does not know whether anything pushes it; add it to "+
+				"closers, or to parked with the reason a discard never reaches it", scope)
+			continue
+		case isRoot:
+			build = root.build
+			if root.why == "" {
+				t.Errorf("%s is exempt with no reason given", scope)
+			}
+		}
+
+		_, implements := build(depsFor(t)).(kernel.Closer)
+		switch {
+		case pushed && !implements:
+			t.Errorf("%s can be discarded and does not implement kernel.Closer, so a read it started "+
+				"goes on running for an answer the kernel has thrown the view away for", scope)
+		case isRoot && implements:
+			t.Errorf("%s implements kernel.Closer and nothing would ever call it: %s", scope, root.why)
+		}
+	}
+
+	for scope := range closers {
+		if !known(scopes, scope) {
+			t.Errorf("closers names %q, which is no longer a view", scope)
+		}
+	}
+	for scope := range parked {
+		if !known(scopes, scope) {
+			t.Errorf("parked names %q, which is no longer a view", scope)
+		}
+	}
+}
+
 // seed is the row a list would have handed over: a key and nothing else, which
 // is all these panes need to be built.
 func seed() jira.Issue {

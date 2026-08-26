@@ -376,6 +376,12 @@ func (m *Model) stop() {
 	m.loading = false
 }
 
+// Close lets go of the read, the paging and the send. A thread the kernel has
+// discarded is one nothing can draw the answer into; a pane that embeds one is
+// lending it instead, so this is not reached by esc coming back from the whole
+// screen.
+func (m *Model) Close() { m.stop() }
+
 func (m *Model) current(gen int) bool { return gen == m.gen }
 
 func (m *Model) load() tea.Cmd {

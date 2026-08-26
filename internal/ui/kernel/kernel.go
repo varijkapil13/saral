@@ -58,9 +58,57 @@ type Blocker interface {
 	BlocksClose() (reason string, blocked bool)
 }
 
+// Closer is the optional interface a view implements when it starts work that
+// outlives a frame — a read, a write, a poll — and would want it stopped the
+// moment the stack lets go of it. Blocker refuses a close; this is told about
+// the one that happened.
+//
+// Close is called on a view that is *discarded* and on no other: the entry a pop
+// takes off, and every pushed entry a root switch throws away. It is not called
+// on a view something is pushed over, nor on a root parked off screen while
+// another is shown — both are seen again, and cancelling their reads is how
+// opening the palette over a loading thread cancelled the load. FocusMsg{false}
+// covers all three and distinguishes none of them, which is why this is not a
+// question about focus.
+//
+// It is a call rather than a message because Update hands back a View the kernel
+// is about to drop, so whatever a discarded view recorded there is thrown away
+// with it, and because a message is broadcastable — any view could then tell
+// every other one it was finished. Whether a view is gone is the kernel's to
+// say, and it says it to that view alone.
+//
+// Quitting discards every view too, and does not call this: the process is
+// ending, so every context it would cancel dies with it, and a view told the
+// news has no frame left to draw and no command that would run.
+type Closer interface {
+	Close()
+}
+
+// CloseView tells a view it has been discarded, if it cares. It is what the
+// kernel does to an entry it drops, and what a pane holding a child view owes
+// that child when it is closed itself.
+func CloseView(v View) {
+	if c, ok := v.(Closer); ok {
+		c.Close()
+	}
+}
+
 type stackEntry struct {
 	spec ViewSpec
 	view View
+	// lent marks a view its pusher still holds and goes on drawing, so taking it
+	// off the stack is not discarding it. The issue pane gives the kernel the
+	// very comment thread its sidebar draws.
+	lent bool
+}
+
+// discard drops the kernel's reference to an entry and closes the view, unless
+// the view was only lent.
+func discard(e stackEntry) {
+	if e.lent {
+		return
+	}
+	CloseView(e.view)
 }
 
 type chromeKey struct {
@@ -657,7 +705,17 @@ func (m Model) open(id string) (tea.Model, tea.Cmd) {
 		m.live[id] = view
 	}
 	blurred := m.blur()
+	// keepRoot has already parked entry zero, so what a switch throws away is
+	// everything pushed over it — and a build where nothing was available at
+	// startup has neither.
+	var dropped []stackEntry
+	if len(m.stack) > 1 {
+		dropped = m.stack[1:]
+	}
 	m.stack = []stackEntry{{spec: spec, view: view}}
+	for _, e := range dropped {
+		discard(e)
+	}
 	m.status = ""
 	cmds := []tea.Cmd{blurred, m.focus(), m.resizeAll()}
 	if !resumed {
@@ -745,7 +803,8 @@ func (m Model) push(msg PushMsg) (tea.Model, tea.Cmd) {
 		spec.Title = m.top().spec.Title
 	}
 	blurred := m.blur()
-	m.stack = append(append([]stackEntry(nil), m.stack...), stackEntry{spec: spec, view: msg.View})
+	entry := stackEntry{spec: spec, view: msg.View, lent: msg.Lent}
+	m.stack = append(append([]stackEntry(nil), m.stack...), entry)
 	m.status = ""
 	return m, tea.Batch(blurred, msg.View.Init(), m.focus(), m.resizeAll())
 }
@@ -758,7 +817,10 @@ func (m Model) pop() (tea.Model, tea.Cmd) {
 		return m.refuse(reason)
 	}
 	blurred := m.blur()
+	// Read after the blur, so this is the instance the view last handed back.
+	dropped := m.top()
 	m.stack = append([]stackEntry(nil), m.stack[:len(m.stack)-1]...)
+	discard(dropped)
 	m.status = ""
 	return m, tea.Batch(blurred, m.focus(), m.resizeAll())
 }

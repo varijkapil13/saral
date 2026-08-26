@@ -335,6 +335,45 @@ quitting and switching root view ask **every** entry on the stack, because both 
 and the entry holding the draft is usually not the top one — the palette is pushed over whatever it
 was opened from and holds nothing itself.
 
+A view that starts work outliving a frame implements `kernel.Closer`, and is told once, when the
+kernel throws it away:
+
+```go
+type Closer interface {
+	Close()
+}
+```
+
+`Blocker` refuses the close; `Closer` is told about the one that happened. **The whole value is in
+which moments count.** `FocusMsg{false}` reaches a view in three different situations that mean three
+different things — pushed over and still on the stack, switched away from and parked in `live`, or
+popped and gone — and it distinguishes none of them. Cancelling a read on all three is how opening
+the palette over a loading comment thread cancelled the load. So `Close` is called on exactly two
+paths and no others: **the entry a pop takes off, and every entry a root switch throws away above
+entry zero.** A root the user switched away from is kept, comes back on `g` and its digit and is
+never closed; a project switch discards nothing, because every view hears `ProjectMsg` and stays;
+and there is no path that evicts a view from `live` to rebuild it. Quitting discards everything and
+tells nothing — the process is ending, so every context it would cancel dies with it, and a view
+given the news has no frame left to draw and no command that would run.
+
+It is a call and not a message for two reasons. `Update` hands back a `View` the kernel is about to
+drop, so anything a discarded view recorded there goes with it, and the only effect it could have is
+one it can perform on the spot. And a message is broadcastable: `kernel.Broadcast(CloseMsg{})` would
+let any view tell every other one it was finished. Whether a view is gone is the kernel's to say, and
+it says it to that view alone.
+
+**A pushed view is not always the kernel's to close.** The issue detail pane draws the comment thread
+in its sidebar and `C` hands the kernel *that same model* for the whole screen; closing it on `esc`
+would cancel a read the sidebar is still waiting for. `kernel.Lend` is the push that says so — the
+kernel draws it, routes keys to it and drops it like any other entry, and leaves closing it to the
+lender, which does that in its own `Close`. `kernel.Push` is the ordinary case and the default: a view
+built for the push, which the kernel then owns. `kernel.CloseView` is how a pane passes the news to a
+child view it holds.
+
+Which views owe the interface is not something the kernel can check — it may not import one — so
+`internal/ui/livekeys_test.go` holds the table: every view something pushes implements `Closer`, and
+every view nothing pushes is listed with the reason a discard never reaches it.
+
 A view whose keys move with its state implements `kernel.KeyReporter`:
 
 ```go

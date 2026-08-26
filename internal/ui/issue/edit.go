@@ -161,11 +161,6 @@ func (m *editModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.SizeMsg:
 		m.resize(msg.Width, msg.Height)
 
-	case kernel.FocusMsg:
-		if !msg.Focused {
-			m.stop()
-		}
-
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newEditStyles(msg.Theme)
@@ -216,6 +211,10 @@ func (m *editModel) stop() {
 		m.cancel = nil
 	}
 }
+
+// Close lets go of the re-read and the schema behind it. The pane is only ever
+// pushed, so this is the whole of its life ending.
+func (m *editModel) Close() { m.stop() }
 
 func (m *editModel) begin() (ctx context.Context, gen int) {
 	m.stop()

@@ -35,7 +35,10 @@ var zoneNames = [regionCount]string{
 	regionComments: "region:comments",
 }
 
-var _ kernel.View = (*Model)(nil)
+var (
+	_ kernel.View   = (*Model)(nil)
+	_ kernel.Closer = (*Model)(nil)
+)
 
 // Model is the issue detail pane.
 type Model struct {
@@ -43,9 +46,10 @@ type Model struct {
 	keys   keyMap
 	styles *styles
 
-	issue       jira.Issue
-	labels      app.FieldLabels
-	loadedIssue bool
+	issue        jira.Issue
+	labels       app.FieldLabels
+	loadedIssue  bool
+	loadingIssue bool
 
 	// thread is the comment view itself rather than a second rendering of one.
 	// The full-screen gesture hands this same instance to the kernel, so the
@@ -169,11 +173,13 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case loadedMsg:
 		if m.current(msg.gen) {
 			m.issue, m.labels, m.loadedIssue = msg.issue, msg.labels, true
+			m.loadingIssue = false
 			m.dataGen++
 		}
 
 	case failedMsg:
 		if m.current(msg.gen) {
+			m.loadingIssue = false
 			cmd = kernel.Fail(msg.err)
 		}
 
@@ -241,6 +247,7 @@ func (m *Model) fetch() tea.Cmd {
 	m.gen++
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
+	m.loadingIssue = true
 	return load(ctx, m.search, m.issue.Key, m.gen)
 }
 
@@ -249,6 +256,16 @@ func (m *Model) stop() {
 		m.cancel()
 		m.cancel = nil
 	}
+	m.loadingIssue = false
+}
+
+// Close cuts the read short, and the thread's with it: the sidebar holds that
+// model and nothing else does, so a pane thrown away takes it along.
+func (m *Model) Close() {
+	m.stop()
+	if m.thread != nil {
+		kernel.CloseView(m.thread)
+	}
 }
 
 // focused answers the kernel telling this pane whether it is the one taking
@@ -256,10 +273,8 @@ func (m *Model) stop() {
 // be put back: the kernel gave it the whole screen on the way there.
 func (m *Model) focused(on bool) tea.Cmd {
 	if !on {
-		// A pushed view that loses focus has either been popped or been covered,
-		// and either way nobody is waiting for this issue — or is still holding
-		// its divider.
-		m.stop()
+		// The read carries on: a palette opened over a loading pane must not
+		// cancel what it is loading. Nobody is holding the divider, though.
 		m.cancelDrag()
 		return m.tell(kernel.FocusMsg{})
 	}
@@ -268,7 +283,9 @@ func (m *Model) focused(on bool) tea.Cmd {
 		m.threadAt.w, m.threadAt.h = 0, 0
 	}
 	cmds := []tea.Cmd{m.tell(kernel.FocusMsg{Focused: true})}
-	if !m.loadedIssue {
+	// An answer that landed while this pane was covered went to whatever was on
+	// top, so a pane with nothing and nothing coming asks again.
+	if !m.loadedIssue && !m.loadingIssue {
 		cmds = append(cmds, m.fetch())
 	}
 	return tea.Batch(cmds...)
