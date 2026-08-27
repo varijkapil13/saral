@@ -91,6 +91,26 @@ func quote(s string) string {
 // that project meets the project itself instead — see widen.
 func defaultQuery(project string) (jql, title string) { return myIssues.at(project) }
 
+// probeQuery asks whether anything anywhere on this site is assigned to the
+// account the credential belongs to. It is the unscoped form of the search a
+// session opens on, so currentUser() is written down once rather than twice.
+func probeQuery() string {
+	jql, _ := myIssues.at("")
+	return jql
+}
+
+// The one fact the probe establishes, spelt for each of the two places that
+// state it. The status line is written over by the next keypress; the pane is
+// not, so it carries the reason for as long as the list is empty.
+//
+// Both say what was read and neither says what the account is: an account
+// nothing is assigned to is a service token, and it is also a person who
+// started this morning, and no number of round trips tells those apart.
+const (
+	nothingAssigned     = "nothing anywhere on this site is assigned to this account"
+	nothingAssignedPane = "Nothing anywhere on this site is assigned to this account."
+)
+
 // showEverything runs the whole of the session's project. It is the one search
 // the three that were here could not express: they all narrow by who you are,
 // and a token that is nobody in particular matches none of them.
@@ -107,9 +127,27 @@ func (m *Model) showEverything() tea.Cmd {
 // screen and read it as a broken program, so it meets the project instead —
 // once, and told why. A search the user ran is never widened, and a project that
 // is itself empty says so rather than being asked again.
+//
+// The reason waits for the startup probe rather than racing it: an account with
+// work in another project and an account nobody assigns anything to reach this
+// with the same empty page, and only the probe tells them apart.
 func (m *Model) widen() tea.Cmd {
 	project := strings.TrimSpace(m.deps.Project)
-	if !m.defaulted || m.widened || len(m.issues) > 0 || project == "" {
+	if !m.defaulted || m.widened || len(m.issues) > 0 {
+		return nil
+	}
+	// An unscoped session's default is the site-wide question the probe asks, so
+	// this empty page is that answer and no second round trip was made for it.
+	if !m.answered && m.jql == probeQuery() {
+		m.answered, m.assignedNowhere = true, true
+	}
+	if m.asked && !m.answered {
+		return nil
+	}
+	if project == "" {
+		if m.assignedNowhere {
+			return kernel.Status(nothingAssigned + ", and this session is scoped to no project to widen to")
+		}
 		return nil
 	}
 	jql, title := everyIssue.at(project)
@@ -117,10 +155,31 @@ func (m *Model) widen() tea.Cmd {
 		return nil
 	}
 	m.widened = true
-	return tea.Batch(
-		kernel.Status("nothing in "+project+" is assigned to you, so this is every issue in it"),
-		m.setQuery(jql, title, true),
-	)
+	return tea.Batch(kernel.Status(m.whyWidened(project)), m.setQuery(jql, title, true))
+}
+
+// whyWidened says which of the two empty defaults this was. The per-project
+// wording is wrong for a credential nobody assigns work to — it reads as though
+// there were work elsewhere — and the site-wide wording is wrong for a person
+// who simply has none here.
+func (m *Model) whyWidened(project string) string {
+	if m.assignedNowhere {
+		return nothingAssigned + ", so this is every issue in " + project
+	}
+	return "nothing in " + project + " is assigned to you, so this is every issue in it"
+}
+
+// assigned takes the startup probe's answer. A refusal or a transport failure
+// leaves the question unanswered rather than answered "nobody": the fallback
+// then says the per-project thing it always said, which is true whatever the
+// credential is.
+func (m *Model) assigned(msg assignedMsg) tea.Cmd {
+	m.answered = true
+	m.assignedNowhere = msg.err == nil && !msg.has
+	if !m.loaded {
+		return nil
+	}
+	return m.widen()
 }
 
 // --- the search on screen, shown and edited where it is ---------------------

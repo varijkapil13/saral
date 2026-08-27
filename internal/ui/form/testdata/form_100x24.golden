@@ -4,7 +4,7 @@ New Story in PROJ
   Description   empty * rich text                                                                   
   Assignee      empty * person                                                                      
   Labels        empty * labels, separated by spaces                                                 
-  Priority      empty * choice                                                                      
+  Priority      empty * Jira will use Normal                                                        
   Due Date      empty * 2026-03-27                                                                  
   Story Points  empty * number                                                                      
   > 2 fields not on this form                                                                       
