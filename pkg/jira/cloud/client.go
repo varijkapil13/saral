@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -184,7 +185,14 @@ func defaultHTTPClient(concurrency int) *http.Client {
 	// A whole-client Timeout would also bound reading an attachment body, so
 	// the bound is on how long the site may take to start answering.
 	t.ResponseHeaderTimeout = 30 * time.Second
-	return &http.Client{Transport: t}
+	return &http.Client{
+		Transport: t,
+		// Go keeps the Authorization header across a redirect it judges to stay on
+		// one host, and on loopback every redirect stays on one host. An attachment
+		// is answered with a 303 to another host, so no redirect is followed here
+		// and whoever sent the request decides what crosses.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 }
 
 // parseSite reads what a profile calls a site — "example.atlassian.net",
@@ -395,6 +403,26 @@ func (c *Client) attempt(ctx context.Context, pending call) (*response, error) {
 	}
 	defer c.release()
 
+	req, err := c.newRequest(ctx, pending)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = res.Body.Close() }()
+	payload, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	return &response{status: res.StatusCode, header: res.Header, body: payload}, nil
+}
+
+// newRequest builds the HTTP request one attempt sends. It is shared with the
+// streaming path so that there is one place where the credential is attached,
+// and that place is last: a caller's own header can never replace it.
+func (c *Client) newRequest(ctx context.Context, pending call) (*http.Request, error) {
 	var body io.Reader
 	if len(pending.encoded) > 0 {
 		body = bytes.NewReader(pending.encoded)
@@ -413,19 +441,109 @@ func (c *Client) attempt(ctx context.Context, pending call) (*response, error) {
 	for key, values := range pending.header {
 		req.Header[http.CanonicalHeaderKey(key)] = slices.Clone(values)
 	}
-	// Authorising last is what stops a caller's own header from replacing it.
 	c.creds.authorize(req)
+	return req, nil
+}
 
+// streamErrorLimit bounds the body the streaming path buffers to find a reason
+// in. A status it does not read is a refusal, whose body is an error envelope —
+// and nothing says a site cannot answer one enormously.
+const streamErrorLimit = 64 << 10
+
+// stream is a response whose body has not been read. An attachment is as large
+// as the site's upload limit allows, so a download copies it from the wire into
+// the caller's writer rather than through a []byte the size of the file.
+//
+// The caller closes it on every path, cancellation included. Closing is also
+// what gives back the concurrency slot the request is holding, so a stream left
+// open holds a slot until it is.
+type stream struct {
+	status int
+	header http.Header
+	body   io.ReadCloser
+
+	shut sync.Once
+	done func()
+}
+
+func (s *stream) close() {
+	if s == nil {
+		return
+	}
+	s.shut.Do(func() {
+		if s.body != nil {
+			_ = s.body.Close()
+		}
+		if s.done != nil {
+			s.done()
+		}
+	})
+}
+
+// doStream sends a request and hands back the open response body, classifying a
+// refusal and retrying a safe failure exactly as do does. answered says which
+// statuses this caller reads the body of rather than treats as a refusal, which
+// is how an attachment download gets to see the 303 it has to follow itself.
+//
+// It must not be coalesced, and cannot retry past the first byte: one body
+// cannot be read twice, so neither two callers nor a second attempt can have it.
+// A connection that breaks mid-body is the callers to resume.
+func (c *Client) doStream(ctx context.Context, r request, answered func(status int) bool) (*stream, error) {
+	encoded, contentType, err := encodeBody(r)
+	if err != nil {
+		return nil, err
+	}
+	pending := call{request: r, encoded: encoded, contentType: contentType}
+	for attempt := 1; ; attempt++ {
+		open, resp, err := c.streamAttempt(ctx, pending, answered)
+		if err == nil && open != nil {
+			return open, nil
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		failure := c.failure(pending.request, resp, err)
+		if attempt >= c.retry.Attempts || !retryable(pending.request, resp, err) {
+			return nil, failure
+		}
+		if waitErr := c.clock.Wait(ctx, c.waitFor(failure, attempt)); waitErr != nil {
+			return nil, waitErr
+		}
+	}
+}
+
+// streamAttempt sends one attempt of a streaming request. A status the caller
+// does not read is buffered and handed back to be classified like any other
+// refusal; a status it does read keeps the body open, and with it the slot.
+func (c *Client) streamAttempt(ctx context.Context, pending call, answered func(int) bool) (*stream, *response, error) {
+	if err := c.acquire(ctx); err != nil {
+		return nil, nil, err
+	}
+	handed := false
+	defer func() {
+		if !handed {
+			c.release()
+		}
+	}()
+
+	req, err := c.newRequest(ctx, pending)
+	if err != nil {
+		return nil, nil, err
+	}
 	res, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	defer func() { _ = res.Body.Close() }()
-	payload, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
+	if !answered(res.StatusCode) {
+		defer func() { _ = res.Body.Close() }()
+		payload, err := io.ReadAll(io.LimitReader(res.Body, streamErrorLimit))
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, &response{status: res.StatusCode, header: res.Header, body: payload}, nil
 	}
-	return &response{status: res.StatusCode, header: res.Header, body: payload}, nil
+	handed = true
+	return &stream{status: res.StatusCode, header: res.Header, body: res.Body, done: c.release}, nil, nil
 }
 
 func (c *Client) endpoint(r request) string {

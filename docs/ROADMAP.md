@@ -798,9 +798,9 @@ are guesses.
 
 ## Batch 4 — Attachments · parallel ×3
 
-- [ ] **P4.1 — List and download** · [#17](https://github.com/varijkapil13/saral/issues/17) · **owns** `pkg/jira/cloud/attachment.go`
+- [x] **P4.1 — List and download** · [#17](https://github.com/varijkapil13/saral/issues/17) · **owns** `pkg/jira/cloud/attachment.go`
   Ranged download with progress and resume, temp-file-then-rename.
-- [ ] **P4.2 — Upload** · [#18](https://github.com/varijkapil13/saral/issues/18) · same file, second PR (sequential with P4.1)
+- [x] **P4.2 — Upload** · [#18](https://github.com/varijkapil13/saral/issues/18) · same file, second PR (sequential with P4.1)
   Multipart part named `file`, `X-Atlassian-Token: no-check`, multi-file, delete.
 - [ ] **P4.3 — Preview** · [#19](https://github.com/varijkapil13/saral/issues/19) · **owns** `internal/ui/attach/**`
   Inline images via kitty/iTerm2 graphics, chafa half-blocks fallback, name+size last resort;
