@@ -868,6 +868,33 @@ eight views are built against it and it is closed.
   there is no second thing to choose between, and somebody who is not told has every reason to assume
   their theme is about to go.
 
+- [x] **K7 — The destinations, taught at the moment of asking** ·
+  **owns** `internal/ui/kernel/{destinations,destinations_test,keys,budget_test}.go`, the key and
+  chrome handling in `internal/ui/kernel/kernel.go`,
+  `internal/ui/kernel/testdata/{destinations,help}_*.golden`, `internal/ui/destinations_test.go`,
+  `internal/ui/{keys_test.go,testdata/{destinations,overlay}_*.golden}`,
+  `docs/{UX,PERFORMANCE,ROADMAP}.md`
+  Reported by the owner on the built binary: *"the default view is issues. how do i open board view?
+  there is no way to know that g can be used to switch views."* At rest the row said `? ctrl+k esc`,
+  `?` taught the gesture and never what was on each slot, and the palette's *Go to* rows needed you to
+  know to look. **The destinations still do not go on the footer** — seven slots cost 81 columns
+  against a documented 80, which is [#96](https://github.com/varijkapil13/saral/issues/96) and stays
+  fixed.
+  **The shortcut is `g` itself.** The kernel already buffered it and sat there saying nothing, because
+  `internal/ui/{list,issue,comment}` spend the same key on `gg` and `ge` and forwarding it would
+  misfire the next stroke. Making that wait visible costs no width at rest and changes no gesture:
+  the digit, `esc` and every pass-through key resolve exactly as they did, and the three keys the
+  overlay adds — `↑`/`↓`, `k`/`j` and `enter` — are ones no view answers behind the prefix.
+  The rows come from the registry, a view out of reach keeps its row and carries the probe's own
+  sentence, the cursor skips it, and the block under them is the focused view's own `g` bindings read
+  off its key set. `docs/UX.md` has the rendering, the ladder at 80×20 and the one gap this exposed:
+  `ge` is answered by three views and registered by none, so nothing can teach it yet.
+  **The steady frame did not move** — 297 allocations before and after, because the box is built only
+  while the prefix is latched. The pending frame is 1120 and now has a ceiling of its own, next to the
+  776 the `?` overlay costs and the 800 the right-click menu costs, neither of which had one.
+  Also #62's other half: the palette's *switch view* opens the same overlay, so the gesture has the
+  three routes `docs/UX.md` principle 3 asks for.
+
 ## W1 · the seam Batches 4 to 8 code against
 
 Three batches reach for the same three things — attachments, versions, sprints — and eight packets

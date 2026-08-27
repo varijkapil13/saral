@@ -107,10 +107,21 @@ the binding it advertises — so the key, the palette entry and the pointer are 
 cannot drift. `+N` opens `?`, which is where what it stands for is listed.
 
 The digits keep their place on the row where they work: in a root view the bound saved queries are
-the first entry in the actions cell, named after the query. **The view slots are not on the row.**
-One row cannot hold nine destinations and the actions as well, the destinations are the half needed
-least often, and the header already says what is on top — so `g1`–`g9` are taught by `?` and by the
-palette's *Go to* rows, and the row names only the root you are in.
+the first entry in the actions cell, named after the query. **The view slots are not on the row, and
+they are not going on it.** One row cannot hold nine destinations and the actions as well, the
+destinations are the half needed least often, and the header already says what is on top. What was
+wrong with that was not the trade but the consequence: at rest the row said `? ctrl+k esc` and
+nothing anywhere said the other views existed, so somebody using the built binary asked how to open
+the board and was right to. **The destinations are now taught at the moment of asking** — pressing
+`g` draws them, see *Behind the prefix* below — as well as by `?` and by the palette's *Go to* rows.
+The row itself still names only the root you are in, at every width.
+
+While the prefix is latched the row says what that overlay answers to and nothing else, which is what
+it already does under `?` and under the right-click menu:
+
+```
+ Issues  1-9 switch view  up/down choose  enter go there  esc cancel
+```
 
 The theme is switched from the palette — *use the dark theme*, *follow the terminal's own colours* —
 and the choice is written back into the profile it came from. There is no key for it: every letter
@@ -122,6 +133,8 @@ A stack, not a graph — so "back" always means something.
 
 ```
 run a saved query      1 – 9          in a root view; the profile's own searches
+where you can go       g              from anywhere; the destinations, and what this view does
+                                      with the same prefix. esc throws it away
 switch view            g then 1–9     from anywhere, including a pushed view
 push                   enter          open the thing under the cursor
 switch pane            tab            in a view with more than one; shift+tab goes back round
@@ -228,7 +241,8 @@ away, and a view that is taking typing gets the keys before any of this happens.
 
 The footer advertises only what works: the digits that actually have a query bound, named after the
 query. The slots themselves are not on the row — see *The row at the bottom* — so a slot is still
-allocated here rather than picked, and `?` and the palette are where its digit is taught.
+allocated here rather than picked, and *Behind the prefix*, `?` and the palette are where its digit is
+taught.
 
 | Slot | View | Arrives with |
 |---|---|---|
@@ -251,6 +265,55 @@ version list. Each of them still registers its keys, so the footer, the `?` over
 `internal/ui` find it exactly as they find a slotted view. `kernel.RegisterView` refuses a second
 claim on a slot at startup, so the table above is enforced rather than merely written down — but it is
 written down so that six later packets do not each pick a number.
+
+### Behind the prefix
+
+**Pressing `g` draws the destinations.** The program was already sitting there waiting for the key
+that completes the gesture and saying nothing about it, so this costs no width at rest, changes no
+gesture, and `g2` typed fast behaves exactly as it always did. The palette's *switch view* opens the
+same overlay for somebody who has not learnt the prefix.
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Where g goes                                                                 │
+│ > g1   Issues     on screen                                                  │
+│   g2   Board      Boards need a Jira Software project, and this token can... │
+│   g3   Backlog    Boards need a Jira Software project, and this token can... │
+│   g5   Releases                                                              │
+│                                                                              │
+│ In this view                                                                 │
+│   g g  first row                                                             │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+What it holds, and why each half is there:
+
+- **Every slot a view claimed, in slot order, from the registry.** Not a list written down: a view
+  moved to another digit cannot leave this teaching the old one.
+- **A view out of reach keeps its row and carries the probe's own sentence**, because a negative
+  capability is an answer with a reason attached and not an omission — the rule the rest of this
+  document already follows. Plans is the usual case and the boards are the other. The cursor skips
+  such a row, and its digit still answers with the reason on the status line, where the sentence is
+  not cut off. At 80 columns something has to give and the order is fixed: a destination is never
+  dropped to fit a reason, and a reason is cut rather than wrapped, because the box is sized by its
+  widest row and a wrapped row's second line would be outside the zone a click resolves through.
+- **What the focused view spends the same prefix on**, so that `g g` and the rest are taught by the
+  overlay rather than shadowed by it. They are read off the view's own key set — a two-stroke gesture
+  is spelt as the label of the binding it lands on, `g g` on a binding whose stroke is `home` — so a
+  view teaches this by registering its keys and by nothing else. Where the terminal is too short for
+  all of them the block folds to a `+N`; the destinations do not fold.
+  **`ge` is the gap this exposes**: the issue list, the detail pane and the comment thread all answer
+  it and none of them registers a binding that says so, so neither this overlay nor `?` can teach it.
+  Whichever packet next touches those three keymaps should spell it on the binding it lands on, the
+  way `g g` already is.
+- **The row you are on**, marked, so the overlay teaches its own gesture by example: the cursor opens
+  on the view that is up.
+
+The digit still switches on its own, `enter` goes to the row under the cursor, `↑`/`↓` and `k`/`j`
+move it, and `esc` throws the gesture away and draws nothing. **Every other key resolves exactly as
+it did before the overlay existed** — the view gets both strokes in the order they were typed — which
+is what keeps this a hint over a pass-through rather than a mode to get out of. A click on a row is
+the same as pressing its digit; a click anywhere else cancels.
 
 A view that cannot be built without knowing what it is about is reached from the view that knows.
 The comment thread is the case: the issue detail pane draws it in its own sidebar and `C` hands the

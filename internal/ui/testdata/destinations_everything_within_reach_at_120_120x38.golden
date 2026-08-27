@@ -1,10 +1,17 @@
- saral | Board                                                                                    example.atlassian.net 
-enter open the row under the cursor    ↓/j down    1-9   saved query           ctrl+k commands                          
-/     filter these rows                ↑/k up      g     where to go           ?      help                              
-                                                   g 1-9 switch view           q      quit                              
-                                                   esc   back                                                           
-                                                   r     refresh                                                        
-                                                   R     refetch everything                                             
+ saral | Issues                                                                            PROJ | example.atlassian.net 
+┌─────────────────────────────┐                                                                                         
+│ Where g goes                │                                                                                         
+│ > g1   Issues     on screen │                                                                                         
+│   g2   Board                │                                                                                         
+│   g3   Backlog              │                                                                                         
+│   g4   Sprints              │                                                                                         
+│   g5   Releases             │                                                                                         
+│   g6   Timeline             │                                                                                         
+│   g7   Plans                │                                                                                         
+│                             │                                                                                         
+│ In this view                │                                                                                         
+│   g g  first row            │                                                                                         
+└─────────────────────────────┘                                                                                         
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -27,4 +34,5 @@ enter open the row under the cursor    ↓/j down    1-9   saved query          
                                                                                                                         
                                                                                                                         
                                                                                                                         
- Board  ? close help
+                                                                                                                        
+ Issues  1-9 switch view  up/down choose  enter go there  esc cancel

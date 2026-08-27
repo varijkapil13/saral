@@ -32,6 +32,11 @@ func TestBudget_AFrameCostsWhatTheChromeCosts(t *testing.T) {
 		{"a frame whose header names a project", BenchmarkFrameScopedToAProject, 297, 330},
 		{"a keystroke and the frame it produces", BenchmarkKeyToFrame, 310, 345},
 		{"a frame with the mouse on", BenchmarkFrameMouseOn, 324, 360},
+		// The overlay behind the latched prefix is not a steady state — nothing
+		// repaints it until the next key — but it is a frame, and the ? overlay
+		// and the right-click menu cost 776 and 800 unbudgeted, so this is the
+		// one that says out loud what an overlay here costs.
+		{"a frame with the destinations up", BenchmarkFrameWithTheDestinationsUp, 1120, 1240},
 	} {
 		got := testing.Benchmark(tc.bench).AllocsPerOp()
 		t.Logf("%s: %d allocations, ceiling %d", tc.what, got, tc.ceiling)

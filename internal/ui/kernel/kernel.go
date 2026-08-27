@@ -236,9 +236,11 @@ type Model struct {
 	// prefix holds the go-to key while it waits for the one that completes it.
 	// It is buffered rather than forwarded, because a view that spends g on its
 	// own gestures must not be left half way through one when the kernel takes
-	// the digit that follows.
+	// the digit that follows. While it is held the frame says where the gesture
+	// can go, and dest is which of those rows the cursor is on.
 	prefix    tea.KeyPressMsg
 	prefixSet bool
+	dest      int
 
 	// startup is a view the composition root wants over the root at startup,
 	// built at Init rather than here so that it is given the same complete Deps
@@ -512,6 +514,9 @@ func (m Model) route(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case OpenMsg:
 		return m.open(msg.ID)
 
+	case latchPrefixMsg:
+		return m.latchPrefix()
+
 	case StatusMsg:
 		m.status, m.statusLevel = msg.Text, msg.Level
 		return m, nil
@@ -586,8 +591,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.resolvePrefix(msg)
 	}
 	if Matches(msg, m.keys.Go) {
-		m.prefix, m.prefixSet = msg, true
-		return m, nil
+		return m.latch(msg)
 	}
 
 	switch {
@@ -652,13 +656,16 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 				return next, cmd
 			}
 		case tea.MouseRight:
-			if !m.showHelp {
+			if !m.showHelp && !m.prefixSet {
 				return m.openMenu(click)
 			}
 		}
 	}
 	if m.showHelp {
 		return m, nil
+	}
+	if m.prefixSet {
+		return m.destMouse(msg)
 	}
 	return m.forwardTop(msg)
 }
@@ -674,7 +681,7 @@ func (m Model) clickFooter(click tea.MouseClickMsg) (tea.Model, tea.Cmd, bool) {
 	if len(m.stack) == 0 {
 		return m, nil, false
 	}
-	if !m.showHelp {
+	if !m.showHelp && !m.prefixSet {
 		if m.deps.Zones.Get(m.zonePrefix + rootZone).InBounds(click) {
 			return withHit(m.open(m.stack[0].spec.ID))
 		}
@@ -760,9 +767,14 @@ func (m Model) openSlot(slot int) (tea.Model, tea.Cmd) {
 }
 
 // resolvePrefix spends the buffered go-to key on whatever followed it. A digit
-// is the kernel's; esc throws the gesture away; anything else was meant for the
-// view, which then sees both keys in the order they were typed.
+// is the kernel's, and so are the three keys that move the overlay's cursor and
+// spend the gesture on the row under it; esc throws the gesture away; anything
+// else was meant for the view, which then sees both keys in the order they were
+// typed.
 func (m Model) resolvePrefix(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if next, cmd, handled := m.destKey(msg); handled {
+		return next, cmd
+	}
 	buffered := m.prefix
 	m.prefix, m.prefixSet = tea.KeyPressMsg{}, false
 	switch {
@@ -1436,6 +1448,8 @@ func (m Model) body() string {
 		content = m.helpView()
 	case m.menu.open:
 		content = m.menuView()
+	case m.prefixSet:
+		content = m.destView()
 	case len(m.stack) == 0:
 		content = m.emptyState()
 	default:
@@ -1636,10 +1650,7 @@ func (m Model) footerActs() []Binding {
 	case m.menu.open:
 		return menuFooterActs()
 	case m.prefixSet:
-		return []Binding{
-			Bind(m.keys.Slot.Keys(), "1-9", "switch view"),
-			Bind(m.keys.Back.Keys(), "esc", "cancel"),
-		}
+		return m.destFooterActs()
 	}
 	set, _ := m.viewKeys()
 	acts := set.Acts
@@ -1746,8 +1757,9 @@ func (m Model) drawLeft(root string, rootW int, labels []footerLabel, named int)
 //
 // The footer no longer spells it out. One row cannot hold nine destinations and
 // the actions as well, and the destinations are the half a user needs least
-// often, so the digits are taught by the ? overlay and by the palette rows that
-// carry them.
+// often, so the digits are taught where there is room for them: the overlay the
+// prefix draws while it waits, the ? overlay, and the palette rows that carry
+// them.
 //
 // It answers for the default keymap, which is the only one an init() can know
 // about.
@@ -1776,7 +1788,7 @@ func (m Model) liveGlobals() KeySet {
 	} else {
 		set.Short = append(set.Short, g.Quit)
 	}
-	set.Full = [][]Binding{{g.Saved, g.Slot, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}}
+	set.Full = [][]Binding{{g.Saved, g.Go, g.Slot, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}}
 	if len(bound) > 0 {
 		set.Full = append([][]Binding{bound}, set.Full...)
 	}
