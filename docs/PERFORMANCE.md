@@ -30,7 +30,7 @@ today; comparing a run against a baseline is P9.2
 ## How a budget is guarded
 
 A guard is a test named `TestBudget_*` that runs a benchmark and fails on the number it comes back
-with. Four things make one of them worth trusting, and each was got wrong once here:
+with. Five things make one of them worth trusting, and each was got wrong once here:
 
 - **It is absolute, with headroom.** A guard that only compares two benchmarks against each other
   catches a memo that stopped being hit and passes just as happily at nine hundred allocations a
@@ -63,6 +63,17 @@ with. Four things make one of them worth trusting, and each was got wrong once h
   on reaching the bottom now, and reports 42 everywhere. A budget over a number that moves with the
   machine is not a budget, and the way that shows up is a ceiling that is red on the runner and green
   on the laptop it was written on.
+- **It holds a timing against a number, never against another timing.** Two `testing.Benchmark`
+  calls each pick their own iteration count and each meets whatever else the machine was doing during
+  its second, so a ratio or a difference between their `ns/op` is a ratio between two independent
+  samples rather than a fact about the code. The date cascade's linearity guard divided them, and
+  measured this: one two-thousand-issue run read **11.4 ms** against another two-thousand-issue run's
+  **2.4 ms**, slower than the fastest ten-thousand run, while the allocation counts repeated to the
+  unit — 2,300 against 11,173. It compares allocations now, which are deterministic and are the one
+  thing two benchmarks may be held against each other on. A `!race` tag does not make the timing
+  shape sound, because it is a measurement problem and not a wall-clock one, so
+  `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` fails the build on it wherever it appears —
+  including inside a budget file, which is where it came back the second time.
 
 Run them the way CI does:
 
@@ -89,6 +100,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/app` | `TestBudget_IndexRebuildAtTenThousandIssues` |
 | `internal/app` | `TestBudget_IndexSearchAllocatesOnlyTheAnswerItHandsBack` |
 | `internal/app` | `TestBudget_IndexSearchAtTenThousandIssues` |
+| `internal/app` | `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` |
 | `internal/app` | `TestBudget_TheDocumentNamesEveryGuardAndOnlyRealOnes` |
 | `internal/ui/comment` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/comment` | `TestBudget_KeystrokeToFrameOnATenThousandCommentThread` |

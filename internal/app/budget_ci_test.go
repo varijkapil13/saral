@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// These three keep docs/PERFORMANCE.md's promise about the budgets mechanical
+// These four keep docs/PERFORMANCE.md's promise about the budgets mechanical
 // rather than honour-system. They are the only budget tests built with the race
 // detector, because they measure nothing: they read the tree.
 
@@ -36,6 +36,17 @@ var (
 	// a polling loop with a deadline and After.
 	perOp      = regexp.MustCompile(`\bNsPerOp\(\)`)
 	clockBound = regexp.MustCompile(`[<>]=?[^=<>]*\btime\.(?:Nanosecond|Microsecond|Millisecond|Second|Minute|Hour)\b`)
+
+	// The pieces of the ratio rule. A timing is read either off a variable a
+	// benchmark result was put in or off the call itself; the operators are the
+	// ones that can put two of them on the same side of a pass or fail.
+	nsInline = regexp.MustCompile(`testing\.Benchmark\((.*?)\)\.NsPerOp\(\)`)
+	nsRead   = regexp.MustCompile(`(\w+)\.NsPerOp\(\)`)
+	nsAssign = regexp.MustCompile(`^\s*(?:\w+\s+)?(\w+(?:\s*,\s*\w+)*)\s*:?=[^=]`)
+	combine  = regexp.MustCompile(`[-+*/]|[<>]=?`)
+	joinOp   = regexp.MustCompile(`[-+*/(,]$`)
+	literal  = regexp.MustCompile("\"(?:[^\"\\\\]|\\\\.)*\"|`[^`]*`")
+	funcTop  = regexp.MustCompile(`^func\b`)
 )
 
 type guard struct{ pkg, test string }
@@ -308,4 +319,196 @@ func holdOneFile(t *testing.T, rel, content string) {
 			"what the assertion reads is the instrumentation and it fails on whichever run loses the "+
 			"lottery: %s, and %s\n\t%s", rel, i+1, what, fix, guardsAnswer, strings.TrimSpace(line))
 	}
+}
+
+// A budget that divides one benchmark's ns/op by another's is unsound wherever
+// it lives, so this is not the wall-clock rule above with a different tag on it.
+// `testing.Benchmark` picks its own iteration count per call and each call meets
+// its own neighbours, so the two samples are not comparable: the date cascade's
+// linearity guard read 11.4ms for two thousand issues against 2.4ms for another
+// run of the same two thousand — slower than the fastest ten-thousand run — while
+// the allocation counts repeated to the unit. Allocation and byte counts between
+// two benchmarks are deterministic and are what this repo compares deliberately;
+// it is the timings that may not be put on both sides of an operator.
+func TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers(t *testing.T) {
+	t.Parallel()
+
+	root := repoRoot(t)
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case d.IsDir() && skipWalk(d.Name()):
+			return fs.SkipDir
+		case d.IsDir() || !strings.HasSuffix(d.Name(), "_test.go"):
+			return nil
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		holdOneFileAgainstRatios(t, filepath.ToSlash(rel), string(content))
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking the tree for ratios between benchmark timings: %v", err)
+	}
+}
+
+// holdOneFileAgainstRatios reports the first statement in each function that
+// puts two different benchmarks' timings into one arithmetic or relational
+// expression. One report a function, because the shape arrives as a division and
+// an assertion on what it produced, and both lines are the same mistake.
+func holdOneFileAgainstRatios(t *testing.T, rel, content string) {
+	t.Helper()
+
+	timed := map[string]map[string]bool{}
+	said := false
+	for _, stmt := range statements(content) {
+		if funcTop.MatchString(stmt.text) {
+			timed, said = map[string]map[string]bool{}, false
+		}
+		code := literal.ReplaceAllString(stmt.text, `""`)
+		if cut := strings.Index(code, "//"); cut >= 0 {
+			code = code[:cut]
+		}
+		for _, part := range splitTerms(code) {
+			from := timingsIn(part, timed)
+			if len(from) < 2 || !combine.MatchString(part) {
+				continue
+			}
+			if !said {
+				said = true
+				t.Errorf("%s:%d derives a budget from the timings of %s in one expression. Each "+
+					"testing.Benchmark call picks its own iteration count and meets its own "+
+					"neighbours, so a ratio or a difference between two of their ns/op figures is a "+
+					"ratio between two independent samples of what the machine was doing: one 2k run "+
+					"here read 11.4ms against another 2k run's 2.4ms while the allocation counts "+
+					"repeated to the unit. Compare a timing against a fixed bound, and compare the "+
+					"two runs on allocations or bytes, which are deterministic\n\t%s",
+					rel, stmt.line, strings.Join(sorted(from), " and "), strings.TrimSpace(stmt.text))
+			}
+		}
+		if names := nsAssign.FindStringSubmatch(code); names != nil {
+			from := timingsIn(strings.TrimPrefix(code, names[0]), timed)
+			for _, name := range strings.Split(names[1], ",") {
+				name = strings.TrimSpace(name)
+				if name == "" || name == "_" || len(from) == 0 {
+					continue
+				}
+				if timed[name] == nil {
+					timed[name] = map[string]bool{}
+				}
+				for src := range from {
+					timed[name][src] = true
+				}
+			}
+		}
+	}
+}
+
+// timingsIn names the benchmarks whose ns/op the expression reads, directly or
+// through a variable one was put in.
+func timingsIn(code string, timed map[string]map[string]bool) map[string]bool {
+	from := map[string]bool{}
+	rest := nsInline.ReplaceAllStringFunc(code, func(m string) string {
+		from[strings.TrimSpace(nsInline.FindStringSubmatch(m)[1])] = true
+		return ""
+	})
+	for _, m := range nsRead.FindAllStringSubmatch(rest, -1) {
+		from[m[1]] = true
+	}
+	for name, srcs := range timed {
+		if !wordIn(name, rest) {
+			continue
+		}
+		for src := range srcs {
+			from[src] = true
+		}
+	}
+	return from
+}
+
+// splitTerms cuts a statement where no operator reaches across, so that two
+// benchmarks each held against a bound of its own — one ns/op over zero and then
+// the other, joined by an and — is not read as one held against the other.
+func splitTerms(code string) []string {
+	for _, sep := range []string{"&&", "||", ";"} {
+		code = strings.ReplaceAll(code, sep, ",")
+	}
+	return strings.Split(code, ",")
+}
+
+type statement struct {
+	line int
+	text string
+}
+
+// statements joins the lines gofmt wrapped back into one, so an expression too
+// long for a line is read whole: a division split after its operator, and a call
+// whose arguments run on. Full-line comments are dropped rather than joined, so
+// prose in them cannot be read as code.
+func statements(content string) []statement {
+	var out []statement
+	var held strings.Builder
+	start, depth := 0, 0
+	for i, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "//") {
+			continue
+		}
+		if held.Len() == 0 {
+			start = i + 1
+		} else {
+			held.WriteString(" ")
+		}
+		held.WriteString(strings.TrimSpace(line))
+		bare := literal.ReplaceAllString(line, `""`)
+		depth += strings.Count(bare, "(") + strings.Count(bare, "[") -
+			strings.Count(bare, ")") - strings.Count(bare, "]")
+		if depth > 0 || joinOp.MatchString(strings.TrimSpace(bare)) {
+			continue
+		}
+		out = append(out, statement{line: start, text: held.String()})
+		held.Reset()
+		depth = 0
+	}
+	if held.Len() > 0 {
+		out = append(out, statement{line: start, text: held.String()})
+	}
+	return out
+}
+
+// wordIn reports whether the expression names the identifier, rather than
+// merely containing its letters inside a longer one.
+func wordIn(name, code string) bool {
+	part := func(r byte) bool {
+		return r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
+	}
+	for at := 0; at < len(code); {
+		i := strings.Index(code[at:], name)
+		if i < 0 {
+			return false
+		}
+		i += at
+		before := i == 0 || !part(code[i-1])
+		end := i + len(name)
+		if before && (end == len(code) || !part(code[end])) {
+			return true
+		}
+		at = i + 1
+	}
+	return false
+}
+
+func sorted(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for k := range set {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
