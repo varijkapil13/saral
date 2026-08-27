@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -262,7 +263,9 @@ func resolveOne(t *testing.T, d *Dates, iss jira.Issue) (Range, Resolution) {
 func TestResolveDateFields_ResolvesEveryFieldTheCascadeReadsByName(t *testing.T) {
 	t.Parallel()
 
-	fields := ResolveDateFields(siteFields(), []string{"Kickoff"}, []string{"Handover"})
+	// The blank is an empty slot in a profile, which is not a name that failed
+	// to resolve.
+	fields := ResolveDateFields(siteFields(), []string{"Kickoff", "   "}, []string{"Handover"})
 
 	if problems := fields.Problems(); len(problems) != 0 {
 		t.Errorf("a catalogue with every field on it produced %d problem(s): %v", len(problems), problems)
@@ -271,6 +274,7 @@ func TestResolveDateFields_ResolvesEveryFieldTheCascadeReadsByName(t *testing.T)
 		testKickoffID, testHandoverID,
 		testTargetStartID, testTargetEndID, testStartDateID, testSprintID,
 		dueDateFieldID, createdFieldID, fixVersionsFieldID,
+		parentFieldID, subtasksFieldID,
 	}
 	if got := fields.IDs(); !equalStrings(got, want) {
 		t.Errorf("the fields to fetch are %v, want %v", got, want)
@@ -280,7 +284,61 @@ func TestResolveDateFields_ResolvesEveryFieldTheCascadeReadsByName(t *testing.T)
 		t.Errorf("the projection is %+v, want the timeline's own narrow field set", projection)
 	}
 	if projection.Custom {
-		t.Error("the timeline projection asks for every custom field on the site; it needs six")
+		t.Error("the timeline projection asks for every custom field on the site; it needs the ones it names")
+	}
+}
+
+// The rollup reads an issue's parent and its subtasks, and neither is on an
+// issue a read did not ask for them by name — so a projection that leaves them
+// out is a rule 7 that fires for nobody.
+func TestResolveDateFields_AsksForTheFieldsTheRollupReads(t *testing.T) {
+	t.Parallel()
+
+	ids := ResolveDateFields(siteFields(), nil, nil).IDs()
+	for _, id := range []string{parentFieldID, subtasksFieldID} {
+		if !slices.Contains(ids, id) {
+			t.Errorf("the fields to fetch are %v, which does not name %q", ids, id)
+		}
+	}
+	// Neither carries a date, so a read that asked for one of them and nothing
+	// else asked for no date at all.
+	iss := anIssue("TL-1", askedFor(parentFieldID, subtasksFieldID))
+	got, _ := resolveOne(t, NewDates(ResolveDateFields(siteFields(), nil, nil), WithNow(testClock())), iss)
+	if got.Absent != AbsentNotAsked {
+		t.Errorf("an issue read for its parent alone reports %+v, want the read that asked for no date", got)
+	}
+}
+
+// end = "Due date" is the likeliest rule 1 there is, and duedate is also one of
+// the three platform fields the cascade asks for whatever a profile says. Naming
+// it must not put it in the field list twice, and must not leave rule 1 reading a
+// field the adapter never puts in the field set.
+func TestResolveDateFields_ReadsAPlatformDateFieldAProfileNamesForRuleOne(t *testing.T) {
+	t.Parallel()
+
+	fields := ResolveDateFields(siteFields(), []string{"Created"}, []string{"Due date"})
+	want := []string{
+		createdFieldID, dueDateFieldID,
+		testTargetStartID, testTargetEndID, testStartDateID, testSprintID,
+		fixVersionsFieldID, parentFieldID, subtasksFieldID,
+	}
+	if got := fields.IDs(); !equalStrings(got, want) {
+		t.Errorf("the fields to fetch are %v, want %v, with no id in it twice", got, want)
+	}
+
+	iss := anIssue("TL-1",
+		created(time.Date(2026, time.January, 2, 11, 0, 0, 0, time.UTC)),
+		due(day(2026, time.March, 27)),
+		withDate(testStartDateID, day(2026, time.March, 2)))
+	got, _ := resolveOne(t, NewDates(fields, WithNow(testClock())), iss)
+	wantRange := Range{
+		Start:  day(2026, time.January, 2),
+		End:    day(2026, time.March, 27),
+		From:   FromConfiguredFields,
+		Source: "Created to Due date",
+	}
+	if got != wantRange {
+		t.Errorf("resolved %+v, want %+v: a profile naming two platform fields is still rule 1", got, wantRange)
 	}
 }
 
@@ -333,8 +391,69 @@ func TestResolveDateFields_SaysWhichNamesThisSiteCannotResolveAndWhy(t *testing.
 	}
 	// A name that resolved to two fields is not a name to correct, so it must
 	// not be reported as one this site does not have.
-	if got := fields.IDs(); len(got) != 4 {
-		t.Errorf("the fields to fetch are %v, want the one configured field that resolved and the three platform IDs", got)
+	if got := fields.IDs(); len(got) != 6 {
+		t.Errorf("the fields to fetch are %v, want the one configured field that resolved, the three platform date IDs "+
+			"and the two the rollup reads", got)
+	}
+}
+
+// A plugin that adds a second field called Sprint takes rule 4 off that site
+// altogether: the name means two fields, so the cascade reads neither and every
+// issue falls to a later rule. The resolution's warnings are the only place that
+// can say so, and an empty timeline with nothing to say about why is how an
+// afternoon goes.
+func TestResolve_SaysSoWhenAFieldNameMeansTwoFieldsOnThisSite(t *testing.T) {
+	t.Parallel()
+
+	catalogue := append(siteFields(), jira.Field{
+		ID: "customfield_50001", Key: "customfield_50001",
+		Name: sprintFieldName, UntranslatedName: sprintFieldName,
+		Custom: true, Navigable: true, ClauseNames: []string{"Sprint"},
+		Schema: jira.FieldSchema{Type: "array", Items: "json", Custom: "com.acme.plugin:sprint"},
+	})
+	fields := ResolveDateFields(catalogue, nil, nil)
+	if fields.sprint.ID != "" {
+		t.Fatalf("Sprint resolved to %q on a site carrying two fields of that name", fields.sprint.ID)
+	}
+
+	reader := sprints()
+	d := NewDates(fields, WithNow(testClock()), WithSprints(reader))
+	iss := anIssue("TL-1", inSprint(42, "Sprint 42"),
+		created(time.Date(2026, time.January, 2, 11, 0, 0, 0, time.UTC)),
+		fixVersion("1.4", day(2026, time.June, 30)))
+	got, res := resolveOne(t, d, iss)
+
+	if got.From != FromCreatedAndRelease {
+		t.Errorf("the issue resolved from %v, want the rule below the sprint", got.From)
+	}
+	if calls := reader.calls(); len(calls) != 0 {
+		t.Errorf("the reader was asked for %v on a site where nothing could say which field holds the sprint", calls)
+	}
+	if !hasWarning(res, sprintFieldName) || !hasWarning(res, "the cascade fell through") {
+		t.Errorf("nothing says rule 4 cannot run on this site: %v", res.Warnings())
+	}
+	if got := len(res.Warnings()); got != 1 {
+		t.Errorf("the pass produced %d warnings (%v), want the one field that could not be identified", got, res.Warnings())
+	}
+}
+
+// A name this site has no field for is the ordinary shape of a site without
+// Advanced Roadmaps. Warning about it would put three lines under every timeline
+// on most sites, which is how a warning stops being read.
+func TestResolve_DoesNotWarnAboutACascadeFieldThisSiteSimplyDoesNotHave(t *testing.T) {
+	t.Parallel()
+
+	catalogue := []jira.Field{
+		{ID: dueDateFieldID, Key: dueDateFieldID, Name: "Due date",
+			Schema: jira.FieldSchema{Type: "date", System: dueDateFieldID}},
+	}
+	fields := ResolveDateFields(catalogue, nil, nil)
+	if got := len(fields.Problems()); got != 4 {
+		t.Fatalf("a bare site produced %d problems, want one for each name the cascade looks up", got)
+	}
+	_, res := resolveOne(t, NewDates(fields, WithNow(testClock())), anIssue("TL-1", due(day(2026, time.March, 2))))
+	if got := res.Warnings(); len(got) != 0 {
+		t.Errorf("a site without Advanced Roadmaps produced the warnings %v", got)
 	}
 }
 
@@ -642,45 +761,71 @@ func TestResolve_FallsBackToUTCAndRepeatsTheReasonItWasGiven(t *testing.T) {
 func TestResolve_ReadsASprintValueInBothShapesItArrivesIn(t *testing.T) {
 	t.Parallel()
 
+	// The created date is the fall-through, so a shape nothing can be read out of
+	// diamonds on it rather than resolving from a sprint.
+	milestone := Range{Start: day(2026, time.January, 2), End: day(2026, time.January, 2), From: FromOneDate, Source: createdFieldID}
+	sprint42 := Range{Start: day(2026, time.March, 2), End: day(2026, time.March, 16), From: FromSprint, Source: "Sprint 42 to Sprint 42"}
+
 	tests := []struct {
 		name string
 		opt  issueOpt
 		want Range
+		// wantAsked is which sprints the reader was asked for, which is what says
+		// a shape that cannot name a sprint made no request rather than a request
+		// for sprint 0.
+		wantAsked []int64
 	}{
 		{
-			name: "as options, which is what a read with no schema block infers",
-			opt:  inSprint(42, "Sprint 42"),
-			want: Range{Start: day(2026, time.March, 2), End: day(2026, time.March, 16), From: FromSprint, Source: "Sprint 42 to Sprint 42"},
+			name:      "as options, which is what a read with no schema block infers",
+			opt:       inSprint(42, "Sprint 42"),
+			want:      sprint42,
+			wantAsked: []int64{42},
 		},
 		{
-			name: "as the bytes it arrived as, which is what a read with one keeps",
-			opt:  withSprintJSON(`[{"id":42,"name":"Sprint 42","state":"active","boardId":7}]`),
-			want: Range{Start: day(2026, time.March, 2), End: day(2026, time.March, 16), From: FromSprint, Source: "Sprint 42 to Sprint 42"},
+			name:      "as the bytes it arrived as, which is what a read with one keeps",
+			opt:       withSprintJSON(`[{"id":42,"name":"Sprint 42","state":"active","boardId":7}]`),
+			want:      sprint42,
+			wantAsked: []int64{42},
 		},
 		{
-			name: "as bytes naming several sprints, the last of which is where it is now",
-			opt:  withSprintJSON(`[{"id":41,"name":"Sprint 41"},{"id":42,"name":"Sprint 42"}]`),
-			want: Range{Start: day(2026, time.March, 2), End: day(2026, time.March, 16), From: FromSprint, Source: "Sprint 42 to Sprint 42"},
+			name:      "as bytes naming several sprints, the last of which is where it is now",
+			opt:       withSprintJSON(`[{"id":41,"name":"Sprint 41"},{"id":42,"name":"Sprint 42"}]`),
+			want:      sprint42,
+			wantAsked: []int64{41, 42},
 		},
 		{
 			name: "as bytes nothing can be read out of, which is a fall-through and not a crash",
 			opt:  withSprintJSON(`[{"id":`),
-			want: Range{Start: day(2026, time.January, 2), End: day(2026, time.January, 2), From: FromOneDate, Source: createdFieldID},
+			want: milestone,
+		},
+		{
+			name: "as bytes naming a sprint with no id, which is no sprint to ask about",
+			opt:  withSprintJSON(`[{"name":"Sprint 42","state":"active"}]`),
+			want: milestone,
+		},
+		{
+			name: "as an option whose id is not a number, which is no sprint to ask about",
+			opt:  withSprintOptions(jira.Option{ID: "sprint-42", Label: "Sprint 42"}),
+			want: milestone,
 		},
 		{
 			name: "as a value in a shape no sprint ever had",
 			opt:  withText(testSprintID, "Sprint 42"),
-			want: Range{Start: day(2026, time.January, 2), End: day(2026, time.January, 2), From: FromOneDate, Source: createdFieldID},
+			want: milestone,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			d := NewDates(ResolveDateFields(siteFields(), nil, nil), WithNow(testClock()), WithSprints(sprints()))
+			reader := sprints()
+			d := NewDates(ResolveDateFields(siteFields(), nil, nil), WithNow(testClock()), WithSprints(reader))
 			iss := anIssue("TL-1", tt.opt, created(time.Date(2026, time.January, 2, 11, 0, 0, 0, time.UTC)))
-			if got, _ := resolveOne(t, d, iss); got != tt.want {
-				t.Errorf("resolved %+v, want %+v", got, tt.want)
+			if got, res := resolveOne(t, d, iss); got != tt.want {
+				t.Errorf("resolved %+v, want %+v (%v)", got, tt.want, res.Warnings())
+			}
+			if got := reader.calls(); !slices.Equal(got, tt.wantAsked) {
+				t.Errorf("the reader was asked for %v, want %v", got, tt.wantAsked)
 			}
 		})
 	}
@@ -713,9 +858,14 @@ func TestResolve_ReadsADateFieldInEveryShapeAValueArrivesIn(t *testing.T) {
 			want:  day(2026, time.March, 2),
 		},
 		{
-			name:  "text holding an instant",
+			name:  "text holding an instant in the platform's own layout, whose offset has no colon",
 			start: withText(testStartDateID, "2026-03-02T23:30:00.000+0000"),
-			want:  jira.Date{},
+			want:  day(2026, time.March, 3),
+		},
+		{
+			name:  "text holding an instant in the Agile layout, whose offset has one",
+			start: withText(testStartDateID, "2026-03-02T23:30:00.000+00:00"),
+			want:  day(2026, time.March, 3),
 		},
 		{
 			name:  "text holding an instant Go can read",
@@ -730,6 +880,13 @@ func TestResolve_ReadsADateFieldInEveryShapeAValueArrivesIn(t *testing.T) {
 		{
 			name:  "a zero date, which is a field with nothing in it",
 			start: withDate(testStartDateID, jira.Date{}),
+			want:  jira.Date{},
+		},
+		{
+			// jira.DateOf of a zero time is the first day of year 1, which a bar
+			// would happily start on.
+			name:  "a zero instant, which is a datetime field with nothing in it",
+			start: withInstant(testStartDateID, time.Time{}),
 			want:  jira.Date{},
 		},
 	}
@@ -759,9 +916,11 @@ func TestResolve_ReadsEachSprintOnceHoweverManyIssuesAreInIt(t *testing.T) {
 	sprint := sprints()
 	d := NewDates(ResolveDateFields(siteFields(), nil, nil), WithNow(testClock()), WithSprints(sprint))
 
+	// The higher sprint comes first, so a pass that reads them in the order it
+	// met them reads them in the wrong order.
 	issues := make([]jira.Issue, 0, 60)
 	for i := range 60 {
-		id := int64(41 + i%2)
+		id := int64(42 - i%2)
 		issues = append(issues, anIssue(fmt.Sprintf("TL-%d", i+1), inSprint(id, "")))
 	}
 	res, err := d.Resolve(t.Context(), issues)
@@ -912,6 +1071,17 @@ func TestResolve_StopsWhenTheCallerGoesAway(t *testing.T) {
 		}
 	})
 
+	t.Run("before the pass starts, over issues with no sprint to read", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		d := NewDates(ResolveDateFields(siteFields(), nil, nil), WithNow(testClock()))
+		if _, err := d.Resolve(ctx, []jira.Issue{anIssue("TL-1", due(day(2026, time.March, 27)))}); !errors.Is(err, context.Canceled) {
+			t.Fatalf("got %v, want the context's own error: a pass that reads nothing still stops", err)
+		}
+	})
+
 	t.Run("part way through reading the sprints", func(t *testing.T) {
 		t.Parallel()
 
@@ -941,14 +1111,17 @@ func TestResolve_RollsAParentUpToItsChildren(t *testing.T) {
 		anIssue("TL-1"),
 		anIssue("TL-2", childOf("TL-1"), withDate(testStartDateID, day(2026, time.March, 2)), due(day(2026, time.March, 20))),
 		anIssue("TL-3", childOf("TL-1"), withDate(testStartDateID, day(2026, time.February, 10)), due(day(2026, time.March, 10))),
-		// The latest day of all is an end and not a start, and the earliest is
-		// the end of a child whose two dates are the wrong way round — so a
-		// rollup that reads only one end of each child gets both wrong.
 		anIssue("TL-4", childOf("TL-1"), withDate(testStartDateID, day(2026, time.March, 1)), due(day(2026, time.May, 30))),
 		anIssue("TL-5", childOf("TL-1"), due(day(2026, time.April, 30))),
+		// Two children are the wrong way round, and between them they put the
+		// earliest day of the set on a child's end and the latest on a child's
+		// start — so a rollup that reads one end of each child gets both wrong.
 		anIssue("TL-6", childOf("TL-1"),
 			withDate(testKickoffID, day(2026, time.January, 20)),
 			withDate(testHandoverID, day(2026, time.January, 5))),
+		anIssue("TL-8", childOf("TL-1"),
+			withDate(testKickoffID, day(2026, time.June, 30)),
+			withDate(testHandoverID, day(2026, time.June, 1))),
 		anIssue("TL-7", childOf("TL-1")),
 	}
 	res, err := d.Resolve(t.Context(), issues)
@@ -959,9 +1132,9 @@ func TestResolve_RollsAParentUpToItsChildren(t *testing.T) {
 	got, _ := res.Range("TL-1")
 	want := Range{
 		Start:  day(2026, time.January, 5),
-		End:    day(2026, time.May, 30),
+		End:    day(2026, time.June, 30),
 		From:   FromChildren,
-		Source: "5 of its children",
+		Source: "6 of its children",
 	}
 	if got != want {
 		t.Errorf("the parent resolved %+v, want %+v", got, want)
@@ -982,10 +1155,12 @@ func TestResolve_RollsUpThroughAParentThatIsItselfARollup(t *testing.T) {
 
 	d := NewDates(ResolveDateFields(siteFields(), nil, nil), WithNow(testClock()))
 	// A grandparent, a parent with no dates, and a leaf that has some. The
-	// grandparent's range can only come from the leaf, through the middle.
+	// grandparent's range can only come from the leaf, through the middle — and
+	// the top link is named only by the parent's own subtask list, which is the
+	// half of an edge an issue read from the other end does not carry.
 	issues := []jira.Issue{
 		anIssue("TL-1", withSubtasks("TL-2")),
-		anIssue("TL-2", childOf("TL-1")),
+		anIssue("TL-2"),
 		anIssue("TL-3", childOf("TL-2"), withDate(testStartDateID, day(2026, time.March, 2)), due(day(2026, time.March, 20))),
 	}
 	res, err := d.Resolve(t.Context(), issues)
@@ -1053,6 +1228,12 @@ func TestResolve_RefusesToWalkAParentChainThatLoops(t *testing.T) {
 	if !hasWarning(res, "leads back to itself") {
 		t.Errorf("the loop is in no warning: %v", res.Warnings())
 	}
+	// One cycle is one warning, however many of its issues the walk enters it
+	// from — and an issue that names itself as its own parent is not a link, so
+	// there is nothing to roll up and nothing to say about it.
+	if got := res.Warnings(); len(got) != 1 {
+		t.Errorf("the pass produced %d warnings, want one for the one cycle: %v", len(got), got)
+	}
 }
 
 func TestResolve_NamesTheIssuesWhoseDatesAreTheWrongWayRound(t *testing.T) {
@@ -1105,7 +1286,9 @@ func TestResolve_CoversEveryIssueItWasGivenAndNothingElse(t *testing.T) {
 func TestResolve_HandsOutCopiesRatherThanItsOwnState(t *testing.T) {
 	t.Parallel()
 
-	d := NewDates(ResolveDateFields(siteFields(), []string{"Kickoff"}, nil), WithNow(testClock()))
+	// The zone reason is a warning, so the slice a caller is handed is not empty.
+	d := NewDates(ResolveDateFields(siteFields(), []string{"Kickoff"}, nil),
+		WithNow(testClock()), WithZone(time.UTC, "this machine has no entry for the account's zone"))
 	_, res := resolveOne(t, d, anIssue("TL-1", due(day(2026, time.March, 2))))
 
 	keys := res.Keys()
@@ -1113,11 +1296,13 @@ func TestResolve_HandsOutCopiesRatherThanItsOwnState(t *testing.T) {
 	if got := res.Keys(); got[0] != "TL-1" {
 		t.Error("a caller writing into the keys it was handed rewrote the resolution")
 	}
-	if warnings := res.Warnings(); len(warnings) > 0 {
-		warnings[0] = "written over"
-		if res.Warnings()[0] == "written over" {
-			t.Error("a caller writing into the warnings it was handed rewrote the resolution")
-		}
+	warnings := res.Warnings()
+	if len(warnings) == 0 {
+		t.Fatal("the resolution carries no warning, so the copy this test is about was never made")
+	}
+	warnings[0] = "written over"
+	if res.Warnings()[0] == "written over" {
+		t.Error("a caller writing into the warnings it was handed rewrote the resolution")
 	}
 	ids := d.Fields().IDs()
 	ids[0] = "written over"
@@ -1172,6 +1357,31 @@ func TestProvenance_SaysWhichRuleFiredAndHowToDrawIt(t *testing.T) {
 				t.Error("String() says nothing, so a footer showing provenance shows a blank")
 			}
 		})
+	}
+}
+
+// Point is how a caller tells a bar it can draw from one it has to draw as a
+// mark, and a milestone is not the only range that covers one day.
+func TestRange_PointIsTheRangesThatCoverOneDay(t *testing.T) {
+	t.Parallel()
+
+	d := NewDates(ResolveDateFields(siteFields(), []string{"Kickoff"}, []string{"Handover"}), WithNow(testClock()))
+	oneDay := day(2026, time.March, 2)
+
+	milestone, _ := resolveOne(t, d, anIssue("TL-1", due(oneDay)))
+	if !milestone.From.Milestone() || !milestone.Point() {
+		t.Errorf("a lone due date resolved %+v, want a milestone that covers one day", milestone)
+	}
+	bar, _ := resolveOne(t, d, anIssue("TL-2", withDate(testKickoffID, oneDay), withDate(testHandoverID, oneDay)))
+	if bar.From.Milestone() || !bar.Point() {
+		t.Errorf("a one-day bar resolved %+v, want a bar that covers one day and is not a milestone", bar)
+	}
+	span, _ := resolveOne(t, d, anIssue("TL-3", withDate(testKickoffID, oneDay), withDate(testHandoverID, day(2026, time.March, 3))))
+	if span.Point() {
+		t.Errorf("a two-day bar reports itself as one day: %+v", span)
+	}
+	if (Range{}).Point() {
+		t.Error("a range that resolved nothing reports itself as covering a day")
 	}
 }
 

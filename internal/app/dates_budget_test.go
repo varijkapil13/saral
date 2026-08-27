@@ -26,6 +26,12 @@ import (
 // dates came from — and the ceiling is a tenth above what it measures, which is
 // room for a compiler release and not room for a per-field allocation to hide
 // in.
+//
+// It is a CPU budget and nothing else. The benchmark's sprint reader is a map
+// lookup, so the one thing this cannot see is the cost of reading the sprints:
+// readSprints issues one request per distinct sprint, in sequence, and a
+// timeline spanning twenty of them is twenty round trips a view waits on before
+// its first paint. Bounding that is the view's own budget to set.
 func TestBudget_DateCascadeOverATimelineOfIssues(t *testing.T) {
 	res := testing.Benchmark(BenchmarkResolveDates2k)
 	t.Logf("resolving two thousand issues: %s and %d allocations, ceilings 16ms and 2600",

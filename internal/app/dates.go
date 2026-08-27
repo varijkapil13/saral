@@ -33,6 +33,15 @@ const (
 	fixVersionsFieldID = "fixVersions"
 )
 
+// The platform field IDs the rollup reads. They carry no date, so a read that
+// asked for these and nothing else is a read that asked for no date at all —
+// but a read that does not name them comes back with Parent nil and Subtasks
+// empty however the issues are related, so rule 7 needs them in the field list.
+const (
+	parentFieldID   = "parent"
+	subtasksFieldID = "subtasks"
+)
+
 // Provenance is which rule of the date cascade produced a range.
 //
 // The timeline draws by it — rule 5 is a faded bar, a lone date is a diamond
@@ -208,7 +217,7 @@ func (p FieldProblem) String() string {
 		return p.Name
 	}
 	if p.Configured {
-		return "this profile's timeline names " + p.Err.Error()
+		return "this profile's timeline: " + p.Err.Error()
 	}
 	return p.Err.Error()
 }
@@ -233,6 +242,7 @@ type DateFields struct {
 	startDate   jira.FieldRef
 	sprint      jira.FieldRef
 	ids         []string
+	dated       []string
 	problems    []FieldProblem
 }
 
@@ -255,7 +265,7 @@ func ResolveDateFields(catalogue []jira.Field, configuredStart, configuredEnd []
 	out.startDate = out.resolveOne(catalogue, startDateName)
 	out.sprint = out.resolveOne(catalogue, sprintFieldName)
 
-	ids := make([]string, 0, len(out.starts)+len(out.ends)+6)
+	ids := make([]string, 0, len(out.starts)+len(out.ends)+8)
 	for _, ref := range out.starts {
 		ids = appendUnique(ids, ref.ID)
 	}
@@ -265,7 +275,14 @@ func ResolveDateFields(catalogue []jira.Field, configuredStart, configuredEnd []
 	for _, ref := range []jira.FieldRef{out.targetStart, out.targetEnd, out.startDate, out.sprint} {
 		ids = appendUnique(ids, ref.ID)
 	}
-	ids = append(ids, dueDateFieldID, createdFieldID, fixVersionsFieldID)
+	// A profile can name one of these: end = "Due date" is the likeliest rule 1.
+	for _, id := range []string{dueDateFieldID, createdFieldID, fixVersionsFieldID} {
+		ids = appendUnique(ids, id)
+	}
+	out.dated = slices.Clone(ids)
+	for _, id := range []string{parentFieldID, subtasksFieldID} {
+		ids = appendUnique(ids, id)
+	}
 	out.ids = ids
 	return out
 }
@@ -297,6 +314,9 @@ func (f *DateFields) resolveOne(catalogue []jira.Field, name string) jira.FieldR
 
 // IDs are the field IDs a read has to ask for so the cascade has something to
 // work on, in a stable order. A field this site does not have is not in it.
+//
+// parent and subtasks are in it and carry no date: rule 7 rolls a parent up over
+// its children, and an issue read without them names neither.
 func (f DateFields) IDs() []string { return slices.Clone(f.ids) }
 
 // Projection is the narrow field set a timeline fetches with. Asking for these
@@ -322,6 +342,23 @@ func (f DateFields) Missing() []string {
 	return out
 }
 
+// unusable is the problems a resolution warns about, which is not all of them.
+// A cascade name this site has no field for is the ordinary shape of a site
+// without Advanced Roadmaps and would warn on every pass. A name belonging to
+// two fields is not: the rule that reads it silently never fires, on a site
+// where a plugin has added a second field called Sprint or Start date, and the
+// emptiest timeline is the one with nothing to say about why.
+func (f DateFields) unusable() []string {
+	var out []string
+	for _, problem := range f.problems {
+		if !problem.Configured && !problem.Ambiguous() {
+			continue
+		}
+		out = append(out, problem.String()+"; the cascade fell through the rule that reads it")
+	}
+	return out
+}
+
 // SprintDates is the one thing rule 4 needs from Jira: a sprint's own start and
 // end, which the sprint value on an issue does not carry.
 //
@@ -331,6 +368,8 @@ func (f DateFields) Missing() []string {
 type SprintDates interface {
 	Sprint(ctx context.Context, id int64) (jira.Sprint, error)
 }
+
+var _ SprintDates = jira.SprintReader(nil)
 
 // Dates resolves the timeline cascade: given the fields resolved for this site
 // and a set of issues, which start and end each issue draws between, and which
@@ -454,9 +493,10 @@ func (r Resolution) Zone() (zone *time.Location, reason string) {
 func (r Resolution) Span() (start, end jira.Date) { return r.spanStart, r.spanEnd }
 
 // Warnings are the things that went wrong without stopping the pass, in a stable
-// order: a zone that would not load, a sprint that could not be read, an issue
-// whose dates are the wrong way round, a parent chain that loops. A view shows
-// them; nothing in here depends on them.
+// order: a zone that would not load, a field name that means two fields on this
+// site, a sprint that could not be read, an issue whose dates are the wrong way
+// round, a parent chain that loops. A view shows them; nothing in here depends
+// on them.
 func (r Resolution) Warnings() []string { return slices.Clone(r.warnings) }
 
 // Resolve runs the cascade over a set of issues.
@@ -491,16 +531,16 @@ func (d *Dates) Resolve(ctx context.Context, issues []jira.Issue) (Resolution, e
 	if d.reason != "" {
 		out.warnings = append(out.warnings, d.reason)
 	}
+	out.warnings = append(out.warnings, d.fields.unusable()...)
 
 	run := &pass{
 		fields:  d.fields,
 		zone:    d.zone,
-		ids:     d.fields.ids,
+		dated:   d.fields.dated,
 		out:     &out,
 		onIssue: make(map[string][]sprintRef, len(issues)),
 		parsed:  make(map[string][]sprintRef),
 		sprints: make(map[int64]jira.Sprint),
-		unread:  make(map[int64]bool),
 	}
 
 	ids := run.collect(issues)
@@ -535,7 +575,6 @@ func (d *Dates) readSprints(ctx context.Context, ids []int64, run *pass) error {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return ctxErr
 			}
-			run.unread[id] = true
 			reason, _ := jira.Reason(err)
 			run.warn(fmt.Sprintf("sprint %d could not be read, so the issues in it fall back to a later rule: %s", id, reason))
 			continue
@@ -545,8 +584,6 @@ func (d *Dates) readSprints(ctx context.Context, ids []int64, run *pass) error {
 	return nil
 }
 
-// sprintFlightKey namespaces a sprint read against the other calls this package
-// coalesces, the way searchKey does: the NUL is what no id can contain.
 func sprintFlightKey(id int64) string {
 	return "sprint\x00" + strconv.FormatInt(id, 10)
 }
@@ -564,13 +601,16 @@ type sprintRef struct {
 type pass struct {
 	fields  DateFields
 	zone    *time.Location
-	ids     []string
+	dated   []string
 	out     *Resolution
 	onIssue map[string][]sprintRef
 	parsed  map[string][]sprintRef
 	sprints map[int64]jira.Sprint
-	unread  map[int64]bool
 	kids    map[string][]string
+	// looped is the keys already reported as being in a parent-chain cycle, so
+	// that a three-issue cycle is one warning and not one per issue that leads
+	// into it.
+	looped map[string]bool
 }
 
 func (p *pass) warn(text string) { p.out.warnings = append(p.out.warnings, text) }
@@ -873,9 +913,9 @@ func sourceOf(ref jira.FieldRef) string {
 // A date field already is one and is taken as it stands. A datetime is an
 // instant, and which day an instant falls on is a question about a timezone, so
 // it is bucketed in the account's zone and not this machine's. A field that
-// arrived as text — a date custom field read from an endpoint that sent no
-// schema, or one whose schema this client has no slot for — is parsed, because
-// the alternative is a bar that is missing for no reason a user can see.
+// arrived as text — one the site declares as a string, holding a date somebody
+// types in — is parsed, because the alternative is a bar that is missing for no
+// reason a user can see.
 func (p *pass) dateOf(iss jira.Issue, ref jira.FieldRef) (jira.Date, bool) {
 	if ref.ID == "" {
 		return jira.Date{}, false
@@ -889,11 +929,29 @@ func (p *pass) dateOf(iss jira.Issue, ref jira.FieldRef) (jira.Date, bool) {
 	if date, ok := iss.Fields.Date(ref); ok {
 		return date, !date.IsZero()
 	}
-	text, ok := iss.Fields.Text(ref)
-	if !ok {
+	if text, ok := iss.Fields.Text(ref); ok {
+		return parseDateText(text, p.zone)
+	}
+	return p.platformDate(iss, ref.ID)
+}
+
+// platformDate reads a date that lands on the issue itself rather than in its
+// field set. An adapter decodes duedate and created onto the struct, so a
+// profile naming one of them for rule 1 — end = "Due date" is the likeliest
+// rule 1 there is — finds nothing in the set and would fall through to a rule
+// nobody configured.
+func (p *pass) platformDate(iss jira.Issue, id string) (jira.Date, bool) {
+	switch id {
+	case dueDateFieldID:
+		return iss.Due, !iss.Due.IsZero()
+	case createdFieldID:
+		if iss.Created.IsZero() {
+			return jira.Date{}, false
+		}
+		return jira.DateOf(iss.Created.In(p.zone)), true
+	default:
 		return jira.Date{}, false
 	}
-	return parseDateText(text, p.zone)
 }
 
 // parseDateText reads a date out of a field that arrived as text. Anything that
@@ -908,17 +966,31 @@ func parseDateText(text string, zone *time.Location) (jira.Date, bool) {
 		date, err := jira.ParseDate(value)
 		return date, err == nil
 	}
-	if at, err := time.Parse(time.RFC3339, value); err == nil {
-		return jira.DateOf(at.In(zone)), true
+	for _, layout := range dateTextLayouts {
+		if at, err := time.Parse(layout, value); err == nil {
+			return jira.DateOf(at.In(zone)), true
+		}
 	}
 	return jira.Date{}, false
+}
+
+// The layouts a date-time reaches this package as text in. The first two are the
+// platform's own and the Agile API's, neither of which is RFC 3339: the platform
+// writes an offset with no colon. docs/API-NOTES.md has the third.
+var dateTextLayouts = []string{
+	"2006-01-02T15:04:05.000-0700",
+	"2006-01-02T15:04:05.000-07:00",
+	time.RFC3339,
 }
 
 // absence says which kind of nothing an unresolved issue is. The mask records
 // what the read asked for and can say that much; it cannot tell a field that was
 // empty from one spelled wrongly or one this site never had.
+//
+// Only the fields a date can come out of count: a read that asked for parent and
+// nothing else asked for no date.
 func (p *pass) absence(iss jira.Issue) Absence {
-	for _, id := range p.ids {
+	for _, id := range p.dated {
 		if iss.Requested.Has(id) {
 			return AbsentEmpty
 		}
@@ -949,7 +1021,15 @@ func (p *pass) rollup(key string, visiting map[string]bool) Range {
 		return got
 	}
 	if visiting[key] {
-		p.warn(key + ": its parent chain leads back to itself, so nothing was rolled up onto it")
+		if !p.looped[key] {
+			p.warn(key + ": its parent chain leads back to itself, so nothing was rolled up onto it")
+			if p.looped == nil {
+				p.looped = make(map[string]bool, len(visiting)+1)
+			}
+			for inChain := range visiting {
+				p.looped[inChain] = true
+			}
+		}
 		return Range{}
 	}
 	visiting[key] = true

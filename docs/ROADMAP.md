@@ -880,8 +880,17 @@ are guesses.
 
 - [x] **P8.1 — Date resolution** · [#26](https://github.com/varijkapil13/saral/issues/26) · **owns** `internal/app/dates.go`
   The cascade that gives every issue a start and an end (see below). Reports provenance per bar.
-  Rule 4 needs [#38](https://github.com/varijkapil13/saral/issues/38) first: an issue's sprint value
-  carries `{id, name}` and no dates, and the timeline has no board id to look them up with.
+  Rule 4 reads a sprint's dates through `Sprint(ctx, id)`, which W1 landed on the port and on the
+  fake ([#38](https://github.com/varijkapil13/saral/issues/38)): an issue's sprint value carries
+  `{id, name}` and no dates, and the timeline has no board id to look them up with. Two divergences
+  are open against it and each has a failing test in `internal/app/conformance_dates_test.go` rather
+  than a table written around it. **`pkg/jira/cloud` has no `Sprint` method**, so rule 4 answers
+  against the fake and falls through against a site —
+  `TestConformance_RuleFourHasAnImplementationOnBothSidesOfThePort`. And the fake sends a sprint
+  value as options whatever the field list said, where the schema-expanded read a timeline issues
+  gets the raw JSON — `TestConformance_ASprintValueArrivesInTheShapeASchemaExpandedReadSends`. The
+  cascade reads both shapes, so the second costs correctness nothing here and would cost the view
+  everything.
 - [ ] **P8.2 — Timeline view** · [#27](https://github.com/varijkapil13/saral/issues/27) · **owns** `internal/ui/timeline/**`
   Horizontal bars, zoom by day/week/month/quarter, today marker, version and sprint markers,
   milestone diamonds where only one date resolves. Virtualized like every other list.
