@@ -289,7 +289,12 @@ func TestSession_SwitchesToTheWholeSiteFromThePalette(t *testing.T) {
 	s.press("enter")
 	s.press("enter")
 
-	mustContain(t, ansi.Strip(s.m.Frame()), "no project is selected")
+	// The header, not the status line: the scope note lands there and the list's
+	// own sentence about an empty search replaces it, so the header is the only
+	// place the scope is still legible a frame later.
+	if head := firstLine(ansi.Strip(s.m.Frame())); strings.Contains(head, "PROJ") {
+		t.Errorf("the header still names PROJ after a switch to the whole site:\n%s", head)
+	}
 	if got := s.scoped(); len(got) != 1 || got[0] != "" {
 		t.Errorf("the session was re-scoped to %v, want the whole site", got)
 	}

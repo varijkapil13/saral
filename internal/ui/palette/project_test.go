@@ -23,10 +23,11 @@ func twoProjects(keys ...string) *jiratest.Fake {
 	if len(keys) == 0 {
 		keys = []string{"PROJ", "OPSHOP"}
 	}
-	opts := []jiratest.Option{
+	opts := make([]jiratest.Option, 0, 2+len(keys))
+	opts = append(opts,
 		jiratest.WithProject(keys[0], jiratest.Scrum),
 		jiratest.WithMe(jira.User{AccountID: "acct-nobody", DisplayName: "Nobody At All", TimeZone: time.UTC, Active: true}),
-	}
+	)
 	for _, key := range keys {
 		opts = append(opts, jiratest.WithIssues(jiratest.GenFor(key, 2)))
 	}

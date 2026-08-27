@@ -11,6 +11,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -154,7 +155,7 @@ func buildProject(d kernel.Deps, freq *table) *projectModel {
 }
 
 func newProjectInput() textinput.Model {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = "> "
 	ti.Placeholder = "which project?"
 	return ti

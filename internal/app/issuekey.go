@@ -14,7 +14,7 @@ import (
 // be renamed, so only a read can answer that; what this saves is the read for
 // something that cannot be a key at all, and the guesswork in telling a key
 // from a view name.
-var issueKey = regexp.MustCompile(`^[A-Z][A-Z0-9_]*-[1-9][0-9]*$`)
+var issueKey = regexp.MustCompile(`^[A-Z][A-Z0-9_]*-[1-9]\d*$`)
 
 // ParseKey reads an issue key out of what somebody typed, spelt the way Jira
 // spells one. It reports false for anything that is not the shape of a key.

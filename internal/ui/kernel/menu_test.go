@@ -282,8 +282,7 @@ func (v selectingView) Update(msg tea.Msg) (View, tea.Cmd) {
 
 func (v selectingView) View() string { return "board body" }
 
-func (v selectingView) LiveKeys() (KeySet, int) {
-	gen := 0
+func (v selectingView) LiveKeys() (set KeySet, gen int) {
 	if v.selected {
 		gen = 1
 	}

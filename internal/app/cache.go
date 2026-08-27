@@ -354,7 +354,9 @@ func (c *DiskCache) EachIssue(fn func(jira.Issue, time.Time) bool) (int, error) 
 		}
 		return fn(iss, rec.StoredAt)
 	})
-	bad = append(bad, short...)
+	if len(short) > 0 {
+		bad = append(bad, short...)
+	}
 	if err != nil {
 		return len(bad), err
 	}

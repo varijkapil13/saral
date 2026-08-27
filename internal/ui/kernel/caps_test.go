@@ -50,11 +50,11 @@ func (c *capsStore) PutCaps(project string, caps jira.Capabilities) error {
 	return nil
 }
 
-func (c *capsStore) Rows(string) (app.Snapshot, bool)                 { return app.Snapshot{}, false }
-func (c *capsStore) PutRows(string, []jira.Issue, bool) error         { return nil }
-func (c *capsStore) Forget(string) error                              { return nil }
-func (c *capsStore) EachIssue(func(jira.Issue, time.Time) bool) error { return nil }
-func (c *capsStore) Generation() uint64                               { return 0 }
+func (c *capsStore) Rows(string) (app.Snapshot, bool)                        { return app.Snapshot{}, false }
+func (c *capsStore) PutRows(string, []jira.Issue, bool) error                { return nil }
+func (c *capsStore) Forget(string) error                                     { return nil }
+func (c *capsStore) EachIssue(func(jira.Issue, time.Time) bool) (int, error) { return 0, nil }
+func (c *capsStore) Generation() uint64                                      { return 0 }
 
 // storedAnswer is what a previous run left behind: boards allowed here, plans
 // refused with the site's own sentence.
@@ -174,7 +174,7 @@ func TestCaps_TheProbesOwnAnswerIsKeptForTheNextRun(t *testing.T) {
 	d.Cache = held
 
 	m := newAt(t, d, 120, 30)
-	m = deliver(t, m, m.Init())
+	deliver(t, m, m.Init())
 
 	kept, ok := held.written["ONE"]
 	if !ok {
@@ -234,7 +234,7 @@ func TestCaps_AProjectSwitchKeepsTheAnswerUnderTheProjectItIsAbout(t *testing.T)
 	m := newAt(t, d, 120, 30)
 	m = deliver(t, m, m.Init())
 	m, cmd := switchTo(t, m, "TWO")
-	m = deliver(t, m, cmd)
+	deliver(t, m, cmd)
 
 	if got := held.written["ONE"].Plans.Reason; got != answeredFor("ONE") {
 		t.Errorf("the entry for ONE says %q", got)

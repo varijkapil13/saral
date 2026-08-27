@@ -285,10 +285,10 @@ func WithInitialView(id string) Option {
 // A constructor rather than a view, because Deps is only complete inside New:
 // a view built before it has no zone manager, and would draw a frame nothing can
 // click on.
-func WithInitialPush(id, title string, new func(Deps) View) Option {
+func WithInitialPush(id, title string, build func(Deps) View) Option {
 	return func(m *Model) {
-		if new != nil {
-			m.startup = startupPush{id: id, title: title, new: new}
+		if build != nil {
+			m.startup = startupPush{id: id, title: title, new: build}
 		}
 	}
 }
