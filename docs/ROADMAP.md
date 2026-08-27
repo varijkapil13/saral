@@ -888,6 +888,10 @@ are guesses.
 - [ ] **P8.3 — Plans** · [#28](https://github.com/varijkapil13/saral/issues/28) · **owns** `pkg/jira/cloud/plan.go`, `internal/ui/plan/**`
   Real plans where the token has Administer Jira; locally defined plans (projects/filters + date
   mapping from config) everywhere else, with the reason shown.
+  `pkg/jira/cloud/plan.go` has landed; the checkbox waits on `internal/ui/plan/**`. Before the view
+  is written, the fake has to stop putting a project key where the API puts a project id — the
+  divergence is a red case in `TestPlans_BothAdaptersAnswerTheSameWay` and a row in
+  [`docs/API-NOTES.md`](API-NOTES.md).
 
 ## Batch 9 — Ship it · parallel ×3
 
