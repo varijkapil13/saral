@@ -30,3 +30,33 @@ func TestBudget_FormFullRedrawAt200x60(t *testing.T) {
 		t.Errorf("a full redraw at 200x60 took %s, want under the 4ms in docs/PERFORMANCE.md", per)
 	}
 }
+
+// The screen is virtualized, so a project with two hundred custom fields costs a
+// frame what one with eight costs. The absolute half is what matters: comparing
+// two benchmarks against each other passes just as happily at nine hundred
+// allocations a frame.
+//
+// 1 at either length, every run: the frame string View has to return, with every
+// field behind it memoized.
+func TestBudget_FormScrollingCostsTheSameOnTwoHundredFieldsAsOnEight(t *testing.T) {
+	big := testing.Benchmark(BenchmarkFormSteadyScroll200)
+	small := testing.Benchmark(BenchmarkFormSteadyScroll8)
+
+	bigAllocs, smallAllocs := big.AllocsPerOp(), small.AllocsPerOp()
+	t.Logf("a steady frame: %d allocations over two hundred fields, %d over eight, ceiling 1", bigAllocs, smallAllocs)
+	if bigAllocs > smallAllocs {
+		t.Errorf("a 200-field form allocates %d per frame against %d for an 8-field one; "+
+			"the render is not virtualized", bigAllocs, smallAllocs)
+	}
+	if bigAllocs > 1 {
+		t.Errorf("a steady-state frame allocates %d times, want the memo to carry all but the frame itself",
+			bigAllocs)
+	}
+}
+
+func TestBudget_FormFieldsAreMemoizedSoAFrameCostsNothingToRedraw(t *testing.T) {
+	m := built(t, 200, 120, 40)
+	if got := testing.AllocsPerRun(200, func() { _ = m.row(0) }); got != 0 {
+		t.Errorf("a memoized row allocates %.1f times, want none", got)
+	}
+}

@@ -51,3 +51,54 @@ func TestBudget_ProjectPickerKeystroke(t *testing.T) {
 		t.Errorf("a keystroke into the project picker took %s, want under the 16ms in docs/PERFORMANCE.md", per)
 	}
 }
+
+// The list is virtualized, so a registry of two thousand commands costs a frame
+// what one of twenty costs. The absolute ceiling is the half that matters: a
+// comparison of two benchmarks passes just as happily at nine hundred
+// allocations a frame.
+//
+// 29 on an M2 Pro at either length, every run. The palette is not memoized down
+// to one allocation a frame the way a list view is — it rebuilds the input line,
+// the group heads and the rows it shows on every keystroke, because a keystroke
+// re-ranks the whole list and there is nothing stable to key a memo on.
+func TestBudget_PaletteScrollingCostsTheSameOnTwoThousandCommandsAsOnTwenty(t *testing.T) {
+	big := testing.Benchmark(BenchmarkPaletteScroll2000)
+	small := testing.Benchmark(BenchmarkPaletteScroll20)
+
+	bigAllocs, smallAllocs := big.AllocsPerOp(), small.AllocsPerOp()
+	t.Logf("a scrolled frame: %d allocations over two thousand commands, %d over twenty, ceiling 34", bigAllocs, smallAllocs)
+	if bigAllocs > smallAllocs {
+		t.Errorf("a 2000-command palette allocates %d per frame against %d for a 20-command one; "+
+			"the drawing is not virtualized", bigAllocs, smallAllocs)
+	}
+	if bigAllocs > 34 {
+		t.Errorf("a scrolled frame allocates %d times, over the ceiling of 34; it measured 29 when the "+
+			"ceiling was set, and a window drawn over the whole registry would be two orders of "+
+			"magnitude more", bigAllocs)
+	}
+}
+
+// Standing still costs one allocation less than scrolling: the frame is drawn
+// again and no cursor moved to make the row under it change.
+func TestBudget_PaletteStandingStillCostsNoMoreThanScrolling(t *testing.T) {
+	long := testing.Benchmark(BenchmarkPaletteRedraw2000)
+	short := testing.Benchmark(BenchmarkPaletteRedraw20)
+
+	longAllocs, shortAllocs := long.AllocsPerOp(), short.AllocsPerOp()
+	t.Logf("a redrawn frame: %d allocations over two thousand commands, %d over twenty, ceiling 34", longAllocs, shortAllocs)
+	if longAllocs > shortAllocs {
+		t.Errorf("2000 commands allocate %d per frame against %d for twenty; the drawing is not virtualized",
+			longAllocs, shortAllocs)
+	}
+	if longAllocs > 34 {
+		t.Errorf("a redrawn frame allocates %d times, over the ceiling of 34; it measured 28 when the "+
+			"ceiling was set", longAllocs)
+	}
+}
+
+func TestBudget_PaletteRowsAreMemoizedSoAFrameCostsNothingToRedraw(t *testing.T) {
+	m := opened(t, 2000, 120, 40)
+	if got := testing.AllocsPerRun(200, func() { _ = m.row(0) }); got != 0 {
+		t.Errorf("a memoized row allocates %.1f times, want none", got)
+	}
+}

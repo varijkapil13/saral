@@ -9,6 +9,7 @@ permissions:
 
 env:
   GOLANGCI_VERSION: v2.12.2
+  BENCHSTAT_VERSION: v0.0.0-20260825160852-19be9d8e6c70
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -179,6 +180,68 @@ jobs:
       - name: give the caches back to the runner
         if: always()
         run: sudo chown -R "$(id -u):$(id -g)" "$(go env GOCACHE)" "$(go env GOMODCACHE)"
+
+  # Regression detection against the base commit. The ceilings in the budgets job
+  # catch a step past a number; this catches a slide that stays under one.
+  regressions:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # A dot directory, so every tree walker in the repo already skips it.
+      - name: check out the base commit beside the branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .base
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # In this order: a gate that has never been seen to fail proves nothing green.
+      - name: the gate catches what it claims to
+        run: python3 scripts/benchgate_test.py
+      - name: install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@${{ env.BENCHSTAT_VERSION }}
+      - name: warm the caches of both trees while the network is still there
+        run: |
+          go test -count=1 -run '^$' ./...
+          (cd .base && go test -count=1 -run '^$' ./...)
+      # Both sides on one runner minutes apart, so nothing is stored to go stale.
+      - name: benchmark both trees, without the detector and on a loopback-only network
+        run: |
+          sudo env "PATH=$PATH" "HOME=$HOME" \
+            "GOCACHE=$(go env GOCACHE)" "GOMODCACHE=$(go env GOMODCACHE)" \
+            GOPROXY=off GOTOOLCHAIN=local \
+            unshare -n -- sh -euc '
+              ip link set lo up
+              ip -o link show lo | grep -qw UP || { echo "::error::loopback is down inside the namespace"; exit 1; }
+              command -v curl >/dev/null || { echo "::error::no curl to prove the namespace isolates"; exit 1; }
+              if curl -sS --max-time 5 -o /dev/null https://proxy.golang.org; then
+                echo "::error::a request left the namespace, so this check proves nothing"
+                exit 1
+              fi
+              mkdir -p .bench
+              go test -run "^$" -bench . -benchmem -benchtime=100x -count=6 ./... > .bench/head.txt
+              (cd .base && go test -run "^$" -bench . -benchmem -benchtime=100x -count=6 ./...) > .bench/base.txt
+            '
+      # .bench too: the benchmarks ran under sudo, so the directory and both
+      # results belong to root and the comparison below cannot write beside them.
+      - name: give the caches and the results back to the runner
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" "$(go env GOCACHE)" "$(go env GOMODCACHE)" .bench
+      - name: nothing budgeted allocates more than it did on the base commit
+        run: |
+          benchstat -format csv .bench/base.txt .bench/head.txt > .bench/cmp.csv
+          {
+            echo '<details><summary>benchstat, base against branch</summary>'
+            echo
+            echo '```'
+            benchstat .bench/base.txt .bench/head.txt || true
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+          python3 scripts/benchgate.py --csv .bench/cmp.csv --root . --summary "$GITHUB_STEP_SUMMARY"
 
   fixtures:
     runs-on: ubuntu-latest

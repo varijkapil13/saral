@@ -15,12 +15,13 @@ Three constraints drive every decision below:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  cmd/saral            entrypoint, flags, subcommands        │
+│  cmd/saral            entrypoint, flags, one positional arg │
 ├─────────────────────────────────────────────────────────────┤
 │  internal/ui          Bubble Tea models — one per view      │
 │    kernel/            root model, view stack, registries    │
-│    board/ issue/ ...  self-contained views                  │
+│    board/ issue/ ...  self-contained views, fifteen of them │
 │    widget/            zones, click timing, drag, scrolling  │
+│    richtext/          ADF to styled lines, memoized         │
 ├─────────────────────────────────────────────────────────────┤
 │  internal/app         use cases — orchestration, no IO libs │
 │                       cache policy: kinds, TTLs, the codec  │
@@ -88,6 +89,7 @@ type Client interface {
 	BoardIssues(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
 	BoardBacklog(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
 	Sprints(ctx context.Context, boardID int64, states ...SprintState) (Page[Sprint], error)
+	Sprint(ctx context.Context, id int64) (Sprint, error)
 	CreateSprint(ctx context.Context, in SprintInput) (Sprint, error)
 	UpdateSprint(ctx context.Context, id int64, in SprintPatch) (Sprint, error)
 	StartSprint(ctx context.Context, id int64) (Sprint, error)
@@ -163,7 +165,7 @@ ids it already holds instead of disappearing.
 ### Roles: what a caller asks for
 
 `Client` is what an adapter grows into. It is **not** what a caller takes. A view that runs a search
-needs a search, and an adapter that cannot yet do the other thirty-three should not have to pretend —
+needs a search, and an adapter that cannot yet do the other forty-one should not have to pretend —
 the reasoning `internal/app.Counter` was already written with, generalised.
 
 So `pkg/jira/roles.go` declares one interface per job, and callers take those:
@@ -286,11 +288,13 @@ scopes Move, Delete and Create as project permissions, so one token answers diff
 projects on one site. Probing with no project leaves those three unavailable with a reason saying so.
 `People` is site-wide and is therefore answered either way.
 
-Two probes ask `mypermissions` and four call the endpoint they are about. Calling it is preferred
-where there is an endpoint cheap enough to call: the refusal is then the site's own sentence about the
-thing that was actually refused, and `mypermissions` fails the **whole** request with a 400 when one
-key in it is unrecognised — so folding a new key into the existing list would put Bulk Change and
-Delete Issues behind whether this site knows that key.
+Six probes run when a project is named and four when none is. Exactly **one** of them asks
+`mypermissions`, and it answers two capabilities at once — Bulk Change and Delete Issues; the other
+five call the endpoint they are about. Calling it is preferred where there is an endpoint cheap enough
+to call: the refusal is then the site's own sentence about the thing that was actually refused, and
+`mypermissions` fails the **whole** request with a 400 when one key in it is unrecognised — so folding
+a new key into the existing list would put Bulk Change and Delete Issues behind whether this site
+knows that key.
 
 ## The UI kernel and its registries
 
@@ -723,6 +727,12 @@ A typed taxonomy in `pkg/jira`, because the UI needs to render different things:
 | `*ValidationError` (field → message) | annotate the offending form fields inline |
 | `*ConflictError` (409) | offer reload-and-reapply |
 | `*TransportError` | show cached data with a stale badge, retry in background |
+| `*AuthError` (401) | the credential, not the request: say so and offer onboarding, and leave a cached capability answer standing |
+| `*NotFoundError` (404) | Jira does not separate "gone" from "you may not see it", so show `Detail` — the site's own sentence is the only thing that ever tells them apart |
+| `*PartialMoveError` | a move that stopped part way: draw `Moved` against `Pending`, and never blind-retry the pending half |
+
+`jira.Reason` is the wording for the first seven; `*PartialMoveError` wraps the failure that stopped
+it, so `errors.As` still classifies it as whichever of them the site answered with.
 
 `errors.As` is the only way callers inspect these. No string matching on messages.
 

@@ -5,9 +5,10 @@ opening the repo for the first time; it is the only document that assumes nothin
 
 ## 1. Verify what your token can reach
 
-Four calls, run once by a human. They decide what P0.1 and P1.3 build, and their responses become the
-first test fixtures. Nothing in this repo should be written until these have been run, because
-guessing at any of them has already cost a rewrite once.
+Four questions, seven calls, run once by a human. They decided what P0.1 and P1.3 built, and their
+responses became the first test fixtures. Guessing at any of them has already cost a rewrite once, so
+run them before trusting a `schema` row in [`docs/API-NOTES.md`](API-NOTES.md) about the same
+endpoint.
 
 ```sh
 export SARAL_SITE=your-site.atlassian.net
@@ -95,9 +96,13 @@ Dependencies to add in P0.1, all confirmed current as of 2026-08:
 |---|---|
 | `charm.land/bubbletea/v2` | v2 shipped 2026-02. `View()` returns `tea.View`; `KeyPressMsg`/`MouseClickMsg` replace `KeyMsg`/`MouseMsg`; mouse mode is declared on the view, not as a program option |
 | `charm.land/lipgloss/v2` | confirmed vanity path |
-| bubbles v2 | **confirm the module path** — likely `charm.land/bubbles/v2`, not yet verified |
-| `github.com/lrstanley/bubblezone` | mouse hit-testing by zone, not coordinate arithmetic |
+| `charm.land/bubbles/v2` | confirmed when P0.1 merged; the path this table used to say was unverified |
+| `github.com/lrstanley/bubblezone/v2` | mouse hit-testing by zone, not coordinate arithmetic. The v2 path, not the unversioned one |
 | `go.etcd.io/bbolt` | cache |
+
+`go.mod` is the current answer to all of it and has four more besides — `BurntSushi/toml`,
+`zalando/go-keyring`, `charmbracelet/x/ansi` and `golang.org/x/sync`. This table is what P0.1 was told
+to add, kept because the two corrections in it are the kind that cost an afternoon.
 
 The port signature **freezes when P0.1 merges**. Extending it later needs its own small PR labelled
 `contract`; changing an existing signature needs a deprecation step.

@@ -72,8 +72,10 @@ func BenchmarkSprintsWalk(b *testing.B) {
 }
 
 // BenchmarkSprintsScroll is the steady state: the window moves and every row it
-// lands on is already rendered.
+// lands on is already rendered. The twenty-sprint twin is what it is held against.
 func BenchmarkSprintsScroll(b *testing.B) { scrollOver(b, 2000) }
+
+func BenchmarkSprintsScroll20(b *testing.B) { scrollOver(b, 20) }
 
 func BenchmarkSprintsRedraw200x60(b *testing.B) {
 	m := stocked(b, 2000, 200, 60)

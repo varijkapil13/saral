@@ -6,6 +6,10 @@ on:
 permissions:
   contents: write
 
+# Two tags in quick succession would race each other for the tap.
+concurrency:
+  group: release-${{ github.ref }}
+
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
@@ -18,8 +22,31 @@ jobs:
           cache: true
       - uses: goreleaser/goreleaser-action@v6
         with:
-          version: latest
-          args: release --clean
+          version: '~> v2'
+          install-only: true
+      - name: the config is valid
+        run: goreleaser check
+      # goreleaser publishes the release before it touches the tap, and cannot roll back.
+      - name: the tap is reachable, or there is no tap to reach
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAP: varijkapil13/homebrew-tap
+        run: |
+          if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then
+            echo "::notice::HOMEBREW_TAP_TOKEN is unset; publishing the GitHub release and no cask"
+            exit 0
+          fi
+          code=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $HOMEBREW_TAP_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$TAP")
+          if [ "$code" != 200 ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN cannot reach $TAP (HTTP ${code:-none}); nothing published"
+            exit 1
+          fi
+          echo "::notice::the Homebrew cask will be pushed to $TAP"
+      - name: release
+        run: goreleaser release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

@@ -9,11 +9,12 @@
 > **Picking this up cold:** start with [`docs/BOOTSTRAP.md`](BOOTSTRAP.md) — it takes a fresh clone to
 > the first line of code. Then open the **lowest-numbered open milestone** and take any unassigned
 > packet with no unchecked dependency — today that is
-> `gh issue list --milestone "Batch 1.5 — Corrections"`. Claim it by commenting on the issue.
-> `AGENTS.md` is the working agreement; `docs/PARALLEL.md` is the definition of done.
+> `gh issue list --milestone "Batch 9 — Ship it"`, every batch before it having closed. Claim it by
+> commenting on the issue. `AGENTS.md` is the working agreement; `docs/PARALLEL.md` is the definition
+> of done.
 >
-> **A batch does not open until the one before it closes**, and Batch 1.5 exists precisely so that
-> nobody starts Batch 2 on top of a claim that is not true. Lowest-numbered means 1.5 before 2.
+> **A batch does not open until the one before it closes**, and Batch 1.5 existed precisely so that
+> nobody started Batch 2 on top of a claim that was not true. Lowest-numbered means 1.5 before 2.
 
 Work is organised into **batches** (waves) containing **packets** (single-PR units of work). Batches
 are ordered by *when the value arrives*, not by architectural tidiness: the aim is that Saral is
@@ -1017,33 +1018,53 @@ are guesses.
   The cascade that gives every issue a start and an end (see below). Reports provenance per bar.
   Rule 4 reads a sprint's dates through `Sprint(ctx, id)`, which W1 landed on the port and on the
   fake ([#38](https://github.com/varijkapil13/saral/issues/38)): an issue's sprint value carries
-  `{id, name}` and no dates, and the timeline has no board id to look them up with. Two divergences
-  are open against it and each has a failing test in `internal/app/conformance_dates_test.go` rather
-  than a table written around it. **`pkg/jira/cloud` has no `Sprint` method**, so rule 4 answers
-  against the fake and falls through against a site —
-  `TestConformance_RuleFourHasAnImplementationOnBothSidesOfThePort`. And the fake sends a sprint
-  value as options whatever the field list said, where the schema-expanded read a timeline issues
-  gets the raw JSON — `TestConformance_ASprintValueArrivesInTheShapeASchemaExpandedReadSends`. The
-  cascade reads both shapes, so the second costs correctness nothing here and would cost the view
-  everything.
-  Rule 4 needs [#38](https://github.com/varijkapil13/saral/issues/38) first: an issue's sprint value
-  carries `{id, name}` and no dates, and the timeline has no board id to look them up with.
+  `{id, name}` and no dates, and the timeline has no board id to look them up with. Both divergences
+  this note used to record are closed. `pkg/jira/cloud.Sprint` exists, so rule 4 answers against a
+  site as well as against the fake, and the two tests that held the gaps open —
+  `TestConformance_RuleFourHasAnImplementationOnBothSidesOfThePort` and
+  `TestConformance_ASprintValueArrivesInTheShapeASchemaExpandedReadSends` — are green. The cascade
+  still reads a sprint value in both shapes, the raw JSON a schema-expanded read sends and the options
+  a bare one infers, because a list view and a timeline ask for different field sets.
 - [x] **P8.2 — Timeline view** · [#27](https://github.com/varijkapil13/saral/issues/27) · **owns** `internal/ui/timeline/**`
   Horizontal bars, zoom by day/week/month/quarter, today marker, version and sprint markers,
   milestone diamonds where only one date resolves. Virtualized like every other list.
 - [x] **P8.3 — Plans** · [#28](https://github.com/varijkapil13/saral/issues/28) · **owns** `pkg/jira/cloud/plan.go`, `internal/ui/plan/**`
   Real plans where the token has Administer Jira; locally defined plans (projects/filters + date
   mapping from config) everywhere else, with the reason shown.
-  `pkg/jira/cloud/plan.go` has landed; the checkbox waits on `internal/ui/plan/**`. Before the view
-  is written, the fake has to stop putting a project key where the API puts a project id — the
-  divergence is a red case in `TestPlans_BothAdaptersAnswerTheSameWay` and a row in
-  [`docs/API-NOTES.md`](API-NOTES.md).
+  Both halves have landed, and the fake's project-key divergence with them: it sends the numeric id
+  the schema documents, so `TestPlans_BothAdaptersAnswerTheSameWay` is green and the row in
+  [`docs/API-NOTES.md`](API-NOTES.md) records the correction. What a locally defined plan is *not* yet
+  is a profile section — `plan.Defined` carries the TOML tags for `[[profiles.x.plans]]` and
+  `plan.WithDefined` is the seam, but nothing in `internal/config` reads one, so the view stands in
+  with the session's project and one plan per saved query, and says on each row which of the two it
+  is.
 
 ## Batch 9 — Ship it · parallel ×3
 
-- [ ] **P9.1 — Release engineering** · [#29](https://github.com/varijkapil13/saral/issues/29) — goreleaser dry-run, Homebrew tap, install script, `v0.1.0`.
-- [ ] **P9.2 — Performance gate** · [#30](https://github.com/varijkapil13/saral/issues/30) — benchmarks in CI with `benchstat` regression detection.
-- [ ] **P9.3 — README, demo GIF, docs pass.** · [#31](https://github.com/varijkapil13/saral/issues/31)
+- [x] **P9.1 — Release engineering** · [#29](https://github.com/varijkapil13/saral/issues/29)
+  `goreleaser check` and a snapshot release are green — `check` was **already failing** before this
+  packet: `brews:` is deprecated as of goreleaser 2.16 and is now `homebrew_casks:`, which has no
+  `test` field and which Homebrew refuses on Linux, so `brew install` is macOS-only and Linux takes
+  the script or `go install`. The action is pinned `~> v2`; `latest` would have broken a release on
+  the next major. `force_token: github`, because goreleaser picks its SCM from whichever token is in
+  the environment, and a stray `GITLAB_TOKEN` made a dry run emit gitlab.com URLs and report success.
+  `scripts/install.sh` verifies a checksum before it unpacks and renames into place, so a failure
+  leaves nothing behind; `scripts/install_test.sh` drives it against a fake release with no network,
+  14 checks under dash, bash and ksh. The cask gates itself on `HOMEBREW_TAP_TOKEN`, so a tag pushed
+  before the tap exists publishes a clean GitHub release rather than half of one. Installing is in
+  [`docs/INSTALL.md`](INSTALL.md), the tag's ordered prerequisites in
+  [`docs/RELEASING.md`](RELEASING.md).
+- [x] **P9.2 — Performance gate** · [#30](https://github.com/varijkapil13/saral/issues/30)
+  The gate is on `allocs/op` and `B/op`, not on wall clock, and the reason is in
+  [`docs/PERFORMANCE.md`](PERFORMANCE.md): two runs of the same commit on an idle machine disagreed
+  about `ns/op` by up to **821%** with `benchstat` calling it significant, on nineteen of the 141
+  benchmarks, while `allocs/op` repeated to the unit on 134 of them. Timings are reported on the run
+  summary and never fail a build. The baseline is a second checkout of the base commit benchmarked
+  beside the branch, so no stored number can go stale.
+- [x] **P9.3 — README, demo tape, docs pass.** · [#31](https://github.com/varijkapil13/saral/issues/31)
+  The demo is committed as `demo.tape` and not as a GIF: a tape is re-recordable when the UI moves.
+  [`docs/DEMO.md`](DEMO.md) is how to record it, and records the one finding — `cmd/saral` cannot be
+  pointed at `pkg/jira/jiratest`, so the tape needs a scripted profile until a `-fake` flag exists.
 
 ---
 
@@ -1060,9 +1081,12 @@ and the UI shows which source a bar came from so a wrong-looking bar is diagnosa
 | 4 | sprint `startDate` | sprint `endDate` | when the issue is in a sprint |
 | 5 | `created` | `fixVersion.releaseDate` | last resort; renders as a faded bar |
 | 6 | whichever single date exists | — | milestone diamond, not a bar |
+| 7 | the earliest date on any child | the latest date on any child | a parent no rule above resolved. The walk recurses, so a child with no dates of its own rolls up first, and a parent chain that leads back to itself is warned about rather than followed. Drawn distinctly from a real range: moving it moves nothing |
 
-Parents roll up to the min/max of their children when they have no dates of their own, and the
-rollup is drawn distinctly from a real date range.
+Rules 1 to 5 are tried in order and the first that yields **both** ends wins; the first lone date any
+of them found becomes the milestone under rule 6 when none does. `app.Provenance.Rule()` numbers
+itself against this table, so a row added here is a row the code already counts on — the rollup is 7
+and an unresolved issue is 0.
 
 ## Later, deliberately not now
 
