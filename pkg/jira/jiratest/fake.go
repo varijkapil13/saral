@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -97,6 +98,7 @@ func (f *Fake) Fields(ctx context.Context) ([]jira.Field, error) {
 // fake cannot honour never passes as a query that matched everything.
 func (f *Fake) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue], error) {
 	mask := jira.NewFieldMask(q.Fields)
+	expanded := fakeExpandsSchema(q.Fields)
 	return jira.Cursor(ctx, func(ctx context.Context, token string) ([]jira.Issue, string, error) {
 		if err := f.fakeBegin(ctx, "Search"); err != nil {
 			return nil, "", err
@@ -130,6 +132,9 @@ func (f *Fake) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue],
 		for _, iss := range matched[offset:end] {
 			clone := fakeCloneIssue(iss)
 			fakeApplyFieldMask(&clone, mask)
+			if expanded {
+				f.fakeUntypedAsBytes(&clone)
+			}
 			items = append(items, clone)
 		}
 		next := ""
@@ -155,7 +160,9 @@ func (f *Fake) Issue(ctx context.Context, key string) (jira.Issue, error) {
 	if !ok {
 		return jira.Issue{}, fakeNotFound("issue", key)
 	}
-	return fakeCloneIssue(iss), nil
+	out := fakeCloneIssue(iss)
+	f.fakeUntypedAsBytes(&out)
+	return out, nil
 }
 
 // CreateIssue creates an issue, refusing a missing summary or an unknown
@@ -213,7 +220,9 @@ func (f *Fake) CreateIssue(ctx context.Context, in jira.IssueInput) (jira.Issue,
 	}
 	iss.Assignee = f.fakeUser(in.Assignee)
 	f.fakePutIssue(&iss)
-	return fakeCloneIssue(f.issues[iss.Key]), nil
+	out := fakeCloneIssue(f.issues[iss.Key])
+	f.fakeUntypedAsBytes(&out)
+	return out, nil
 }
 
 // UpdateIssue applies a sparse patch: a nil pointer leaves a field alone, a set
@@ -385,6 +394,9 @@ func (f *Fake) Upload(ctx context.Context, key string, files []jira.FileRef) ([]
 	if err := f.fakeBegin(ctx, "Upload"); err != nil {
 		return nil, err
 	}
+	if err := fakeUploadFiles(files); err != nil {
+		return nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.caps.Require(jira.CapAttachments); err != nil {
@@ -422,15 +434,25 @@ func (f *Fake) Download(ctx context.Context, id string, w io.Writer, opt jira.Do
 	if err := f.fakeBegin(ctx, "Download"); err != nil {
 		return err
 	}
+	wanted, err := fakeAttachmentID(id)
+	if err != nil {
+		return err
+	}
+	if w == nil {
+		return fakeInvalid("writer", "a download needs somewhere to write the bytes to")
+	}
+	if opt.From < 0 {
+		return fakeInvalid("from", "a download cannot resume before the first byte")
+	}
 	f.mu.Lock()
-	att, ok := f.fakeAttachment(id)
+	att, ok := f.fakeAttachment(wanted)
 	f.mu.Unlock()
 	if !ok {
-		return fakeNotFound("attachment", id)
+		return fakeNotFound("attachment", wanted)
 	}
 
 	data := fakeAttachmentBytes(&att)
-	if opt.From < 0 || opt.From > int64(len(data)) {
+	if opt.From > int64(len(data)) {
 		return fakeInvalid("from", fmt.Sprintf("cannot resume at byte %d of a %d byte attachment", opt.From, len(data)))
 	}
 	data = data[opt.From:]
@@ -443,7 +465,7 @@ func (f *Fake) Download(ctx context.Context, id string, w io.Writer, opt jira.Do
 		n, err := w.Write(data[off:min(off+fakeDownloadChunk, len(data))])
 		written += int64(n)
 		if err != nil {
-			return &jira.TransportError{Op: "download attachment " + id, Err: err}
+			return &jira.TransportError{Op: "download attachment " + wanted, Err: err}
 		}
 		if progress != nil {
 			progress(written)
@@ -457,21 +479,25 @@ func (f *Fake) DeleteAttachment(ctx context.Context, id string) error {
 	if err := f.fakeBegin(ctx, "DeleteAttachment"); err != nil {
 		return err
 	}
+	wanted, err := fakeAttachmentID(id)
+	if err != nil {
+		return err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.caps.Require(jira.CapAttachments); err != nil {
 		return err
 	}
-	key, ok := f.attachOwner[id]
+	key, ok := f.attachOwner[wanted]
 	if !ok {
-		return fakeNotFound("attachment", id)
+		return fakeNotFound("attachment", wanted)
 	}
 	list := f.attachments[key]
-	idx := slices.IndexFunc(list, func(a jira.Attachment) bool { return a.ID == id })
+	idx := slices.IndexFunc(list, func(a jira.Attachment) bool { return a.ID == wanted })
 	if idx >= 0 {
 		f.attachments[key] = slices.Delete(list, idx, idx+1)
 	}
-	delete(f.attachOwner, id)
+	delete(f.attachOwner, wanted)
 	return nil
 }
 
@@ -542,7 +568,8 @@ func (f *Fake) SaveVersion(ctx context.Context, v jira.VersionInput) (jira.Versi
 }
 
 // UnresolvedCount reports how many issues carry the version as a fix version
-// and are not in the done status category.
+// and have nothing resolving them, which is what the site's own count measures
+// and the only number a release is gated on.
 func (f *Fake) UnresolvedCount(ctx context.Context, versionID string) (int, error) {
 	if err := f.fakeBegin(ctx, "UnresolvedCount"); err != nil {
 		return 0, err
@@ -588,6 +615,11 @@ func (f *Fake) ReleaseVersion(ctx context.Context, id string, in jira.ReleaseInp
 			iss.Updated = f.now
 		}
 	case jira.ReleaseAnyway:
+	default:
+		// ReleaseAnyway is the zero value, so a fall-through here ships a version
+		// over its open issues for a caller that never set the field.
+		return jira.Version{}, fakeInvalid("unresolved",
+			"say what happens to the issues still open: release anyway, move them to another version, or strip this one from them")
 	}
 
 	version.Released = true
@@ -1229,11 +1261,14 @@ func (f *Fake) fakeAttachment(id string) (jira.Attachment, bool) {
 	return jira.Attachment{}, false
 }
 
+// fakeUnresolvedOn lists the issues on a version that nothing has resolved. The
+// status category is a different question: an issue can sit in a done column
+// with nobody having set a resolution.
 func (f *Fake) fakeUnresolvedOn(versionID string) []*jira.Issue {
 	out := make([]*jira.Issue, 0, len(f.issueKeys))
 	for _, key := range f.issueKeys {
 		iss := f.issues[key]
-		if iss.Status.Category == jira.CategoryDone {
+		if iss.Resolution != nil {
 			continue
 		}
 		if slices.ContainsFunc(iss.FixVersions, func(v jira.Version) bool { return v.ID == versionID }) {
@@ -1534,10 +1569,32 @@ func fakeResolutionFrom(fields jira.FieldSet) (*jira.Resolution, error) {
 	return nil, fakeInvalid("resolution", fmt.Sprintf("no resolution %q on this site", want))
 }
 
-func fakeReadAll(file *jira.FileRef) (int64, error) {
-	if file.Open == nil {
-		return 0, fakeInvalid("file", fmt.Sprintf("%s has no way to open it", file.Name))
+// fakeUploadFiles refuses the upload arguments no multipart body can be built
+// from, rather than storing an attachment a site would never have taken.
+func fakeUploadFiles(files []jira.FileRef) error {
+	if len(files) == 0 {
+		return fakeInvalid("file", "an upload needs at least one file")
 	}
+	for _, file := range files {
+		if strings.TrimSpace(file.Name) == "" {
+			return fakeInvalid("file", "every file needs a name: it is what the attachment is called on the issue")
+		}
+		if file.Open == nil {
+			return fakeInvalid("file", file.Name+" cannot be opened: it carries no way to read it")
+		}
+	}
+	return nil
+}
+
+func fakeAttachmentID(id string) (string, error) {
+	trimmed := strings.TrimSpace(id)
+	if trimmed == "" {
+		return "", fakeInvalid("id", "an attachment id is required")
+	}
+	return trimmed, nil
+}
+
+func fakeReadAll(file *jira.FileRef) (int64, error) {
 	rc, err := file.Open()
 	if err != nil {
 		return 0, &jira.TransportError{Op: "open " + file.Name, Err: err}
@@ -1662,6 +1719,112 @@ func fakeApplyFieldMask(iss *jira.Issue, mask jira.FieldMask) {
 	if len(drop) > 0 {
 		iss.Fields = fakeRetainFields(iss.Fields, drop)
 	}
+}
+
+// fakeSystemFieldIDs are the fields an adapter lands on jira.Issue itself rather
+// than in its FieldSet. A query naming anything else is one the adapter asks the
+// site to expand the schema for, and the schema is what decides the shape a
+// value arrives in.
+var fakeSystemFieldIDs = map[string]bool{
+	"summary": true, "description": true, "project": true, "issuetype": true,
+	"status": true, "priority": true, "resolution": true, "assignee": true,
+	"reporter": true, "labels": true, "components": true, "fixVersions": true,
+	"parent": true, "subtasks": true, "issuelinks": true, "duedate": true,
+	"created": true, "updated": true, "resolutiondate": true, "timetracking": true,
+}
+
+// fakeExpandsSchema reports whether a search with this field list is answered
+// with a schema block. Either wildcard counts: it asks for every custom field
+// the site has.
+func fakeExpandsSchema(fields []string) bool {
+	for _, id := range fields {
+		if trimmed := strings.TrimSpace(id); trimmed != "" && !fakeSystemFieldIDs[trimmed] {
+			return true
+		}
+	}
+	return false
+}
+
+// fakeTypedArrayItems are the element types the port can read an array of into a
+// jira.FieldValue. json, attachment, worklog and the rest are not among them.
+var fakeTypedArrayItems = map[string]bool{
+	"user": true, "string": true, "option": true, "option-with-child": true,
+	"version": true, "component": true, "group": true, "priority": true,
+	"issuetype": true, "resolution": true, "project": true,
+}
+
+// fakeUntypedAsBytes rewrites the values a schema-expanded read cannot type into
+// the bytes they arrived as, which is what an adapter keeps for a shape it has
+// no slot for. The sprint field is the one this site holds: declared an array of
+// json, so a timeline gets the JSON and never the options its value looks like.
+func (f *Fake) fakeUntypedAsBytes(iss *jira.Issue) {
+	for _, id := range iss.Fields.IDs() {
+		schema, known := f.fakeSchemaOf(id)
+		if !known || schema.Type != "array" || fakeTypedArrayItems[schema.Items] {
+			continue
+		}
+		ref := jira.FieldRef{ID: id}
+		options, ok := iss.Fields.Options(ref)
+		if !ok {
+			continue
+		}
+		iss.Fields = iss.Fields.With(ref, jira.FieldValue{
+			Kind: jira.KindUnknown,
+			Text: f.fakeSprintArrayJSON(options),
+		})
+	}
+}
+
+func (f *Fake) fakeSchemaOf(id string) (jira.FieldSchema, bool) {
+	for i := range f.fields {
+		if f.fields[i].ID == id {
+			return f.fields[i].Schema, true
+		}
+	}
+	return jira.FieldSchema{}, false
+}
+
+// fakeSprintWire is one sprint as the sprint field's own value carries it. Only
+// the id and the name are read above the port; the rest is what a site sends
+// alongside them.
+type fakeSprintWire struct {
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	State        string `json:"state,omitempty"`
+	BoardID      int64  `json:"boardId,omitempty"`
+	Goal         string `json:"goal,omitempty"`
+	StartDate    string `json:"startDate,omitempty"`
+	EndDate      string `json:"endDate,omitempty"`
+	CompleteDate string `json:"completeDate,omitempty"`
+}
+
+// fakeSprintArrayLayout is the Agile API's date-time, whose offset carries a
+// colon.
+const fakeSprintArrayLayout = "2006-01-02T15:04:05.000-07:00"
+
+func (f *Fake) fakeSprintArrayJSON(options []jira.Option) string {
+	out := make([]fakeSprintWire, 0, len(options))
+	for _, option := range options {
+		id, _ := strconv.ParseInt(strings.TrimSpace(option.ID), 10, 64)
+		one := fakeSprintWire{ID: id, Name: option.Label}
+		if sp, ok := f.sprints[id]; ok {
+			one.Name, one.Goal, one.BoardID = sp.Name, sp.Goal, sp.BoardID
+			one.State = string(sp.State)
+			one.StartDate = fakeSprintArrayTime(sp.Start)
+			one.EndDate = fakeSprintArrayTime(sp.End)
+			one.CompleteDate = fakeSprintArrayTime(sp.Complete)
+		}
+		out = append(out, one)
+	}
+	raw, _ := json.Marshal(out)
+	return string(raw)
+}
+
+func fakeSprintArrayTime(at *time.Time) string {
+	if at == nil {
+		return ""
+	}
+	return at.Format(fakeSprintArrayLayout)
 }
 
 func fakeEncodeCursor(offset int) string {
