@@ -1,0 +1,31 @@
+choosing the target project
+  acts   enter use it · i type a key
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, end last row]
+  full   [enter use the project under the cursor, i type a project key]
+typing a project key
+  acts   enter look it up · esc the list
+  full   [enter look this key up, esc back to the projects]
+choosing the issue type
+  acts   enter use it · shift+tab back
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, end last row]
+  full   [enter use this issue type, shift+tab back a step]
+saying what each status becomes
+  acts   ←/h previous · →/l next · enter carry on · shift+tab back
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, end last row]
+  full   [←/h previous value, →/l next value]
+  full   [enter carry on, shift+tab back a step]
+answering what the target insists on
+  acts   ←/h previous · →/l next · enter carry on · shift+tab back
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, end last row]
+  full   [←/h previous value, →/l next value]
+  full   [enter carry on, shift+tab back a step]
+the confirm screen
+  acts   y move them · n notify · shift+tab back
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, end last row]
+  full   [y move them, n email the watchers, or do not, shift+tab back a step]
+a move the queue has taken
+  acts   
+the outcome
+  acts   enter close
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, end last row]
+  full   [enter close]

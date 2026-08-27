@@ -876,17 +876,18 @@ are guesses.
 
 ## Batch 7 — Cross-project move · parallel ×1
 
-- [ ] **P7.1 — Move wizard** · [#25](https://github.com/varijkapil13/saral/issues/25) · **owns** `pkg/jira/cloud/bulkmove.go`, `internal/ui/move/**`
+- [x] **P7.1 — Move wizard** · [#25](https://github.com/varijkapil13/saral/issues/25) · **owns** `pkg/jira/cloud/bulkmove.go`, `internal/ui/move/**`
   Target project and issue type, status remap, mandatory-field resolution, a confirm screen showing
   the full mapping, submit, then poll the task. Hidden with a reason when `BULK_CHANGE` is absent.
   Polls `/bulk/queue/{taskId}`, not `/task/{taskId}` — different shapes, both fixtured by PC.5.
   **The adapter half has landed:** `BulkMove` and `Task` on `pkg/jira/cloud/bulkmove.go`, both
   progress registries, the `{retain, type, value}` mandatory-field wrapper, and a both-adapters
-  conformance table. `internal/ui/move/**` remains, and with it the two things the adapter cannot
-  do for it: resolving the target's mandatory field set from createmeta before submitting — any
-  value in `MoveRequest.Fields` opts the whole group out of retaining the rest from source — and a
-  confirm screen that says subtasks travel and are retyped. The checkbox stays unticked until that
-  half lands.
+  conformance table. **`internal/ui/move/**` has landed too**, and with it the two things the adapter
+  cannot do for it: it resolves the target's mandatory field set from createmeta and sends the whole
+  group or none of it — any value in `MoveRequest.Fields` opts the whole group out of retaining the
+  rest from source — and its confirm screen says subtasks travel and are retyped. It also maps every
+  source status by id, and refuses a subtask target type because a move cannot name a parent over
+  there.
 
   **Four gates in `pkg/jira/cloud` fail on purpose**, each on a defect outside this packet's owned
   paths. `pkg/jira/jiratest/fake.go`: `Task` looks a task up by `ref.ID` and never reads `ref.URL`,
