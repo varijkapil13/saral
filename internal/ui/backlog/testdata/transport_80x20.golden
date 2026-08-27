@@ -1,0 +1,19 @@
+  no board | 0 open sprints | 0 issues
+  The board could not be read.
+  GET /rest/agile/1.0/board failed: dial tcp 10.0.0.7:443: connect: connection
+  refused
+
+  r reads the board again.
+
+
+
+
+
+
+
+
+
+
+
+
+

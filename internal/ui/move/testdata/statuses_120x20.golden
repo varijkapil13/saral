@@ -1,0 +1,19 @@
+Move 3 issues out of PROJ
+----------------------------------------------------------------------------------------------- what each status becomes
+into OTHER as Story
+->Building                                  -> Building  1 issue                                                        
+  Shipped                                   -> Shipped  1 issue                                                         
+  Triage                                    -> Triage  1 issue                                                          
+
+
+
+
+
+
+
+
+
+
+
+
+

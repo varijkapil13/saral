@@ -85,6 +85,8 @@ type Client interface {
 
 	Boards(ctx context.Context, projectKey string) ([]Board, error)
 	BoardConfig(ctx context.Context, boardID int64) (BoardConfig, error)
+	BoardIssues(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
+	BoardBacklog(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
 	Sprints(ctx context.Context, boardID int64, states ...SprintState) (Page[Sprint], error)
 	CreateSprint(ctx context.Context, in SprintInput) (Sprint, error)
 	UpdateSprint(ctx context.Context, id int64, in SprintPatch) (Sprint, error)

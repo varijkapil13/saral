@@ -174,3 +174,31 @@ func Reason(err error) (string, bool) {
 	}
 	return err.Error(), false
 }
+
+// PartialMoveError reports a move of issues that stopped part way through.
+//
+// Both Agile move endpoints take fifty issues per call, so more than fifty
+// issues is more than one call and a failure part way leaves the earlier calls
+// moved. Moved and Pending are that split. A refusal moved nothing of the chunk
+// it refused; a transport failure leaves that chunk's fate unknown, so Pending
+// is the set to reconcile rather than the set to blind-retry.
+//
+// It lives here rather than in an adapter because a view is what has to draw the
+// difference between some issues moving and none, and internal/ui may not import
+// an adapter package.
+//
+// Err is the failure the site answered with, and unwrapping reaches it, so a
+// refusal or a rate limit is still classified as itself.
+type PartialMoveError struct {
+	Op      string
+	Moved   []string
+	Pending []string
+	Err     error
+}
+
+func (e *PartialMoveError) Error() string {
+	return fmt.Sprintf("%s moved %d of %d issues before it stopped, and the other %d did not move: %v",
+		e.Op, len(e.Moved), len(e.Moved)+len(e.Pending), len(e.Pending), e.Err)
+}
+
+func (e *PartialMoveError) Unwrap() error { return e.Err }

@@ -15,21 +15,23 @@ today; comparing a run against a baseline is P9.2
 |---|---|---|
 | Cold start → first paint (no cache) | **< 250 ms** | `ci.yml`, best of five `saral --bench-first-paint` runs against an empty cache directory |
 | Cold start → first paint (warm cache) | < 60 ms | *measured, not guarded.* `hyperfine` on `saral --bench-first-paint`. Warming the cache needs a site, so CI cannot; the in-process half is `TestBudget_FirstPaintFromCache` |
-| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the palette, the form and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, so p99 waits on #30 |
+| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the timeline, the palette, the form and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, so p99 waits on #30 |
 | Scroll a 10k-row list | 1 allocation a frame | the frame string `View` returns, and nothing behind it. Asserted with the mouse on, under a kept filter and under terms in force |
+| Pan a chart across a thousand years of calendar | the allocations and the bytes that ten years costs, and **< 16 ms** a frame over either span | the timeline is the one view that scrolls in two dimensions. `TestBudget_TimelinePanningCostsTheSameOverAThousandYearsAsOverTen` compares the two runs on the counts and the bytes, holds the count to a ceiling of 1700 besides, and holds each frame's time against the budget rather than against the other run |
 | Frame allocations at 200×60 | ceilings in `internal/ui/kernel/budget_test.go` | 297 for a frame, 310 for a keystroke and its frame, 324 with the mouse on, each held to a ceiling about a tenth above |
-| Full redraw at 200×60 | < 4 ms | asserted in list, issue, comment, filter, the form and the kernel chrome |
+| Full redraw at 200×60 | < 4 ms | asserted in list, issue, comment, filter, the timeline, the form and the kernel chrome |
 | RSS with 10k issues cached | < 60 MB | *measured, not guarded.* Nothing reads the number; the harness that would is #30 |
 | Stripped binary | **< 15 MiB** | `ci.yml`'s size step |
 | Cache read for a view's first paint | < 5 ms | `BenchmarkCacheReadFirstPaint` |
 | Rank 10k cached issues against a keystroke | **< 16 ms**, 1 allocation | `BenchmarkIndexSearch10k` and its two siblings |
 | Rebuild the local index over 10k cached issues | < 16 ms | `BenchmarkIndexRebuild10k` |
+| Resolve the date cascade over a timeline's worth of issues | **< 16 ms**, and linear in the issues | `BenchmarkResolveDates2k` against `BenchmarkResolveDates10k` |
 | Render a description to styled lines | **≤ 8 allocations a line**, and linear in the lines | `BenchmarkRender`, over four widths and both palettes |
 
 ## How a budget is guarded
 
 A guard is a test named `TestBudget_*` that runs a benchmark and fails on the number it comes back
-with. Four things make one of them worth trusting, and each was got wrong once here:
+with. Five things make one of them worth trusting, and each was got wrong once here:
 
 - **It is absolute, with headroom.** A guard that only compares two benchmarks against each other
   catches a memo that stopped being hit and passes just as happily at nine hundred allocations a
@@ -62,6 +64,20 @@ with. Four things make one of them worth trusting, and each was got wrong once h
   on reaching the bottom now, and reports 42 everywhere. A budget over a number that moves with the
   machine is not a budget, and the way that shows up is a ceiling that is red on the runner and green
   on the laptop it was written on.
+- **It holds a timing against a number, never against another timing.** Two `testing.Benchmark`
+  calls each pick their own iteration count and each meets whatever else the machine was doing during
+  its second, so a ratio or a difference between their `ns/op` is a ratio between two independent
+  samples rather than a fact about the code. The date cascade's linearity guard divided them, and
+  measured this: one two-thousand-issue run read **11.4 ms** against another two-thousand-issue run's
+  **2.4 ms**, slower than the fastest ten-thousand run, while the allocation counts repeated to the
+  unit — 2,300 against 11,173. It compares allocations now, which are deterministic and are the one
+  thing two benchmarks may be held against each other on. A `!race` tag does not make the timing
+  shape sound, because it is a measurement problem and not a wall-clock one, so
+  `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` fails the build on it wherever it appears —
+  including inside a budget file, which is where it came back the second time, and the timeline's pan
+  guard, which is where it came back the third. That one keeps its two runs against each other on the
+  counts and the bytes and holds each frame's time against the frame budget, which is what a timing may
+  be compared with.
 
 Run them the way CI does:
 
@@ -82,11 +98,32 @@ table, which is the same thing as writing down that the budget is no longer held
 |---|---|
 | `internal/app` | `TestBudget_CacheReadForAViewsFirstPaint` |
 | `internal/app` | `TestBudget_CIRunsTheGuardsWithoutTheDetector` |
+| `internal/app` | `TestBudget_DateCascadeCostsNoMoreThanTheIssuesItIsGiven` |
+| `internal/app` | `TestBudget_DateCascadeOverATimelineOfIssues` |
 | `internal/app` | `TestBudget_EveryWallClockAssertionSitsInAGuard` |
 | `internal/app` | `TestBudget_IndexRebuildAtTenThousandIssues` |
 | `internal/app` | `TestBudget_IndexSearchAllocatesOnlyTheAnswerItHandsBack` |
 | `internal/app` | `TestBudget_IndexSearchAtTenThousandIssues` |
+| `internal/app` | `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` |
 | `internal/app` | `TestBudget_TheDocumentNamesEveryGuardAndOnlyRealOnes` |
+| `internal/ui/attach` | `TestBudget_AttachAMemoLookupCostsNothing` |
+| `internal/ui/attach` | `TestBudget_AttachFullRedrawAt200x60` |
+| `internal/ui/attach` | `TestBudget_AttachKeystrokeToFrame` |
+| `internal/ui/attach` | `TestBudget_AttachRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/attach` | `TestBudget_AttachScrollingCostsTheSameOnTwoThousandFilesAsOnTwenty` |
+| `internal/ui/backlog` | `TestBudget_BacklogAMemoMissCostsOneRowAndNotAWindow` |
+| `internal/ui/backlog` | `TestBudget_BacklogFullRedrawAt200x60` |
+| `internal/ui/backlog` | `TestBudget_BacklogKeystrokeToFrameAtTenThousandIssues` |
+| `internal/ui/backlog` | `TestBudget_BacklogPickingAnIssueCostsOneRowAndTheFrame` |
+| `internal/ui/backlog` | `TestBudget_BacklogRegroupingAfterAMoveIsOnTheKeystrokeBudget` |
+| `internal/ui/backlog` | `TestBudget_BacklogRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/backlog` | `TestBudget_BacklogScrollingCostsTheSameOnTenThousandRowsAsOnTwenty` |
+| `internal/ui/board` | `TestBudget_ABoardMemoMissCostsTwoLinesAndNotAScreen` |
+| `internal/ui/board` | `TestBudget_BoardCardsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/board` | `TestBudget_BoardColumnsAreVirtualizedAsWellAsItsRows` |
+| `internal/ui/board` | `TestBudget_BoardFullRedrawAt200x60` |
+| `internal/ui/board` | `TestBudget_BoardKeystrokeToFrame` |
+| `internal/ui/board` | `TestBudget_BoardScrollCostsTheFrameAndNothingElse` |
 | `internal/ui/comment` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/comment` | `TestBudget_KeystrokeToFrameOnATenThousandCommentThread` |
 | `internal/ui/comment` | `TestBudget_ScrollingCostsTheSameOnTenThousandCommentsAsOnTwenty` |
@@ -105,6 +142,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/kernel` | `TestBudget_AFrameCostsWhatTheChromeCosts` |
 | `internal/ui/kernel` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/kernel` | `TestBudget_KeystrokeToFrame` |
+| `internal/ui/list` | `TestBudget_AMemoMissCostsOneRowAndNotAWindow` |
 | `internal/ui/list` | `TestBudget_FirstPaintFromCache` |
 | `internal/ui/list` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/list` | `TestBudget_KeystrokeToFrameAtTenThousandRows` |
@@ -113,13 +151,41 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameUnderAFilterThatHasBeenAccepted` |
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameUnderTermsInForce` |
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameWithTheMouseOn` |
-| `internal/ui/list` | `TestBudget_AMemoMissCostsOneRowAndNotAWindow` |
+| `internal/ui/move` | `TestBudget_MoveFullRedrawAt200x60` |
+| `internal/ui/move` | `TestBudget_MoveKeystrokeToFrame` |
+| `internal/ui/move` | `TestBudget_MoveRemapKeystrokeToFrame` |
+| `internal/ui/move` | `TestBudget_MoveRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/move` | `TestBudget_MoveScrollingCostsTheSameOnAThousandIssuesAsOnTwenty` |
 | `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverEveryCachedIssue` |
 | `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverTwoThousandCommands` |
 | `internal/ui/palette` | `TestBudget_PaletteOpeningIsOnTheKeystrokeBudget` |
+| `internal/ui/plan` | `TestBudget_APlansMemoMissCostsTwoRowsAndNotAWindow` |
+| `internal/ui/plan` | `TestBudget_PlanRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/plan` | `TestBudget_PlansFullRedrawAt200x60` |
+| `internal/ui/plan` | `TestBudget_PlansKeystrokeToFrame` |
+| `internal/ui/plan` | `TestBudget_PlansScrollingCostsTheSameOnTwoThousandPlansAsOnTwenty` |
+| `internal/ui/plan` | `TestBudget_PlansStandingStillCostsTheFrameAndNothingElse` |
+| `internal/ui/release` | `TestBudget_ReleaseFlowFullRedrawAt200x60` |
+| `internal/ui/release` | `TestBudget_ReleaseFlowScrollingCostsTheSameOnTwoThousandVersionsAsOnTwenty` |
+| `internal/ui/release` | `TestBudget_ReleasesAMemoMissCostsTheRowsThatMovedAndNotAWindow` |
+| `internal/ui/release` | `TestBudget_ReleasesFullRedrawAt200x60` |
+| `internal/ui/release` | `TestBudget_ReleasesKeystrokeToFrame` |
+| `internal/ui/release` | `TestBudget_ReleasesRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/release` | `TestBudget_ReleasesScrollingCostsTheSameOnTwoThousandVersionsAsOnTwenty` |
 | `internal/ui/richtext` | `TestBudget_Render` |
 | `internal/ui/richtext` | `TestBudget_ScalesWithTheDocument` |
 | `internal/ui/richtext` | `TestBudget_Summary` |
+| `internal/ui/sprint` | `TestBudget_SprintRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/sprint` | `TestBudget_SprintScrollingCostsTheSameOnTwoThousandSprintsAsOnTwenty` |
+| `internal/ui/sprint` | `TestBudget_SprintsFullRedrawAt200x60` |
+| `internal/ui/sprint` | `TestBudget_SprintsKeystrokeToFrame` |
+| `internal/ui/timeline` | `TestBudget_TimelineAMemoMissCostsThreeRowsAndNotAWindow` |
+| `internal/ui/timeline` | `TestBudget_TimelineAZoomRepaintsAWindowAndNotTheWholeChart` |
+| `internal/ui/timeline` | `TestBudget_TimelineFullRedrawAt200x60` |
+| `internal/ui/timeline` | `TestBudget_TimelineKeystrokeToFrameAtTenThousandBars` |
+| `internal/ui/timeline` | `TestBudget_TimelinePanningCostsTheSameOverAThousandYearsAsOverTen` |
+| `internal/ui/timeline` | `TestBudget_TimelineRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/timeline` | `TestBudget_TimelineScrollingCostsTheSameOnTenThousandBarsAsOnTwenty` |
 
 <!-- /budget-guards -->
 

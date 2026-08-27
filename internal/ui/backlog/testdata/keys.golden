@@ -1,0 +1,19 @@
+browsing with nothing picked
+  acts   space pick · v pick all · m move
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
+  full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog]
+something picked
+  acts   space pick · v pick all · m move · x unpick all
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
+  full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, x unpick everything]
+choosing where they go
+  acts   enter move here · esc cancel
+  full   [↓/j down, ↑/k up]
+  full   [enter move them here, esc leave them where they are]
+confirming the move
+  acts   y go ahead · esc cancel
+  full   [y go ahead, esc leave them where they are]
+a move in flight
+  acts   

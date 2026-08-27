@@ -1,0 +1,24 @@
+Timeline of PROJ                                                   checked 09:00  24 of 24 dated  2025-02-24 -> 2026-03-30  one column: week
+  KEY      SUMMARY                                 SOURCE      Mar  Apr May Jun  Jul Aug Sep  Oct Nov Dec  Jan Feb Mar                      
+--------------------------------------------------------------||----|---|---|----|---|---|----|---|---|----|---|---v------------------------
+                                                                                                          *1.0         *2.0                 
+                                                                                                               | |  |                       
+> PROJ-1   Add the nightly export                  one date   *                                                    |                        
+  PROJ-10  Investigate the release checklist       guessed    ---------------------------------------------        |                        
+  PROJ-11  Document the login flow                 one date   *                                                    |                        
+  PROJ-12  Retire the nightly export               guessed    ----------------------------------------------------------                    
+  PROJ-13  Speed up webhook retries                one date   *                                                    |                        
+  PROJ-14  Fix the onboarding wizard               guessed    ---------------------------------------------        |                        
+  PROJ-2   Rework webhook retries                  guessed    ---------------------------------------------        |                        
+  PROJ-3   Investigate the onboarding wizard       one date   *                                                    |                        
+  PROJ-4   Document CSV import                     guessed    ----------------------------------------------------------                    
+  PROJ-5   Retire the audit trail                  one date   *                                                    |                        
+  PROJ-6   Speed up session expiry                 guessed    ---------------------------------------------        |                        
+  PROJ-7   Fix the search index                    one date   *                                                    |                        
+  PROJ-8   Add invoice rounding                    guessed    ----------------------------------------------------------                    
+  PROJ-9   Rework the mobile layout                one date   *                                                    |                        
+  PROJ-15  Add CSV import                          one date    *                                                   |                        
+  PROJ-16  Rework the audit trail                  guessed     ---------------------------------------------------------                    
+  PROJ-17  Investigate session expiry              one date    *                                                   |                        
+PROJ-1  2025-03-02  the one date there is (created)
+one thing worth knowing about these dates — n says what they are

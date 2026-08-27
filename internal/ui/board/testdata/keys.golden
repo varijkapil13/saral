@@ -1,0 +1,11 @@
+looking at the board
+  acts   enter open · m move · b board
+  full   [↓/j down, ↑/k up, ←/h previous column, →/l next column]
+  full   [pgdn page down, pgup page up, g g first card in this column, G last card in this column]
+  full   [enter open, m move this issue to another column, b another board of this project]
+a card in hand
+  acts   enter move it here · ctrl+g put it back
+  full   [←/h previous column, →/l next column]
+  full   [enter move it to this column, ctrl+g put it back]
+a move out with the site
+  acts   

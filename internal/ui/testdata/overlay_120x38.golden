@@ -1,3 +1,22 @@
+attach
+1-9   saved query           ctrl+k commands
+g 1-9 switch view           ?      help
+esc   back                  q      quit
+r     refresh
+R     refetch everything
+
+backlog
+space pick or unpick this issue                       ↓/j  down         ctrl+d half page down ...
+v     pick every issue in this section                ↑/k  up           ctrl+u half page up
+m     move these issues to a sprint or the backlog    pgdn page down    g g    first row
+                                                      pgup page up      G      last row
+
+board
+enter open                                 ↓/j down               pgdn page down                 ...
+m     move this issue to another column    ↑/k up                 pgup page up
+b     another board of this project        ←/h previous column    g g  first card in this column
+                                           →/l next column        G    last card in this column
+
 comment
 a write a comment    ↓/j  down         ctrl+d half page down    1-9   saved query           ctrl+k commands
 e edit this one      ↑/k  up           ctrl+u half page up      g 1-9 switch view           ?      help
@@ -53,4 +72,49 @@ f     filter by a person, a status, a label    ↑/k  up           ctrl+u half p
 a     all issues                               pgup page up      G      last row          r     refresh
 e     edit this search                                                                    R     refetch everything
 s     save this query to a key
+
+move
+enter use the project under the cursor    ↓/j  down         1-9   saved query           ctrl+k commands
+i     type a project key                  ↑/k  up           g 1-9 switch view           ?      help
+                                          pgdn page down    esc   back                  q      quit
+                                          pgup page up      r     refresh
+                                          home first row    R     refetch everything
+                                          end  last row
+
+plans
+enter show what this plan is made of    ↓/j  down          1-9   saved query           ctrl+k commands
+                                        ↑/k  up            g 1-9 switch view           ?      help
+                                        pgdn page down     esc   back                  q      quit
+                                        pgup page up       r     refresh
+                                        home first plan    R     refetch everything
+                                        end  last plan
+
+release.flow
+enter choose what happens to the open issues    ↓/j down    1-9   saved query           ctrl+k commands
+                                                ↑/k up      g 1-9 switch view           ?      help
+                                                            esc   back                  q      quit
+                                                            r     refresh
+                                                            R     refetch everything
+
+releases
+enter release this version       ↓/j  down             1-9   saved query           ctrl+k commands
+n     new version                ↑/k  up               g 1-9 switch view           ?      help
+e     edit this version          pgdn page down        esc   back                  q      quit
+A     archive or unarchive it    pgup page up          r     refresh
+                                 g g  first version    R     refetch everything
+                                 G    last version
+
+sprints
+o show or hide closed sprints    1-9   saved query           ctrl+k commands
+                                 g 1-9 switch view           ?      help
+                                 esc   back                  q      quit
+                                 r     refresh
+                                 R     refetch everything
+
+timeline
+n where these dates came from    1-9   saved query           ctrl+k commands
+                                 g 1-9 switch view           ?      help
+                                 esc   back                  q      quit
+                                 r     refresh
+                                 R     refetch everything
 

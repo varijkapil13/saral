@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -58,6 +59,7 @@ type Client struct {
 	concurrency int
 	gate        chan struct{}
 	flight      *singleflight.Group
+	attachMeta  *attachmentMetaCache
 
 	// joined, when set, is called once per caller that has been registered with
 	// the flight for a key. A test coalescing N callers cannot otherwise know
@@ -97,6 +99,7 @@ func New(site, email, token string, opts ...Option) (*Client, error) {
 		agent:       defaultUserAgent,
 		concurrency: DefaultMaxConcurrent,
 		flight:      &singleflight.Group{},
+		attachMeta:  &attachmentMetaCache{},
 	}
 	for _, o := range opts {
 		if o != nil {
@@ -184,7 +187,13 @@ func defaultHTTPClient(concurrency int) *http.Client {
 	// A whole-client Timeout would also bound reading an attachment body, so
 	// the bound is on how long the site may take to start answering.
 	t.ResponseHeaderTimeout = 30 * time.Second
-	return &http.Client{Transport: t}
+	return &http.Client{
+		Transport: t,
+		// Go carries the Authorization header across a redirect it judges to stay
+		// on one host, and on loopback every redirect stays on one host, so no
+		// redirect is followed here: the caller decides what crosses.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 }
 
 // parseSite reads what a profile calls a site — "example.atlassian.net",
@@ -395,6 +404,25 @@ func (c *Client) attempt(ctx context.Context, pending call) (*response, error) {
 	}
 	defer c.release()
 
+	req, err := c.newRequest(ctx, pending)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = res.Body.Close() }()
+	payload, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	return &response{status: res.StatusCode, header: res.Header, body: payload}, nil
+}
+
+// newRequest builds the HTTP request one attempt sends. The credential is
+// attached last, so a caller's own header cannot replace it.
+func (c *Client) newRequest(ctx context.Context, pending call) (*http.Request, error) {
 	var body io.Reader
 	if len(pending.encoded) > 0 {
 		body = bytes.NewReader(pending.encoded)
@@ -413,19 +441,114 @@ func (c *Client) attempt(ctx context.Context, pending call) (*response, error) {
 	for key, values := range pending.header {
 		req.Header[http.CanonicalHeaderKey(key)] = slices.Clone(values)
 	}
-	// Authorising last is what stops a caller's own header from replacing it.
 	c.creds.authorize(req)
+	return req, nil
+}
 
+// streamErrorLimit bounds the body the streaming path buffers to find a reason
+// in: nothing says a site cannot answer an error envelope enormously.
+const streamErrorLimit = 64 << 10
+
+// stream is a response whose body has not been read, so that a download copies
+// the bytes into the caller's writer rather than through a []byte the size of the
+// file.
+//
+// The caller closes it on every path. Closing is also what gives back the
+// concurrency slot the request holds, so a stream left open holds one.
+type stream struct {
+	status int
+	// op names the request this body came from, which is not always the Jira
+	// endpoint: a download's bytes arrive from the host it was redirected to.
+	op     string
+	header http.Header
+	body   io.ReadCloser
+
+	shut sync.Once
+	done func()
+}
+
+func (s *stream) close() {
+	if s == nil {
+		return
+	}
+	s.shut.Do(func() {
+		if s.body != nil {
+			_ = s.body.Close()
+		}
+		if s.done != nil {
+			s.done()
+		}
+	})
+}
+
+// doStream sends a request and hands back the open response body, classifying a
+// refusal and retrying a safe failure exactly as do does. answered says which
+// statuses this caller reads the body of rather than treats as a refusal, which
+// is how a download gets to see the 303 it has to follow itself.
+//
+// One body cannot be read twice, so a stream is neither coalesced nor retried
+// once its first byte is out.
+func (c *Client) doStream(ctx context.Context, r request, answered func(status int) bool) (*stream, error) {
+	encoded, contentType, err := encodeBody(r)
+	if err != nil {
+		return nil, err
+	}
+	pending := call{request: r, encoded: encoded, contentType: contentType}
+	for attempt := 1; ; attempt++ {
+		open, resp, err := c.streamAttempt(ctx, pending, answered)
+		if err == nil && open != nil {
+			return open, nil
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		failure := c.failure(pending.request, resp, err)
+		if attempt >= c.retry.Attempts || !retryable(pending.request, resp, err) {
+			return nil, failure
+		}
+		if waitErr := c.clock.Wait(ctx, c.waitFor(failure, attempt)); waitErr != nil {
+			return nil, waitErr
+		}
+	}
+}
+
+// streamAttempt sends one attempt of a streaming request. A status the caller does
+// not read is buffered and handed back to be classified like any other refusal.
+func (c *Client) streamAttempt(ctx context.Context, pending call, answered func(int) bool) (*stream, *response, error) {
+	if err := c.acquire(ctx); err != nil {
+		return nil, nil, err
+	}
+	handed := false
+	defer func() {
+		if !handed {
+			c.release()
+		}
+	}()
+
+	req, err := c.newRequest(ctx, pending)
+	if err != nil {
+		return nil, nil, err
+	}
 	res, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	defer func() { _ = res.Body.Close() }()
-	payload, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
+	if !answered(res.StatusCode) {
+		defer func() { _ = res.Body.Close() }()
+		payload, err := io.ReadAll(io.LimitReader(res.Body, streamErrorLimit))
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, &response{status: res.StatusCode, header: res.Header, body: payload}, nil
 	}
-	return &response{status: res.StatusCode, header: res.Header, body: payload}, nil
+	handed = true
+	return &stream{
+		status: res.StatusCode,
+		op:     pending.op(),
+		header: res.Header,
+		body:   res.Body,
+		done:   c.release,
+	}, nil, nil
 }
 
 func (c *Client) endpoint(r request) string {
@@ -503,14 +626,19 @@ func (e jiraError) reasonOr(fallback string) string {
 	return fallback
 }
 
-// parseErrorBody reads the three envelopes a Jira Cloud site refuses in.
+// parseErrorBody reads the four envelopes a Jira Cloud site refuses in.
 //
 // The platform API sends errorMessages and errors, the latter keyed by field.
 // The Agile API sends the same two keys but writes its sentence into errors
 // under the name of a URL parameter, leaving errorMessages empty. Anything that
 // never reaches a Jira handler at all — an unknown route, a method a route does
 // not take — answers RFC 7807 problem+json, where the sentence is detail and
-// title only spells out the status.
+// title only spells out the status. The /bulk/** endpoints send errors as an
+// array of objects instead, each with a message and no field to attach it to.
+//
+// Precedence: errorMessages, message, detail, title if nothing else spoke, then
+// whatever errors held — one key carrying either the object or the array and
+// never both, so the fourth envelope cannot reorder the first three.
 //
 // Nothing here may read the text of a message: the messages are localised, so a
 // rule that depends on their wording holds on an English site only.
@@ -541,6 +669,32 @@ func parseErrorBody(status int, body []byte) jiraError {
 			continue
 		}
 		out.messages = append(out.messages, entry.Message)
+	}
+	out.messages = append(out.messages, parseErrorList(envelope.Errors)...)
+	return out
+}
+
+// parseErrorList reads the errors array the /bulk/** endpoints refuse in, whose
+// entries declare message and nothing else. An entry names no field, so it is a
+// reason whatever the status — two of the bulk routes document this envelope for
+// their 403 and the other two document no 403 at all. errorType, where an entry
+// carries one, is an enum and is never shown.
+func parseErrorList(raw json.RawMessage) []string {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '[' {
+		return nil
+	}
+	var entries []struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(trimmed, &entries); err != nil {
+		return nil
+	}
+	var out []string
+	for _, entry := range entries {
+		if entry.Message != "" {
+			out = append(out, entry.Message)
+		}
 	}
 	return out
 }

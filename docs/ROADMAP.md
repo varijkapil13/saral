@@ -798,25 +798,57 @@ are guesses.
 
 ## Batch 4 — Attachments · parallel ×3
 
-- [ ] **P4.1 — List and download** · [#17](https://github.com/varijkapil13/saral/issues/17) · **owns** `pkg/jira/cloud/attachment.go`
+- [x] **P4.1 — List and download** · [#17](https://github.com/varijkapil13/saral/issues/17) · **owns** `pkg/jira/cloud/attachment.go`
   Ranged download with progress and resume, temp-file-then-rename.
-- [ ] **P4.2 — Upload** · [#18](https://github.com/varijkapil13/saral/issues/18) · same file, second PR (sequential with P4.1)
+- [x] **P4.2 — Upload** · [#18](https://github.com/varijkapil13/saral/issues/18) · same file, second PR (sequential with P4.1)
   Multipart part named `file`, `X-Atlassian-Token: no-check`, multi-file, delete.
-- [ ] **P4.3 — Preview** · [#19](https://github.com/varijkapil13/saral/issues/19) · **owns** `internal/ui/attach/**`
+- [x] **P4.3 — Preview** · [#19](https://github.com/varijkapil13/saral/issues/19) · **owns** `internal/ui/attach/**`
   Inline images via kitty/iTerm2 graphics, chafa half-blocks fallback, name+size last resort;
   system handler for everything else.
+  **The bytes decide the protocol, not the name.** `MimeType` and the extension are both whatever the
+  uploader's machine said, and a graphics escape claiming a format the bytes are not paints itself
+  over the frame — so the file is sniffed before either protocol is claimed, and kitty takes only a
+  PNG (`f=100` is its one encoded format), which is why a JPEG on kitty falls to chafa. Every rung
+  falls to the next carrying the reason it could not be taken, because a pane showing a filename
+  where a picture was expected is otherwise indistinguishable from a broken one.
+  **The signed media URL never leaves the adapter.** The port takes an id and a writer, so this pane
+  has no URL to leak; what it hands chafa and the desktop handler is a file it wrote itself under the
+  cache directory, and a test drives every state asserting the URL reaches no frame, no status line,
+  no argument list and no hand-off. The temp-file-then-rename is here because the port hands over a
+  writer: a cancelled or refused download leaves nothing rather than a file of the right name and the
+  wrong length, and the partial is discarded rather than resumed because nothing here can prove a
+  file left behind is a prefix of this attachment.
+  Reading attachments needs no capability beyond seeing the issue; adding and removing them do, so
+  `CapAttachments` hides `u` and `d` with the site's own reason rather than hiding the pane. The pane
+  cannot pre-empt an oversized upload: `attachment/meta`'s `uploadLimit` is read inside the adapter
+  and is not on `jira.Capabilities`, so the site's number reaches the user only as a refusal.
 
 ## Batch 5 — Releases · parallel ×2
 
-- [ ] **P5.1 — Versions** · [#20](https://github.com/varijkapil13/saral/issues/20) · **owns** `pkg/jira/cloud/version.go`, `internal/ui/release/list*.go`
   CRUD, archive, unresolved counts, bulk fix-version assignment from the list.
-- [ ] **P5.2 — The release flow** · [#21](https://github.com/varijkapil13/saral/issues/21) · **owns** `internal/ui/release/flow*.go`
+  - The adapter half landed: `Versions`, `SaveVersion`, `UnresolvedCount` and `ReleaseVersion` in
+    `pkg/jira/cloud/version.go`, with the release sweeping the open issues itself because
+    `moveUnfixedIssuesTo` is a key nobody has watched work. Still open: `internal/ui/release/list*.go`
+    and bulk fix-version assignment, so the box stays unticked.
+  - **Two divergences the fake has to be corrected for**, both failing in
+    `pkg/jira/cloud/conformance_version_test.go` on purpose until somebody who owns
+    `pkg/jira/jiratest/**` fixes them: `Fake.ReleaseVersion`'s policy switch has no `default`, so an
+    `UnresolvedPolicy` it does not know releases the version instead of being refused; and
+    `fakeUnresolvedOn` counts by status category where the port and the site count by resolution,
+    so an issue that is Done with no resolution is invisible to the fake and stripped by the client.
+- [x] **P5.1 — Versions** · [#20](https://github.com/varijkapil13/saral/issues/20) · **owns** `pkg/jira/cloud/version.go`, `internal/ui/release/list*.go`
+  CRUD, archive, unresolved counts, bulk fix-version assignment from the list. The counts are read one
+  version at a time, when a release screen needs one, and the column says nobody has asked rather than
+  drawing a zero. Bulk fix-version assignment is the release flow's move and strip policies: the port
+  exposes no other way to change an issue's fix versions without replacing the whole array, and the
+  fake cannot be asked at all — see the fix-versions row in `docs/API-NOTES.md`.
+- [x] **P5.2 — The release flow** · [#21](https://github.com/varijkapil13/saral/issues/21) · **owns** `internal/ui/release/flow*.go`
   Check `unresolvedIssueCount`, then offer the same three choices the web app does (move to another
   version / strip the version / release anyway), confirm, then `PUT released: true`.
 
 ## Batch 6 — Sprints and boards · parallel ×3
 
-- [ ] **P6.1 — Board configuration** · [#22](https://github.com/varijkapil13/saral/issues/22) · **owns** `pkg/jira/cloud/board.go`
+- [x] **P6.1 — Board configuration** · [#22](https://github.com/varijkapil13/saral/issues/22) · **owns** `pkg/jira/cloud/board.go`
   Columns by `statusCategory`, estimation field and rank field read from board config — never guessed.
   **Every part of a board config is optional and the absences are not exotic.** A Kanban board sends
   no estimation object at all, which is why `BoardConfig.Estimation` is a pointer; a board may expose
@@ -824,9 +856,19 @@ are guesses.
   ordered by priority rather than by rank. Match everything by id or `untranslatedName`, never by
   display name — on a German instance the field, status and priority names all arrive translated, and
   `clauseNames` follows the translation too.
-- [ ] **P6.2 — Sprint lifecycle** · [#23](https://github.com/varijkapil13/saral/issues/23) · **owns** `pkg/jira/cloud/sprint.go`
+  **One conformance case fails on purpose** until `jiratest.Fake.Boards` trims a project key and
+  refuses a blank one the way `Fake.IssueTypeStatuses` does: the cloud adapter refuses a blank key
+  with a `*jira.ValidationError` naming `projectKey` and the fake answers a `*jira.NotFoundError`, so
+  the rule is one nothing above the port meets.
+- [x] **P6.2 — Sprint lifecycle** · [#23](https://github.com/varijkapil13/saral/issues/23) · **owns** `pkg/jira/cloud/sprint.go`
   `UpdateSprint` over the partial-update `POST`; `StartSprint`/`CompleteSprint` validate state
   locally first. **The raw `PUT` must never be reachable from the port** — it nulls omitted fields.
+  Left two things it could not fix from inside its own paths, both of which P6.3 runs into:
+  [#128](https://github.com/varijkapil13/saral/issues/128), six sprint rules the fake does not hold —
+  including a >50-issue move it refuses and the adapter chunks, so the cap is the endpoint's and not
+  the port's — which `TestSprintLifecycle_RulesTheFakeDoesNotHold` fails on rather than skipping; and
+  [#129](https://github.com/varijkapil13/saral/issues/129), `cloud.PartialMoveError` living in the one
+  package the views may not import.
 - [ ] **P6.3 — Board and backlog views** · [#24](https://github.com/varijkapil13/saral/issues/24) · **owns** `internal/ui/board/**`, `internal/ui/backlog/**`
   Column view, drag or key to move between sprint and backlog (50-issue cap per call), rank-aware
   reorder when the board exposes a rank field. Takes the footer slot PC.2 assigns it; the kernel
@@ -834,23 +876,56 @@ are guesses.
 
 ## Batch 7 — Cross-project move · parallel ×1
 
-- [ ] **P7.1 — Move wizard** · [#25](https://github.com/varijkapil13/saral/issues/25) · **owns** `pkg/jira/cloud/bulkmove.go`, `internal/ui/move/**`
+- [x] **P7.1 — Move wizard** · [#25](https://github.com/varijkapil13/saral/issues/25) · **owns** `pkg/jira/cloud/bulkmove.go`, `internal/ui/move/**`
   Target project and issue type, status remap, mandatory-field resolution, a confirm screen showing
   the full mapping, submit, then poll the task. Hidden with a reason when `BULK_CHANGE` is absent.
   Polls `/bulk/queue/{taskId}`, not `/task/{taskId}` — different shapes, both fixtured by PC.5.
+  **The adapter half has landed:** `BulkMove` and `Task` on `pkg/jira/cloud/bulkmove.go`, both
+  progress registries, the `{retain, type, value}` mandatory-field wrapper, and a both-adapters
+  conformance table. **`internal/ui/move/**` has landed too**, and with it the two things the adapter
+  cannot do for it: it resolves the target's mandatory field set from createmeta and sends the whole
+  group or none of it — any value in `MoveRequest.Fields` opts the whole group out of retaining the
+  rest from source — and its confirm screen says subtasks travel and are retyped. It also maps every
+  source status by id, and refuses a subtask target type because a move cannot name a parent over
+  there.
+
+  **Four gates in `pkg/jira/cloud` fail on purpose**, each on a defect outside this packet's owned
+  paths. `pkg/jira/jiratest/fake.go`: `Task` looks a task up by `ref.ID` and never reads `ref.URL`,
+  so a view that keeps the id and drops the endpoint is green against the fake for its whole life;
+  `TaskStatus.Failed` is filled with issue **keys** while the queue body keys its failures by numeric
+  issue **id**, so one list renders as `EX-1` and the other as `10002`, and `pkg/jira/types.go:1055`
+  documents the wrong one of the two; and an empty `TargetIssueTypeID` is a `NotFoundError` with an
+  empty ID rather than a `ValidationError`. `pkg/jira/cloud/client.go`: `parseErrorBody` reads three
+  refusal envelopes and `/bulk/**` answers a fourth, so a documented 400 from either bulk endpoint
+  reaches the user in this client's words instead of the site's.
 
 ## Batch 8 — Timeline and plans · parallel ×3
 
-- [ ] **P8.1 — Date resolution** · [#26](https://github.com/varijkapil13/saral/issues/26) · **owns** `internal/app/dates.go`
+- [x] **P8.1 — Date resolution** · [#26](https://github.com/varijkapil13/saral/issues/26) · **owns** `internal/app/dates.go`
   The cascade that gives every issue a start and an end (see below). Reports provenance per bar.
+  Rule 4 reads a sprint's dates through `Sprint(ctx, id)`, which W1 landed on the port and on the
+  fake ([#38](https://github.com/varijkapil13/saral/issues/38)): an issue's sprint value carries
+  `{id, name}` and no dates, and the timeline has no board id to look them up with. Two divergences
+  are open against it and each has a failing test in `internal/app/conformance_dates_test.go` rather
+  than a table written around it. **`pkg/jira/cloud` has no `Sprint` method**, so rule 4 answers
+  against the fake and falls through against a site —
+  `TestConformance_RuleFourHasAnImplementationOnBothSidesOfThePort`. And the fake sends a sprint
+  value as options whatever the field list said, where the schema-expanded read a timeline issues
+  gets the raw JSON — `TestConformance_ASprintValueArrivesInTheShapeASchemaExpandedReadSends`. The
+  cascade reads both shapes, so the second costs correctness nothing here and would cost the view
+  everything.
   Rule 4 needs [#38](https://github.com/varijkapil13/saral/issues/38) first: an issue's sprint value
   carries `{id, name}` and no dates, and the timeline has no board id to look them up with.
-- [ ] **P8.2 — Timeline view** · [#27](https://github.com/varijkapil13/saral/issues/27) · **owns** `internal/ui/timeline/**`
+- [x] **P8.2 — Timeline view** · [#27](https://github.com/varijkapil13/saral/issues/27) · **owns** `internal/ui/timeline/**`
   Horizontal bars, zoom by day/week/month/quarter, today marker, version and sprint markers,
   milestone diamonds where only one date resolves. Virtualized like every other list.
 - [ ] **P8.3 — Plans** · [#28](https://github.com/varijkapil13/saral/issues/28) · **owns** `pkg/jira/cloud/plan.go`, `internal/ui/plan/**`
   Real plans where the token has Administer Jira; locally defined plans (projects/filters + date
   mapping from config) everywhere else, with the reason shown.
+  `pkg/jira/cloud/plan.go` has landed; the checkbox waits on `internal/ui/plan/**`. Before the view
+  is written, the fake has to stop putting a project key where the API puts a project id — the
+  divergence is a red case in `TestPlans_BothAdaptersAnswerTheSameWay` and a row in
+  [`docs/API-NOTES.md`](API-NOTES.md).
 
 ## Batch 9 — Ship it · parallel ×3
 

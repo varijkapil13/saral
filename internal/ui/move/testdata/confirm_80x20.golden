@@ -1,0 +1,19 @@
+Move 3 issues out of PROJ
+------------------------------------------------------------------------ confirm
+into OTHER as Story
+  Building -> Building   1 issue
+  Shipped -> Shipped   1 issue
+  Triage -> Triage   1 issue
+  watchers -> not emailed
+  Subtasks travel with their parents and are retyped in OTHER. They count
+  towards the 1000 one move takes, so the site can still refuse this.
+Once submitted the move runs on Jira whether this stays open or not. There is
+no undo.
+  PROJ-1                                    Add the nightly export              
+  PROJ-2                                    Rework webhook retries              
+  PROJ-3                                    Investigate the onboarding wizard   
+
+
+
+
+

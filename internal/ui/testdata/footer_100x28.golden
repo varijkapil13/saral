@@ -1,3 +1,9 @@
+attach
+ Issues                                                                                 ? ctrl+k esc
+backlog
+ Issues  space pick  v pick all  m move                                                 ? ctrl+k esc
+board
+ Issues  enter open  m move  b board                                                    ? ctrl+k esc
 comment
  Issues  a write  e edit  d delete                                                      ? ctrl+k esc
 filter
@@ -12,7 +18,19 @@ issue.move
  Issues  enter choose                                                                   ? ctrl+k esc
 list
  Issues  enter open  f filter by  / filter  a all  e search  s save                       ? ctrl+k q
+move
+ Issues  enter use it  i type a key                                                     ? ctrl+k esc
 onboarding
  Issues  enter continue                                                                       ctrl+k
 palette
  Issues  enter run it  esc close                                                              ctrl+k
+plans
+ Issues  enter sources                                                                  ? ctrl+k esc
+release.flow
+ Issues  enter choose                                                                   ? ctrl+k esc
+releases
+ Issues  enter release  n new  e edit  A archive                                        ? ctrl+k esc
+sprints
+ Issues  o closed                                                                       ? ctrl+k esc
+timeline
+ Issues  n notes                                                                        ? ctrl+k esc

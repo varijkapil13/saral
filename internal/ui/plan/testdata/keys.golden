@@ -1,0 +1,10 @@
+a plan under the cursor
+  acts   enter sources
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first plan, end last plan]
+  full   [enter show what this plan is made of]
+the plan under the cursor already open
+  acts   enter hide
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first plan, end last plan]
+  full   [enter hide what this plan is made of]
+no plan to be on
+  acts   

@@ -245,8 +245,10 @@ func TestOffsetPages_WalksAnAgileEndpointToExhaustion(t *testing.T) {
 			truncateAt: -1, wantItems: 7, wantPages: 3, wantCounted: true,
 		},
 		{
-			name: "neither, so only an empty page ends the walk", items: 5, pageSize: 2,
-			truncateAt: -1, wantItems: 5, wantPages: 4,
+			// The board issue endpoints send neither, and a page shorter than
+			// the length asked for is all there is to end them on.
+			name: "neither, so a page shorter than the one asked for ends the walk", items: 5, pageSize: 2,
+			truncateAt: -1, wantItems: 5, wantPages: 3,
 		},
 		{
 			name: "a total the endpoint then silently truncates against", items: 20, pageSize: 3, total: true,
