@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -20,6 +21,7 @@ import (
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/store"
 	_ "github.com/varijkapil13/saral/internal/ui"
+	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/list"
 	"github.com/varijkapil13/saral/internal/ui/onboarding"
@@ -60,9 +62,10 @@ func main() {
 }
 
 type options struct {
-	profile    string
-	project    string
-	view       string
+	profile string
+	project string
+	// arg is the positional argument, which names a view, an issue or a Jira URL.
+	arg        string
 	theme      string
 	poll       time.Duration
 	mouse      bool
@@ -83,7 +86,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fs.BoolVar(&opt.benchPaint, "bench-first-paint", false, "render one frame, print how long it took, and exit")
 	fs.BoolVar(&opt.showVer, "version", false, "print the version and exit")
 	fs.Usage = func() {
-		_, _ = fmt.Fprint(stderr, "usage: saral [flags] [view]\n\nflags:\n")
+		_, _ = fmt.Fprint(stderr, "usage: saral [flags] [view | issue key | Jira URL]\n\nflags:\n")
 		fs.PrintDefaults()
 	}
 	if len(args) > 0 && args[0] == "version" {
@@ -106,8 +109,13 @@ func run(args []string, stdout, stderr io.Writer) error {
 		_, err := fmt.Fprintf(stdout, "saral %s (%s, %s)\n", version, commit, date)
 		return err
 	}
-	if rest := fs.Args(); len(rest) > 0 {
-		opt.view = rest[0]
+	switch rest := fs.Args(); len(rest) {
+	case 0:
+	case 1:
+		opt.arg = rest[0]
+	default:
+		return fmt.Errorf("saral opens one thing: %s. To scope a session to a project, use --project",
+			strings.Join(rest, " and "))
 	}
 
 	if errs := kernel.RegistrationErrors(); len(errs) > 0 {
@@ -208,12 +216,70 @@ func build(opt options) (deps kernel.Deps, kopts []kernel.Option, notice string,
 	}
 	kopts = []kernel.Option{kernel.WithMouse(mouse)}
 	switch {
-	case opt.view != "":
-		kopts = append(kopts, kernel.WithInitialView(opt.view))
+	case opt.arg != "":
+		opened, argNotice, aerr := argument(opt.arg, profile.Site)
+		if aerr != nil {
+			return deps, nil, notice, releaseCache, aerr
+		}
+		kopts = append(kopts, opened...)
+		// Both, when there are both: one says why nothing will reach the site and
+		// the other why the issue that was asked for is not on screen, and
+		// dropping either leaves a question the status line could have answered.
+		if argNotice != "" {
+			notice = strings.TrimPrefix(notice+" · "+argNotice, " · ")
+		}
 	case firstRun:
 		kopts = append(kopts, kernel.WithInitialView(kernel.SetupViewID))
 	}
 	return deps, kopts, notice, releaseCache, nil
+}
+
+// argument resolves the positional argument: an issue key, a Jira URL, or the ID
+// of a registered view.
+//
+// Anything else is an error rather than nothing. The argument used to be handed
+// to the kernel as a view ID and dropped where no view had it, so `saral PROJ-142`
+// and `saral bord` both opened whichever view held the first footer slot and said
+// nothing about the word that was typed.
+//
+// A URL for another site is named rather than opened: the key would be read
+// against this profile's site, where it is at best a 404 and at worst somebody
+// else's issue with the same key.
+func argument(arg, site string) (opts []kernel.Option, notice string, err error) {
+	if key, ok := app.ParseKey(arg); ok {
+		return []kernel.Option{openIssue(key)}, "", nil
+	}
+	if key, host, ok := app.ParseIssueURL(arg); ok {
+		here, serr := config.NormalizeSite(site)
+		if serr == nil && !strings.EqualFold(here, host) {
+			return nil, fmt.Sprintf("%s is on %s and this profile is on %s, so it was not opened", key, host, here), nil
+		}
+		return []kernel.Option{openIssue(key)}, "", nil
+	}
+	if _, ok := kernel.LookupView(arg); ok {
+		return []kernel.Option{kernel.WithInitialView(arg)}, "", nil
+	}
+	return nil, "", fmt.Errorf("%q is not an issue key, a Jira URL, or one of the views in this build (%s)",
+		arg, strings.Join(viewIDs(), ", "))
+}
+
+// openIssue is the detail pane over whichever root opens, seeded with the key
+// and nothing else: the pane reads the issue itself, and says so in its own
+// words when the site has no such key.
+func openIssue(key string) kernel.Option {
+	return kernel.WithInitialPush(issue.ViewID, key, func(d kernel.Deps) kernel.View {
+		return issue.New(d, jira.Issue{Key: key})
+	})
+}
+
+func viewIDs() []string {
+	specs := kernel.Views()
+	ids := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		ids = append(ids, spec.ID)
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 // openCache opens the profile's cache, and says in words when it could not.

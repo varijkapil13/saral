@@ -354,6 +354,7 @@ func (m Model) summary() []string {
 		m.pair("Token", m.tokenLine()),
 		m.pair("Project", m.projectLine()),
 	)
+	rows = append(rows, m.updateNote()...)
 	if !m.probed {
 		return rows
 	}
@@ -364,6 +365,36 @@ func (m Model) summary() []string {
 	return append(rows, "",
 		m.pair("Dates in", m.datesLine()),
 		m.pair("Images", m.caps.Graphics.String()))
+}
+
+// updateNote says that this run writes over a profile that is already there,
+// and what of it survives. It tells rather than asks: the same account on the
+// same site is the profile the user already has, so there is no second thing to
+// choose between — but the theme, the glyphs, the timeline fields and the
+// searches on the number keys are not on this screen, and somebody who is not
+// told they are kept has every reason to assume they are not.
+func (m Model) updateNote() []string {
+	held, ok := m.target()
+	if !ok {
+		return nil
+	}
+	return m.prose("This updates " + held.Name + ", the profile already there for this account. " +
+		"Its theme, glyphs, timeline fields and saved searches stay as they are.")
+}
+
+// prose wraps a sentence into indented muted rows at the width the body has.
+func (m Model) prose(text string) []string {
+	width := m.width - 2*inputIndent
+	if width < 20 {
+		return nil
+	}
+	lines := strings.Split(ansi.Wordwrap(text, width, ""), "\n")
+	out := make([]string, 0, len(lines)+1)
+	out = append(out, "")
+	for _, line := range lines {
+		out = append(out, indent(m.styles.muted.Render(line)))
+	}
+	return out
 }
 
 func (m Model) datesLine() string {

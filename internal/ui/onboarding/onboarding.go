@@ -10,6 +10,8 @@ package onboarding
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -582,6 +584,9 @@ func (m Model) profileName() string {
 	if m.name != "" {
 		return m.name
 	}
+	if held, ok := m.target(); ok {
+		return held.Name
+	}
 	base := profileNameFor(m.value(fieldSite))
 	name := base
 	for n := 2; ; n++ {
@@ -590,6 +595,41 @@ func (m Model) profileName() string {
 		}
 		name = base + "-" + strconv.Itoa(n)
 	}
+}
+
+// target is the profile this run is re-running over: the one the config file
+// already holds for this account on this site. The same account on one site is
+// one profile, while a second account on it is legitimately a second profile —
+// so the match is on both, and a run that finds one updates it rather than
+// writing a near-copy under a name with a number on the end.
+//
+// The stored site is compared normalised because that is what the file holds and
+// the field holds what was typed; the email is compared case-insensitively,
+// because Jira accepts the address either way and a profile is not a second
+// account for having been typed in capitals.
+func (m Model) target() (config.Profile, bool) {
+	site, err := config.NormalizeSite(hostOf(m.value(fieldSite)))
+	email := m.value(fieldEmail)
+	if err != nil || email == "" {
+		return config.Profile{}, false
+	}
+	// Sorted, because two profiles could match — the file is hand-editable — and
+	// which one a run updates must not depend on map iteration order.
+	for _, name := range slices.Sorted(maps.Keys(m.cfg.Profiles)) {
+		held := m.cfg.Profiles[name]
+		stored, err := config.NormalizeSite(held.Site)
+		if err != nil || stored != site {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(held.Email), email) {
+			continue
+		}
+		if held.Name == "" {
+			held.Name = name
+		}
+		return held, true
+	}
+	return config.Profile{}, false
 }
 
 // profileNameFor turns a host into a bare TOML key: the first label, lowercased,

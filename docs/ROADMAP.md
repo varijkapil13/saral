@@ -336,8 +336,8 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   `EachIssue` for the corpus and `Generation()` for knowing the corpus moved. A session with nowhere to
   cache carries a nil one and every caller copes.
   The clause in `docs/ARCHITECTURE.md` saying the capability probe "is cached in the store" was false
-  and is gone; persisting it needs the kernel, which is
-  [#81](https://github.com/varijkapil13/saral/issues/81).
+  and was removed here, because persisting it honestly needed the kernel. K4 below did it, and the
+  clause is back with the code under it.
 - [x] **P3.3 — Mouse** · [#14](https://github.com/varijkapil13/saral/issues/14) · **owns** `internal/ui/widget/**`, the zone and click wiring plus tests and `testdata/**` in `internal/ui/{list,issue,form,comment,onboarding}`, `docs/{UX,ARCHITECTURE,ROADMAP}.md`
   **The `owns` line above is a correction.** It used to read `internal/ui/widget/zone*.go` + zone
   wiring in own files, and `internal/ui/widget/` did not exist — so on day one this packet owned
@@ -358,9 +358,10 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   clip, so the last field was unreachable by wheel *or* cursor on a short terminal.
   **Two gestures were cut and filed:** drag-to-resize is [#75](https://github.com/varijkapil13/saral/issues/75)
   — there is no divider to drag until a view has two panes, so `widget.Drag` ships tested and bound to
-  nothing for P6.3 — and the right-click context menu is
-  [#76](https://github.com/varijkapil13/saral/issues/76), which needs `kernel.Command` to know what a
-  command applies to.
+  nothing for P6.3 — and the right-click context menu was
+  [#76](https://github.com/varijkapil13/saral/issues/76), cut here because `kernel.Command` cannot say
+  what a command applies to. K3 below built it without teaching it to: the focused view's `Acts`
+  already answer that question, and the kernel already reads them for the footer.
 - [x] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/{index,match}.go`, their tests and benchmarks, `docs/{PERFORMANCE,ROADMAP}.md` · **after P3.2**
   **This row used to promise "instant search over cached issues with no round trip".** Half of that
   already shipped in P1.5: `internal/ui/list` filters as you type with no round trip and no
@@ -388,7 +389,8 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   ranks commands with `app.Pattern`, and the signature was published on #12 and #15 before this
   packet was finished so it could be coded against. `app.Index` itself has no view yet —
   [#85](https://github.com/varijkapil13/saral/issues/85) reaches it from the palette and
-  [#62](https://github.com/varijkapil13/saral/issues/62) from a key jump.
+  [#62](https://github.com/varijkapil13/saral/issues/62) from a key jump — whose command-line half
+  landed in K5 below, and whose in-session gesture is still undecided.
 - [x] **P3.5a — The contextual footer, the `?` overlay and the theme switch** · [#16](https://github.com/varijkapil13/saral/issues/16) · **owns** `internal/ui/kernel/{theme,chrome_test,theme_test}.go`, the chrome functions in `internal/ui/kernel/kernel.go`, the `KeyReporter` lines in `internal/ui/kernel/{view,registry}.go`, `internal/ui/kernel/testdata/**`, the `keys*.go` and `testdata/keys.golden` of `internal/ui/{list,issue,form,comment,onboarding}`, `internal/ui/livekeys_test.go`, `docs/{UX,ARCHITECTURE,ROADMAP}.md`
   Contextual footer showing only valid keys, `?` overlay from the key registry, light/dark/no-color
   themes switchable while the program runs.
@@ -400,8 +402,9 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   `KeysFor` returned one static set however the view's state changed, and six views were advertising
   keys that do nothing in the state the user was in. `kernel.KeyReporter` is how a view answers for
   the state it is in, and all six implement it. `ThemeMsg` existed and nothing sent it; there are now
-  four palette commands and the choice is written back without dropping the rest of the profile
-  ([#63](https://github.com/varijkapil13/saral/issues/63)). Colour stepping down to 256 and 16 was
+  four palette commands and the choice is written back without dropping the rest of the profile —
+  which onboarding then dropped on its next run ([#63](https://github.com/varijkapil13/saral/issues/63)),
+  fixed in K6 below. Colour stepping down to 256 and 16 was
   never missing — bubbletea's renderer does it — so that was a doc correction.
   **The hints bullet moved to P3.1** ([#12](https://github.com/varijkapil13/saral/issues/12)): "after
   you reach an action through the palette three times, the status line notes its key" needs the
@@ -580,11 +583,11 @@ of headroom under the 15 MiB binary gate. So the display renderer is written her
   by side. `layout_test.go` measures both rather than trusting them.
   **The ratio is per machine, in `ui.toml` under the cache directory, and deliberately not in the
   profile.** A pane width belongs to the terminal it was chosen in rather than to a Jira account,
-  `config.toml` is a file people hand each other, and onboarding rebuilds a profile from a zero value
-  and drops what it did not collect ([#63](https://github.com/varijkapil13/saral/issues/63)) — so a
-  field added there would be lost the next time anybody re-checked a token. That bug is neither fixed
-  nor made worse; the split is simply not in its way, which `internal/config` asserts by running that
-  same overwrite over a profile and finding the split still there.
+  `config.toml` is a file people hand each other, and at the time onboarding rebuilt a profile from a
+  zero value and dropped what it did not collect ([#63](https://github.com/varijkapil13/saral/issues/63),
+  since fixed in K6 below) — so a field added there would have been lost the next time anybody
+  re-checked a token. The split was kept out of its way either way, which `internal/config` asserts by
+  running that same overwrite over a profile and finding the split still there.
   **A drag is a motion stream, so it was measured.** A frame drawn while the boundary is held costs
   what a frame at rest costs — two allocations at 120×40, unchanged. A motion that moves the boundary
   nowhere costs no render. A motion that does move it is a resize of two regions and costs slightly
@@ -680,10 +683,13 @@ lands first, because `pkg/jira/port.go` blocks everyone while it is open.
   is unchanged at 297, and the picker is virtualized and memoized — 3 allocations a frame scrolling
   two thousand labels, 94µs from keystroke to frame.
 
-## Kernel · being covered is not being thrown away
+## Kernel · corrections to the root model
 
-Found while building the comment thread. The kernel said one thing — `FocusMsg{Focused: false}` — in
-three situations that mean three different things, and every view had to guess which it was in.
+K1 and K2 were found while building the comment thread: the kernel said one thing —
+`FocusMsg{Focused: false}` — in three situations that mean three different things, and every view had
+to guess which it was in. K3 to K6 are the backlog this section grew afterwards, each one a promise a
+doc made that the code did not keep. None of them changes the `View`, `Deps` or `Command` contract:
+eight views are built against it and it is closed.
 
 - [x] **K1 — A view learns when it is being discarded** · [#124](https://github.com/varijkapil13/saral/issues/124) ·
   **owns** `internal/ui/kernel/**`, the focus and fetch handling of
@@ -754,6 +760,107 @@ three situations that mean three different things, and every view had to guess w
   each answer back until the palette is up so that the delivery decision is really made with the view
   underneath. Every guard was checked by mutation: removing the kernel's routing, and dropping the
   address from any one view, turns exactly that view's case red.
+
+- [x] **K3 — The right-click menu, built from what the focused view says applies** ·
+  [#76](https://github.com/varijkapil13/saral/issues/76) ·
+  **owns** `internal/ui/kernel/{menu.go,menu_test.go}`, the mouse, key and chrome hooks in
+  `internal/ui/kernel/kernel.go`, `internal/ui/kernel/testdata/menu_*.golden`,
+  `internal/ui/{menu_test.go,testdata/menu_120x38.golden}`, `docs/{UX,ROADMAP}.md`
+  `docs/UX.md`'s mouse table promised *right-click a row → the actions valid for it* and P3.3 cut it,
+  because `kernel.Command` has `Requires` — a capability key — and nothing that says what a command
+  applies to. The recommendation on the issue was a `Command.Scope` field plus an adoption in each of
+  the five `register.go` files. **That is not what this does.** The kernel already knows the focused
+  view and the view already publishes its `Acts`, which is by definition the inventory of what can be
+  done to the thing on screen and already moves with the view's state through `KeyReporter`. So the
+  menu is the footer's middle cell in full, and **the kernel contract does not move**: no field on
+  `Command`, no method on `View`, no registrar swept.
+  **Choosing an entry delivers the binding's first stroke** through `handleKey`, which is the rule a
+  footer-action click already follows, so key, palette and pointer cannot drift into three
+  implementations of one action.
+  **Row granularity, and the row is the focused one** — recorded in `docs/UX.md` before any code:
+  only the view can turn a coordinate into a row, so a kernel that guessed would offer *delete*
+  against the wrong issue. The right-click is forwarded to the focused view first, which is the seam
+  for a view to adopt *right-click selects this row*; no view does yet, and that is a per-view
+  follow-up rather than a kernel change.
+  **A view with no `Acts` opens no menu and says so.** There is no keybinding for the menu and none is
+  invented: `g` is the slot prefix, and every entry in the menu is already a key and a palette command.
+  **The menu takes the body, like `?`, and not a floating box at the pointer.** Splicing one into the
+  view's own lines means cutting strings that carry the zone markers a click is resolved through, and
+  half the frame's mouse targets would stop answering — the boundary the overlay already respects.
+  Held over the real views rather than a stub: `internal/ui/menu_test.go` opens the menu on every
+  registered view and keeps a golden of all seventeen, asserts that every action a view publishes is
+  named in it — the row folds what does not fit into a `+N` and the menu does not — and drives
+  right-click-then-enter on the issue list end to end. The one view that publishes nothing, the
+  attachment pane with nothing attached and no permission to attach, is asserted to explain itself
+  instead. Every guard checked by mutation: dropping the right-click branch, the key interception,
+  the capturing guard, the forwarded click, the stroke delivery or the footer's own row each turns
+  exactly the case that covers it red.
+
+- [x] **K4 — What the token can do, kept between runs** ·
+  [#81](https://github.com/varijkapil13/saral/issues/81) ·
+  **owns** `internal/app/{cache.go,caps_test.go}`, the capability handling in
+  `internal/ui/kernel/kernel.go`, `internal/ui/kernel/caps_test.go`, the capability half of
+  `cmd/saral/main_test.go`, `docs/{ARCHITECTURE,UX,ROADMAP}.md`
+  `deps.Caps` was the zero `jira.Capabilities` for the whole first frame, so every gated view was
+  hidden with nothing to say about why and `saral board` fell through to the first footer slot without
+  a word. `app.KindCaps` keeps the last answer per project — `*` for a session scoped to none, which
+  is a real answer about the site rather than the absence of one — under a **one-hour TTL**, and
+  `kernel.New` installs it before the first frame.
+  **A stored answer gates, and does not merely pre-fill.** Pre-filling without gating is exactly what
+  the zero value already did. The cost of a stale positive is a request that comes back 403 with the
+  site's own sentence, which is the same failure as a permission revoked a second after a live probe
+  and one the kernel already survives.
+  **Three things make that safe.** `cloud.capsVoid` returns an error rather than an all-negative
+  answer, so an expired token, a rate limit or one dropped packet leaves the stored answer standing
+  instead of writing five denials to disk where they would outlive the minute that caused them. `Init`
+  re-asks unconditionally whatever the entry's age, reaching views through `CapabilitiesMsg` exactly
+  as `R` and a project switch do. And only the kernel's own probe is written: a `CapabilitiesMsg` from
+  a view is applied and not stored, because onboarding probes the site being set up.
+  **Past the TTL the answer is still served, with one line saying when it was last checked**, taken
+  down by the probe that settles it and only if it is still the line there — the composition root's
+  startup notice lands on the same row.
+  **`Graphics` is deliberately not stored** (it is what this terminal can draw, and a stored `kitty`
+  answer in a terminal that cannot speak it prints escape bytes over the frame), and `TimeZone` is
+  stored by name, with the sentence that says so when this machine cannot load it.
+  Also fixes a latent state this made visible: a build whose every view is gated had an empty stack
+  until an answer arrived and nothing re-ran the choice, so the frame said no views were registered
+  for the rest of the run.
+
+- [x] **K5 — `saral PROJ-142`, and an argument that names nothing** ·
+  [#62](https://github.com/varijkapil13/saral/issues/62) ·
+  **owns** `internal/app/{issuekey.go,issuekey_test.go}`, the argument handling in
+  `cmd/saral/{main.go,main_test.go}`, `kernel.WithInitialPush` in `internal/ui/kernel/kernel.go`,
+  `docs/{UX,ROADMAP}.md`
+  **Half of #62, and the half that was determined.** `app.ParseKey` reads the shape of an issue key —
+  a **shape**, never a claim the issue exists, because the project key charset is per-instance and a
+  project can be renamed — and `app.ParseIssueURL` reads the key out of a pasted browse, board or
+  backlog URL and hands back the host, so a URL for another site is named rather than read against
+  this one. `cmd/saral` resolves the positional argument in that order and then as a view ID, and
+  **errors naming the views it does know** when it is none of them: an unrecognised argument used to be
+  handed to the kernel as a view ID and dropped, so `saral PROJ-142` and `saral bord` both opened the
+  issue list. A second positional argument is refused with a pointer at `--project`.
+  `kernel.WithInitialPush` is how the pane reaches the stack: an issue key names something no registry
+  can build, so the composition root supplies the constructor and the kernel calls it at `Init`, with
+  the complete `Deps` and after the root under it has initialised.
+  **The in-session gesture is deliberately not here.** `g` is the view-slot prefix and what completes
+  it for a key is a decision nobody has taken; #62 stays open holding that half and the palette entry
+  that goes with it, and `docs/UX.md` says which half is built.
+
+- [x] **K6 — Re-running setup updates the profile it finds** ·
+  [#63](https://github.com/varijkapil13/saral/issues/63) ·
+  **owns** `internal/ui/onboarding/**`, `docs/{ARCHITECTURE,UX,ROADMAP}.md`
+  The symptom on the issue is real and its mechanism is not: onboarding never overwrote anything.
+  `profileName()` skips every taken name, so re-running setup for a site somebody already had wrote a
+  **second** profile — `example-2`, built from a zero value and the four fields the wizard collects —
+  and made it active, leaving the first intact and unreachable. Either way the user has no theme, no
+  glyph set, no timeline fields and no saved queries, so the number keys stop working.
+  **The profile a run is re-running over is matched on site *and* account email**: the same account on
+  one site is one profile, a second account on it is legitimately a second profile. Sites are compared
+  normalised, because the file holds a bare lowercase host and the field holds whatever was pasted,
+  and email case is folded. The four collected fields are the only ones replaced.
+  **The review screen tells rather than asks**, naming the profile being updated and what survives:
+  there is no second thing to choose between, and somebody who is not told has every reason to assume
+  their theme is about to go.
 
 ## W1 · the seam Batches 4 to 8 code against
 
