@@ -981,7 +981,7 @@ are guesses.
   the port's — which `TestSprintLifecycle_RulesTheFakeDoesNotHold` fails on rather than skipping; and
   [#129](https://github.com/varijkapil13/saral/issues/129), `cloud.PartialMoveError` living in the one
   package the views may not import.
-- [ ] **P6.3 — Board and backlog views** · [#24](https://github.com/varijkapil13/saral/issues/24) · **owns** `internal/ui/board/**`, `internal/ui/backlog/**`
+- [x] **P6.3 — Board and backlog views** · [#24](https://github.com/varijkapil13/saral/issues/24) · **owns** `internal/ui/board/**`, `internal/ui/backlog/**`
   Column view, drag or key to move between sprint and backlog (50-issue cap per call), rank-aware
   reorder when the board exposes a rank field. Takes the footer slot PC.2 assigns it; the kernel
   rejects a duplicate at startup, so this cannot be settled by guessing.
@@ -1031,7 +1031,7 @@ are guesses.
 - [x] **P8.2 — Timeline view** · [#27](https://github.com/varijkapil13/saral/issues/27) · **owns** `internal/ui/timeline/**`
   Horizontal bars, zoom by day/week/month/quarter, today marker, version and sprint markers,
   milestone diamonds where only one date resolves. Virtualized like every other list.
-- [ ] **P8.3 — Plans** · [#28](https://github.com/varijkapil13/saral/issues/28) · **owns** `pkg/jira/cloud/plan.go`, `internal/ui/plan/**`
+- [x] **P8.3 — Plans** · [#28](https://github.com/varijkapil13/saral/issues/28) · **owns** `pkg/jira/cloud/plan.go`, `internal/ui/plan/**`
   Real plans where the token has Administer Jira; locally defined plans (projects/filters + date
   mapping from config) everywhere else, with the reason shown.
   `pkg/jira/cloud/plan.go` has landed; the checkbox waits on `internal/ui/plan/**`. Before the view
