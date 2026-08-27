@@ -236,6 +236,53 @@ func (f *field) clear() {
 	f.rev++
 }
 
+// stated is what Jira says it will put in this field if the request leaves it
+// out, and whether it says anything at all. It is shown and never put in the
+// widget: seeding the widget would make the field non-empty, which puts the
+// value in the FieldSet and sends it, and a default the client sends explicitly
+// is a default the project can no longer change.
+func (f *field) stated() (string, bool) {
+	if !f.meta.HasDefault {
+		return "", false
+	}
+	return defaultText(f.meta.Default), true
+}
+
+// defaultText spells a stated default. The empty string is the answer for a
+// screen that says a field has a default without naming it — the reporter comes
+// from the credential — and for a shape with no short form to show.
+func defaultText(v jira.FieldValue) string {
+	switch v.Kind {
+	case jira.KindText, jira.KindUnknown:
+		return strings.TrimSpace(v.Text)
+	case jira.KindNumber:
+		return strconv.FormatFloat(v.Number, 'f', -1, 64)
+	case jira.KindBool:
+		if v.Bool {
+			return "yes"
+		}
+		return "no"
+	case jira.KindDate:
+		return v.Date.String()
+	case jira.KindTime:
+		return v.Time.Format("2006-01-02 15:04")
+	case jira.KindOption, jira.KindOptions:
+		labels := make([]string, 0, len(v.Options))
+		for _, option := range v.Options {
+			labels = append(labels, cascadeLabel(option))
+		}
+		return strings.Join(labels, ", ")
+	case jira.KindUser, jira.KindUsers:
+		names := make([]string, 0, len(v.Users))
+		for _, user := range v.Users {
+			names = append(names, userOption(user).Label)
+		}
+		return strings.Join(names, ", ")
+	default:
+		return ""
+	}
+}
+
 // display is the value as the field list shows it.
 func (f *field) display() string {
 	if f.kind.chooses() {

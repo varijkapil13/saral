@@ -169,9 +169,44 @@ that names the method — `jira.Identifier` for `Me`. Each case builds a site in
 terms (a replay server for `cloud`, an option for `jiratest`) and then asserts the same thing about
 the answer, so a divergence fails on the adapter that has it.
 
-Three tables stand beside each other today: `Me` in `conformance_test.go`, the five methods a filter
-picker calls in `conformance_people_test.go`, and the account on an issue in
-`conformance_search_test.go` — the last because the adapter dropped `accountType` from an issue read
-while the picker badged app accounts by it, so one screen said an account was an app and the next
-said nothing. A new adapter method is a new table beside them; a harness over all 34 port methods is
-[#74](https://github.com/varijkapil13/saral/issues/74) and deliberately not this.
+Eleven files of tables stand beside each other today, covering 30 of the port's 42 methods. Some are
+there because a divergence was found the hard way: `conformance_search_test.go` exists because the
+adapter dropped `accountType` from an issue read while the picker badged app accounts by it, so one
+screen said an account was an app and the next said nothing. `conformance_meta_test.go` exists because
+a create screen states a default the port had no slot for.
+
+### Adding a method's cases
+
+1. **Write the table beside the others**, in a file named `conformance_<area>_test.go`. Take the port
+   *role* that names the method — `jira.Identifier` for `Me`, `jira.SchemaReader` for `CreateMeta` —
+   so the table's own type says which part of Jira it needs.
+2. **One builder per adapter.** The two configure a site in terms that will never converge, so each
+   case opens its own: `jiratest.NewServer(...)` plus `testClient` for `cloud`, `conformFake(t)` plus
+   options for `jiratest`. The assertion is written once and meets both.
+3. **Assert properties, not values, wherever the two sites legitimately differ.** The fixture site's
+   priorities are not the fake's, so a case about a default asserts that it arrives as one identified,
+   labelled option — not that it says `Medium`.
+4. **Name the test function `..._BothAdapters...`** or, for a rule both refuse, `..._NeitherAdapter...`.
+   That name is what marks the file as a table: it is the one statement in it that says the
+   assertions inside are run against both sides.
+5. **The case set a method owes**: the normal answer with every domain field populated the same way by
+   both, the answer that is well-formed and empty, and each typed failure the port promises
+   (`*jira.AuthError`, `*jira.CapabilityError`, `*jira.RateLimitError`, `*jira.TransportError`,
+   `*jira.NotFoundError`, `*jira.ValidationError`) that the method can produce.
+6. **Delete the method's entry from `noCaseYet`** in `internal/arch/conformance_test.go`, in the same
+   change.
+
+### What stops a method being silently uncovered
+
+`internal/arch/conformance_test.go` enumerates `jira.Client` by reflection, enumerates the methods the
+tables call, and fails on a method that is in neither the covered set nor `noCaseYet` — an explicit
+per-method list of the ones no table covers, each entry carrying what a table for it would have to
+establish. A packet deletes one entry at a time. An entry whose method has since been covered fails
+too, so the list cannot outlive the gap it describes, and an entry naming a method the port no longer
+declares fails as well.
+
+It counts tables, not assertions. It proves a conformance file names the method and runs something
+against both adapters; it does not prove the two are asserted to answer the same way, that the case
+set in point 5 is complete, or that the call site is more than setup for another method's case. That
+limit is written into its own failure message, because a guard that overstates what it holds is worse
+than none.

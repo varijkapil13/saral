@@ -117,6 +117,17 @@ type Model struct {
 	// it because that derives a fresh default.
 	widened bool
 
+	// asked and answered track the one question a session asks about the
+	// credential: whether the site has anything assigned to this account
+	// anywhere. It is asked once — the answer is about the token, which does not
+	// change while the program runs — and a project switch does not ask again.
+	asked    bool
+	answered bool
+	// assignedNowhere is that answer. It is why the search on screen is not the
+	// one this view opens on, and the pane says so for as long as the list is
+	// empty.
+	assignedNowhere bool
+
 	// saved is the kernel's set of saved queries, as this view was built and as
 	// the kernel last changed it, kept so that binding a key can name what that
 	// key already runs.
@@ -262,9 +273,30 @@ type ClearFilterMsg struct{}
 // Init asks the site for what the first frame could not draw from disk.
 func (m *Model) Init() tea.Cmd {
 	if m.loaded {
-		return tea.Batch(m.revalidate(), m.pageAheadIfNeeded())
+		return tea.Batch(m.revalidate(), m.pageAheadIfNeeded(), m.probeAssignment())
 	}
-	return m.load()
+	return tea.Batch(m.load(), m.probeAssignment())
+}
+
+// probeAssignment asks whether this credential belongs to an account anybody
+// assigns work to. The search a session opens on narrows by currentUser(), which
+// resolves for a service token and matches nothing at all, so without an answer
+// the opening frame is empty and the reason for it is a guess.
+//
+// It costs a second round trip, and it is skipped wherever the answer is already
+// in hand: rows for the default off disk are proof of work, and an unscoped
+// session's own default asks the same question.
+func (m *Model) probeAssignment() tea.Cmd {
+	if m.search == nil || m.asked || m.answered || !m.defaulted || len(m.issues) > 0 {
+		return nil
+	}
+	jql := probeQuery()
+	if jql == m.jql {
+		return nil
+	}
+	m.asked = true
+	ctx, cancel := context.WithCancel(context.Background())
+	return kernel.Reply(withCancel(cancel, probeAssigned(ctx, m.search, jql)), m.addr)
 }
 
 // revalidate re-reads rows that came off disk, and only once they are past their
@@ -341,6 +373,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case failedMsg:
 		cmd = m.failed(msg)
+
+	case assignedMsg:
+		cmd = m.assigned(msg)
 
 	case pollMsg:
 		cmd = m.polled(msg)
@@ -1206,6 +1241,9 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 	default:
 		lines = append(lines, m.styles.muted.Render("  Nothing matches this search."),
 			m.styles.muted.Render("  "+m.jql))
+		if m.defaulted && m.assignedNowhere {
+			lines = append(lines, "", m.styles.muted.Render("  "+nothingAssignedPane))
+		}
 	}
 	for len(lines)-at < h {
 		lines = append(lines, "")

@@ -260,15 +260,16 @@ func (t apiTransition) domain() jira.Transition {
 
 // apiTransitionField is one field on a transition screen.
 type apiTransitionField struct {
-	Required        bool           `json:"required"`
-	Schema          apiFieldSchema `json:"schema"`
-	Name            string         `json:"name"`
-	Key             string         `json:"key"`
-	FieldID         string         `json:"fieldId"`
-	Operations      []string       `json:"operations"`
-	HasDefaultValue bool           `json:"hasDefaultValue"`
-	AllowedValues   []apiOption    `json:"allowedValues"`
-	AutoCompleteURL string         `json:"autoCompleteUrl"`
+	Required        bool            `json:"required"`
+	Schema          apiFieldSchema  `json:"schema"`
+	Name            string          `json:"name"`
+	Key             string          `json:"key"`
+	FieldID         string          `json:"fieldId"`
+	Operations      []string        `json:"operations"`
+	HasDefaultValue bool            `json:"hasDefaultValue"`
+	DefaultValue    json.RawMessage `json:"defaultValue"`
+	AllowedValues   []apiOption     `json:"allowedValues"`
+	AutoCompleteURL string          `json:"autoCompleteUrl"`
 }
 
 // transitionFields flattens the screen's field map into a stable order:
@@ -301,11 +302,13 @@ func (f apiTransitionField) domain(mapKey string) jira.FieldMeta {
 			allowed = append(allowed, option)
 		}
 	}
+	schema := f.Schema.domain()
 	return jira.FieldMeta{
-		Field:           jira.FieldRef{ID: id, Name: f.Name, Schema: f.Schema.domain()},
+		Field:           jira.FieldRef{ID: id, Name: f.Name, Schema: schema},
 		Name:            f.Name,
 		Required:        f.Required,
 		HasDefault:      f.HasDefaultValue,
+		Default:         defaultFieldValue(f.HasDefaultValue, f.DefaultValue, schema),
 		Operations:      slices.Clone(f.Operations),
 		AllowedValues:   allowed,
 		AutoCompleteURL: f.AutoCompleteURL,

@@ -711,10 +711,21 @@ func (p IssuePatch) IsEmpty() bool {
 
 // FieldMeta describes one field on a create, edit or transition screen.
 type FieldMeta struct {
-	Field           FieldRef
-	Name            string
-	Required        bool
-	HasDefault      bool
+	Field    FieldRef
+	Name     string
+	Required bool
+	// HasDefault is the site saying it will fill this field in when the request
+	// omits it.
+	HasDefault bool
+	// Default is what it will fill it in with, and is meaningful only when
+	// HasDefault. A screen may say there is a default and not say what it is —
+	// Jira sends a null beside hasDefaultValue true for the reporter — and that
+	// arrives here as KindEmpty, which is a different answer from no default.
+	//
+	// It is for showing, not for sending. A caller that seeds a write with it
+	// turns a server-side default into an explicit value in the request, and the
+	// project's default then stops applying to anything this client creates.
+	Default         FieldValue
 	Operations      []string
 	AllowedValues   []Option
 	AutoCompleteURL string

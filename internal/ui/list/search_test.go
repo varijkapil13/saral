@@ -1,8 +1,12 @@
 package list
 
 import (
+	"context"
+	"errors"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -147,13 +151,9 @@ func TestList_OpensOnTheProjectWhenNothingInItIsAssignedToTheAccount(t *testing.
 	if len(dr.m.issues) != 12 {
 		t.Errorf("the widened search holds %d rows, want the 12 in the project", len(dr.m.issues))
 	}
-	var said bool
-	for _, status := range dr.statuses {
-		if strings.Contains(status.Text, "assigned to you") {
-			said = true
-		}
-	}
-	if !said {
+	// This account has nothing assigned to it anywhere, which the startup probe
+	// established, so the reason names the credential rather than the project.
+	if !dr.said(nothingAssigned) {
 		t.Errorf("nothing explained why the search on screen is not the one asked for: %+v", dr.statuses)
 	}
 }
@@ -164,7 +164,9 @@ func TestList_DoesNotWidenAgainWhenTheProjectItselfIsEmpty(t *testing.T) {
 	f := asMe(0)
 	dr := newDriver(t, testDeps(f), 120, 30)
 
-	if got := countCalls(f, "Search"); got > 2 {
+	// Three: the default, the probe that asks whether this account is assigned
+	// anything anywhere, and the fallback.
+	if got := countCalls(f, "Search"); got > 3 {
 		t.Errorf("an empty project was searched %d times; the fallback must be tried once", got)
 	}
 	if !dr.m.widened {
@@ -186,6 +188,9 @@ func TestList_DoesNotWidenASearchTheUserRan(t *testing.T) {
 	if dr.m.title != "Nothing" {
 		t.Errorf("the title is %q, want the user's own", dr.m.title)
 	}
+	// The account's own emptiness is the reason a default was replaced, and it is
+	// not the reason a search somebody typed came back with nothing.
+	mustNotContain(t, dr.view(), nothingAssignedPane)
 }
 
 func TestList_AProjectSwitchGetsTheFallbackBack(t *testing.T) {
@@ -509,5 +514,230 @@ func TestList_WidenedGolden(t *testing.T) {
 			m := start(t, testDeps(asMe(12)), size.w, size.h)
 			golden(t, "list_widened_"+name+".golden", frame(m))
 		})
+	}
+}
+
+// --- what currentUser() means, asked once, on startup -----------------------
+
+// asker records the searches a session issues, so a test can say what was asked
+// and not only how many times. The probe is a JQL nothing else in this view
+// sends: the opening search with its project scope taken off.
+type asker struct {
+	jira.Client
+	mu    sync.Mutex
+	asked []jira.Query
+}
+
+func (a *asker) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue], error) {
+	a.mu.Lock()
+	a.asked = append(a.asked, q)
+	a.mu.Unlock()
+	return a.Client.Search(ctx, q)
+}
+
+func (a *asker) queries() []jira.Query {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return slices.Clone(a.asked)
+}
+
+func (a *asker) probes() []jira.Query {
+	out := make([]jira.Query, 0, 1)
+	for _, q := range a.queries() {
+		if q.JQL == probeQuery() {
+			out = append(out, q)
+		}
+	}
+	return out
+}
+
+// refuser answers the probe and nothing else with a refusal. FailNext cannot
+// express this: the two searches a start-up issues are in the air together, so
+// which of them gets the refusal is not a test's to decide.
+type refuser struct {
+	jira.Client
+	err error
+}
+
+func (r *refuser) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue], error) {
+	if q.JQL == probeQuery() {
+		return jira.Page[jira.Issue]{}, r.err
+	}
+	return r.Client.Search(ctx, q)
+}
+
+// Every search this view offers by name but one narrows by currentUser(). That
+// resolves for a token nobody assigns work to, matches nothing, and refuses
+// nothing — so the session asks the site once whether this is an account work is
+// assigned to, and the opening search is picked from the answer.
+func TestList_AsksTheSiteOnceWhetherAnythingIsAssignedToThisAccount(t *testing.T) {
+	t.Parallel()
+
+	spy := &asker{Client: asMe(12)}
+	dr := newDriver(t, testDeps(spy), 120, 30)
+
+	probes := spy.probes()
+	if len(probes) != 1 {
+		t.Fatalf("the site was asked %d times whether anything is assigned to this account, want once: %+v",
+			len(probes), spy.queries())
+	}
+	if strings.Contains(probes[0].JQL, "project") {
+		t.Errorf("the probe asks %q; an account with work in another project is somebody, so the "+
+			"question cannot be scoped to this one", probes[0].JQL)
+	}
+	if probes[0].MaxResults != 1 {
+		t.Errorf("the probe asked for %d rows; one row is the whole answer", probes[0].MaxResults)
+	}
+	if !dr.m.answered || !dr.m.assignedNowhere {
+		t.Errorf("the probe settled answered=%v nowhere=%v, want an answer of nothing assigned",
+			dr.m.answered, dr.m.assignedNowhere)
+	}
+
+	dr.send(kernel.ProjectMsg{Project: "PROJ"})
+	dr.key("a")
+	if got := len(spy.probes()); got != 1 {
+		t.Errorf("the site was asked %d times in all; the answer is about the credential and does not change", got)
+	}
+}
+
+// The two empty defaults have to be told apart. An account with work elsewhere
+// is a person whose project is quiet; an account with none anywhere is a
+// credential the named searches cannot serve at all, and the words for one are
+// wrong for the other.
+func TestList_SaysWhichOfTheTwoEmptyDefaultsThisIs(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		open     func(t *testing.T) *driver
+		nowhere  bool
+		want     string
+		unwanted string
+	}{
+		"an account nothing anywhere is assigned to": {
+			open: func(t *testing.T) *driver {
+				t.Helper()
+				return newDriver(t, testDeps(asMe(12)), 120, 30)
+			},
+			nowhere:  true,
+			want:     nothingAssigned,
+			unwanted: "assigned to you",
+		},
+		"an account whose work is in another project": {
+			open: func(t *testing.T) *driver {
+				t.Helper()
+				// Ada is assigned some of PROJ's twelve and none of OTHER's two,
+				// so a session scoped to OTHER is a person with a quiet project.
+				f := jiratest.New(
+					jiratest.WithProject("PROJ", jiratest.Scrum),
+					jiratest.WithProject("OTHER", jiratest.Kanban),
+					jiratest.WithIssues(append(jiratest.Gen(12), jiratest.GenFor("OTHER", 2)...)),
+					jiratest.WithMe(ada),
+				)
+				d := testDeps(f)
+				d.Project = "OTHER"
+				return newDriver(t, d, 120, 30)
+			},
+			want:     "is assigned to you",
+			unwanted: nothingAssigned,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			dr := tc.open(t)
+			if dr.m.assignedNowhere != tc.nowhere {
+				t.Fatalf("the probe read nowhere=%v, so this is not the case it names", dr.m.assignedNowhere)
+			}
+			if !dr.said(tc.want) {
+				t.Errorf("no status line said %q: %+v", tc.want, dr.statuses)
+			}
+			if dr.said(tc.unwanted) {
+				t.Errorf("a status line said %q, which is the other case's wording: %+v", tc.unwanted, dr.statuses)
+			}
+		})
+	}
+}
+
+// The status line is written over by the next keypress, so the pane carries the
+// reason for as long as the list is empty — the four other kinds of empty
+// already do.
+func TestList_KeepsSayingWhyAnAccountWithNothingAssignedSeesAnEmptyList(t *testing.T) {
+	t.Parallel()
+
+	dr := newDriver(t, testDeps(asMe(0)), 120, 30)
+	if !dr.m.assignedNowhere {
+		t.Fatal("the probe did not settle on nothing assigned, so this is not the case")
+	}
+	mustContain(t, dr.view(), nothingAssignedPane)
+
+	dr.key("j", "k", "G", "g", "g")
+	mustContain(t, dr.view(), nothingAssignedPane)
+}
+
+// An unscoped session has no project to widen to, and the search it opened on is
+// the site-wide question itself — so it costs no second round trip, and the only
+// thing left to do with the answer is say it.
+func TestList_UnscopedSessionSaysWhyItIsEmptyWithoutInventingAProject(t *testing.T) {
+	t.Parallel()
+
+	spy := &asker{Client: asMe(12)}
+	d := testDeps(spy)
+	d.Project = ""
+	dr := newDriver(t, d, 120, 30)
+
+	if got := len(spy.probes()); got != 1 {
+		t.Errorf("an unscoped session issued %d site-wide searches, want only the one it opened on", got)
+	}
+	if strings.Contains(dr.m.jql, "project =") {
+		t.Errorf("an unscoped session widened to %q, naming a project it was never given", dr.m.jql)
+	}
+	if !dr.said(nothingAssigned) {
+		t.Errorf("nothing said why the list is empty: %+v", dr.statuses)
+	}
+	mustContain(t, dr.view(), nothingAssignedPane)
+}
+
+// A probe the site refuses answers nothing. Reading a refusal as "this account is
+// nobody" would put the site-wide wording on a person's quiet project.
+func TestList_KeepsThePerProjectReasonWhenTheProbeIsRefused(t *testing.T) {
+	t.Parallel()
+
+	client := &refuser{
+		Client: asMe(12),
+		err:    &jira.TransportError{Op: "search", Err: errors.New("dial tcp: no such host")},
+	}
+	dr := newDriver(t, testDeps(client), 120, 30)
+
+	if dr.m.assignedNowhere {
+		t.Error("a refused probe was read as proof that nothing is assigned to this account")
+	}
+	if dr.said(nothingAssigned) {
+		t.Errorf("a refused probe produced the wording reserved for a settled answer: %+v", dr.statuses)
+	}
+	if !dr.said("is assigned to you") {
+		t.Errorf("the fallback stopped saying anything at all: %+v", dr.statuses)
+	}
+}
+
+// Rows for the default off disk are proof this account is assigned work, so the
+// round trip is not made at all.
+func TestList_DoesNotAskWhoThisIsWhenTheDefaultCameOffDisk(t *testing.T) {
+	t.Parallel()
+
+	spy := &asker{Client: asAda(12)}
+	d := testDeps(spy)
+	jql, _ := defaultQuery(d.Project)
+	held := newFakeCache()
+	held.hold(jql, jiratest.Gen(4), false, false)
+	dr := newDriver(t, withCache(d, held), 120, 30)
+
+	if got := len(spy.probes()); got != 0 {
+		t.Errorf("the site was asked %d times whether this account is assigned anything, and the "+
+			"cache already held rows for the search that asks it", got)
+	}
+	if dr.m.asked {
+		t.Error("the probe was issued anyway")
 	}
 }
