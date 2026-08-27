@@ -6,6 +6,7 @@ reading the thread
 writing a comment
   acts   ctrl+s send · esc put it aside
   full   [ctrl+s send, esc put it aside]
+  full   [alt+k delete to end of line]
 confirming a deletion
   acts   y delete it · esc keep it
   full   [y delete it, esc keep it]

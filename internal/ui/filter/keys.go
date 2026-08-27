@@ -1,6 +1,9 @@
 package filter
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
+)
 
 var _ kernel.KeyReporter = (*Model)(nil)
 
@@ -86,13 +89,14 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Full: [][]kernel.Binding{
 			{k.TypeDown, k.TypeUp, k.TypePageDown, k.TypePageUp},
 			{k.Use, k.Back},
+			{widget.KillLine},
 		},
 	}
 	// Nothing to choose is not nothing to do: the way back is the whole of what
 	// works, and naming enter there names a stroke that is refused.
 	sets[keysNothing] = kernel.KeySet{
 		Acts: []kernel.Binding{kernel.Terse(k.Back, "facets")},
-		Full: [][]kernel.Binding{{k.Back}},
+		Full: [][]kernel.Binding{{k.Back}, {widget.KillLine}},
 	}
 	return sets
 }()

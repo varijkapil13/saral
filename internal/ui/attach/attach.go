@@ -286,7 +286,7 @@ func (m *Model) focus(on bool) {
 }
 
 func newInput() textinput.Model {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = "> "
 	ti.Placeholder = "a path to the file to attach"
 	return ti

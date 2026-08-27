@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
 // search is one of the searches this view offers by name: the predicate half,
@@ -138,7 +139,7 @@ const askPrefix = "jql "
 const askHint = "  enter runs it, esc keeps this one"
 
 func newAskInput() textinput.Model {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = askPrefix
 	ti.Placeholder = "a search to run"
 	return ti

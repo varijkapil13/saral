@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -73,7 +74,7 @@ type form struct {
 func newForm() form {
 	var f form
 	for i := range f.inputs {
-		in := textinput.New()
+		in := widget.NewInput()
 		in.Prompt = ""
 		f.inputs[i] = in
 	}

@@ -119,6 +119,10 @@ func labelWidth(f *field) int {
 	return n
 }
 
+// width is a hidden field's name as it measures on screen. A name comes from
+// createmeta as the site spells it, so on a localised site it is not ASCII.
+func (h hiddenField) width() int { return ansi.StringWidth(h.name) }
+
 // View draws the visible window and nothing else, so that a screen with six
 // fields and one with two hundred cost the same per frame.
 func (m *Model) View() string {

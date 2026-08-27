@@ -1,6 +1,9 @@
 package issue
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
+)
 
 // EditViewID and MoveViewID are the scopes the two pushed panes register their
 // keys under. Neither is a footer slot: both are opened with the issue they are
@@ -86,7 +89,7 @@ var editLiveSets = func() [5]kernel.KeySet {
 		stageBrowse: k.keySet(),
 		stageTyping: {
 			Acts: []kernel.Binding{k.Accept, k.Cancel},
-			Full: [][]kernel.Binding{{k.Accept, k.Cancel}},
+			Full: [][]kernel.Binding{{k.Accept, k.Cancel}, {widget.KillLine}},
 		},
 		stageConfirm: {
 			Acts: []kernel.Binding{k.Yes, notYet},

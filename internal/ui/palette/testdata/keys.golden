@@ -2,10 +2,13 @@ something to run
   acts   enter run it · esc close
   full   [↓ down, ↑ up, pgdn page down, pgup page up]
   full   [enter run it, esc close]
+  full   [alt+k delete to end of line]
 a cached issue under the cursor
   acts   enter open it · esc close
   full   [↓ down, ↑ up, pgdn page down, pgup page up]
   full   [enter open it, esc close]
+  full   [alt+k delete to end of line]
 nothing matches
   acts   esc close
   full   [esc close]
+  full   [alt+k delete to end of line]

@@ -217,7 +217,7 @@ func build(d kernel.Deps, key string) *Model {
 }
 
 func newEditor() textarea.Model {
-	ta := textarea.New()
+	ta := widget.NewArea()
 	ta.Prompt = ""
 	ta.ShowLineNumbers = false
 	ta.Placeholder = "Markdown. Tables, lists, quotes and code fences all survive the round trip."

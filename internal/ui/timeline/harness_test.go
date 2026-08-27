@@ -395,15 +395,15 @@ func (c *memCache) Forget(jql string) error {
 	return nil
 }
 
-func (c *memCache) EachIssue(fn func(jira.Issue, time.Time) bool) error {
+func (c *memCache) EachIssue(fn func(jira.Issue, time.Time) bool) (int, error) {
 	for _, issues := range c.rows {
 		for i := range issues {
 			if !fn(issues[i], c.stamp) {
-				return nil
+				return 0, nil
 			}
 		}
 	}
-	return nil
+	return 0, nil
 }
 
 func (c *memCache) Generation() uint64 { return c.gen }

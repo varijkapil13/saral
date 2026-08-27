@@ -5,6 +5,7 @@ choosing the target project
 typing a project key
   acts   enter look it up · esc the list
   full   [enter look this key up, esc back to the projects]
+  full   [alt+k delete to end of line]
 choosing the issue type
   acts   enter use it · shift+tab back
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, end last row]

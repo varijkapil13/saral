@@ -1,6 +1,9 @@
 package move
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
+)
 
 var _ kernel.KeyReporter = (*Model)(nil)
 
@@ -69,7 +72,7 @@ var liveSets = func() [steps]kernel.KeySet {
 	}
 	sets[stepTyping] = kernel.KeySet{
 		Acts: []kernel.Binding{kernel.Terse(lookUp, "look it up"), kernel.Terse(k.Cancel, "the list")},
-		Full: [][]kernel.Binding{{lookUp, k.Cancel}},
+		Full: [][]kernel.Binding{{lookUp, k.Cancel}, {widget.KillLine}},
 	}
 	sets[stepType] = kernel.KeySet{
 		Acts: []kernel.Binding{kernel.Terse(useType, "use it"), kernel.Terse(k.Back, "back")},

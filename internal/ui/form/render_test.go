@@ -164,3 +164,36 @@ func TestPlanLayout_LeavesRoomForAValueAndWhatIsWrongWithIt(t *testing.T) {
 		})
 	}
 }
+
+// A hidden field's name comes from createmeta as the site spells it, so on a
+// localised site it is not ASCII — and the label column every visible field is
+// drawn in is sized by the widest of them. Measured in bytes, a Japanese name
+// over-pads that column by eight and a combining mark by two.
+func TestWidestLabel_MeasuresAHiddenFieldNameOnScreenRatherThanInBytes(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		field string
+		want  int
+	}{
+		"a CJK name is three bytes to two columns":   {field: "課題の優先度設定", want: 16},
+		"a combining mark costs bytes and no width":  {field: "Zu\u0308sammenfassung", want: 15},
+		"an ASCII name measures the same either way": {field: "Story Points", want: 12},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			dr := newDriver(t, testDeps(newFake(1)), 100, 24)
+			dr.m.fields = nil
+			dr.m.hidden = []hiddenField{{name: tc.field, reason: "not on the create screen"}}
+			dr.m.relayout()
+
+			if got := dr.m.widestLabel(); got != tc.want {
+				t.Errorf("%q measured %d columns wide, want %d; len() is %d", tc.field, got, tc.want, len(tc.field))
+			}
+			if got := dr.m.lay.label; got != tc.want {
+				t.Errorf("the label column every field is drawn in is %d wide, want %d", got, tc.want)
+			}
+		})
+	}
+}
