@@ -1,0 +1,20 @@
+PROJ board                                                                 3 columns | 24 cards | ranked | checked 09:00
+To Do                                 8 In Progress                           8 Done                                  8
+<>PROJ-3 Investigate the onboarding ...  PROJ-1 Add the nightly export        2  PROJ-2 Rework webhook retries          
+ PROJ-6 Speed up session expiry          PROJ-4 Document CSV import           5  PROJ-5 Retire the audit trail          
+ PROJ-9 Rework the mobile layout         PROJ-7 Fix the search index          8  PROJ-8 Add invoice rounding            
+ PROJ-12 Retire the nightly export       PROJ-10 Investigate the release c... 3  PROJ-11 Document the login flow        
+ PROJ-15 Add CSV import                  PROJ-13 Speed up webhook retries     6  PROJ-14 Fix the onboarding wizard      
+ PROJ-18 Document the search index       PROJ-16 Rework the audit trail       1  PROJ-17 Investigate session expiry     
+ PROJ-21 Fix the release checklist       PROJ-19 Retire invoice rounding      4  PROJ-20 Speed up the mobile layout     
+ PROJ-24 Investigate webhook retries     PROJ-22 Add the login flow           7  PROJ-23 Rework the nightly export      
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+------------------------------------- 0 ------------------------------------ 36 ------------------------------------- 0
+move PROJ-3 from Triage to In Progress                                             enter moves it, ctrl+g puts it back  

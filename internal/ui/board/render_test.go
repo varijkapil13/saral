@@ -1,0 +1,212 @@
+package board
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/charmbracelet/x/ansi"
+	zone "github.com/lrstanley/bubblezone/v2"
+
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/pkg/jira"
+	"github.com/varijkapil13/saral/pkg/jira/jiratest"
+)
+
+func TestBoardRender_Golden(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		width, height int
+		keys          []string
+		golden        string
+		build         func(*testing.T, kernel.Deps, int, int) *driver
+	}{
+		"a board at a comfortable width": {
+			width: 120, height: 20, golden: "board_120x20.golden",
+		},
+		"a narrow terminal": {
+			width: 80, height: 20, golden: "board_80x20.golden",
+		},
+		"a wide terminal": {
+			width: 160, height: 30, golden: "board_160x30.golden",
+		},
+		"a card in hand, aimed at the next column": {
+			width: 120, height: 20, keys: []string{"m", "l"}, golden: "held_120x20.golden",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			dr := newDriver(t, testDeps(newFake(24)), tc.width, tc.height)
+			dr.key(tc.keys...)
+			golden(t, tc.golden, dr.view())
+		})
+	}
+}
+
+func TestBoardRender_EmptyStatesGolden(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		deps   func(*testing.T) kernel.Deps
+		golden string
+	}{
+		"no Jira in this session": {
+			deps:   func(*testing.T) kernel.Deps { return testDeps(nil) },
+			golden: "empty_noclient_100x16.golden",
+		},
+		"a token that may not read boards": {
+			deps: func(*testing.T) kernel.Deps {
+				d := testDeps(newFake(9))
+				d.Caps.Boards = jira.Capability{Reason: "you need the Browse Projects permission on PROJ"}
+				return d
+			},
+			golden: "empty_nocap_100x16.golden",
+		},
+		"a project with no board on it": {
+			deps: func(*testing.T) kernel.Deps {
+				return testDeps(jiratest.New(jiratest.WithProject("PROJ", jiratest.NoBoard)))
+			},
+			golden: "empty_noboard_100x16.golden",
+		},
+		"a board whose columns nothing is in": {
+			deps: func(*testing.T) kernel.Deps {
+				return testDeps(jiratest.New(jiratest.WithProject("PROJ", jiratest.Scrum)))
+			},
+			golden: "empty_nocards_100x16.golden",
+		},
+		"a search the site refused": {
+			deps: func(*testing.T) kernel.Deps {
+				fake := newFake(9)
+				fake.FailNextN(4, &jira.CapabilityError{
+					Capability: jira.CapBoards,
+					Reason:     "your token cannot see the boards on this project",
+				})
+				return testDeps(fake)
+			},
+			golden: "failed_100x16.golden",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			dr := newDriver(t, tc.deps(t), 100, 16)
+			golden(t, tc.golden, dr.view())
+		})
+	}
+}
+
+// The frame is exactly the box the kernel gave it, at every size, in every
+// state. A view a line too tall pushes the footer off the screen.
+func TestBoardRender_FitsTheBoxItIsGiven(t *testing.T) {
+	t.Parallel()
+	for _, size := range [][2]int{{40, 10}, {80, 20}, {120, 30}, {200, 60}} {
+		for name, keys := range map[string][]string{
+			"looking at it":  nil,
+			"a card in hand": {"m", "l"},
+		} {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				dr := newDriver(t, testDeps(newFake(40)), size[0], size[1])
+				dr.key(keys...)
+				lines := strings.Split(dr.view(), "\n")
+				if len(lines) != size[1] {
+					t.Fatalf("at %dx%d the board drew %d lines", size[0], size[1], len(lines))
+				}
+				for i, line := range lines {
+					if got := ansi.StringWidth(line); got > size[0] {
+						t.Errorf("at %dx%d line %d is %d cells wide", size[0], size[1], i, got)
+					}
+				}
+			})
+		}
+	}
+}
+
+// Every card fills its column, so that a selected one's highlight reaches the
+// column's edge rather than stopping at the end of its summary.
+func TestBoardRender_EveryCardFillsItsColumn(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(24)), 120, 20)
+	cell := dr.m.lay.cell
+	if cell <= 0 {
+		t.Fatal("the layout gave the columns no width")
+	}
+	for col := range dr.m.cols {
+		for row := range dr.m.columnLen(col) {
+			got := ansi.StringWidth(ansi.Strip(dr.m.cell(col, row)))
+			if got != cell {
+				t.Fatalf("the card at column %d row %d is %d cells wide, want %d", col, row, got, cell)
+			}
+		}
+	}
+}
+
+// A column that holds more cards than the board says it should draws its count
+// in the warning style rather than silently. Min and Max are pointers because a
+// column may have neither.
+func TestBoardRender_ABreachedColumnLimitIsDrawnDifferently(t *testing.T) {
+	t.Parallel()
+	two := 2
+	cfg := jira.BoardConfig{BoardID: 1, Name: "Ledger", Columns: []jira.Column{
+		{Name: "Waiting", StatusIDs: []string{"10201"}},
+		{Name: "Under way", StatusIDs: []string{"10202"}, Max: &two},
+	}}
+	issues := []jira.Issue{
+		{Key: "PROJ-1", Summary: "one", Status: jira.Status{ID: "10202"}},
+		{Key: "PROJ-2", Summary: "two", Status: jira.Status{ID: "10202"}},
+		{Key: "PROJ-3", Summary: "three", Status: jira.Status{ID: "10202"}},
+	}
+	under := jira.BoardConfig{BoardID: 1, Name: "Ledger", Columns: []jira.Column{
+		{Name: "Waiting", StatusIDs: []string{"10201"}},
+		{Name: "Under way", StatusIDs: []string{"10202"}},
+	}}
+
+	breachedFrame := colouredFrame(t, cfg, issues)
+	plainFrame := colouredFrame(t, under, issues)
+	if breachedFrame == plainFrame {
+		t.Error("a column holding three cards against its own limit of two is drawn exactly as one with no limit")
+	}
+	if !breached(planColumn{max: &two}, 3) {
+		t.Error("three cards against a maximum of two is not reported as a breach")
+	}
+	if breached(planColumn{}, 3) {
+		t.Error("a column with neither limit was reported as breaching one")
+	}
+}
+
+// colouredFrame draws a board with a theme that has colour in it, because what a
+// breached limit changes is a style and not a word.
+func colouredFrame(t *testing.T, cfg jira.BoardConfig, issues []jira.Issue) string {
+	t.Helper()
+	d := testDeps(nil)
+	d.Theme = kernel.NewTheme(kernel.ThemeDark, true, kernel.ASCIIGlyphs())
+	d.Zones = zone.New()
+	view, ok := New(d).(*Model)
+	if !ok {
+		t.Fatal("New did not return a *Model")
+	}
+	dr := &driver{t: t, m: view}
+	dr.send(kernel.SizeMsg{Width: 100, Height: 16})
+	dr.send(boardsMsg{gen: dr.m.gen, boards: []jira.Board{{ID: cfg.BoardID, Name: cfg.Name}}})
+	dr.send(configMsg{gen: dr.m.gen, cfg: cfg})
+	dr.send(issuesMsg{gen: dr.m.gen, issues: issues})
+	return dr.m.View()
+}
+
+// A board that does not estimate draws no estimate anywhere, which is different
+// from drawing a zero.
+func TestBoardRender_ABoardThatDoesNotEstimateDrawsNoNumbers(t *testing.T) {
+	t.Parallel()
+	cfg := jira.BoardConfig{BoardID: 1, Name: "Ledger", Type: jira.BoardKanban, Columns: []jira.Column{
+		{Name: "Waiting", StatusIDs: []string{"10201"}},
+		{Name: "Under way", StatusIDs: []string{"10202"}},
+	}}
+	points := jira.FieldRef{ID: "customfield_13401", Name: "Story Points"}
+	iss := jira.Issue{Key: "PROJ-1", Summary: "one", Status: jira.Status{ID: "10201"}}
+	iss.Fields = iss.Fields.With(points, jira.FieldValue{Kind: jira.KindNumber, Number: 8})
+
+	_, plain := stocked(t, cfg, []jira.Issue{iss}, 100, 16)
+	withEstimates := cfg
+	withEstimates.Estimation = &jira.Estimation{Type: jira.EstimationField, Field: points}
+	_, counted := stocked(t, withEstimates, []jira.Issue{iss}, 100, 16)
+
+	mustNotContain(t, plain.view(), "8")
+	mustContain(t, counted.view(), "8")
+}
