@@ -123,7 +123,7 @@ func TestBuild_AnExplicitViewStillWinsOnAFirstRun(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
 	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 
-	_, opts, _, _, err := build(options{view: "board"})
+	_, opts, _, _, err := build(options{arg: "board"})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -207,6 +207,125 @@ func TestBuild_TheProjectFlagOverridesTheProfileRatherThanReplacingIt(t *testing
 }
 
 func initialView(opts []kernel.Option) string { return kernel.InitialViewOf(opts...) }
+
+// TestBuild_APositionalArgumentIsAViewAnIssueOrAMistake covers the argument
+// nobody used to be told about: an unrecognised one was handed to the kernel as
+// a view ID and dropped, so a typo and an issue key both opened the issue list.
+func TestBuild_APositionalArgumentIsAViewAnIssueOrAMistake(t *testing.T) {
+	tests := map[string]struct {
+		arg      string
+		view     string
+		pushed   string
+		notice   string
+		errNames string
+	}{
+		"a view opens that view":            {arg: "board", view: "board"},
+		"an issue key opens the issue":      {arg: "PROJ-142", pushed: "PROJ-142"},
+		"a key in lower case is still one":  {arg: "proj-142", pushed: "PROJ-142"},
+		"a browse URL opens the issue":      {arg: "https://example.atlassian.net/browse/PROJ-9", pushed: "PROJ-9"},
+		"a board URL opens the issue on it": {arg: "https://example.atlassian.net/jira/software/projects/PROJ/boards/1?selectedIssue=PROJ-3", pushed: "PROJ-3"},
+		"a URL for another site is named":   {arg: "https://other.atlassian.net/browse/PROJ-9", notice: "other.atlassian.net"},
+		"a word that is neither fails":      {arg: "bord", errNames: "bord"},
+		"an issue-shaped view name fails":   {arg: "PROJ-0", errNames: "PROJ-0"},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			writeProfile(t)
+
+			_, opts, notice, release, err := build(options{arg: tc.arg})
+			if release != nil {
+				defer release()
+			}
+			if tc.errNames != "" {
+				if err == nil {
+					t.Fatalf("saral %s was accepted", tc.arg)
+				}
+				if !strings.Contains(err.Error(), tc.errNames) {
+					t.Errorf("the error %q does not quote %q", err, tc.errNames)
+				}
+				// The views it does know are worth naming, or the message is a dead end.
+				if !strings.Contains(err.Error(), "board") {
+					t.Errorf("the error %q does not say what it would have accepted", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("build: %v", err)
+			}
+			if got := initialView(opts); got != tc.view {
+				t.Errorf("saral %s opened view %q, want %q", tc.arg, got, tc.view)
+			}
+			id, pushed := kernel.InitialPushOf(opts...)
+			switch {
+			case tc.pushed == "" && pushed:
+				t.Errorf("saral %s pushed %q, want nothing over the root", tc.arg, id)
+			case tc.pushed != "" && !pushed:
+				t.Errorf("saral %s pushed nothing, want the issue %s", tc.arg, tc.pushed)
+			}
+			if tc.notice != "" && !strings.Contains(notice, tc.notice) {
+				t.Errorf("saral %s said %q, want it to name %s", tc.arg, notice, tc.notice)
+			}
+		})
+	}
+}
+
+// TestBuild_AnIssueArgumentReallyOpensTheIssue drives the kernel rather than the
+// options, because an option that is never acted on is what a routing test
+// passing on its own would hide.
+func TestBuild_AnIssueArgumentReallyOpensTheIssue(t *testing.T) {
+	writeProfile(t)
+	t.Setenv("SARAL_TEST_TOKEN", "a-token")
+
+	_, opts, _, release, err := build(options{arg: "PROJ-142"})
+	if release != nil {
+		defer release()
+	}
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	m, err := kernel.New(kernel.Deps{}, append(opts, kernel.WithSize(100, 30))...)
+	if err != nil {
+		t.Fatalf("kernel.New: %v", err)
+	}
+	// Init is where the push is built, so that the view is given the complete
+	// Deps and the root under it is initialised first.
+	pushes := 0
+	var push kernel.PushMsg
+	collect(m.Init(), func(msg tea.Msg) {
+		if p, ok := msg.(kernel.PushMsg); ok {
+			pushes, push = pushes+1, p
+		}
+	})
+	if pushes != 1 {
+		t.Fatalf("Init produced %d pushes, want the issue pane", pushes)
+	}
+	if push.Title != "PROJ-142" {
+		t.Errorf("the pushed view is titled %q, want the issue key", push.Title)
+	}
+	next, _ := m.Update(push)
+	frame := next.(kernel.Model).Frame()
+	if !strings.Contains(frame, "PROJ-142") {
+		t.Errorf("the first frame does not name the issue that was asked for:\n%s", frame)
+	}
+}
+
+// collect walks a command tree the way Bubble Tea would, without running the
+// timers in it.
+func collect(cmd tea.Cmd, fn func(tea.Msg)) {
+	if cmd == nil {
+		return
+	}
+	switch msg := cmd().(type) {
+	case nil:
+	case tea.BatchMsg:
+		for _, c := range msg {
+			collect(c, fn)
+		}
+	default:
+		fn(msg)
+	}
+}
 
 // writeProfile puts a config file naming an env-resolved token in a temporary
 // config directory. Nothing here reaches a keychain: a test that prompted for

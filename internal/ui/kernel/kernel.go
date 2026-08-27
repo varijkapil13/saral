@@ -222,6 +222,11 @@ type Model struct {
 	prefix    tea.KeyPressMsg
 	prefixSet bool
 
+	// startup is a view the composition root wants over the root at startup,
+	// built at Init rather than here so that it is given the same complete Deps
+	// every other view gets — a zone manager included, which New is what mints.
+	startup startupPush
+
 	width, height int
 	capsGen       int
 	savedGen      int
@@ -237,6 +242,12 @@ type Model struct {
 // Option configures the root model.
 type Option func(*Model)
 
+// startupPush is WithInitialPush's argument, held until Init can build it.
+type startupPush struct {
+	id, title string
+	new       func(Deps) View
+}
+
 // WithSize starts the model at a known size, which is what the benchmark and
 // the golden tests need since there is no terminal to ask.
 func WithSize(w, h int) Option {
@@ -246,6 +257,33 @@ func WithSize(w, h int) Option {
 // WithInitialView opens a specific view rather than the first allocated slot.
 func WithInitialView(id string) Option {
 	return func(m *Model) { m.initialView = id }
+}
+
+// WithInitialPush puts a view over whichever root opens, once the root has been
+// initialised. It is how `saral PROJ-142` opens an issue: a key names something
+// no registry can build, so the composition root supplies the constructor and
+// the kernel starts with the result on the stack.
+//
+// A constructor rather than a view, because Deps is only complete inside New:
+// a view built before it has no zone manager, and would draw a frame nothing can
+// click on.
+func WithInitialPush(id, title string, new func(Deps) View) Option {
+	return func(m *Model) {
+		if new != nil {
+			m.startup = startupPush{id: id, title: title, new: new}
+		}
+	}
+}
+
+// InitialPushOf reports which view a set of options would push over the root,
+// which is how a composition root tests its own routing without building a
+// program.
+func InitialPushOf(opts ...Option) (id string, ok bool) {
+	var m Model
+	for _, opt := range opts {
+		opt(&m)
+	}
+	return m.startup.id, m.startup.new != nil
 }
 
 // WithMouse turns mouse reporting on or off. Off is what a user who relies on
@@ -346,6 +384,10 @@ func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{tea.RequestBackgroundColor, m.probeAt(m.capsSeq)}
 	if len(m.stack) > 0 {
 		cmds = append(cmds, m.top().view.Init())
+	}
+	if m.startup.new != nil {
+		push := PushMsg{View: m.startup.new(m.deps), ID: m.startup.id, Title: m.startup.title}
+		cmds = append(cmds, func() tea.Msg { return push })
 	}
 	return tea.Batch(cmds...)
 }
