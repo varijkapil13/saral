@@ -810,6 +810,16 @@ are guesses.
 
 - [ ] **P5.1 — Versions** · [#20](https://github.com/varijkapil13/saral/issues/20) · **owns** `pkg/jira/cloud/version.go`, `internal/ui/release/list*.go`
   CRUD, archive, unresolved counts, bulk fix-version assignment from the list.
+  - The adapter half landed: `Versions`, `SaveVersion`, `UnresolvedCount` and `ReleaseVersion` in
+    `pkg/jira/cloud/version.go`, with the release sweeping the open issues itself because
+    `moveUnfixedIssuesTo` is a key nobody has watched work. Still open: `internal/ui/release/list*.go`
+    and bulk fix-version assignment, so the box stays unticked.
+  - **Two divergences the fake has to be corrected for**, both failing in
+    `pkg/jira/cloud/conformance_version_test.go` on purpose until somebody who owns
+    `pkg/jira/jiratest/**` fixes them: `Fake.ReleaseVersion`'s policy switch has no `default`, so an
+    `UnresolvedPolicy` it does not know releases the version instead of being refused; and
+    `fakeUnresolvedOn` counts by status category where the port and the site count by resolution,
+    so an issue that is Done with no resolution is invisible to the fake and stripped by the client.
 - [ ] **P5.2 — The release flow** · [#21](https://github.com/varijkapil13/saral/issues/21) · **owns** `internal/ui/release/flow*.go`
   Check `unresolvedIssueCount`, then offer the same three choices the web app does (move to another
   version / strip the version / release anyway), confirm, then `PUT released: true`.
