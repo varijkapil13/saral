@@ -826,7 +826,7 @@ are guesses.
 
 ## Batch 6 — Sprints and boards · parallel ×3
 
-- [ ] **P6.1 — Board configuration** · [#22](https://github.com/varijkapil13/saral/issues/22) · **owns** `pkg/jira/cloud/board.go`
+- [x] **P6.1 — Board configuration** · [#22](https://github.com/varijkapil13/saral/issues/22) · **owns** `pkg/jira/cloud/board.go`
   Columns by `statusCategory`, estimation field and rank field read from board config — never guessed.
   **Every part of a board config is optional and the absences are not exotic.** A Kanban board sends
   no estimation object at all, which is why `BoardConfig.Estimation` is a pointer; a board may expose
@@ -834,6 +834,10 @@ are guesses.
   ordered by priority rather than by rank. Match everything by id or `untranslatedName`, never by
   display name — on a German instance the field, status and priority names all arrive translated, and
   `clauseNames` follows the translation too.
+  **One conformance case fails on purpose** until `jiratest.Fake.Boards` trims a project key and
+  refuses a blank one the way `Fake.IssueTypeStatuses` does: the cloud adapter refuses a blank key
+  with a `*jira.ValidationError` naming `projectKey` and the fake answers a `*jira.NotFoundError`, so
+  the rule is one nothing above the port meets.
 - [ ] **P6.2 — Sprint lifecycle** · [#23](https://github.com/varijkapil13/saral/issues/23) · **owns** `pkg/jira/cloud/sprint.go`
   `UpdateSprint` over the partial-update `POST`; `StartSprint`/`CompleteSprint` validate state
   locally first. **The raw `PUT` must never be reachable from the port** — it nulls omitted fields.
