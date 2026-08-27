@@ -825,7 +825,6 @@ are guesses.
 
 ## Batch 5 — Releases · parallel ×2
 
-- [ ] **P5.1 — Versions** · [#20](https://github.com/varijkapil13/saral/issues/20) · **owns** `pkg/jira/cloud/version.go`, `internal/ui/release/list*.go`
   CRUD, archive, unresolved counts, bulk fix-version assignment from the list.
   - The adapter half landed: `Versions`, `SaveVersion`, `UnresolvedCount` and `ReleaseVersion` in
     `pkg/jira/cloud/version.go`, with the release sweeping the open issues itself because
@@ -837,7 +836,13 @@ are guesses.
     `UnresolvedPolicy` it does not know releases the version instead of being refused; and
     `fakeUnresolvedOn` counts by status category where the port and the site count by resolution,
     so an issue that is Done with no resolution is invisible to the fake and stripped by the client.
-- [ ] **P5.2 — The release flow** · [#21](https://github.com/varijkapil13/saral/issues/21) · **owns** `internal/ui/release/flow*.go`
+- [x] **P5.1 — Versions** · [#20](https://github.com/varijkapil13/saral/issues/20) · **owns** `pkg/jira/cloud/version.go`, `internal/ui/release/list*.go`
+  CRUD, archive, unresolved counts, bulk fix-version assignment from the list. The counts are read one
+  version at a time, when a release screen needs one, and the column says nobody has asked rather than
+  drawing a zero. Bulk fix-version assignment is the release flow's move and strip policies: the port
+  exposes no other way to change an issue's fix versions without replacing the whole array, and the
+  fake cannot be asked at all — see the fix-versions row in `docs/API-NOTES.md`.
+- [x] **P5.2 — The release flow** · [#21](https://github.com/varijkapil13/saral/issues/21) · **owns** `internal/ui/release/flow*.go`
   Check `unresolvedIssueCount`, then offer the same three choices the web app does (move to another
   version / strip the version / release anyway), confirm, then `PUT released: true`.
 

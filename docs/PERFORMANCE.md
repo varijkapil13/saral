@@ -137,6 +137,13 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverEveryCachedIssue` |
 | `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverTwoThousandCommands` |
 | `internal/ui/palette` | `TestBudget_PaletteOpeningIsOnTheKeystrokeBudget` |
+| `internal/ui/release` | `TestBudget_ReleaseFlowFullRedrawAt200x60` |
+| `internal/ui/release` | `TestBudget_ReleaseFlowScrollingCostsTheSameOnTwoThousandVersionsAsOnTwenty` |
+| `internal/ui/release` | `TestBudget_ReleasesAMemoMissCostsTheRowsThatMovedAndNotAWindow` |
+| `internal/ui/release` | `TestBudget_ReleasesFullRedrawAt200x60` |
+| `internal/ui/release` | `TestBudget_ReleasesKeystrokeToFrame` |
+| `internal/ui/release` | `TestBudget_ReleasesRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/release` | `TestBudget_ReleasesScrollingCostsTheSameOnTwoThousandVersionsAsOnTwenty` |
 | `internal/ui/richtext` | `TestBudget_Render` |
 | `internal/ui/richtext` | `TestBudget_ScalesWithTheDocument` |
 | `internal/ui/richtext` | `TestBudget_Summary` |

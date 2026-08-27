@@ -1,0 +1,14 @@
+reading the versions
+  acts   enter release · n new · e edit · A archive
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G last version]
+  full   [enter release this version, n new version, e edit this version, A archive or unarchive it]
+counting what is open on one
+  acts   n new · e edit · A archive
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G last version]
+  full   [n new version, e edit this version, A archive or unarchive it]
+typing a version
+  acts   ctrl+s save · esc leave it
+  full   [tab next field, shift+tab previous field]
+  full   [ctrl+s save this version, esc leave it alone]
+a save in flight
+  acts   

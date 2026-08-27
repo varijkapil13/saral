@@ -1,0 +1,16 @@
+choosing what happens to the open issues
+  acts   enter choose
+  full   [↓/j down, ↑/k up]
+  full   [enter choose what happens to the open issues]
+choosing where they move to
+  acts   enter move them here
+  full   [↓/j down, ↑/k up]
+  full   [enter move the open issues to this version]
+the confirm
+  acts   y go ahead
+  full   [y release it]
+a release in flight
+  acts   
+a release that did not happen
+  acts   enter start again
+  full   [enter start again]
