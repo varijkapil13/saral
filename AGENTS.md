@@ -87,8 +87,14 @@ Prefer asking on the issue over guessing, and prefer a smaller correct packet ov
 speculative one. If you discover something about the Jira API that isn't in `docs/API-NOTES.md`, add
 it there in your PR — that file is how the next agent avoids your afternoon.
 
-## If this is the first work in the repo
+## The tree is the specification now, not the docs
 
-Read [`docs/BOOTSTRAP.md`](docs/BOOTSTRAP.md). It covers verifying what a token can reach, capturing
-the fixtures every later packet depends on, and the reading order for P0.1. There is no feature code
-yet, so nothing you find in the tree contradicts the docs — the docs are the specification.
+[`docs/BOOTSTRAP.md`](docs/BOOTSTRAP.md) still covers verifying what a token can reach and capturing
+the fixtures every later packet depends on, and it is worth reading before touching an adapter. What
+it no longer means is what it says: there **is** feature code, so a doc and the code can disagree, and
+where they do it is the doc that is wrong until somebody has checked. Batches 0 to 8 have merged, and
+much of the correction backlog was a document outliving its code: a table of task states missing one
+the type had gained, a note asserting four status names where the queue uses seven, a performance doc
+calling two packages unguarded while five tests guarded them, a doc comment naming the endpoints that
+*used* to fill a field. If a claim you are about to build on is checkable, check it, and fix it in the
+same PR.

@@ -28,11 +28,11 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 |---|---|
 | First minute | Onboarding writes the profile, then drops you on your own issues — or on the project itself, where nothing in it is assigned to you, because an empty first screen reads as a broken program. `?` explains the current view only. |
 | First hour | The footer teaches what can be done to the thing in front of you, most-used first. Mouse works, so nothing is blocked on learning. |
-| First week | Frecency: projects, assignees, versions and labels reorder so your usual choices are first. |
+| First week | Frecency: the palette's commands and the project picker reorder so your usual choices are first. Assignees, versions and labels do **not** yet — a value picker ranks with the same subsequence scorer the palette filters by, and nothing counts what you pick. |
 | | Hints: after you reach an action through the palette three times, the status line notes its key. Built in P3.1 ([#12](https://github.com/varijkapil13/saral/issues/12)) rather than with the footer: the count, the call site and the frecency table are one piece of data, and P3.1 already owns it. `kernel.CommandRanMsg{ID, Keys}` is the signal it hangs on, and `Command.Keys` is the key it names — a command nothing binds is never given one, and the line is said once rather than on every run after the third. |
-| Ongoing | JQL history with fuzzy recall; saved queries bound to `1`–`9` and kept in the profile. |
+| Ongoing | Saved queries bound to `1`–`9` and kept in the profile, validated by `app.SavedQueries` so a file and a keypress cannot disagree. **JQL history is not built** — `e` shows the search on screen and runs an edited one, and nothing keeps the ones run before it. |
 | | Local fuzzy index — typing a key or a few words of a summary finds it with no round trip. Reached from the palette: `ctrl+k` and a few letters offers the issues already on disk beside the commands, ranked by `app.Index` over `app.Cache`. |
-| | Session resume: reopening lands exactly where you left, including scroll and filter. |
+| | **Session resume is not built.** What survives a restart is the rows themselves, out of the cache and badged for age, and the pane split out of `ui.toml`; the cursor, the scroll offset and a filter in force are not written anywhere. |
 | Fluent | `saral PROJ-142` and `saral https://…/browse/PROJ-142` open that issue; `saral board` opens a view by name; `--project` scopes the session. An argument that is none of those is named as the mistake it is rather than silently opening the default view. Piping a JQL query in and scriptable subcommands are not built. |
 
 Frecency is a plain local table of `(item, count, lastUsed)` scored `count * decay(lastUsed)`. No
@@ -81,7 +81,7 @@ at 80×20 the body is 17 rows with a status line up, and the issue list has as f
 |---|---|
 | root | the **root** view's title — where `esc` lands, and what a click there goes back to |
 | actions | what can be done to the thing on screen, most-used first, terse; whatever is left over becomes `+N` |
-| globals | `? ctrl+k esc`, or `q` at the bottom of the stack — bare keys, and never given up |
+| globals | `? ctrl+k esc`, or `q` at the bottom of the stack — bare keys, never given up to make room. A view taking typing swallows all but `ctrl+k`, and the cell drops what will not arrive |
 
 ```
  Issues  tab pane  e edit  t status  C comment                     ? ctrl+k esc
@@ -96,8 +96,9 @@ That order exists because the previous row gave up exactly the wrong end first: 
 was dropped whole. Somebody ran the program at 80 columns for a week and was never told the command
 palette existed ([#96](https://github.com/varijkapil13/saral/issues/96)).
 
-**The motions are not on the row.** The issue pane answers sixteen strokes and thirteen of them only
-move the cursor; a row that lists them in the order they were declared spends itself on scrolling.
+**The motions are not on the row.** The issue pane answers twenty strokes and eleven of them only
+move the cursor or pan the document; a row that lists them in the order they were declared spends
+itself on scrolling.
 `?` lists them, and it leads with the actions — spelt out, because the overlay has room for *edit
 fields* where the row had room for *edit*. Every key appears there exactly once.
 
@@ -240,12 +241,13 @@ allocated here rather than picked, and `?` and the palette are where its digit i
 | 7 | plans | P8.3 ([#28](https://github.com/varijkapil13/saral/issues/28)) — shipped |
 | 8, 9 | free | — |
 
-Everything else registers `Slot: 0` and is reached by being pushed, by name or from the palette:
-issue detail, onboarding, the palette itself, forms and comments. Three go further and register no
-`ViewSpec` at all, because a registry constructor has nothing to open them over — `internal/ui/attach`
-is pushed with the issue whose files it lists, `internal/ui/move` with the issues it is moving, and
-the release screen inside `internal/ui/release` with the version and the count of what is still open
-on it. Each of the three still registers its keys, so the footer, the `?` overlay and the sweeps in
+Four views register a `ViewSpec` with `Slot: 0`, and are reached by being pushed, by name or from the
+palette: onboarding, the palette itself, the new-issue form and the comment thread. **Four packages go further
+and register no `ViewSpec` at all**, because a registry constructor has nothing to open them over —
+`internal/ui/issue` is pushed with the issue it draws, `internal/ui/attach` with the issue whose files
+it lists, `internal/ui/filter` with the terms it narrows, and `internal/ui/move` with the issues it is
+moving. So is the release screen inside `internal/ui/release`, whose package does register one for the
+version list. Each of them still registers its keys, so the footer, the `?` overlay and the sweeps in
 `internal/ui` find it exactly as they find a slotted view. `kernel.RegisterView` refuses a second
 claim on a slot at startup, so the table above is enforced rather than merely written down — but it is
 written down so that six later packets do not each pick a number.
@@ -273,7 +275,7 @@ wider sidebar for a long custom field, had no way to ask. Now the boundary can b
 three strokes move it four cells at a time, `=` gives it back to the width, and the choice is kept as
 a **share of the pane rather than a column count**, so it means the same thing in a window of another
 size. Two floors hold it: 53 cells of prose, below which the same paragraph loses about two words a
-line, and 34 for the sidebar, below which a label and its value stop fitting side by side. At 90
+line, and 35 for the sidebar, which is the label column plus a value somebody can read. At 90
 columns those two meet, so there is exactly one legal split there and the gesture says so rather than
 pretending to move — as it does below 90, where the regions take the screen in turn and there is no
 boundary on it at all.
