@@ -142,8 +142,10 @@ around:
   site was ten of eleven.
 - **`User.Kind` labels; it never filters.** An app account is assigned work and reports issues exactly
   as a person does, so hiding one loses rows — but a site that is ten robots and one human is
-  unreadable without the distinction, which is what a picker sinks and badges by. It is
-  `AccountUnknown` on any read that did not carry an `accountType`, which is most of them.
+  unreadable without the distinction, which is what a picker sinks and badges by. One decoder reads
+  `accountType` wherever an account arrives, so an issue's assignee and reporter, a comment's author
+  and update author, `/myself` and the people endpoints all carry a kind; it is `AccountUnknown` only
+  on a read that did not carry one.
 - **`People` answers fewer accounts than it was asked for.** An id this site does not know comes back
   as a JSON `null` inside the page, and a blank row is worse than an absence, so the result is keyed
   by `AccountID` and never by position.
@@ -325,12 +327,19 @@ key except `ctrl+c` and `ctrl+k`, and the footer drops the globals it is swallow
 one it cannot. Without it a global keymap makes the letters `q` and `r`, and the escape key,
 unreachable inside any text input.
 
-The two exceptions are not equally free. `ctrl+c` costs nothing to reserve. `ctrl+k` costs
-kill-to-end-of-line: `bubbles` binds it to delete-after-cursor in both `textinput` and `textarea`, and
-no view here overrides that, so reserving it takes the gesture out of every field in the program
-([#80](https://github.com/varijkapil13/saral/issues/80)). It is reserved anyway, because a palette that
-cannot be opened from the editor it is most wanted in is worse than a field that cannot kill a line —
-but it is a real loss rather than a free one, and the views owe it a replacement binding.
+The two exceptions are not equally free. `ctrl+c` costs nothing to reserve; `ctrl+k` costs
+kill-to-end-of-line. `bubbles` binds it to delete-after-cursor in both `textinput` and `textarea`, so
+reserving it would take the gesture out of every field in the program. It is reserved anyway, because
+a palette that cannot be opened from the editor it is most wanted in is worse than a field that cannot
+kill a line — and the motion is moved rather than lost. `internal/ui/widget` is the one place a text
+field is built: `widget.NewInput` and `widget.NewArea` rebind delete-after-cursor to **`alt+k`**,
+which nothing else here and nothing in either `bubbles` keymap claims. Every view holding a field
+registers `widget.KillLine` in the key set of the state the field is typed in, so the footer and the
+`?` overlay name the stroke that works. A sweep over the source in `internal/ui/killline_test.go`
+holds the next field to both halves of that: built through the widget, and advertised by its state.
+
+`?` cannot open the overlay while a view is capturing typing — it is a character there — so a state's
+own overlay entry is not by itself how a user finds the stroke. The keymap table in `docs/UX.md` is.
 
 A view holding something unsaved implements `kernel.Blocker`. Going back asks the view being popped;
 quitting and switching root view ask **every** entry on the stack, because both throw all of it away

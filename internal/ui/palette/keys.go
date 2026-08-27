@@ -1,6 +1,9 @@
 package palette
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
+)
 
 var _ kernel.KeyReporter = (*Model)(nil)
 
@@ -54,6 +57,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.Run, k.Close},
+			{widget.KillLine},
 		},
 	}
 	sets[keysIssue] = kernel.KeySet{
@@ -61,11 +65,12 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.Open, k.Close},
+			{widget.KillLine},
 		},
 	}
 	sets[keysNothing] = kernel.KeySet{
 		Acts: []kernel.Binding{k.Close},
-		Full: [][]kernel.Binding{{k.Close}},
+		Full: [][]kernel.Binding{{k.Close}, {widget.KillLine}},
 	}
 	return sets
 }()

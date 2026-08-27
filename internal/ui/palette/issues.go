@@ -53,9 +53,24 @@ func (m *Model) search(text string, now time.Time) tea.Cmd {
 		m.shown = append(m.shown, entry{issue: true, at: i})
 	}
 	if err != nil {
-		return kernel.Warn("some cached issues could not be read: " + err.Error())
+		return kernel.Warn("the cache on this machine could not be walked: " + err.Error())
+	}
+	if n := m.index.Dropped(); n > 0 && n != m.said {
+		m.said = n
+		return kernel.Warn(dropped(n))
 	}
 	return nil
+}
+
+// dropped says how much of the cache went unread, because a palette that offers
+// fewer issues than the machine holds looks exactly like a project that holds
+// fewer. The records are gone rather than skipped over, so the sentence promises
+// what actually happens next.
+func dropped(n int) string {
+	if n == 1 {
+		return "1 cached issue could not be read and has been dropped; the next fetch of it rewrites the record"
+	}
+	return strconv.Itoa(n) + " cached issues could not be read and have been dropped; the next fetch of them rewrites the records"
 }
 
 func newHit(h app.Hit, now time.Time) hit {
@@ -97,6 +112,8 @@ func (m *Model) noIssues() string {
 	switch {
 	case m.deps.Cache == nil:
 		return "This session has nowhere to cache issues, so only commands are searched."
+	case m.index.Len() == 0 && m.index.Dropped() > 0:
+		return "No issue cached on this machine could be read; every record has been dropped."
 	case m.index.Len() == 0:
 		return "No issue has been cached on this machine yet."
 	default:

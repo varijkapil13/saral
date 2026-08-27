@@ -135,7 +135,7 @@ func NewEdit(d kernel.Deps, iss jira.Issue, opts ...editOption) kernel.View {
 }
 
 func newEditInput() textinput.Model {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = ""
 	return ti
 }

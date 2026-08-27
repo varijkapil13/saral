@@ -7,6 +7,7 @@ editing an issue's fields
   a field taking typing
     acts   enter keep this value · esc leave the value alone
     full   [enter keep this value, esc leave the value alone]
+    full   [alt+k delete to end of line]
   waiting for the go-ahead to save
     acts   y go ahead · esc do not save yet
     full   [y go ahead, esc do not save yet]

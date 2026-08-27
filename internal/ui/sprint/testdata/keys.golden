@@ -20,6 +20,7 @@ filling a sprint in
   acts   ctrl+s send it to Jira · tab next field · esc discard this edit
   full   [tab next field, shift+tab previous field]
   full   [ctrl+s send it to Jira, esc discard this edit]
+  full   [alt+k delete to end of line]
 answering the confirm
   acts   y go ahead · esc leave it alone
   full   [y go ahead, esc leave it alone]

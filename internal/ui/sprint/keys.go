@@ -2,6 +2,7 @@ package sprint
 
 import (
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -140,7 +141,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// fit, and what they are called is the whole point of asking.
 	sets[keysForm] = kernel.KeySet{
 		Acts: []kernel.Binding{k.Save, k.Field, k.Discard},
-		Full: [][]kernel.Binding{{k.Field, k.PrevField}, {k.Save, k.Discard}},
+		Full: [][]kernel.Binding{{k.Field, k.PrevField}, {k.Save, k.Discard}, {widget.KillLine}},
 	}
 	sets[keysConfirm] = kernel.KeySet{
 		Acts: []kernel.Binding{k.Yes, k.No},

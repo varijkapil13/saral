@@ -247,7 +247,7 @@ func (m *Model) fromCache() {
 }
 
 func newFilterInput() textinput.Model {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = "/"
 	ti.Placeholder = "filter these rows"
 	return ti

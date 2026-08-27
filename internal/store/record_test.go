@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"go.etcd.io/bbolt"
 )
 
 const kind = "issue"
@@ -160,7 +162,7 @@ func TestEach_WalksInKeyOrderAndStopsWhenAsked(t *testing.T) {
 	}
 
 	var seen []string
-	if err := db.Each(scope, kind, func(rec Record) bool {
+	if _, err := db.Each(scope, kind, func(rec Record) bool {
 		seen = append(seen, rec.Key)
 		return true
 	}); err != nil {
@@ -172,7 +174,7 @@ func TestEach_WalksInKeyOrderAndStopsWhenAsked(t *testing.T) {
 	}
 
 	seen = nil
-	if err := db.Each(scope, kind, func(rec Record) bool {
+	if _, err := db.Each(scope, kind, func(rec Record) bool {
 		seen = append(seen, rec.Key)
 		return false
 	}); err != nil {
@@ -188,7 +190,7 @@ func TestEach_OverAKindNeverWrittenToVisitsNothing(t *testing.T) {
 
 	db := openTemp(t)
 	visited := 0
-	if err := db.Each(scope, "search", func(Record) bool {
+	if _, err := db.Each(scope, "search", func(Record) bool {
 		visited++
 		return true
 	}); err != nil {
@@ -275,5 +277,41 @@ func TestRecords_StayInsideTheirOwnScope(t *testing.T) {
 	}
 	if _, ok, _ := db.Get(scope, kind, "PROJ-1"); !ok {
 		t.Error("emptying one account's cache emptied another's")
+	}
+}
+
+// A value too short to carry the time it was written used to end the walk, and
+// keys sort, so one truncated record hid every record after it.
+func TestEach_SkipsARecordItCannotDecodeAndNamesIt(t *testing.T) {
+	t.Parallel()
+
+	db := openTemp(t)
+	now := time.Now()
+	for _, key := range []string{"PROJ-1", "PROJ-2", "PROJ-3"} {
+		if err := db.Put(scope, kind, Record{Key: key, Value: []byte(key), StoredAt: now}); err != nil {
+			t.Fatalf("Put %s: %v", key, err)
+		}
+	}
+	// Written past Put, which always stamps what it stores: a half-written value
+	// is what a file truncated under a crash leaves behind.
+	if err := db.bolt.Update(func(tx *bbolt.Tx) error {
+		return tx.Bucket(scope.Bucket(kind)).Put([]byte("PROJ-2"), []byte{1, 2, 3})
+	}); err != nil {
+		t.Fatalf("writing a value too short to carry a stamp: %v", err)
+	}
+
+	var seen []string
+	unreadable, err := db.Each(scope, kind, func(rec Record) bool {
+		seen = append(seen, rec.Key)
+		return true
+	})
+	if err != nil {
+		t.Fatalf("Each: %v", err)
+	}
+	if want := []string{"PROJ-1", "PROJ-3"}; fmt.Sprint(seen) != fmt.Sprint(want) {
+		t.Errorf("the walk visited %v, want %v: one record it could not decode hid the ones after it", seen, want)
+	}
+	if want := []string{"PROJ-2"}; fmt.Sprint(unreadable) != fmt.Sprint(want) {
+		t.Errorf("the walk reported %v as unreadable, want %v; a caller cannot heal or count what it is not told about", unreadable, want)
 	}
 }

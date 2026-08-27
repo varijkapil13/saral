@@ -128,6 +128,8 @@ every issue here       a              widen the search to the whole of the sessi
 edit this search       e              show the JQL on screen and run an edited one
 save this search       s              bind the query on screen to a number key
 refresh                r / R          current view / purge and refetch. both say what came back
+kill to end of line    alt+k          in any text field. ctrl+k is the palette and never reaches one,
+                                      so bubbles' own binding for this is rebound in one place
 ```
 
 Vim keys and arrows are both always bound. `j/k` and `↑/↓` are not a preference to configure.

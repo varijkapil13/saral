@@ -129,7 +129,13 @@ func (db *DB) Delete(s Scope, kind string, keys ...string) error {
 
 // Each visits every record of one kind in key order, stopping early when fn
 // returns false. The value handed to fn is the caller's own copy.
-func (db *DB) Each(s Scope, kind string, fn func(Record) bool) error {
+//
+// A record whose stored bytes cannot be read is skipped and its key returned
+// rather than ending the walk. Keys sort, so stopping at the first unreadable
+// one would hide every record after it, and a short answer with no error is the
+// one failure a caller cannot see.
+func (db *DB) Each(s Scope, kind string, fn func(Record) bool) ([]string, error) {
+	var unreadable []string
 	err := db.bolt.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(s.Bucket(kind))
 		if bucket == nil {
@@ -139,7 +145,8 @@ func (db *DB) Each(s Scope, kind string, fn func(Record) bool) error {
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 			rec, err := decode(string(k), v)
 			if err != nil {
-				return err
+				unreadable = append(unreadable, string(k))
+				continue
 			}
 			if !fn(rec) {
 				return nil
@@ -148,9 +155,9 @@ func (db *DB) Each(s Scope, kind string, fn func(Record) bool) error {
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("walking %s: %w", kind, err)
+		return unreadable, fmt.Errorf("walking %s: %w", kind, err)
 	}
-	return nil
+	return unreadable, nil
 }
 
 // Trim keeps the keep most recently written records of one kind and deletes the

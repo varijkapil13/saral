@@ -257,7 +257,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 }
 
 func newInput() textinput.Model {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = "> "
 	ti.Placeholder = "project key"
 	return ti

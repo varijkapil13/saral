@@ -1,6 +1,9 @@
 package list
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
+)
 
 var _ kernel.KeyReporter = (*Model)(nil)
 
@@ -128,7 +131,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// they are called is the whole point of asking.
 	sets[keysFiltering] = kernel.KeySet{
 		Acts: []kernel.Binding{k.Accept, k.Clear},
-		Full: [][]kernel.Binding{{k.Accept, k.Clear}},
+		Full: [][]kernel.Binding{{k.Accept, k.Clear}, {widget.KillLine}},
 	}
 	sets[keysPickingSlot] = kernel.KeySet{
 		Acts: []kernel.Binding{k.Slot, k.Drop},
@@ -140,7 +143,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	}
 	sets[keysAsking] = kernel.KeySet{
 		Acts: []kernel.Binding{k.Run, k.Keep},
-		Full: [][]kernel.Binding{{k.Run, k.Keep}},
+		Full: [][]kernel.Binding{{k.Run, k.Keep}, {widget.KillLine}},
 	}
 	return sets
 }()

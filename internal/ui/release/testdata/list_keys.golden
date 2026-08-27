@@ -10,5 +10,6 @@ typing a version
   acts   ctrl+s save · esc leave it
   full   [tab next field, shift+tab previous field]
   full   [ctrl+s save this version, esc leave it alone]
+  full   [alt+k delete to end of line]
 a save in flight
   acts   

@@ -107,7 +107,13 @@ type Cache interface {
 	// EachIssue visits every issue held, in key order, stopping early when fn
 	// returns false. It is how an index over what is already on disk is built
 	// without a round trip.
-	EachIssue(fn func(iss jira.Issue, storedAt time.Time) bool) error
+	//
+	// A record that cannot be decoded is skipped, not fatal: keys sort, so
+	// stopping at the first one would hide every issue after it, and a list that
+	// is quietly short is indistinguishable from a project that shrank. How many
+	// were dropped is returned so a caller can say so, and it is the whole count
+	// whether or not the error is nil.
+	EachIssue(fn func(iss jira.Issue, storedAt time.Time) bool) (dropped int, err error)
 
 	// Generation counts the changes this cache has made to what is on disk. It
 	// only ever increases, and it moves for any write, so something holding a
@@ -292,23 +298,38 @@ func (c *DiskCache) Forget(jql string) error {
 }
 
 // EachIssue implements Cache.
-func (c *DiskCache) EachIssue(fn func(jira.Issue, time.Time) bool) error {
+func (c *DiskCache) EachIssue(fn func(jira.Issue, time.Time) bool) (int, error) {
 	if c == nil || c.db == nil || fn == nil {
-		return nil
+		return 0, nil
 	}
-	var bad error
-	err := c.db.Each(c.scope, string(KindIssue), func(rec store.Record) bool {
-		iss, err := decodeIssue(rec.Value)
-		if err != nil {
-			bad = fmt.Errorf("the cached copy of %s cannot be read: %w", rec.Key, err)
-			return false
+	var bad []string
+	short, err := c.db.Each(c.scope, string(KindIssue), func(rec store.Record) bool {
+		iss, decErr := decodeIssue(rec.Value)
+		if decErr != nil {
+			bad = append(bad, rec.Key)
+			return true
 		}
 		return fn(iss, rec.StoredAt)
 	})
+	bad = append(bad, short...)
 	if err != nil {
+		return len(bad), err
+	}
+	return len(bad), c.prune(bad)
+}
+
+// prune drops the records a walk could not read. Nothing is lost that was not
+// already unreadable, and a record left in place would be counted again on every
+// walk for the rest of the file's life.
+func (c *DiskCache) prune(keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	if err := c.db.Delete(c.scope, string(KindIssue), keys...); err != nil {
 		return err
 	}
-	return bad
+	c.gen.Add(1)
+	return nil
 }
 
 // Generation implements Cache.

@@ -1,6 +1,9 @@
 package comment
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
+)
 
 var _ kernel.KeyReporter = (*Model)(nil)
 
@@ -80,7 +83,7 @@ var liveSets = func() [3]kernel.KeySet {
 		browsing: k.keySet(),
 		writing: {
 			Acts: []kernel.Binding{k.Send, k.Cancel},
-			Full: [][]kernel.Binding{{k.Send, k.Cancel}},
+			Full: [][]kernel.Binding{{k.Send, k.Cancel}, {widget.KillLine}},
 		},
 		confirming: {
 			Acts: []kernel.Binding{k.Confirm, k.Keep},

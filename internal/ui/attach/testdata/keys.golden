@@ -16,6 +16,7 @@ nothing attached, and a token that may attach one
 typing a path
   acts   ctrl+s attach it · esc leave it unattached
   full   [ctrl+s attach it, esc leave it unattached]
+  full   [alt+k delete to end of line]
 a deletion waiting for an answer
   acts   y delete it · esc keep it
   full   [y delete it, esc keep it]

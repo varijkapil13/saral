@@ -25,6 +25,7 @@ type fakeCache struct {
 	stored map[string]time.Time
 	gen    uint64
 	walks  int
+	drops  int
 	fail   error
 }
 
@@ -65,7 +66,7 @@ func (c *fakeCache) PutRows(string, []jira.Issue, bool) error { return nil }
 
 func (c *fakeCache) Forget(string) error { return nil }
 
-func (c *fakeCache) EachIssue(fn func(jira.Issue, time.Time) bool) error {
+func (c *fakeCache) EachIssue(fn func(jira.Issue, time.Time) bool) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.walks++
@@ -74,7 +75,7 @@ func (c *fakeCache) EachIssue(fn func(jira.Issue, time.Time) bool) error {
 			break
 		}
 	}
-	return c.fail
+	return c.drops, c.fail
 }
 
 func (c *fakeCache) Generation() uint64 {
@@ -318,22 +319,60 @@ func TestPalette_WithAnEmptyCacheSaysNothingHasBeenStoredYet(t *testing.T) {
 	mustContain(t, p.frame(), "No issue has been cached")
 }
 
-// An issue that cannot be decoded is reported rather than swallowed, and the
-// issues that could be read are still offered.
-func TestPalette_ReportsACachedIssueItCouldNotRead(t *testing.T) {
+// A walk that failed outright is reported rather than swallowed, and the issues
+// it did read are still offered.
+func TestPalette_ReportsACacheItCouldNotWalk(t *testing.T) {
 	t.Parallel()
 
 	d, cache := cachedDeps()
-	cache.fail = errors.New("the cached copy of PROJ-9 cannot be read")
+	cache.fail = errors.New("the cache file is not readable")
 	p := fly(t, d, sample(), memoryTable(), 120, 24)
 	p.typeText("login")
 
-	if got := p.statuses(); len(got) != 1 || !strings.Contains(got[0], "PROJ-9") {
-		t.Fatalf("the palette said %v about a cached issue it could not read", got)
+	if got := p.statuses(); len(got) != 1 || !strings.Contains(got[0], "not readable") {
+		t.Fatalf("the palette said %v about a cache it could not walk", got)
 	}
 	if got := p.keys(); len(got) == 0 {
-		t.Error("one unreadable issue took the rest of the cache with it")
+		t.Error("a failed walk took the rows it had already read with it")
 	}
+}
+
+// A record that cannot be decoded is skipped, so the count of them is the only
+// account of it there is: without it a cache holding less than it looks reads
+// exactly like a project that holds less.
+func TestPalette_SaysHowManyCachedIssuesWentUnread(t *testing.T) {
+	t.Parallel()
+
+	d, cache := cachedDeps()
+	cache.drops = 2
+	p := fly(t, d, sample(), memoryTable(), 120, 24)
+	p.typeText("login")
+
+	got := p.statuses()
+	if len(got) != 1 || !strings.Contains(got[0], "2 cached issues") {
+		t.Fatalf("the palette said %v about the two records it could not read", got)
+	}
+	if keys := p.keys(); len(keys) == 0 {
+		t.Error("two unreadable records took the rest of the cache with them")
+	}
+}
+
+// The two lines this used to draw at once contradicted each other: an empty state
+// saying nothing had ever been cached, beside a warning saying some of it could
+// not be read. The count is what lets one of them be true.
+func TestPalette_TellsAnEmptyCacheFromOneItCouldNotReadAtAll(t *testing.T) {
+	t.Parallel()
+
+	d := paletteDeps()
+	cache := newFakeCache()
+	cache.drops = 3
+	d.Cache = cache
+	p := fly(t, d, sample(), memoryTable(), 120, 24)
+	p.typeText("zzzz")
+
+	frame := p.frame()
+	mustContain(t, frame, "could be read")
+	mustNotContain(t, frame, "No issue has been cached on this machine yet")
 }
 
 // docs/PERFORMANCE.md: the index rebuilds only when the cache has moved, so a

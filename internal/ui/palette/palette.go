@@ -14,6 +14,7 @@ import (
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -106,6 +107,9 @@ type Model struct {
 	hits  []hit
 	shown []entry
 	ranks []ranked
+	// said is the drop count already reported, so a cache holding less than it
+	// looks is said once rather than on every keystroke over the same walk.
+	said int
 	// refused are the commands the filter matched that this site does not allow.
 	// They are not offered, and their reason is what the palette says instead of
 	// "nothing matches".
@@ -162,7 +166,7 @@ func build(d kernel.Deps, cmds []kernel.Command, freq *table) *Model {
 // to keep issues is normal, and offering to search them there would name
 // something that cannot work.
 func newInput(cached bool) textinput.Model {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = "> "
 	ti.Placeholder = "what do you want to do?"
 	if cached {

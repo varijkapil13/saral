@@ -637,7 +637,7 @@ func (m *Model) refreshPane() {
 }
 
 func (m Model) newInput(f field) textinput.Model {
-	in := textinput.New()
+	in := widget.NewInput()
 	in.Prompt = ""
 	in.Placeholder = f.placeholder()
 	if f == fieldToken {
