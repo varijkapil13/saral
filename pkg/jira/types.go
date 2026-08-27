@@ -953,6 +953,33 @@ func (c BoardConfig) Estimates() bool {
 	return c.Estimation != nil && c.Estimation.Type == EstimationField && c.Estimation.Field.ID != ""
 }
 
+// BoardQuery narrows a read of a board's issues.
+//
+// Fields is not optional, for the reason Query.Fields is not: asked for no
+// field, the Agile issue endpoints answer with every navigable and Agile field
+// the site has, which on a site with ninety custom fields is ninety values per
+// card that draws six. A read naming none is refused rather than sent.
+//
+// SubQuery is the board's own extra condition, taken from BoardConfig.SubQuery.
+// It is on the query rather than applied inside the port because the caller has
+// already read the configuration and the port would have to read it again; it is
+// on the query at all because the endpoint does not apply it. A Kanban board
+// whose sub-query hides long-resolved work answers more issues than the board
+// draws, and the difference is silent. Anything other than that board's own
+// sub-query narrows the board to a set no board shows.
+//
+// There is deliberately no further narrowing. What a board holds is the board's
+// to define, and a caller that wants a subset of it filters the rows it was
+// given rather than asking the site a question whose answer nothing can compare
+// against the board on screen.
+type BoardQuery struct {
+	Fields   []string
+	SubQuery string
+	// MaxResults is how many issues one page asks for. Zero leaves the length
+	// to the adapter.
+	MaxResults int
+}
+
 // SprintState is where a sprint is in its lifecycle. The only legal moves are
 // future to active to closed.
 type SprintState string

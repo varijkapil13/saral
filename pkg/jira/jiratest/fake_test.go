@@ -747,6 +747,16 @@ func TestCapabilities_GateTheMethodsThatDependOnThem(t *testing.T) {
 			func(ctx context.Context, c *jiratest.Fake) error { _, err := c.Sprints(ctx, 1); return err }},
 		{"Sprint with no board", jiratest.NoBoards, jira.CapBoards,
 			func(ctx context.Context, c *jiratest.Fake) error { _, err := c.Sprint(ctx, 1); return err }},
+		{"BoardIssues with no board", jiratest.NoBoards, jira.CapBoards,
+			func(ctx context.Context, c *jiratest.Fake) error {
+				_, err := c.BoardIssues(ctx, 1, jira.BoardQuery{Fields: fakeNarrow})
+				return err
+			}},
+		{"BoardBacklog with no board", jiratest.NoBoards, jira.CapBoards,
+			func(ctx context.Context, c *jiratest.Fake) error {
+				_, err := c.BoardBacklog(ctx, 1, jira.BoardQuery{Fields: fakeNarrow})
+				return err
+			}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

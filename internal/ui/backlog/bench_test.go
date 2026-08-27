@@ -74,7 +74,6 @@ func benchLoaded(gen, n int) loadedMsg {
 			{ID: 1002, BoardID: 10, Name: "Sprint 1002", State: jira.SprintFuture},
 		},
 		field: field,
-		jql:   `project = "PROJ" ORDER BY created ASC`,
 		page:  jira.NewPage(issues, nil),
 	}
 }

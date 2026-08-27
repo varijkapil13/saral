@@ -209,11 +209,11 @@ func TestBacklog_SaysWhichKindOfEmptyItIs(t *testing.T) {
 			build: func(t *testing.T) *driver {
 				f := jiratest.New(
 					jiratest.WithProject("PROJ", jiratest.Scrum),
-					jiratest.WithIssues(allDone()),
+					jiratest.WithIssues(allDone(t)),
 				)
 				return newDriver(t, d(f), 100, 20)
 			},
-			want: []string{"Nothing on this board is waiting to be scheduled.", `project = "PROJ"`},
+			want: []string{"Nothing on this board is waiting to be scheduled."},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -237,12 +237,25 @@ func noSprintField() []jira.Field {
 	}
 }
 
-func allDone() []jira.Issue {
+// allDone is the fixture with every issue finished. The status is taken off an
+// issue the generator already put in the done category rather than written down:
+// a board shows an issue whose status one of its columns maps, so an id invented
+// here is an issue on no board at all.
+func allDone(tb testing.TB) []jira.Issue {
+	tb.Helper()
 	issues := jiratest.Gen(6)
+	done := jira.Status{}
 	for i := range issues {
-		issues[i].Status = jira.Status{
-			ID: "10003", Name: "Released", Category: jira.CategoryDone,
+		if issues[i].Status.Category == jira.CategoryDone {
+			done = issues[i].Status
+			break
 		}
+	}
+	if done.ID == "" {
+		tb.Fatal("the generator made no finished issue, so there is no done status to give the rest")
+	}
+	for i := range issues {
+		issues[i].Status = done
 	}
 	return issues
 }
@@ -496,25 +509,62 @@ func TestBacklog_ReadsBothShapesOfASprintValue(t *testing.T) {
 	}
 }
 
-// The fake refuses a move of more than fifty issues, which is the endpoint's own
-// rule; pkg/jira/cloud's adapter chunks around it instead. The view chunks too,
-// so it meets the same rule against both — and this holds the fake to it, since
-// a view that stopped chunking would otherwise only fail against a real site.
-func TestPort_TheFakeHoldsTheEndpointCapTheViewChunksFor(t *testing.T) {
+// The fifty-issue cap is the endpoint's and not the port's: pkg/jira/cloud
+// chunks to stay inside it, so MoveToSprint takes as many keys as a caller has
+// and moves all of them. The view chunks as well, because a chunk is the only
+// unit it can report progress in — so both halves are asserted here, the port
+// taking the whole list and the view still sending it in calls the endpoint
+// would accept.
+func TestPort_TakesEveryKeyItIsGivenAndTheViewStillChunks(t *testing.T) {
 	t.Parallel()
-	f := newFake(120)
-	active, _ := sprintIDs(t, f)
+	c := newChunker(newFake(140))
+	dr := newDriver(t, testDeps(c), 120, 24)
+	dr.loadAll()
+	dr.pickWholeBacklog()
 
-	keys := make([]string, 0, endpointCap+1)
-	for i := 1; len(keys) < endpointCap+1; i++ {
-		keys = append(keys, "PROJ-"+strconv.Itoa(i))
+	whole := len(dr.m.picked)
+	if whole <= endpointCap {
+		t.Fatalf("the fixture leaves %d issues to schedule, and this test is about more than the %d the endpoint takes",
+			whole, endpointCap)
 	}
-	if err := f.MoveToSprint(t.Context(), active, keys); err == nil {
-		t.Errorf("the fake accepted a move of %d issues; the endpoint refuses more than %d, so a view "+
-			"that stopped chunking would pass every test here and fail against a real site",
-			len(keys), endpointCap)
+	keys := make([]string, 0, whole)
+	for i := range dr.m.rows {
+		if !dr.m.rows[i].head {
+			if key := dr.m.issues[dr.m.rows[i].issue].Key; dr.m.picked[key] {
+				keys = append(keys, key)
+			}
+		}
 	}
-	if err := f.MoveToSprint(t.Context(), active, keys[:endpointCap]); err != nil {
-		t.Errorf("the fake refused a move of exactly %d issues, which the endpoint takes: %v", endpointCap, err)
+
+	// The port, handed the whole selection at once.
+	active, _ := sprintIDs(t, c.Fake)
+	if err := c.Fake.MoveToSprint(t.Context(), active, keys); err != nil {
+		t.Fatalf("the port refused a move of %d issues; the fifty-issue cap is the endpoint's, and the "+
+			"adapter chunks for it: %v", len(keys), err)
+	}
+	for _, key := range keys {
+		iss, err := c.Fake.Issue(t.Context(), key)
+		if err != nil {
+			t.Fatalf("reading %s back: %v", key, err)
+		}
+		if _, held := iss.Fields.Get(dr.m.field); !held {
+			t.Fatalf("%s was in a move of %d and is in no sprint, so only part of the list moved",
+				key, len(keys))
+		}
+	}
+
+	// The view, moving the same selection through the same port.
+	dr.key("m")
+	dr.m.destAt = 0
+	dr.key("enter", "y")
+	sprint, _ := c.calls()
+	if len(sprint) != (whole+endpointCap-1)/endpointCap {
+		t.Errorf("the view moved %d issues in %d calls, want %d", whole, len(sprint),
+			(whole+endpointCap-1)/endpointCap)
+	}
+	for i, n := range sprint {
+		if n > endpointCap || n == 0 {
+			t.Errorf("call %d carried %d issues; the endpoint takes 1 to %d", i, n, endpointCap)
+		}
 	}
 }

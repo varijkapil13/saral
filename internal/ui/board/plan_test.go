@@ -2,7 +2,6 @@ package board
 
 import (
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/varijkapil13/saral/internal/app"
@@ -131,68 +130,30 @@ func TestPlan_ABoardWithoutARankFieldIsOrderedByItsFilter(t *testing.T) {
 	}
 }
 
-func TestPlan_TheQueryNamesEveryStatusTheBoardMaps(t *testing.T) {
-	t.Parallel()
-	p := newPlan(jira.BoardConfig{Columns: twoColumns()})
-	got := p.jql("PROJ")
-
-	for _, want := range []string{`project = "PROJ"`, `"10201"`, `"10777"`, `"10202"`, `"10204"`} {
-		if !strings.Contains(got, want) {
-			t.Errorf("the query %q does not name %s", got, want)
-		}
-	}
-	if strings.Contains(got, "Waiting") || strings.Contains(got, "Under way") {
-		t.Errorf("the query %q names a column by the words on screen; a status is asked for by id", got)
-	}
-}
-
-// A Kanban board's own condition decides which resolved issues it still shows.
-// Dropping it makes the done column every issue the project ever finished, so it
-// is part of the query rather than a field of the configuration nothing reads.
-func TestPlan_AKanbanBoardsRuleAboutResolvedIssuesIsPartOfTheQuery(t *testing.T) {
+// A Kanban board's own condition about resolved issues is read off the
+// configuration and kept, because the read that fills the board applies the
+// board's filter and its columns and leaves this one part to the caller.
+func TestPlan_AKanbanBoardsRuleAboutResolvedIssuesIsKept(t *testing.T) {
 	t.Parallel()
 	const rule = "resolved >= -14d OR resolved is EMPTY"
-	kanban := newPlan(jira.BoardConfig{Type: jira.BoardKanban, Columns: twoColumns(), SubQuery: rule})
+
+	kanban := newPlan(jira.BoardConfig{Type: jira.BoardKanban, Columns: twoColumns(), SubQuery: "  " + rule + "  "})
+	if kanban.subQuery != rule {
+		t.Errorf("the Kanban plan carries the sub-query %q, want %q", kanban.subQuery, rule)
+	}
 	scrum := newPlan(jira.BoardConfig{Type: jira.BoardScrum, Columns: twoColumns()})
-
-	if got := kanban.jql("PROJ"); !strings.Contains(got, "("+rule+")") {
-		t.Errorf("the Kanban query %q leaves the board's own rule about resolved issues out of it", got)
-	}
-	if got := scrum.jql("PROJ"); strings.Contains(got, "resolved") {
-		t.Errorf("the Scrum query %q carries a sub-query; SubQuery is empty on a Scrum board", got)
+	if scrum.subQuery != "" {
+		t.Errorf("the Scrum plan carries the sub-query %q; SubQuery is empty on a Scrum board", scrum.subQuery)
 	}
 }
 
-func TestPlan_ABoardWithNothingMappedHasNoQueryToRun(t *testing.T) {
+// The board the read asks about is the one the configuration answered for, so a
+// project with several boards cannot draw one board's cards under another's
+// columns.
+func TestPlan_IsBuiltForTheBoardItsConfigurationAnswersFor(t *testing.T) {
 	t.Parallel()
-	for _, tc := range []struct {
-		name    string
-		columns []jira.Column
-	}{
-		{name: "no columns at all"},
-		{name: "a column with no status in it", columns: []jira.Column{{Name: "Empty"}}},
-		{name: "a column whose status ids are blank", columns: []jira.Column{{Name: "Blank", StatusIDs: []string{"", " "}}}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			p := newPlan(jira.BoardConfig{Columns: tc.columns})
-			if got := p.jql("PROJ"); got != "" {
-				t.Errorf("jql = %q, want nothing to ask for", got)
-			}
-		})
-	}
-}
-
-// The project is part of the query because the board's own saved filter cannot
-// be read through this port. A session with no project asks for the statuses
-// alone rather than composing a clause with an empty key in it.
-func TestPlan_ASessionWithNoProjectStillAsksForTheStatuses(t *testing.T) {
-	t.Parallel()
-	got := newPlan(jira.BoardConfig{Columns: twoColumns()}).jql("  ")
-	if strings.Contains(got, "project") {
-		t.Errorf("jql = %q, want no project clause when the session has no project", got)
-	}
-	if !strings.Contains(got, `"10201"`) {
-		t.Errorf("jql = %q, want the statuses the board maps", got)
+	p := newPlan(jira.BoardConfig{BoardID: 7, Name: "Ledger", Type: jira.BoardScrum, Columns: twoColumns()})
+	if p.boardID != 7 {
+		t.Errorf("the plan is for board %d, want 7", p.boardID)
 	}
 }

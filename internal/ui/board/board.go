@@ -272,11 +272,11 @@ func (m *Model) loadConfig() tea.Cmd {
 }
 
 func (m *Model) loadCards() tea.Cmd {
-	if m.search == nil || !m.ready {
+	if m.deps.Jira == nil || m.search == nil || !m.ready {
 		return nil
 	}
 	ctx, gen := m.begin(stepIssues)
-	return m.reply(cards(ctx, m.search, m.plan, m.deps.Project, gen))
+	return m.reply(cards(ctx, m.deps.Jira, m.search, m.plan, gen))
 }
 
 // refresh re-reads what is on screen. Purging re-reads the board's shape as

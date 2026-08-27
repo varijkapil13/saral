@@ -21,10 +21,23 @@ const boardPageSize = 50
 // unexpected cannot become an unbounded read on a first-paint path.
 const boardBound = 200
 
+// boardIssuePageSize is the page length a board issue read asks for when the
+// caller names none. The Agile API echoes the number sent rather than capping it
+// silently, so it is a length and not a suggestion.
+const boardIssuePageSize = 50
+
 var _ jira.BoardReader = (*Client)(nil)
 
 func boardConfigPath(boardID int64) string {
 	return boardPath + "/" + strconv.FormatInt(boardID, 10) + "/configuration"
+}
+
+func boardIssuesPath(boardID int64) string {
+	return boardPath + "/" + strconv.FormatInt(boardID, 10) + "/issue"
+}
+
+func boardBacklogPath(boardID int64) string {
+	return boardPath + "/" + strconv.FormatInt(boardID, 10) + "/backlog"
 }
 
 // Boards lists the boards that draw on a project.
@@ -106,6 +119,85 @@ func (c *Client) BoardConfig(ctx context.Context, boardID int64) (jira.BoardConf
 		return jira.BoardConfig{}, boardRefusal(err)
 	}
 	return body.domain(boardID), nil
+}
+
+// BoardIssues lists what a board is showing.
+//
+// The endpoint applies the board's saved filter and its column mapping at the
+// site, which is the whole reason for this read: the filter is arbitrary JQL
+// only the site can run, and BoardConfig reports its id and nothing else. The
+// order is the board's rank order, which is why nothing here sorts.
+//
+// What the endpoint does not apply is the board's own sub-query — a board whose
+// sub-query hid resolved work on released versions answered eighteen issues
+// against the sixteen on screen — so BoardQuery.SubQuery goes out as the
+// endpoint's jql parameter. It is bracketed: the site ANDs the parameter onto
+// the board's filter, and a sub-query with an OR at the top of it would widen
+// the board rather than narrow it.
+//
+// The answer carries no schema block, so a custom field arrives typed by the
+// shape of its value.
+func (c *Client) BoardIssues(ctx context.Context, boardID int64, q jira.BoardQuery) (jira.Page[jira.Issue], error) {
+	return c.boardIssuePages(ctx, boardIssuesPath(boardID), boardID, q)
+}
+
+// BoardBacklog lists a board's backlog, which is the same endpoint shape with a
+// different set behind it: the issues the board's filter matches that no active
+// or future sprint holds. The site decides that, and nothing about it can be
+// read off a page of issues.
+func (c *Client) BoardBacklog(ctx context.Context, boardID int64, q jira.BoardQuery) (jira.Page[jira.Issue], error) {
+	return c.boardIssuePages(ctx, boardBacklogPath(boardID), boardID, q)
+}
+
+func (c *Client) boardIssuePages(ctx context.Context, path string, boardID int64, q jira.BoardQuery) (jira.Page[jira.Issue], error) {
+	if err := boardIDCheck(boardID); err != nil {
+		return jira.Page[jira.Issue]{}, err
+	}
+	fields := uniqueStrings(q.Fields)
+	if len(fields) == 0 {
+		return jira.Page[jira.Issue]{}, errBoardIssuesNeedFields()
+	}
+	mask := jira.NewFieldMask(fields)
+	query := url.Values{"fields": []string{strings.Join(fields, ",")}}
+	if sub := strings.TrimSpace(q.SubQuery); sub != "" {
+		query.Set("jql", "("+sub+")")
+	}
+	size := boardIssuePageSize
+	if q.MaxResults > 0 {
+		size = q.MaxResults
+	}
+	id := strconv.FormatInt(boardID, 10)
+	op := http.MethodGet + " " + path
+	// The refusal is named inside the fetch rather than around the walk, so that
+	// a 403 on the fourth page reads the way the one on the first page does.
+	return jira.Offset(ctx, func(ctx context.Context, startAt int) ([]jira.Issue, int, bool, error) {
+		resp, err := c.do(ctx, request{
+			method: http.MethodGet,
+			path:   path,
+			query:  pagedQuery(query, startAt, size),
+			kind:   "board",
+			id:     id,
+		})
+		if err != nil {
+			return nil, -1, false, boardRefusal(err)
+		}
+		rows, total, isLast, err := decodeAgilePage[apiIssue](resp, op)
+		if err != nil {
+			return nil, -1, false, err
+		}
+		out := make([]jira.Issue, 0, len(rows))
+		for i := range rows {
+			out = append(out, decodeIssue(rows[i], nil, mask))
+		}
+		return out, total, isLast, nil
+	})
+}
+
+func errBoardIssuesNeedFields() error {
+	return &jira.ValidationError{Fields: []jira.FieldError{{
+		Field:   "fields",
+		Message: "a board issue read must name the fields it wants; the endpoint answers with every field the site has without them",
+	}}}
 }
 
 // apiBoard is one row of the board collection. location is a pointer because a

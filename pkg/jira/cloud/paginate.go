@@ -128,7 +128,22 @@ func (e agileEnvelope[W]) total() int {
 	return *e.Total
 }
 
-func (e agileEnvelope[W]) last() bool { return e.IsLast != nil && *e.IsLast }
+// last reports the end of the walk. An endpoint that sends isLast is believed;
+// one that sends a total is left to jira.Offset, which ends on it. The board
+// issue endpoints send neither, so all they leave to go on is the length of the
+// page against the maxResults the response itself echoes — a page shorter than
+// the length asked for is the last one, and without this a walk over them costs
+// an extra request that comes back empty.
+func (e agileEnvelope[W]) last() bool {
+	switch {
+	case e.IsLast != nil:
+		return *e.IsLast
+	case e.Total != nil:
+		return false
+	default:
+		return e.MaxResults > 0 && len(e.items()) < e.MaxResults
+	}
+}
 
 // decodeAgilePage reads one page of an offset-paginated Agile response.
 func decodeAgilePage[W any](resp *response, op string) (items []W, total int, isLast bool, err error) {

@@ -681,22 +681,211 @@ func (f *Fake) BoardConfig(ctx context.Context, boardID int64) (jira.BoardConfig
 		Columns:  fakeColumns(),
 		FilterID: "filter-" + strconv.FormatInt(board.ID, 10),
 	}
+	cfg.SubQuery = fakeSubQueryOf(board)
+	if ref, ranked := f.fakeRankField(board); ranked {
+		cfg.RankFieldID = ref.ID
+	}
 	// A Scrum board ranks and estimates; a Kanban board here does neither, and
 	// sends no estimation object at all rather than one saying "none". A caller
 	// that reads Estimation without checking is what this is here to catch.
 	if board.Type == jira.BoardScrum {
-		if ref, found := fakeRefByName(f.fields, "Rank"); found {
-			cfg.RankFieldID = ref.ID
-		}
 		est := jira.Estimation{Type: jira.EstimationNone}
 		if ref, found := fakeRefByName(f.fields, "Story Points"); found {
 			est = jira.Estimation{Type: jira.EstimationField, Field: ref}
 		}
 		cfg.Estimation = &est
-	} else {
-		cfg.SubQuery = "resolved >= -14d OR resolved is EMPTY"
 	}
 	return cfg, nil
+}
+
+// BoardIssues lists what a board is showing: the issues in the board's project
+// whose status one of its columns maps, narrowed by the board's sub-query when
+// one is passed, ordered by rank where the board has a rank field and by the
+// order they were loaded in where it has none.
+//
+// The filter is a project here, and that is the gap. A real board's contents are
+// its saved filter — arbitrary JQL — and there is no filter engine in an
+// in-memory fake, so a board draws on the project it belongs to, which is what
+// its FilterID stands for. Everything else the endpoint decides, this decides:
+// a status mapped to no column is an issue the board does not show, and the
+// sub-query is applied rather than ignored.
+func (f *Fake) BoardIssues(ctx context.Context, boardID int64, q jira.BoardQuery) (jira.Page[jira.Issue], error) {
+	return f.fakeBoardIssues(ctx, "BoardIssues", boardID, q, false)
+}
+
+// BoardBacklog lists a board's backlog: the same set, less the issues an active
+// or future sprint holds and less the finished ones, which is what the endpoint
+// means by a backlog. A closed sprint holds nothing back — the work in it is
+// over — so an issue whose only sprint is closed is in the backlog.
+func (f *Fake) BoardBacklog(ctx context.Context, boardID int64, q jira.BoardQuery) (jira.Page[jira.Issue], error) {
+	return f.fakeBoardIssues(ctx, "BoardBacklog", boardID, q, true)
+}
+
+// fakeBoardIssues pages either board issue read by offset with a total, which is
+// the Agile API's model rather than the platform API's cursor.
+func (f *Fake) fakeBoardIssues(ctx context.Context, name string, boardID int64, q jira.BoardQuery, backlog bool) (jira.Page[jira.Issue], error) {
+	mask := jira.NewFieldMask(q.Fields)
+	expanded := fakeExpandsSchema(q.Fields)
+	return jira.Offset(ctx, func(ctx context.Context, startAt int) ([]jira.Issue, int, bool, error) {
+		if err := f.fakeBegin(ctx, name); err != nil {
+			return nil, -1, false, err
+		}
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if err := f.caps.Require(jira.CapBoards); err != nil {
+			return nil, -1, false, err
+		}
+		if err := fakeBoardIDCheck(boardID); err != nil {
+			return nil, -1, false, err
+		}
+		if mask.Len() == 0 && !mask.Wide() {
+			return nil, -1, false, fakeInvalid("fields",
+				"a board issue read must name the fields it wants; the endpoint answers with every field the site has without them")
+		}
+		board, ok := f.boards[boardID]
+		if !ok {
+			return nil, -1, false, fakeNotFound("board", strconv.FormatInt(boardID, 10))
+		}
+		matched, err := f.fakeBoardSet(board, q.SubQuery, backlog)
+		if err != nil {
+			return nil, -1, false, err
+		}
+		size := f.pageSize
+		if q.MaxResults > 0 && q.MaxResults < size {
+			size = q.MaxResults
+		}
+		start := min(max(startAt, 0), len(matched))
+		end := min(start+size, len(matched))
+		items := make([]jira.Issue, 0, end-start)
+		for _, iss := range matched[start:end] {
+			clone := fakeCloneIssue(iss)
+			fakeApplyFieldMask(&clone, mask)
+			if expanded {
+				f.fakeUntypedAsBytes(&clone)
+			}
+			items = append(items, clone)
+		}
+		return items, len(matched), end >= len(matched), nil
+	})
+}
+
+// fakeBoardSet is the issues one of the two reads answers with, in the order it
+// answers them in.
+func (f *Fake) fakeBoardSet(board *jira.Board, subQuery string, backlog bool) ([]*jira.Issue, error) {
+	keep, err := f.fakeSubQuery(board, subQuery)
+	if err != nil {
+		return nil, err
+	}
+	mapped := fakeMappedStatuses()
+	out := make([]*jira.Issue, 0, len(f.issueKeys))
+	for _, key := range f.issueKeys {
+		iss := f.issues[key]
+		switch {
+		case iss.Project.Key != board.ProjectKey:
+		case !mapped[iss.Status.ID]:
+		case !keep(iss):
+		case backlog && !f.fakeUnscheduled(iss):
+		default:
+			out = append(out, iss)
+		}
+	}
+	if ref, ranked := f.fakeRankField(board); ranked {
+		slices.SortStableFunc(out, func(a, b *jira.Issue) int { return fakeCompareRank(a, b, ref) })
+	}
+	return out, nil
+}
+
+// fakeUnscheduled is what the backlog endpoint means by an issue being in one.
+func (f *Fake) fakeUnscheduled(iss *jira.Issue) bool {
+	if iss.Status.Category == jira.CategoryDone {
+		return false
+	}
+	sp, held := f.sprints[f.sprintOf[iss.Key]]
+	return !held || (sp.State != jira.SprintActive && sp.State != jira.SprintFuture)
+}
+
+// fakeKanbanSubQueryDays is the window the sub-query below is written in.
+const fakeKanbanSubQueryDays = 14
+
+// fakeKanbanSubQuery is the sub-query a Kanban board here reports, spelled from
+// the number above so that the words and what they mean cannot drift apart.
+var fakeKanbanSubQuery = fmt.Sprintf("resolved >= -%dd OR resolved is EMPTY", fakeKanbanSubQueryDays)
+
+// fakeSubQueryOf is the sub-query a board reports, which the Agile API sends on
+// a Kanban board and not on a Scrum one.
+func fakeSubQueryOf(board *jira.Board) string {
+	if board.Type == jira.BoardScrum {
+		return ""
+	}
+	return fakeKanbanSubQuery
+}
+
+// fakeSubQuery turns a sub-query into what it means, and it can only mean the
+// one this fake mints.
+//
+// This is the one thing the fake cannot express: a real board's sub-query is
+// arbitrary JQL, and there is no engine here to run one. So the sub-query this
+// fake's own BoardConfig hands out is evaluated in Go, and any other is refused
+// rather than quietly dropped — dropping one is the bug the board issue reads
+// exist to fix, and a fake that dropped it would hide that bug one layer down.
+func (f *Fake) fakeSubQuery(board *jira.Board, text string) (func(*jira.Issue) bool, error) {
+	sub := strings.TrimSpace(text)
+	if sub == "" {
+		return func(*jira.Issue) bool { return true }, nil
+	}
+	want := fakeSubQueryOf(board)
+	switch {
+	case want == "":
+		return nil, fakeInvalid("subQuery",
+			"this board reports no sub-query, so there is none to apply here")
+	case sub != want:
+		return nil, fakeInvalid("subQuery",
+			"this fake applies only the sub-query its own board configuration reports, "+
+				strconv.Quote(want)+"; a real board's is arbitrary JQL and nothing here can run one")
+	}
+	cutoff := f.now.AddDate(0, 0, -fakeKanbanSubQueryDays)
+	return func(iss *jira.Issue) bool {
+		return iss.Resolved == nil || !iss.Resolved.Before(cutoff)
+	}, nil
+}
+
+// fakeRankField is the field a board ranks by, and whether it ranks at all.
+func (f *Fake) fakeRankField(board *jira.Board) (jira.FieldRef, bool) {
+	if board.Type != jira.BoardScrum {
+		return jira.FieldRef{}, false
+	}
+	return fakeRefByName(f.fields, "Rank")
+}
+
+// fakeCompareRank orders by the lexicographic rank string. An issue the store
+// holds no rank for sorts last: a missing rank is not a position at the top.
+func fakeCompareRank(a, b *jira.Issue, ref jira.FieldRef) int {
+	left, hasLeft := a.Fields.Text(ref)
+	right, hasRight := b.Fields.Text(ref)
+	switch {
+	case hasLeft && hasRight:
+		return strings.Compare(left, right)
+	case hasLeft:
+		return -1
+	case hasRight:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// fakeMappedStatuses is the status ids the columns map, which is what decides
+// whether an issue is on the board at all. The subtask workflow's middle status
+// is deliberately not among them: a live status mapped to no column is what
+// leaves rows off a real board.
+func fakeMappedStatuses() map[string]bool {
+	out := make(map[string]bool, len(fakeStatuses))
+	for _, col := range fakeColumns() {
+		for _, id := range col.StatusIDs {
+			out[id] = true
+		}
+	}
+	return out
 }
 
 // Sprints lists a board's sprints, paged by offset with a total, which is the

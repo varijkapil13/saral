@@ -494,9 +494,6 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 		lines = append(lines, m.styles.muted.Render("  Nothing has been asked of Jira yet."))
 	default:
 		lines = append(lines, m.styles.muted.Render("  Nothing on this board is waiting to be scheduled."))
-		if m.jql != "" {
-			lines = append(lines, m.styles.muted.Render(m.fit("  "+m.jql)))
-		}
 	}
 	for len(lines)-at < h {
 		lines = append(lines, "")
@@ -505,16 +502,13 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 }
 
 // appendFailure is what the pane says instead of rows: the reason in the error's
-// own words, the query it was asked about, and the key that runs it again. The
-// reason is wrapped rather than cut, since a transport failure names a host and
-// a port before it says what is wrong with them.
+// own words and the key that runs it again. The reason is wrapped rather than
+// cut, since a transport failure names a host and a port before it says what is
+// wrong with them.
 func (m *Model) appendFailure(lines []string, h int) []string {
 	reason, _ := jira.Reason(m.failure)
 	lines = append(lines, m.styles.danger.Render("  The board could not be read."))
 	lines = m.appendWrapped(lines, m.styles.muted, reason, max(h-4, 1))
-	if m.jql != "" {
-		lines = append(lines, m.styles.muted.Render(m.fit("  "+m.jql)))
-	}
 	return append(lines, "", m.styles.muted.Render("  "+retryHint))
 }
 

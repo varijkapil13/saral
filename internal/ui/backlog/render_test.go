@@ -114,7 +114,7 @@ func TestBacklog_Golden(t *testing.T) {
 			open: func(t *testing.T) *driver {
 				return newDriver(t, testDeps(jiratest.New(
 					jiratest.WithProject("PROJ", jiratest.Scrum),
-					jiratest.WithIssues(allDone()),
+					jiratest.WithIssues(allDone(t)),
 				)), 100, 20)
 			},
 			golden: "empty_100x20.golden",

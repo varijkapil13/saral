@@ -188,8 +188,8 @@ func TestBoards_WalkEveryPageOfTheThreeShapesTheAgileAPIAnswersIn(t *testing.T) 
 			isLast: true, offsets: []string{"", "2", "4"},
 		},
 		{
-			name:    "neither, so nothing but an empty page can end it",
-			offsets: []string{"", "2", "4", "5"},
+			name:    "neither, so the short last page ends it",
+			offsets: []string{"", "2", "4"},
 		},
 	}
 

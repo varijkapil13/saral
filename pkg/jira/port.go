@@ -87,6 +87,27 @@ type Client interface {
 	Boards(ctx context.Context, projectKey string) ([]Board, error)
 	// BoardConfig reads a board's columns, estimation field and rank field.
 	BoardConfig(ctx context.Context, boardID int64) (BoardConfig, error)
+	// BoardIssues lists what a board is showing, in the order it shows it.
+	//
+	// It exists because a board's contents cannot be rebuilt out of JQL. What a
+	// board draws is its saved filter — arbitrary JQL the board owns, of which
+	// BoardConfig reports only the id — narrowed to the statuses its columns
+	// map and ordered by rank. Only the site can run that filter, so a caller
+	// composing a query out of BoardConfig is guessing at the half it cannot
+	// read, and what it draws is not the board the user has.
+	//
+	// The board's sub-query is the one part the endpoint leaves to the caller,
+	// which is why BoardQuery carries it.
+	BoardIssues(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
+	// BoardBacklog lists a board's backlog: the issues its filter matches that
+	// no active or future sprint holds and that are not finished.
+	//
+	// It is a read of its own rather than a flag on BoardIssues because the site
+	// decides the difference. Working out which issues are unscheduled from the
+	// sprint value on each one is the same guess BoardIssues exists to remove: a
+	// board holds sprints a session never listed, an issue carries every sprint
+	// it has ever been in, and neither is visible from a page of issues.
+	BoardBacklog(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
 	// Sprints lists a board's sprints, narrowed to the states named. Passing no
 	// state lists them all, which on a board with years of history is a walk
 	// nothing on a first-paint path should be doing.

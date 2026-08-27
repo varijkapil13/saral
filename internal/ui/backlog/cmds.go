@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
-	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -23,7 +22,6 @@ type loadedMsg struct {
 	config  jira.BoardConfig
 	sprints []jira.Sprint
 	field   jira.FieldRef
-	jql     string
 	page    jira.Page[jira.Issue]
 	missing []string
 }
@@ -75,11 +73,20 @@ func withCancel(cancel context.CancelFunc, cmd tea.Cmd) tea.Cmd {
 const sprintFieldName = "Sprint"
 
 // read is one whole load of a backlog: which boards the project has, the
-// configuration of the one on screen, its open sprints, and the issues.
+// configuration of the one on screen, its open sprints, and the issues in its
+// backlog.
+//
+// The issues come from the read that asks the site what this board holds rather
+// than from a query composed here: a board's saved filter is JQL only the site
+// can run, so a set rebuilt out of the statuses its columns map is a different
+// board. Which of them are unscheduled is still worked out here, from the sprint
+// value on each issue, because the port answers what a board holds and what a
+// board's backlog is and nothing about one sprint — and a section that listed
+// only the backlog would have to say "0 issues" about a sprint holding twenty.
 //
 // It is one command because each step decides the next: the rank field comes out
-// of the board configuration and the order of the search comes out of that, so a
-// fan-out would only be four requests waiting on each other anyway.
+// of the board configuration and the projection comes out of that, so a fan-out
+// would only be four requests waiting on each other anyway.
 func read(ctx context.Context, s site, search *app.Search, project string, at, gen int) tea.Cmd {
 	return func() tea.Msg {
 		boards, err := s.Boards(ctx, project)
@@ -108,22 +115,25 @@ func read(ctx context.Context, s site, search *app.Search, project string, at, g
 			return out
 		}
 		out.field = field.Ref()
-		out.jql = backlogJQL(project)
 		// The rank field is named by the board configuration, by id, so it is
 		// added to the projection rather than looked up by a name.
 		projection := app.ListProjection().With(out.field.ID)
 		if config.RankFieldID != "" {
 			projection = projection.With(config.RankFieldID)
 		}
-		res, err := search.Run(ctx, app.Request{
-			JQL:        out.jql,
-			Projection: projection,
+		wanted, err := search.Resolve(ctx, projection)
+		if err != nil {
+			return failedMsg{gen: gen, err: err}
+		}
+		page, err := s.BoardIssues(ctx, boards[at].ID, jira.BoardQuery{
+			Fields:     wanted.IDs,
+			SubQuery:   config.SubQuery,
 			MaxResults: pageSize,
 		})
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
-		out.page, out.missing = res.Page, res.Missing
+		out.page, out.missing = page, wanted.Missing
 		return out
 	}
 }
@@ -185,21 +195,6 @@ func stateOrder(s jira.SprintState) int {
 		return 0
 	}
 	return 1
-}
-
-// backlogJQL asks for the project oldest first, which is a fetch order and not
-// the board's.
-//
-// The board's own order is its rank field, and that is applied to the rows in
-// hand rather than asked for here: a rank is a lexicographic string on the
-// issue, so sorting locally needs no clause name for a custom field and orders a
-// half-loaded backlog the same way a whole one is ordered.
-func backlogJQL(project string) string {
-	return "project = " + quote(project) + " ORDER BY created ASC"
-}
-
-func quote(s string) string {
-	return strconv.Quote(strings.ReplaceAll(s, `"`, ""))
 }
 
 // sprintIDsIn reads the ids out of the json shape of a sprint value.

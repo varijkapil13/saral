@@ -130,7 +130,6 @@ type Model struct {
 	config  jira.BoardConfig
 	sprints []jira.Sprint
 	field   jira.FieldRef
-	jql     string
 	issues  []jira.Issue
 	byKey   map[string]int
 	page    jira.Page[jira.Issue]
@@ -437,7 +436,7 @@ func (m *Model) forget() {
 	m.byKey = make(map[string]int)
 	m.picked = make(map[string]bool)
 	m.page, m.missing = jira.Page[jira.Issue]{}, nil
-	m.config, m.field, m.jql = jira.BoardConfig{}, jira.FieldRef{}, ""
+	m.config, m.field = jira.BoardConfig{}, jira.FieldRef{}
 	m.cursor, m.top = 0, 0
 	m.loaded, m.failure, m.absent, m.said = false, nil, "", ""
 	m.mode = browsing
@@ -465,7 +464,7 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 	}
 	m.loading, m.loaded = false, true
 	m.boards, m.boardAt, m.config = msg.boards, msg.boardAt, msg.config
-	m.sprints, m.field, m.jql = msg.sprints, msg.field, msg.jql
+	m.sprints, m.field = msg.sprints, msg.field
 	m.issues, m.page, m.missing = msg.page.Items, msg.page, msg.missing
 	m.head = ""
 	switch {

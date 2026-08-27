@@ -1,11 +1,9 @@
 package board
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/varijkapil13/saral/internal/app"
-	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -41,7 +39,9 @@ type plan struct {
 	estimates bool
 	ordering  jira.Ordering
 	// subQuery is the Kanban-only condition deciding which resolved issues the
-	// board still shows. It is empty on a Scrum board.
+	// board still shows, and it is empty on a Scrum board. It travels with the
+	// read because the endpoint that applies a board's filter does not apply
+	// this: without it the done column is every issue the project ever finished.
 	subQuery string
 }
 
@@ -81,46 +81,6 @@ func newPlan(cfg jira.BoardConfig) plan {
 func (p plan) columnOf(statusID string) (int, bool) {
 	at, ok := p.byStatus[statusID]
 	return at, ok
-}
-
-// statuses is every status the board maps, in column order.
-func (p plan) statuses() []string {
-	out := make([]string, 0, len(p.byStatus))
-	for i := range p.columns {
-		out = append(out, p.columns[i].statuses...)
-	}
-	return out
-}
-
-// jql is the search that fills the board.
-//
-// The board's own saved filter cannot be read through this port, so what fills
-// the columns is the session's project narrowed to the statuses the board maps
-// — which is why a status the board does not map is an issue the board does not
-// draw. A Kanban board's own condition about resolved issues is part of that
-// narrowing rather than dropped: without it the done column is every issue the
-// project ever finished.
-func (p plan) jql(project string) string {
-	if len(p.byStatus) == 0 {
-		return ""
-	}
-	terms := make(filter.Terms, 0, len(p.byStatus))
-	for _, id := range p.statuses() {
-		terms = append(terms, filter.Term{Facet: filter.FacetStatus, ID: id})
-	}
-	var b strings.Builder
-	if project = strings.TrimSpace(project); project != "" {
-		b.WriteString("project = ")
-		b.WriteString(strconv.Quote(project))
-		b.WriteString(" AND ")
-	}
-	b.WriteString(terms.Clause())
-	if p.subQuery != "" {
-		b.WriteString(" AND (")
-		b.WriteString(p.subQuery)
-		b.WriteString(")")
-	}
-	return b.String()
 }
 
 // projection is what a card needs: a list row's fields, plus the estimation

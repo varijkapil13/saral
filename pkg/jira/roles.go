@@ -169,12 +169,17 @@ type Releaser interface {
 	ReleaseVersion(ctx context.Context, id string, in ReleaseInput) (Version, error)
 }
 
-// BoardReader reads the boards on a project and the configuration of one.
-// Nothing about a board may be assumed: its columns, whether it estimates and
-// whether it ranks are all answers, and BoardConfig is where they come from.
+// BoardReader reads the boards on a project, the configuration of one, and what
+// one is showing. Nothing about a board may be assumed: its columns, whether it
+// estimates, whether it ranks and which issues it holds are all answers, and
+// none of them can be worked out from the others — the filter behind a board is
+// JQL only the site can run, so BoardIssues and BoardBacklog are the only route
+// to a board's contents.
 type BoardReader interface {
 	Boards(ctx context.Context, projectKey string) ([]Board, error)
 	BoardConfig(ctx context.Context, boardID int64) (BoardConfig, error)
+	BoardIssues(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
+	BoardBacklog(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
 }
 
 // SprintReader lists a board's sprints. A backlog view holds only this: it

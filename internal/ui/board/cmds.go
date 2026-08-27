@@ -95,16 +95,29 @@ func config(ctx context.Context, reader jira.BoardReader, boardID int64, gen int
 	}
 }
 
-// cards fills the board. It asks for the narrow field set a card draws plus the
-// board's own estimation field, and never for a wildcard.
-func cards(ctx context.Context, search *app.Search, p plan, project string, gen int) tea.Cmd {
-	jql := p.jql(project)
+// cards fills the board, through the read that applies the board's own saved
+// filter and column mapping at the site. Nothing here composes a query: the
+// filter behind a board is JQL only the site can run, and a board rebuilt out of
+// its statuses is a different board.
+//
+// It asks for the narrow field set a card draws plus the board's own estimation
+// field, never for a wildcard, and it carries the board's sub-query, which is
+// the one part of a board the endpoint leaves to the caller.
+func cards(ctx context.Context, reader jira.BoardReader, search *app.Search, p plan, gen int) tea.Cmd {
 	return func() tea.Msg {
-		res, err := search.Run(ctx, app.Request{JQL: jql, Projection: p.projection(), MaxResults: pageSize})
+		wanted, err := search.Resolve(ctx, p.projection())
 		if err != nil {
 			return failedMsg{gen: gen, step: stepIssues, err: err}
 		}
-		return issuesMsg{gen: gen, issues: res.Page.Items, more: res.Page.HasMore(), missing: res.Missing}
+		page, err := reader.BoardIssues(ctx, p.boardID, jira.BoardQuery{
+			Fields:     wanted.IDs,
+			SubQuery:   p.subQuery,
+			MaxResults: pageSize,
+		})
+		if err != nil {
+			return failedMsg{gen: gen, step: stepIssues, err: err}
+		}
+		return issuesMsg{gen: gen, issues: page.Items, more: page.HasMore(), missing: wanted.Missing}
 	}
 }
 
