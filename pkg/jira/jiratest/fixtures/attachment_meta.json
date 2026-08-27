@@ -1,0 +1,19 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/attachment/10502",
+  "id": 10502,
+  "filename": "checkout-timeout.png",
+  "author": {
+    "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g",
+    "accountId": "5b10a2844c20165700ede21g",
+    "accountType": "atlassian",
+    "emailAddress": "user@example.com",
+    "displayName": "Example User",
+    "active": true,
+    "timeZone": "Europe/Berlin"
+  },
+  "created": "2026-02-11T09:12:44.000+0100",
+  "size": 34871,
+  "mimeType": "image/png",
+  "content": "https://example.atlassian.net/rest/api/3/attachment/content/10502",
+  "thumbnail": "https://example.atlassian.net/rest/api/3/attachment/thumbnail/10502"
+}

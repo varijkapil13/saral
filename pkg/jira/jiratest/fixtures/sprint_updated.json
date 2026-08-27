@@ -1,0 +1,11 @@
+{
+  "id": 42,
+  "self": "https://example.atlassian.net/rest/agile/1.0/sprint/42",
+  "state": "active",
+  "name": "EX Sprint 8",
+  "startDate": "2026-01-19T09:00:00.000+01:00",
+  "endDate": "2026-02-02T09:00:00.000+01:00",
+  "createdDate": "2026-01-05T09:02:17.000+01:00",
+  "originBoardId": 10,
+  "goal": "Ship the field cache."
+}

@@ -684,6 +684,23 @@ func (f *Fake) Sprints(ctx context.Context, boardID int64, states ...jira.Sprint
 	})
 }
 
+// Sprint fetches one sprint by id.
+func (f *Fake) Sprint(ctx context.Context, id int64) (jira.Sprint, error) {
+	if err := f.fakeBegin(ctx, "Sprint"); err != nil {
+		return jira.Sprint{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.caps.Require(jira.CapBoards); err != nil {
+		return jira.Sprint{}, err
+	}
+	sp, ok := f.sprints[id]
+	if !ok {
+		return jira.Sprint{}, fakeNotFound("sprint", strconv.FormatInt(id, 10))
+	}
+	return fakeCloneSprint(*sp), nil
+}
+
 // CreateSprint creates a future sprint on a board.
 func (f *Fake) CreateSprint(ctx context.Context, in jira.SprintInput) (jira.Sprint, error) {
 	if err := f.fakeBegin(ctx, "CreateSprint"); err != nil {
@@ -917,7 +934,7 @@ func (f *Fake) BulkMove(ctx context.Context, in jira.MoveRequest) (jira.TaskRef,
 	}
 
 	id := f.fakeNextID("task")
-	ref := jira.TaskRef{ID: id, URL: fakeBaseURL + "/rest/api/3/task/" + id}
+	ref := jira.TaskRef{ID: id, URL: fakeBaseURL + "/rest/api/3/bulk/queue/" + id}
 	f.tasks[id] = &fakeTask{ref: ref, req: in, fails: f.failTask}
 	f.failTask = false
 	return ref, nil

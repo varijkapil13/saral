@@ -91,6 +91,13 @@ type Client interface {
 	// state lists them all, which on a board with years of history is a walk
 	// nothing on a first-paint path should be doing.
 	Sprints(ctx context.Context, boardID int64, states ...SprintState) (Page[Sprint], error)
+	// Sprint fetches one sprint by id, including its dates.
+	//
+	// It exists because an issue's sprint value carries an id and a name and no
+	// dates: a timeline drawing a bar from sprint dates starts from that id and
+	// has no board to reach it through, and walking every board of the project
+	// to find one sprint is the alternative.
+	Sprint(ctx context.Context, id int64) (Sprint, error)
 	// CreateSprint creates a future sprint.
 	CreateSprint(ctx context.Context, in SprintInput) (Sprint, error)
 	// UpdateSprint changes only the fields the patch names.

@@ -12,6 +12,10 @@ find out. Read it before writing an adapter method.
   German and back.
 - `schema` — taken from Atlassian's published OpenAPI and JSON schemas. Nobody has watched a real
   site do it.
+- `assumed` — weaker than both: the shape a fixture was written to, reasoned from the endpoint's
+  documented behaviour and the shapes either side of it by somebody with no site to check against.
+  An adapter may be built on one; a product decision may not. The first capture that touches the
+  endpoint either promotes the row or deletes it.
 
 A `live` row is enough to disprove a schema claim and not enough to prove a shape universal: one
 site is one site, and two rows below record a site disagreeing with *itself*. When you verify a
@@ -46,7 +50,7 @@ nobody had checked, so the marker is the point, not decoration.
 | live | On the queue body, `failedAccessibleIssues` and `invalidOrInaccessibleIssueCount` are **absent when zero** | Absent is not a zero with a key on it. A decoder that requires them fails on a clean run. |
 | live | A task's `description` is not reliable prose — it reported zero issues for a run of sixty — and its `message` is sometimes an unresolved i18n key | Report progress from the counts. Neither of those two strings is safe to show a user. |
 | live | A task's `result` is an object for a bulk operation, and its clock — `submitted`, `started`, `lastUpdate`, `finished`, `progress` — is **epoch millis** | Keep `result` as `json.RawMessage` and decode per operation. The Connect variant `TaskProgress` sends those same fields as RFC 3339 strings: two shapes, one name. |
-| schema | The task status enum has **seven** values: `ENQUEUED`, `RUNNING`, `COMPLETE`, `FAILED`, `CANCEL_REQUESTED`, `CANCELLED`, `DEAD` | A cancelled task reads as `CANCEL_REQUESTED` for as long as it takes to stop, so a poller sees it. `jira.TaskState` is missing that one ([#59](https://github.com/varijkapil13/saral/issues/59)). |
+| schema | The task status enum has **seven** values: `ENQUEUED`, `RUNNING`, `COMPLETE`, `FAILED`, `CANCEL_REQUESTED`, `CANCELLED`, `DEAD` | A cancelled task reads as `CANCEL_REQUESTED` for as long as it takes to stop, so a poller sees it. `jira.TaskState` carries all seven, and `Done()` deliberately reports `CANCEL_REQUESTED` as still running. |
 | schema | Dynamic webhooks (`POST /rest/api/3/webhook`) are **Connect / OAuth 2.0 apps only** | No push channel for an API-token client. Poll, scoped and backing off. |
 | schema | The Plans API requires **Administer Jira** on every endpoint, is experimental, and lives at `/rest/api/3/plans/plan` — the doubled segment is correct | Per-plan rights in the UI do not grant API access. `GET /rest/api/3/plans` does not exist. Fall back to locally defined plans. |
 | schema | There is **no release-notes API**. `ReleaseNote.jspa` is a rendered web page | Out of scope by decision. |
@@ -287,13 +291,36 @@ and two story-point fields on one site are all normal answers this client has to
 | Source | Fact | Consequence |
 |---|---|---|
 | live | **No version read reports the unresolved count** — not `GET /version/{id}`, not with `expand=issuesstatus`, not the paged project endpoint. It lives on `GET /rest/api/3/version/{id}/unresolvedIssueCount`, and the key there is spelled `issuesUnresolvedCount` | `jira.Version.Unresolved` can only be filled by that extra call, one per version. So the pre-release gate costs a round trip, and a version list cannot show the number for free — which is fine, because the number is only needed at the moment of releasing. |
-| live | `overdue` is emitted with an explicit **`false`** on an unreleased version and is **absent on a released one** | Absence is not "false", it is "released". Detecting overdue by key presence gets it backwards. Do not round-trip the key. |
+| live | `overdue` is emitted with an explicit **`false`** on an unreleased version and is **absent on a released one** | Read `released` for whether it shipped. `overdue` is documented only as *is this version overdue*, so its presence is not a second way of saying unreleased: a version trimmed into an issue read or a createmeta answer omits the key whatever its state. Do not round-trip it. |
 | live | `expand=issuesstatus` is per-request, not per-version | Either every version in the page has `issuesStatusForFixVersion` or none does. Its absence never means "no issues". |
 | live | `issuesStatusForFixVersion` buckets by **status category**; the unresolved count counts by **resolution** | They disagree — an issue can be in the Done category with no resolution. Only the count is the gate. |
 | live | Archived versions are filtered out of createmeta allowed values but present in the paged version list | A fix-version picker fed from the version list offers archived versions, so filter the list rather than swapping the source: an issue can already carry an archived version, and a detail view has to render it whatever a create screen would offer. |
 | schema | `/project/{key}/versions` returns a **bare array**; `/project/{key}/version` returns a **paged envelope** | One letter apart, different top-level JSON type. Use the paged one — a project accumulates hundreds of versions. |
+| schema | `Version.projectId` is a JSON **number** (`integer(int64)`), while `jira.Version.ProjectID` is a Go **string** | Convert at the boundary — a `json.Number` or an int64 intermediate. Decoding a version straight into the port type fails with *cannot unmarshal number into Go struct field … of type string*. Both version fixtures send the number a site sends; do not "fix" them. Same trap as `location.projectId` on a board, above. |
 | schema | `userStartDate` / `userReleaseDate` are locale display strings | Render `startDate` / `releaseDate` yourself. |
 | schema | Plans `id` is a **string** in the list response while the get-plan example shows a number | Decode leniently. `issueSources[].value` is a numeric project **id**, never a key. |
+
+## Attachments, versions and sprint writes, as the fixtures answer them
+
+These rows are what `pkg/jira/jiratest/fixtures/**` and the fixture server's routes were written to,
+so that Batch 4-8 has something to test an adapter against. The marker on each says how far that
+goes: a `schema` row is Atlassian's published shape, an `assumed` row is somebody reasoning with no
+site to check against. Nothing here is `live`.
+
+| Source | Fact | Consequence |
+|---|---|---|
+| assumed | The attachment array on an **issue read** spells `id` as a **string**, the way the upload's answer does and unlike `GET /attachment/{id}` (the `live` id-type row in Hard constraints has the other two) | Normalise to a string at the boundary; nothing may compare an id from two reads raw. |
+| assumed | An entry in the upload's answer **omits `thumbnail` entirely** for a file the site could not thumbnail, and sends it beside `content` for one it could | Branch on the key's presence. A struct that expects it everywhere reads an empty string as a URL and a preview pane then fetches nothing, twice. |
+| assumed | With `?redirect=false` Jira honours `Range` **itself**: `bytes=N-` answers **206** with `Content-Range: bytes N-<last>/<length>`, and a start past the end answers **416** | `DownloadOptions.From` is a real resume rather than a re-read with the front thrown away. The `live` row above covers the redirect and where an unqualified 206 comes from. `jiratest.AttachmentContent` is the payload the fixture server streams, and its `/media/` route stands in for the host a redirect points at. |
+| assumed | A site with attachments switched off refuses the upload in the **classic envelope** — a sentence in `errorMessages`, `errors` empty | It is a Jira handler saying no, so it is not one of the two shapes the same endpoint answers a bad request in. `attachment_disabled.json` is that body. |
+| schema | `GET /rest/api/3/version/{id}/unresolvedIssueCount` answers three keys and no more: `self`, `issuesUnresolvedCount` and `issuesCount` (`VersionUnresolvedIssuesCount`) | The total arrives beside the count, so a release gate can say "8 of 14" from one request. Only the unresolved half is the gate. |
+| schema | `POST /rest/api/3/version` answers **201** with the whole version, and `PUT /rest/api/3/version/{id}` answers **200** with it | Neither write needs a confirming read. |
+| assumed | `GET /rest/agile/1.0/sprint/{id}` answers the same object an entry of `/board/{id}/sprint` carries, dates included | It is what `jira.Client.Sprint` calls, so a timeline resolves an issue's sprint id without walking every board of the project. A sprint answers with no dates until they are **set**, whatever its state — `sprint_page.json`'s sprint 43 has none and `sprint_created.json` is a future sprint with both — so a missing date is nothing to draw rather than a failed read. |
+| schema | `POST /rest/agile/1.0/sprint` answers **201** with the created sprint | The new sprint's id arrives with it, so a create needs no confirming read. It is the only one of the four sprint writes whose status is documented; the three below are reasoned. |
+| assumed | `POST /rest/agile/1.0/sprint/{id}` answers **200** with the whole sprint as it stands after the patch | The partial update is both the safe call and the one that answers enough to redraw the row. It answers the state the transition left, so `sprint_updated.json` is mid-life: only `CompleteSprint` gets a `completeDate` back, and a test for that one overrides the route with `sprint_one.json`. |
+| assumed | `POST /rest/agile/1.0/sprint/{id}/issue` and `POST /rest/agile/1.0/backlog/issue` answer **204 with no body** | There is nothing to decode, so a move is reported from the status and the 50-issue cap above is the only thing to chunk for. |
+| assumed | A `CANCEL_REQUESTED` task carries **no `finished` and no `result`**, exactly as a `RUNNING` one does | The state is not an ending, and the body agrees with `TaskState.Done()` rather than needing a special case. `task_cancel_requested.json` is that body. |
+| schema | The bulk queue's `status` is the **same seven-value enum** as the generic task endpoint's, `CANCEL_REQUESTED` included (`BulkOperationProgress.status`) | A move poller needs every case a task poller needs. There is no `bulkmove_task_cancel_requested.json`, and that is a gap in the fixture set rather than a state the endpoint cannot report. |
 
 ## Writes that do not read back at once
 
@@ -324,6 +351,11 @@ any poller on the first 429. Cost-based limits mean a burst of narrow requests b
   exercised it.
 - Bulk **move** in particular. Only bulk transition was run; the two share a queue, so the progress
   bodies above are trustworthy and the move's own caps, permissions and failure detail are not.
+- Every row marked `assumed` under *Attachments, versions and sprint writes* above: the shape of
+  `GET /rest/agile/1.0/sprint/{id}`, the statuses the three sprint writes other than the create
+  answer, whether the attachment content endpoint really answers 206 and 416 the way the fixture
+  server does, which keys an upload's answer drops, and whether a `CANCEL_REQUESTED` body omits
+  `result`.
 - Whether `Retry-After` ever arrives as an HTTP-date. No 429 was provoked.
 - Whether `isAvailable` on a transition is ever `false` without asking for unavailable ones.
 - What `/user/search` answers a token that lacks **Browse users and groups**. The testbed account

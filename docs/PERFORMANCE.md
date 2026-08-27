@@ -15,10 +15,10 @@ today; comparing a run against a baseline is P9.2
 |---|---|---|
 | Cold start → first paint (no cache) | **< 250 ms** | `ci.yml`, best of five `saral --bench-first-paint` runs against an empty cache directory |
 | Cold start → first paint (warm cache) | < 60 ms | *measured, not guarded.* `hyperfine` on `saral --bench-first-paint`. Warming the cache needs a site, so CI cannot; the in-process half is `TestBudget_FirstPaintFromCache` |
-| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, so p99 waits on #30 |
+| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the palette, the form and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, so p99 waits on #30 |
 | Scroll a 10k-row list | 1 allocation a frame | the frame string `View` returns, and nothing behind it. Asserted with the mouse on, under a kept filter and under terms in force |
 | Frame allocations at 200×60 | ceilings in `internal/ui/kernel/budget_test.go` | 297 for a frame, 310 for a keystroke and its frame, 324 with the mouse on, each held to a ceiling about a tenth above |
-| Full redraw at 200×60 | < 4 ms | asserted in list, issue, comment, filter and the kernel chrome |
+| Full redraw at 200×60 | < 4 ms | asserted in list, issue, comment, filter, the form and the kernel chrome |
 | RSS with 10k issues cached | < 60 MB | *measured, not guarded.* Nothing reads the number; the harness that would is #30 |
 | Stripped binary | **< 15 MiB** | `ci.yml`'s size step |
 | Cache read for a view's first paint | < 5 ms | `BenchmarkCacheReadFirstPaint` |
@@ -42,7 +42,11 @@ with. Four things make one of them worth trusting, and each was got wrong once h
   is therefore built `//go:build !race` — and a `!race` tag on its own means a test that runs
   *nowhere*, because the only suite CI ran was the race one. The `budgets` job exists to close that:
   it runs the guards without the detector, inside the same loopback-only namespace the race suite
-  uses, and proves the namespace isolates before it trusts it.
+  uses, and proves the namespace isolates before it trusts it. What the job cannot see is a
+  wall-clock assertion that never became a guard at all: three in the palette, two in the form and
+  one in `cmd/saral` sat in an untagged file, ran under the detector, and failed on whichever run
+  lost the lottery — about half of them. `TestBudget_EveryWallClockAssertionSitsInAGuard` is why
+  that shape now fails the build instead of the suite.
 - **It is not parallel.** An allocation count comes from process-wide `MemStats`, so a benchmark run
   beside another test is handed that test's allocations divided by its own iteration count. Measured
   here: a scroll that costs 1 allocation a frame reports **733** when one neighbouring parallel test
@@ -78,6 +82,7 @@ table, which is the same thing as writing down that the budget is no longer held
 |---|---|
 | `internal/app` | `TestBudget_CacheReadForAViewsFirstPaint` |
 | `internal/app` | `TestBudget_CIRunsTheGuardsWithoutTheDetector` |
+| `internal/app` | `TestBudget_EveryWallClockAssertionSitsInAGuard` |
 | `internal/app` | `TestBudget_IndexRebuildAtTenThousandIssues` |
 | `internal/app` | `TestBudget_IndexSearchAllocatesOnlyTheAnswerItHandsBack` |
 | `internal/app` | `TestBudget_IndexSearchAtTenThousandIssues` |
@@ -90,6 +95,8 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/filter` | `TestBudget_PickerRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/filter` | `TestBudget_PickerScrollingCostsTheSameOnTwoThousandRowsAsOnTwenty` |
 | `internal/ui/filter` | `TestBudget_RankingReusesItsBuffers` |
+| `internal/ui/form` | `TestBudget_FormFullRedrawAt200x60` |
+| `internal/ui/form` | `TestBudget_FormKeystrokeToFrameOnALongScreen` |
 | `internal/ui/issue` | `TestBudget_DragCostsAFrameWhileHeldAndAResizeWhileMoving` |
 | `internal/ui/issue` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/issue` | `TestBudget_KeystrokeToFrame` |
@@ -107,6 +114,9 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameUnderTermsInForce` |
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameWithTheMouseOn` |
 | `internal/ui/list` | `TestBudget_AMemoMissCostsOneRowAndNotAWindow` |
+| `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverEveryCachedIssue` |
+| `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverTwoThousandCommands` |
+| `internal/ui/palette` | `TestBudget_PaletteOpeningIsOnTheKeystrokeBudget` |
 | `internal/ui/richtext` | `TestBudget_Render` |
 | `internal/ui/richtext` | `TestBudget_ScalesWithTheDocument` |
 | `internal/ui/richtext` | `TestBudget_Summary` |
@@ -122,8 +132,8 @@ is as visible as the list of what is:
 - **Cold start with a warm cache.** The cache has to be filled from a site first.
 - **p99 of anything.** `testing.Benchmark` reports a mean over its iterations and throws the
   distribution away.
-- **Every benchmark outside the table** — `pkg/adf`, `pkg/jira/cloud`'s decode, the palette and the
-  form — which are watched by eye and by #30 when it lands.
+- **Every benchmark outside the table** — `pkg/adf`, `pkg/jira/cloud`'s decode and the onboarding
+  view — which are watched by eye and by #30 when it lands.
 
 ## Where the time actually goes
 

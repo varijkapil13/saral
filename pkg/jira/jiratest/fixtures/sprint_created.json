@@ -1,0 +1,11 @@
+{
+  "id": 44,
+  "self": "https://example.atlassian.net/rest/agile/1.0/sprint/44",
+  "state": "future",
+  "name": "EX Sprint 10",
+  "startDate": "2026-02-02T08:00:00.000Z",
+  "endDate": "2026-02-16T08:00:00.000Z",
+  "createdDate": "2026-01-26T11:14:51.000Z",
+  "originBoardId": 10,
+  "goal": "Stream the attachment preview instead of buffering it."
+}

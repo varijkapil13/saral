@@ -3,8 +3,11 @@ package jiratest_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -83,15 +86,23 @@ func TestServer_ServesEveryDefaultRouteWithItsFixture(t *testing.T) {
 		{"one issue", http.MethodGet, "/rest/api/3/issue/EX-1", http.StatusOK, "issue_rich_adf.json"},
 		{"issue comments", http.MethodGet, "/rest/api/3/issue/EX-1/comment", http.StatusOK, "comments.json"},
 		{"issue transitions", http.MethodGet, "/rest/api/3/issue/EX-1/transitions", http.StatusOK, "transitions.json"},
+		{"one attachment's metadata", http.MethodGet, "/rest/api/3/attachment/10502", http.StatusOK, "attachment_meta.json"},
 		{"field catalogue", http.MethodGet, "/rest/api/3/field", http.StatusOK, "field.json"},
 		{"create metadata", http.MethodGet, "/rest/api/3/issue/createmeta/EX/issuetypes/10001", http.StatusOK, "createmeta_task.json"},
 		{"the account", http.MethodGet, "/rest/api/3/myself", http.StatusOK, "myself.json"},
 		{"site configuration", http.MethodGet, "/rest/api/3/configuration", http.StatusOK, "configuration.json"},
 		{"permissions", http.MethodGet, "/rest/api/3/mypermissions?permissions=BULK_CHANGE", http.StatusOK, "mypermissions_admin.json"},
 		{"project versions", http.MethodGet, "/rest/api/3/project/EX/version", http.StatusOK, "versions.json"},
+		{"one version", http.MethodGet, "/rest/api/3/version/10100", http.StatusOK, "version_one.json"},
+		{"a version created", http.MethodPost, "/rest/api/3/version", http.StatusCreated, "version_created.json"},
+		{"a version's unresolved issues", http.MethodGet, "/rest/api/3/version/10100/unresolvedIssueCount", http.StatusOK, "version_unresolved_count.json"},
+		{"a version released", http.MethodPut, "/rest/api/3/version/10100", http.StatusOK, "version_released.json"},
 		{"boards", http.MethodGet, "/rest/agile/1.0/board?projectKeyOrId=EX", http.StatusOK, "board.json"},
 		{"board configuration", http.MethodGet, "/rest/agile/1.0/board/10/configuration", http.StatusOK, "board_config_estimation.json"},
 		{"board sprints", http.MethodGet, "/rest/agile/1.0/board/10/sprint", http.StatusOK, "sprint_page.json"},
+		{"one sprint", http.MethodGet, "/rest/agile/1.0/sprint/41", http.StatusOK, "sprint_one.json"},
+		{"a sprint created", http.MethodPost, "/rest/agile/1.0/sprint", http.StatusCreated, "sprint_created.json"},
+		{"a sprint updated in part", http.MethodPost, "/rest/agile/1.0/sprint/42", http.StatusOK, "sprint_updated.json"},
 		{"board issues", http.MethodGet, "/rest/agile/1.0/board/10/issue", http.StatusOK, "board_issues.json"},
 		{"board backlog", http.MethodGet, "/rest/agile/1.0/board/10/backlog", http.StatusOK, "board_issues.json"},
 		{"board epics", http.MethodGet, "/rest/agile/1.0/board/10/epic", http.StatusOK, "board_epics.json"},
@@ -340,6 +351,312 @@ func srvRequiredFields(t *testing.T, body []byte) []string {
 		}
 	}
 	return out
+}
+
+// srvGet never follows a redirect, which is the only way to see one.
+func srvGet(t *testing.T, s *jiratest.Server, target string, header http.Header) srvReply {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, s.URL()+target, http.NoBody)
+	if err != nil {
+		t.Fatalf("building GET %s: %v", target, err)
+	}
+	for key, values := range header {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", target, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	got, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading GET %s: %v", target, err)
+	}
+	return srvReply{status: resp.StatusCode, header: resp.Header, body: got}
+}
+
+// An empty xsrf sends no X-Atlassian-Token at all.
+func srvPostFile(t *testing.T, s *jiratest.Server, target, part, xsrf string) srvReply {
+	t.Helper()
+
+	var body bytes.Buffer
+	mp := multipart.NewWriter(&body)
+	file, err := mp.CreateFormFile(part, "rollout-notes.csv")
+	if err != nil {
+		t.Fatalf("building the %q part: %v", part, err)
+	}
+	if _, err := file.Write([]byte("id,phase\n10001,two\n")); err != nil {
+		t.Fatalf("writing the %q part: %v", part, err)
+	}
+	if err := mp.Close(); err != nil {
+		t.Fatalf("closing the multipart body: %v", err)
+	}
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, s.URL()+target, &body)
+	if err != nil {
+		t.Fatalf("building the upload: %v", err)
+	}
+	req.Header.Set("Content-Type", mp.FormDataContentType())
+	if xsrf != "" {
+		req.Header.Set("X-Atlassian-Token", xsrf)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("posting the upload: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	got, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading the upload's answer: %v", err)
+	}
+	return srvReply{status: resp.StatusCode, header: resp.Header, body: got}
+}
+
+func TestServer_AttachmentUploadNeedsTheXSRFHeaderAndAPartNamedFile(t *testing.T) {
+	t.Parallel()
+	s := srvNewServer(t)
+	const target = "/rest/api/3/issue/EX-1/attachments"
+
+	for _, tc := range []struct {
+		name string
+		xsrf string
+	}{
+		{"without the header the answer is a 404 that is not JSON at all", ""},
+		{"a token that is not the site's own is refused just the same", "1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := srvPostFile(t, s, target, "file", tc.xsrf)
+
+			if got.status != http.StatusNotFound {
+				t.Fatalf("status = %d, want 404", got.status)
+			}
+			if ct := got.header.Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+				t.Errorf("Content-Type = %q, want the plain-text body a JSON decode fails on", ct)
+			}
+			if !strings.Contains(string(got.body), "XSRF") {
+				t.Errorf("body = %q, want the site's own words for the guard", got.body)
+			}
+		})
+	}
+
+	t.Run("a part under any other name is RFC 7807", func(t *testing.T) {
+		t.Parallel()
+		got := srvPostFile(t, s, target, "attachment", "no-check")
+
+		if got.status != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", got.status)
+		}
+		if ct := got.header.Get("Content-Type"); ct != "application/problem+json" {
+			t.Fatalf("Content-Type = %q, want application/problem+json", ct)
+		}
+		body := srvDecode(t, got.body)
+		if detail, _ := body["detail"].(string); detail == "" {
+			t.Error("the refusal carries no detail, which is the only part that says anything")
+		}
+		if _, ok := body["errorMessages"]; ok {
+			t.Error("the refusal carries errorMessages, and a problem+json body does not")
+		}
+	})
+
+	t.Run("a part named file answers the array, not one object", func(t *testing.T) {
+		t.Parallel()
+		got := srvPostFile(t, s, target, "file", "no-check")
+
+		if got.status != http.StatusOK {
+			t.Fatalf("status = %d, want 200", got.status)
+		}
+		if !bytes.Equal(got.body, srvFixture(t, "attachment_upload.json")) {
+			t.Error("the upload is not serving attachment_upload.json verbatim")
+		}
+	})
+}
+
+func TestServer_AttachmentsSwitchedOffRefuseTheUploadInTheClassicEnvelope(t *testing.T) {
+	t.Parallel()
+	s := srvNewServer(t, jiratest.WithStatus(http.MethodPost, "/rest/api/3/issue/{key}/attachments", http.StatusForbidden, "attachment_disabled.json"))
+
+	got := srvPostFile(t, s, "/rest/api/3/issue/EX-1/attachments", "file", "no-check")
+	if got.status != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", got.status)
+	}
+	if !bytes.Equal(got.body, srvFixture(t, "attachment_disabled.json")) {
+		t.Error("body is not attachment_disabled.json verbatim")
+	}
+}
+
+func TestServer_DeletingAnAttachmentAnswersNoContentAndNoBody(t *testing.T) {
+	t.Parallel()
+	s := srvNewServer(t)
+
+	got := srvDo(t, s, http.MethodDelete, "/rest/api/3/attachment/10502", "")
+	if got.status != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", got.status)
+	}
+	if len(got.body) != 0 {
+		t.Errorf("body = %q, want empty", got.body)
+	}
+}
+
+// srvMediaStandIn mirrors the unexported route the fake's redirect points at.
+const srvMediaStandIn = "/media/attachment/content/"
+
+func TestServer_AttachmentContentRedirectsUnlessAskedNotTo(t *testing.T) {
+	t.Parallel()
+	s := srvNewServer(t)
+	const id = "10502"
+	const target = "/rest/api/3/attachment/content/" + id
+
+	t.Run("asked not to redirect, Jira answers the bytes itself", func(t *testing.T) {
+		t.Parallel()
+		got := srvGet(t, s, target+"?redirect=false", http.Header{})
+
+		if got.status != http.StatusOK {
+			t.Fatalf("status = %d, want 200", got.status)
+		}
+		if location := got.header.Get("Location"); location != "" {
+			t.Errorf("Location = %q, and a client that follows redirects cannot tell that apart from Jira serving the bytes", location)
+		}
+		if string(got.body) != jiratest.AttachmentContent {
+			t.Errorf("body = %q, want the payload", got.body)
+		}
+	})
+
+	for _, tc := range []struct {
+		name      string
+		byteRange string
+	}{
+		{"a plain read", ""},
+		{"a resumed read, which is redirected just the same", "bytes=10-"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			header := http.Header{}
+			if tc.byteRange != "" {
+				header.Set("Range", tc.byteRange)
+			}
+			got := srvGet(t, s, target, header)
+
+			if got.status != http.StatusSeeOther {
+				t.Fatalf("status = %d, want 303", got.status)
+			}
+			location := got.header.Get("Location")
+			if location == "" {
+				t.Fatal("the redirect carries no Location")
+			}
+			media, err := url.Parse(location)
+			if err != nil {
+				t.Fatalf("Location = %q does not parse: %v", location, err)
+			}
+			if strings.HasPrefix(media.Path, "/rest/") {
+				t.Errorf("Location = %q still sits on the Jira API, and the download really leaves it for a media host", location)
+			} else if media.Path != srvMediaStandIn+id {
+				t.Errorf("Location path = %q, want the media route %q", media.Path, srvMediaStandIn+id)
+			}
+			if len(got.body) != 0 {
+				t.Errorf("the redirect carries a body: %q", got.body)
+			}
+			followed := srvDo(t, s, http.MethodGet, location, "")
+			if followed.status != http.StatusOK {
+				t.Fatalf("following the redirect answered %d, want 200", followed.status)
+			}
+			if string(followed.body) != jiratest.AttachmentContent {
+				t.Errorf("the media URL answered %q, want the payload", followed.body)
+			}
+		})
+	}
+}
+
+func TestServer_AttachmentContentHonoursARangeSoADownloadCanResume(t *testing.T) {
+	t.Parallel()
+	s := srvNewServer(t)
+	const target = "/rest/api/3/attachment/content/10502?redirect=false"
+	full := jiratest.AttachmentContent
+
+	t.Run("a suffix comes back as 206 saying which bytes it is", func(t *testing.T) {
+		t.Parallel()
+		const from = 40
+		got := srvGet(t, s, target, http.Header{"Range": {fmt.Sprintf("bytes=%d-", from)}})
+
+		if got.status != http.StatusPartialContent {
+			t.Fatalf("status = %d, want 206", got.status)
+		}
+		if string(got.body) != full[from:] {
+			t.Errorf("body = %q, want the payload from byte %d", got.body, from)
+		}
+		if want := fmt.Sprintf("bytes %d-%d/%d", from, len(full)-1, len(full)); got.header.Get("Content-Range") != want {
+			t.Errorf("Content-Range = %q, want %q", got.header.Get("Content-Range"), want)
+		}
+	})
+
+	t.Run("a start past the end is refused rather than answered short", func(t *testing.T) {
+		t.Parallel()
+		got := srvGet(t, s, target, http.Header{"Range": {fmt.Sprintf("bytes=%d-", len(full)+1)}})
+
+		if got.status != http.StatusRequestedRangeNotSatisfiable {
+			t.Fatalf("status = %d, want 416", got.status)
+		}
+	})
+
+	t.Run("a whole read says a range would have been served", func(t *testing.T) {
+		t.Parallel()
+		got := srvGet(t, s, target, http.Header{})
+
+		if got.status != http.StatusOK {
+			t.Fatalf("status = %d, want 200", got.status)
+		}
+		if string(got.body) != full {
+			t.Errorf("body = %q, want the whole payload", got.body)
+		}
+		if ranges := got.header.Get("Accept-Ranges"); ranges != "bytes" {
+			t.Errorf("Accept-Ranges = %q, want bytes, or nothing knows a resume is possible", ranges)
+		}
+	})
+}
+
+func TestServer_HasNoRouteForTheSprintPUTThatNullsOmittedFields(t *testing.T) {
+	t.Parallel()
+	s := srvNewServer(t)
+	const target = "/rest/agile/1.0/sprint/42"
+
+	partial := srvDo(t, s, http.MethodPost, target, `{"goal":"Stream the preview."}`)
+	if partial.status != http.StatusOK {
+		t.Fatalf("the partial update answered %d, want 200", partial.status)
+	}
+
+	full := srvDo(t, s, http.MethodPut, target, `{"name":"EX Sprint 7","state":"closed"}`)
+	if full.status != http.StatusNotFound {
+		t.Fatalf("PUT answered %d; the destructive full replace must reach no route at all", full.status)
+	}
+	if ct := full.header.Get("Content-Type"); ct != "application/problem+json" {
+		t.Errorf("Content-Type = %q, want the answer an unrouted path gets", ct)
+	}
+	if detail, _ := srvDecode(t, full.body)["detail"].(string); !strings.Contains(detail, http.MethodPut) {
+		t.Errorf("detail = %q, want the method that reached no endpoint", detail)
+	}
+}
+
+func TestServer_MovingIssuesToASprintOrTheBacklogAnswersNoContent(t *testing.T) {
+	t.Parallel()
+	s := srvNewServer(t)
+
+	for _, target := range []string{"/rest/agile/1.0/sprint/42/issue", "/rest/agile/1.0/backlog/issue"} {
+		t.Run(target, func(t *testing.T) {
+			t.Parallel()
+			got := srvDo(t, s, http.MethodPost, target, `{"issues":["EX-1","EX-2"]}`)
+
+			if got.status != http.StatusNoContent {
+				t.Fatalf("status = %d, want 204", got.status)
+			}
+			if len(got.body) != 0 {
+				t.Errorf("body = %q, want empty", got.body)
+			}
+		})
+	}
 }
 
 func TestServer_RecordsMethodPathQueryBodyAndHeaders(t *testing.T) {

@@ -2,6 +2,7 @@ package jira
 
 import (
 	"context"
+	"io"
 
 	"github.com/varijkapil13/saral/pkg/adf"
 )
@@ -126,3 +127,126 @@ type SessionClient interface {
 	PeopleFinder
 	FilterVocabulary
 }
+
+// AttachmentReader lists an issue's attachments and streams one out. It is
+// separate from Attacher because the preview pane shows files it has no
+// business replacing, and because attachments can be disabled site-wide: a
+// token that may read one may still not add one.
+type AttachmentReader interface {
+	Attachments(ctx context.Context, key string) ([]Attachment, error)
+	Download(ctx context.Context, id string, w io.Writer, opt DownloadOptions) error
+}
+
+// Attacher reads, adds and removes an issue's attachments.
+type Attacher interface {
+	AttachmentReader
+	Upload(ctx context.Context, key string, files []FileRef) ([]Attachment, error)
+	DeleteAttachment(ctx context.Context, id string) error
+}
+
+// VersionReader reads a project's versions and how many issues are still open
+// on one. The count is its own call and its own method because it is the fact a
+// release decision turns on, and asking for it on a list of forty versions is
+// forty requests — so a list is read without it and a release screen asks.
+type VersionReader interface {
+	Versions(ctx context.Context, projectKey string) ([]Version, error)
+	UnresolvedCount(ctx context.Context, versionID string) (int, error)
+}
+
+// Releaser reads, writes and releases versions. ReleaseVersion is the only way
+// to ship one: the raw PUT will release a version over the top of its open
+// issues without saying so, and ReleaseInput cannot be built without deciding
+// what happens to them.
+type Releaser interface {
+	VersionReader
+	SaveVersion(ctx context.Context, v VersionInput) (Version, error)
+	ReleaseVersion(ctx context.Context, id string, in ReleaseInput) (Version, error)
+}
+
+// BoardReader reads the boards on a project and the configuration of one.
+// Nothing about a board may be assumed: its columns, whether it estimates and
+// whether it ranks are all answers, and BoardConfig is where they come from.
+type BoardReader interface {
+	Boards(ctx context.Context, projectKey string) ([]Board, error)
+	BoardConfig(ctx context.Context, boardID int64) (BoardConfig, error)
+}
+
+// SprintReader lists a board's sprints. A backlog view holds only this: it
+// draws which sprint an issue sits in without being able to end one.
+type SprintReader interface {
+	Sprints(ctx context.Context, boardID int64, states ...SprintState) (Page[Sprint], error)
+	Sprint(ctx context.Context, id int64) (Sprint, error)
+}
+
+// SprintManager runs a board's sprints and moves issues in and out of them.
+//
+// The state machine is the port's, not the caller's: future to active to closed
+// and no other move, which is why there is a method per transition instead of a
+// state to set. Nothing here can null a field it was not given.
+type SprintManager interface {
+	SprintReader
+	CreateSprint(ctx context.Context, in SprintInput) (Sprint, error)
+	UpdateSprint(ctx context.Context, id int64, in SprintPatch) (Sprint, error)
+	StartSprint(ctx context.Context, id int64) (Sprint, error)
+	CompleteSprint(ctx context.Context, id int64) (Sprint, error)
+	MoveToSprint(ctx context.Context, sprintID int64, keys []string) error
+	MoveToBacklog(ctx context.Context, keys []string) error
+}
+
+// TaskWatcher reports on a long-running Jira task. It is its own role because
+// the thing that polls a task is not always the thing that started one, and a
+// TaskRef carries the endpoint to poll with it.
+type TaskWatcher interface {
+	Task(ctx context.Context, ref TaskRef) (TaskStatus, error)
+}
+
+// Relocator moves issues to another project and follows the task that does it.
+// The two halves are one role: BulkMove returns nothing but a TaskRef, so a
+// holder that cannot poll has submitted a change it cannot report on.
+type Relocator interface {
+	TaskWatcher
+	BulkMove(ctx context.Context, in MoveRequest) (TaskRef, error)
+}
+
+// PlanReader lists Advanced Roadmaps plans. Holding it is not permission to use
+// it: every Plans endpoint is gated on Administer Jira, and the per-plan rights
+// the web UI grants do not reach the API — so an ordinary token gets a
+// *CapabilityError naming CapPlans, and the plan view draws what config defines
+// locally instead.
+type PlanReader interface {
+	Plans(ctx context.Context) ([]Plan, error)
+}
+
+// Every role is a subset of Client, and this is what says so.
+//
+// The assertions in pkg/jira/jiratest point the other way: they prove the fake
+// carries at least what a role asks for. Neither of them notices a method
+// dropped from Client, because the fake still has it and the role still wants
+// it — so Client can shed a method and nothing stops compiling. Converting a
+// nil Client to each role closes that direction: a signature that drifts, or a
+// method deleted from the port, fails the build here.
+var (
+	_ Prober           = Client(nil)
+	_ Identifier       = Client(nil)
+	_ Searcher         = Client(nil)
+	_ FieldCatalogue   = Client(nil)
+	_ SchemaReader     = Client(nil)
+	_ IssueWriter      = Client(nil)
+	_ Mover            = Client(nil)
+	_ CommentReader    = Client(nil)
+	_ Commenter        = Client(nil)
+	_ PeopleFinder     = Client(nil)
+	_ FilterVocabulary = Client(nil)
+	_ SessionClient    = Client(nil)
+
+	_ AttachmentReader = Client(nil)
+	_ Attacher         = Client(nil)
+	_ VersionReader    = Client(nil)
+	_ Releaser         = Client(nil)
+	_ BoardReader      = Client(nil)
+	_ SprintReader     = Client(nil)
+	_ SprintManager    = Client(nil)
+	_ TaskWatcher      = Client(nil)
+	_ Relocator        = Client(nil)
+	_ PlanReader       = Client(nil)
+)

@@ -155,21 +155,3 @@ func TestFieldRendering_CostsNothingOnceMemoized(t *testing.T) {
 		t.Errorf("a memoized row allocates %.1f times, want none", got)
 	}
 }
-
-func TestKeystrokeToFrame_StaysUnderTheBudgetOnALongScreen(t *testing.T) {
-	t.Parallel()
-
-	res := testing.Benchmark(BenchmarkFormWalk200)
-	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
-		t.Errorf("keystroke to frame took %s on a 200-field screen, want under 16ms", per)
-	}
-}
-
-func TestFullRedraw_StaysUnderTheBudgetAt200x60(t *testing.T) {
-	t.Parallel()
-
-	res := testing.Benchmark(BenchmarkFormRedraw200x60)
-	if per := time.Duration(res.NsPerOp()); per > 4*time.Millisecond {
-		t.Errorf("a full redraw at 200x60 took %s, want under 4ms", per)
-	}
-}

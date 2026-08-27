@@ -1,0 +1,12 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/version/10100",
+  "id": "10100",
+  "name": "2026.3",
+  "archived": false,
+  "released": true,
+  "startDate": "2026-03-02",
+  "releaseDate": "2026-03-27",
+  "userStartDate": "02/Mar/26",
+  "userReleaseDate": "27/Mar/26",
+  "projectId": 10000
+}

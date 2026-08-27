@@ -1,0 +1,12 @@
+{
+  "id": 41,
+  "self": "https://example.atlassian.net/rest/agile/1.0/sprint/41",
+  "state": "closed",
+  "name": "EX Sprint 7",
+  "startDate": "2026-01-05T09:00:00.000+01:00",
+  "endDate": "2026-01-19T09:00:00.000+01:00",
+  "completeDate": "2026-01-19T14:12:38.000+01:00",
+  "createdDate": "2025-12-18T10:41:02.000+01:00",
+  "originBoardId": 10,
+  "goal": "Close out the checkout rewrite."
+}

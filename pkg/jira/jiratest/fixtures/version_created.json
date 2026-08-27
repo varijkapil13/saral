@@ -1,0 +1,14 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/version/10101",
+  "id": "10101",
+  "description": "Follow-ups the checkout rewrite did not fit.",
+  "name": "2026.4",
+  "archived": false,
+  "released": false,
+  "startDate": "2026-03-30",
+  "releaseDate": "2026-04-24",
+  "userStartDate": "30/Mar/26",
+  "userReleaseDate": "24/Apr/26",
+  "projectId": 10000,
+  "overdue": false
+}

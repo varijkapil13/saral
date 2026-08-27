@@ -660,6 +660,8 @@ func TestCapabilities_GateTheMethodsThatDependOnThem(t *testing.T) {
 			func(ctx context.Context, c *jiratest.Fake) error { _, err := c.BoardConfig(ctx, 1); return err }},
 		{"Sprints with no board", jiratest.NoBoards, jira.CapBoards,
 			func(ctx context.Context, c *jiratest.Fake) error { _, err := c.Sprints(ctx, 1); return err }},
+		{"Sprint with no board", jiratest.NoBoards, jira.CapBoards,
+			func(ctx context.Context, c *jiratest.Fake) error { _, err := c.Sprint(ctx, 1); return err }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -789,6 +791,7 @@ func TestEveryCall_ShortCircuitsOnAContextThatIsAlreadyDone(t *testing.T) {
 		"UpdateIssue": func() error { return c.UpdateIssue(ctx, "PROJ-1", jira.IssuePatch{}) },
 		"Comments":    func() error { _, err := c.Comments(ctx, "PROJ-1"); return err },
 		"Sprints":     func() error { _, err := c.Sprints(ctx, 1); return err },
+		"Sprint":      func() error { _, err := c.Sprint(ctx, 1); return err },
 		"Download":    func() error { return c.Download(ctx, "att-1", io.Discard, jira.DownloadOptions{}) },
 		"Me":          func() error { _, err := c.Me(ctx); return err },
 	}
@@ -807,6 +810,8 @@ func TestFake_IsSafeForConcurrentUse(t *testing.T) {
 	c := fakeNewWithIssues(t, 60, jiratest.WithPageSize(20))
 	ctx := t.Context()
 	board := fakeBoard(t, c)
+	sprint := fakeSprintsOf(t, c, board.ID)[0]
+	goal := "concurrent"
 
 	work := []func() error{
 		func() error { _, err := c.Issue(ctx, "PROJ-3"); return err },
@@ -817,6 +822,16 @@ func TestFake_IsSafeForConcurrentUse(t *testing.T) {
 		func() error { return c.UpdateIssue(ctx, "PROJ-4", jira.IssuePatch{Labels: &[]string{"hot"}}) },
 		func() error { _, err := c.AddComment(ctx, "PROJ-5", adf.NewDoc()); return err },
 		func() error { _, err := c.Sprints(ctx, board.ID); return err },
+		// The writers below are what the read races against; reads alone cannot.
+		func() error { _, err := c.Sprint(ctx, sprint.ID); return err },
+		func() error {
+			_, err := c.CreateSprint(ctx, jira.SprintInput{BoardID: board.ID, Name: "concurrent"})
+			return err
+		},
+		func() error {
+			_, err := c.UpdateSprint(ctx, sprint.ID, jira.SprintPatch{Goal: &goal})
+			return err
+		},
 		func() error { _, err := c.Capabilities(ctx, "PROJ"); return err },
 		func() error {
 			_, err := c.CreateIssue(ctx, jira.IssueInput{ProjectKey: "PROJ", IssueTypeID: "10301", Summary: "concurrent"})
@@ -844,6 +859,91 @@ func TestFake_IsSafeForConcurrentUse(t *testing.T) {
 	}
 	if got := len(c.Calls()); got < len(work)*8 {
 		t.Errorf("want at least %d recorded calls, got %d", len(work)*8, got)
+	}
+}
+
+func TestSprint_ReadsOneByIdAndRefusesAnIdNoBoardHolds(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 2)
+	ctx := t.Context()
+	board := fakeBoard(t, c)
+
+	sprints := fakeSprintsOf(t, c, board.ID)
+	want := sprints[1]
+	if want.Start == nil || want.End == nil || want.Goal == "" {
+		t.Fatalf("the sprint read by id has to be one carrying dates, got %+v", want)
+	}
+
+	got, err := c.Sprint(ctx, want.ID)
+	if err != nil {
+		t.Fatalf("Sprint(%d): %v", want.ID, err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Sprint(%d) = %+v, want the same sprint the board lists: %+v", want.ID, got, want)
+	}
+
+	var unknown int64 = 1
+	for _, sp := range sprints {
+		unknown += sp.ID
+	}
+	_, err = c.Sprint(ctx, unknown)
+	var missing *jira.NotFoundError
+	if !errors.As(err, &missing) {
+		t.Fatalf("Sprint(%d) = %v, want a *jira.NotFoundError for an id no board holds", unknown, err)
+	}
+	if missing.ID != strconv.FormatInt(unknown, 10) {
+		t.Errorf("the error names %q, want the id that was asked for", missing.ID)
+	}
+}
+
+// The seeded sprints share the time values behind their date pointers.
+func TestSprint_HandsBackACopyNoCallerCanWriteThrough(t *testing.T) {
+	t.Parallel()
+
+	moved := time.Date(1999, time.December, 31, 23, 59, 59, 0, time.UTC)
+	cases := []struct {
+		name string
+		date func(jira.Sprint) *time.Time
+	}{
+		{"start", func(sp jira.Sprint) *time.Time { return sp.Start }},
+		{"end", func(sp jira.Sprint) *time.Time { return sp.End }},
+		{"complete", func(sp jira.Sprint) *time.Time { return sp.Complete }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := fakeNewWithIssues(t, 1)
+			ctx := t.Context()
+			board := fakeBoard(t, c)
+			closed := fakeSprintsOf(t, c, board.ID)[0]
+
+			first, err := c.Sprint(ctx, closed.ID)
+			if err != nil {
+				t.Fatalf("Sprint(%d): %v", closed.ID, err)
+			}
+			at := tc.date(first)
+			if at == nil {
+				t.Fatalf("the closed sprint must carry a %s date, got %+v", tc.name, first)
+			}
+			was := *at
+			if was.Equal(moved) {
+				t.Fatalf("the fixture already sits at %v, so writing it proves nothing", moved)
+			}
+			*at = moved
+
+			second, err := c.Sprint(ctx, closed.ID)
+			if err != nil {
+				t.Fatalf("Sprint(%d) again: %v", closed.ID, err)
+			}
+			again := tc.date(second)
+			if again == nil {
+				t.Fatalf("the second read lost the %s date entirely", tc.name)
+			}
+			if !again.Equal(was) {
+				t.Errorf("%s = %v after a caller wrote through the sprint it was handed, want the stored %v", tc.name, *again, was)
+			}
+		})
 	}
 }
 
@@ -1452,6 +1552,26 @@ func TestBulkMove_WalksItsTaskToCompletionAndThenMovesTheIssues(t *testing.T) {
 	}
 	if moved.Project.Key != "OTHER" || moved.Type.ID != "10303" {
 		t.Errorf("want the issue in OTHER as the target type, got %s / %s", moved.Project.Key, moved.Type.Name)
+	}
+}
+
+func TestBulkMove_ReferencesTheBulkQueueAndNotTheGenericTaskEndpoint(t *testing.T) {
+	t.Parallel()
+	c := jiratest.New(
+		jiratest.WithProject("PROJ", jiratest.Scrum),
+		jiratest.WithProject("OTHER", jiratest.Kanban),
+		jiratest.WithIssues(jiratest.Gen(2)),
+	)
+
+	ref, err := c.BulkMove(t.Context(), jira.MoveRequest{Keys: []string{"PROJ-1"}, TargetProjectKey: "OTHER", TargetIssueTypeID: "10303"})
+	if err != nil {
+		t.Fatalf("BulkMove: %v", err)
+	}
+	if want := "/rest/api/3/bulk/queue/" + ref.ID; !strings.HasSuffix(ref.URL, want) {
+		t.Errorf("URL = %q, want a reference ending in %q", ref.URL, want)
+	}
+	if strings.Contains(ref.URL, "/rest/api/3/task/") {
+		t.Errorf("URL = %q, which is the generic task endpoint and answers a different shape", ref.URL)
 	}
 }
 

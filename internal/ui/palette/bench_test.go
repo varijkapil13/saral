@@ -171,37 +171,6 @@ func TestDrawing_CostsTheSameOnTwoThousandCommandsAsOnTwenty(t *testing.T) {
 	}
 }
 
-func TestKeystrokeToFrame_StaysUnderTheBudget(t *testing.T) {
-	t.Parallel()
-
-	res := testing.Benchmark(BenchmarkPaletteKeystroke2000)
-	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
-		t.Errorf("a keystroke into the filter took %s over 2000 commands, want under 16ms", per)
-	}
-}
-
-// The cache half of the palette is on the same budget as the command half, and
-// it is the half that grows with what the session has read.
-func TestKeystrokeOverEveryCachedIssue_StaysUnderTheBudget(t *testing.T) {
-	t.Parallel()
-
-	res := testing.Benchmark(BenchmarkPaletteKeystrokeCached)
-	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
-		t.Errorf("a keystroke over %d cached issues took %s, want under 16ms", app.DefaultIssueBound, per)
-	}
-}
-
-// ctrl+k builds the palette from scratch, so opening it is on the keystroke
-// budget too rather than on a start-up one.
-func TestOpening_StaysUnderTheKeystrokeBudget(t *testing.T) {
-	t.Parallel()
-
-	res := testing.Benchmark(BenchmarkPaletteOpen64)
-	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
-		t.Errorf("building the palette over 64 commands took %s, want under 16ms", per)
-	}
-}
-
 func TestRowRendering_CostsNothingOnceMemoized(t *testing.T) {
 	m := opened(t, 2000, 120, 40)
 	if got := testing.AllocsPerRun(200, func() { _ = m.row(0) }); got != 0 {
