@@ -47,22 +47,26 @@ func TestBudget_DateCascadeOverATimelineOfIssues(t *testing.T) {
 }
 
 // The rollup walks a parent's children and a sprint is read once for however
-// many issues are in it, and both of those are the kind of thing that turns into
-// a walk per issue without anything looking wrong. Five times the issues may
-// cost more than five times the time — bigger maps, more parents — but nothing
-// like the twenty-five a pass that rescanned its own set would cost.
+// many issues are in it, and both of those are the kind of thing that turns
+// into a walk per issue without anything looking wrong.
+//
+// Measured in allocations, because two testing.Benchmark calls each pick their
+// own iteration count: one 2k run read 11.4ms against another's 2.4ms, slower
+// than the fastest 10k run, while the allocation counts repeated to the unit.
 func TestBudget_DateCascadeCostsNoMoreThanTheIssuesItIsGiven(t *testing.T) {
 	small := testing.Benchmark(BenchmarkResolveDates2k)
 	big := testing.Benchmark(BenchmarkResolveDates10k)
-	if small.NsPerOp() <= 0 {
-		t.Fatalf("the two-thousand-issue pass reported %d ns/op, so there is nothing to compare against", small.NsPerOp())
+	if small.AllocsPerOp() <= 0 {
+		t.Fatalf("the two-thousand-issue pass reported %d allocs/op, so there is nothing to compare against",
+			small.AllocsPerOp())
 	}
 
-	ratio := float64(big.NsPerOp()) / float64(small.NsPerOp())
-	t.Logf("five times the issues cost %.1f times the time (%s against %s), ceiling 8",
-		ratio, time.Duration(big.NsPerOp()), time.Duration(small.NsPerOp()))
-	if ratio > 8 {
-		t.Errorf("five times the issues cost %.1f times the time; the pass is not linear in the issues it is given, "+
-			"and a rollup or a sprint read that walks the whole set again would cost twenty-five", ratio)
+	ratio := float64(big.AllocsPerOp()) / float64(small.AllocsPerOp())
+	t.Logf("five times the issues cost %.2f times the allocations (%d against %d), ceiling 6",
+		ratio, big.AllocsPerOp(), small.AllocsPerOp())
+	if ratio > 6 {
+		t.Errorf("five times the issues cost %.2f times the allocations; the pass is not linear in the issues "+
+			"it is given, and a rollup or a sprint read that walks the whole set again would cost twenty-five",
+			ratio)
 	}
 }

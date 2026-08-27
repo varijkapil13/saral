@@ -43,30 +43,6 @@ func boardSprintsPath(boardID int64) string {
 	return "/rest/agile/1.0/board/" + strconv.FormatInt(boardID, 10) + "/sprint"
 }
 
-// PartialMoveError reports a move that stopped part way through.
-//
-// Both move endpoints take fifty issues per call, so more than fifty issues is
-// more than one call and a failure part way leaves the earlier calls moved.
-// Moved and Pending are that split. A refusal moved nothing of the chunk it
-// refused; a transport failure leaves that chunk's fate unknown, so Pending is
-// the set to reconcile rather than the set to blind-retry.
-//
-// Err is the failure the site answered with, and unwrapping reaches it, so a
-// refusal or a rate limit is still classified as itself.
-type PartialMoveError struct {
-	Op      string
-	Moved   []string
-	Pending []string
-	Err     error
-}
-
-func (e *PartialMoveError) Error() string {
-	return fmt.Sprintf("%s moved %d of %d issues before it stopped, and the other %d did not move: %v",
-		e.Op, len(e.Moved), len(e.Moved)+len(e.Pending), len(e.Pending), e.Err)
-}
-
-func (e *PartialMoveError) Unwrap() error { return e.Err }
-
 // apiSprint is one sprint as either the list or the member endpoint answers.
 //
 // Every date is optional, and an absent one means the date is not set rather
@@ -261,7 +237,7 @@ func (c *Client) CompleteSprint(ctx context.Context, id int64) (jira.Sprint, err
 }
 
 // MoveToSprint moves issues into a sprint. More than fifty is more than one
-// call, and a failure part way through reports as a PartialMoveError.
+// call, and a failure part way through reports as a jira.PartialMoveError.
 func (c *Client) MoveToSprint(ctx context.Context, sprintID int64, keys []string) error {
 	if err := sprintIDCheck(sprintID); err != nil {
 		return err
@@ -303,7 +279,7 @@ func (c *Client) moveIssues(ctx context.Context, r request, keys []string) error
 			if start == 0 {
 				return err
 			}
-			return &PartialMoveError{
+			return &jira.PartialMoveError{
 				Op:      r.op(),
 				Moved:   slices.Clone(wanted[:start]),
 				Pending: slices.Clone(wanted[start:]),

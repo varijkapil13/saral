@@ -799,17 +799,17 @@ func TestCompleteSprint_RefusesASprintThatIsNotRunning(t *testing.T) {
 	}
 }
 
-// moveCall is one of the two calls that chunk, so every chunking rule is
+// sprintMoveCall is one of the two calls that chunk, so every chunking rule is
 // asserted about both of them.
-type moveCall struct {
+type sprintMoveCall struct {
 	name  string
 	route string
 	path  string
 	run   func(ctx context.Context, c *Client, keys []string) error
 }
 
-func moveCalls() []moveCall {
-	return []moveCall{
+func sprintMoveCalls() []sprintMoveCall {
+	return []sprintMoveCall{
 		{
 			name: "moving issues into a sprint", route: testSprintIssuesRoute, path: "/rest/agile/1.0/sprint/42/issue",
 			run: func(ctx context.Context, c *Client, keys []string) error {
@@ -863,7 +863,7 @@ func movedIn(t *testing.T, s *jiratest.Server, path string) [][]string {
 func TestMoveIssues_ChunksAtTheCapTheEndpointsShare(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range moveCalls() {
+	for _, tc := range sprintMoveCalls() {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -894,7 +894,7 @@ func TestMoveIssues_ChunksAtTheCapTheEndpointsShare(t *testing.T) {
 func TestMoveIssues_SaysWhichIssuesMovedWhenAChunkPartWayThroughIsRefused(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range moveCalls() {
+	for _, tc := range sprintMoveCalls() {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -912,9 +912,9 @@ func TestMoveIssues_SaysWhichIssuesMovedWhenAChunkPartWayThroughIsRefused(t *tes
 			keys := issueKeys(200)
 
 			err := tc.run(t.Context(), c, keys)
-			var partial *PartialMoveError
+			var partial *jira.PartialMoveError
 			if !errors.As(err, &partial) {
-				t.Fatalf("got %T (%v), want a *PartialMoveError: a half-moved backlog is a real state", err, err)
+				t.Fatalf("got %T (%v), want a *jira.PartialMoveError: a half-moved backlog is a real state", err, err)
 			}
 			if !slices.Equal(partial.Moved, keys[:100]) {
 				t.Errorf("it reports %d issues moved, want the 100 the first two calls took", len(partial.Moved))
@@ -939,14 +939,14 @@ func TestMoveIssues_SaysWhichIssuesMovedWhenAChunkPartWayThroughIsRefused(t *tes
 func TestMoveIssues_AFirstChunkRefusedIsTheRefusalAndNothingMore(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range moveCalls() {
+	for _, tc := range sprintMoveCalls() {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
 			c, _ := sprintClient(t, jiratest.WithStatus(http.MethodPost, tc.route, http.StatusForbidden, "plans_403.json"))
 
 			err := tc.run(t.Context(), c, issueKeys(60))
-			var partial *PartialMoveError
+			var partial *jira.PartialMoveError
 			if errors.As(err, &partial) {
 				t.Errorf("nothing moved, and it reports a partial move of %d issues", len(partial.Moved))
 			}
@@ -961,7 +961,7 @@ func TestMoveIssues_AFirstChunkRefusedIsTheRefusalAndNothingMore(t *testing.T) {
 func TestMoveIssues_MovingNothingAsksTheSiteForNothing(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range moveCalls() {
+	for _, tc := range sprintMoveCalls() {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -980,7 +980,7 @@ func TestMoveIssues_MovingNothingAsksTheSiteForNothing(t *testing.T) {
 func TestMoveIssues_RefusesAListHoldingSomethingThatIsNotAKey(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range moveCalls() {
+	for _, tc := range sprintMoveCalls() {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1368,7 +1368,7 @@ func TestSprintCalls_RefuseAnIdThatIdentifiesNothingWithoutAskingTheSite(t *test
 func TestPartialMoveError_SaysHowFarItGot(t *testing.T) {
 	t.Parallel()
 
-	err := &PartialMoveError{
+	err := &jira.PartialMoveError{
 		Op:      "POST " + backlogIssuesPath,
 		Moved:   issueKeys(50),
 		Pending: issueKeys(3),

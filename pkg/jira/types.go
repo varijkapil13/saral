@@ -1052,7 +1052,11 @@ type TaskStatus struct {
 	State    TaskState
 	Progress int // percent, 0-100
 	Message  string
-	Failed   []string // keys the task could not move, when it reports them
+	// Failed identifies the issues the task could not move, when it reports
+	// them. These are ids and not keys: the queue answers
+	// failedAccessibleIssues keyed by numeric issue id and carries nothing that
+	// turns one back into a key.
+	Failed []string
 }
 
 // PlanSourceType is where a plan draws its issues from.

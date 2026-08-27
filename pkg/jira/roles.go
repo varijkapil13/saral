@@ -126,6 +126,12 @@ type SessionClient interface {
 	Commenter
 	PeopleFinder
 	FilterVocabulary
+	Attacher
+	Releaser
+	BoardReader
+	SprintManager
+	Relocator
+	PlanReader
 }
 
 // AttachmentReader lists an issue's attachments and streams one out. It is
