@@ -4,10 +4,17 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/varijkapil13/saral/internal/ui/attach"
+	"github.com/varijkapil13/saral/internal/ui/backlog"
+	"github.com/varijkapil13/saral/internal/ui/board"
 	"github.com/varijkapil13/saral/internal/ui/comment"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/list"
+	"github.com/varijkapil13/saral/internal/ui/plan"
+	"github.com/varijkapil13/saral/internal/ui/release"
+	"github.com/varijkapil13/saral/internal/ui/sprint"
+	"github.com/varijkapil13/saral/internal/ui/timeline"
 )
 
 // keyOwners says whose footer renders the key each command carries. The kernel
@@ -31,6 +38,42 @@ var keyOwners = map[string]string{
 	"issues.edit-query":       list.ViewID,
 	"issues.all":              list.ViewID,
 	"issues.open":             list.ViewID,
+
+	// The pane holds no slot, so every one of these is a key of its own that the
+	// pane's footer shows once an issue with files is on it.
+	"attachments.show":   attach.ViewID,
+	"attachments.open":   attach.ViewID,
+	"attachments.upload": attach.ViewID,
+	"attachments.delete": attach.ViewID,
+
+	"backlog.move": backlog.ViewID,
+	"backlog.open": backlog.ViewID,
+
+	"board.move-issue": board.ViewID,
+	"board.next":       board.ViewID,
+	"board.open":       board.ViewID,
+
+	"plans.open":    plan.ViewID,
+	"plans.sources": plan.ViewID,
+
+	"releases.archive": release.ViewID,
+	"releases.edit":    release.ViewID,
+	"releases.new":     release.ViewID,
+	"releases.open":    release.ViewID,
+	"releases.release": release.ViewID,
+
+	"sprints.closed":   sprint.ViewID,
+	"sprints.complete": sprint.ViewID,
+	"sprints.edit":     sprint.ViewID,
+	"sprints.new":      sprint.ViewID,
+	"sprints.open":     sprint.ViewID,
+	"sprints.start":    sprint.ViewID,
+
+	"timeline.notes":    timeline.ViewID,
+	"timeline.open":     timeline.ViewID,
+	"timeline.today":    timeline.ViewID,
+	"timeline.zoom-in":  timeline.ViewID,
+	"timeline.zoom-out": timeline.ViewID,
 }
 
 func TestCommands_TeachTheKeyTheirViewActuallyShows(t *testing.T) {
