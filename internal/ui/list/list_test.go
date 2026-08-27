@@ -2,6 +2,7 @@ package list
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -540,5 +541,171 @@ func TestFilter_ReceivesEveryCharacterIncludingTheKernelsOwnBindings(t *testing.
 	m = send(t, m, keyPress("esc"))
 	if got := frame(m); strings.Contains(got, "q2rR?") {
 		t.Errorf("esc did not clear the filter:\n%s", got)
+	}
+}
+
+// injected builds a list holding exactly these issues in exactly this order.
+// The local filter is a pass over the rows a search returned, so the order it
+// returned them in is the thing a ranking test has to fix.
+func injected(t *testing.T, issues []jira.Issue) *Model {
+	t.Helper()
+
+	view, ok := New(testDeps(nil)).(*Model)
+	if !ok {
+		t.Fatal("New did not return a *Model")
+	}
+	next, _ := view.Update(kernel.SizeMsg{Width: 120, Height: 30})
+	m, _ := next.(*Model)
+	next, _ = m.Update(loadedMsg{gen: m.gen, page: jira.NewPage(issues, nil)})
+	m, _ = next.(*Model)
+	return m
+}
+
+// typeFilter opens the / filter and types into it, one keypress at a time.
+func typeFilter(t *testing.T, m *Model, query string) *Model {
+	t.Helper()
+
+	next, _ := m.Update(keyPress("/"))
+	model, _ := next.(*Model)
+	return typeMore(t, model, query)
+}
+
+// typeMore types into a filter that is already open.
+func typeMore(t *testing.T, m *Model, more string) *Model {
+	t.Helper()
+
+	for _, r := range more {
+		next, _ := m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+		m, _ = next.(*Model)
+	}
+	return m
+}
+
+// visible is the keys the filter leaves, in the order they are drawn.
+func visible(m *Model) []string {
+	out := make([]string, 0, len(m.view))
+	for _, at := range m.view {
+		out = append(out, m.issues[at].Key)
+	}
+	return out
+}
+
+func TestFilter_RanksTheRowsRatherThanKeepingTheOrderTheSearchReturned(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		issues []jira.Issue
+		query  string
+		want   []string
+	}{
+		{
+			name: "a word start beats the same letters inside a word",
+			issues: []jira.Issue{
+				{Key: "PROJ-1400", Summary: "Speed up the catalogue export"},
+				{Key: "PROJ-14", Summary: "Fix the login flow"},
+			},
+			query: "log",
+			want:  []string{"PROJ-14", "PROJ-1400"},
+		},
+		{
+			name: "a whole key beats one it is only the start of",
+			issues: []jira.Issue{
+				{Key: "PROJ-1400", Summary: "Speed up the catalogue export"},
+				{Key: "PROJ-14", Summary: "Fix the login flow"},
+			},
+			query: "PROJ-14",
+			want:  []string{"PROJ-14", "PROJ-1400"},
+		},
+		{
+			name: "a summary beats a status matched the same way",
+			issues: []jira.Issue{
+				{Key: "PROJ-1", Summary: "Speed up the export", Status: jira.Status{Name: "Triage"}},
+				{Key: "PROJ-2", Summary: "Triage the inbox", Status: jira.Status{Name: "Done"}},
+			},
+			query: "tri",
+			want:  []string{"PROJ-2", "PROJ-1"},
+		},
+		{
+			name: "nothing matching leaves nothing",
+			issues: []jira.Issue{
+				{Key: "PROJ-1", Summary: "Fix the login flow", Status: jira.Status{Name: "Done"}},
+			},
+			query: "zzzz",
+			want:  []string{},
+		},
+		{
+			name: "each field answers for itself, so no match spans two of them",
+			issues: []jira.Issue{
+				{Key: "PROJ-1", Summary: "Fix the login flow", Status: jira.Status{Name: "Done"}},
+			},
+			query: "flowdone",
+			want:  []string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m := typeFilter(t, injected(t, tt.issues), tt.query)
+			if got := visible(m); !slices.Equal(got, tt.want) {
+				t.Errorf("%q leaves %v, want %v", tt.query, got, tt.want)
+			}
+		})
+	}
+}
+
+// Typing lands on the best match, which is what the palette does with the same
+// scorer. Browsing is the other half of it, held below.
+func TestFilter_TypingLandsTheCursorOnTheBestMatch(t *testing.T) {
+	t.Parallel()
+
+	m := injected(t, []jira.Issue{
+		{Key: "PROJ-1400", Summary: "Speed up the catalogue export"},
+		{Key: "PROJ-14", Summary: "Fix the login flow"},
+	})
+	m = typeFilter(t, m, "log")
+
+	if got := m.selectedKey(); got != "PROJ-14" {
+		t.Errorf("the cursor is on %s after typing, want the best match PROJ-14", got)
+	}
+	// And it follows the ranking as the query grows, rather than staying where
+	// the first keystroke put it.
+	m = typeMore(t, m, "ue")
+	if got := m.selectedKey(); got != "PROJ-1400" {
+		t.Errorf("the cursor is on %s, want the best match for %q", got, m.query)
+	}
+}
+
+func TestFilter_ARebuildThatIsNotTypingLeavesTheCursorWhereItWas(t *testing.T) {
+	t.Parallel()
+
+	issues := []jira.Issue{
+		{Key: "PROJ-1", Summary: "Fix the login flow"},
+		{Key: "PROJ-2", Summary: "Document the login flow"},
+		{Key: "PROJ-3", Summary: "Retire the login flow"},
+	}
+	m := typeFilter(t, injected(t, issues), "login")
+	next, _ := m.Update(keyPress("enter"))
+	m, _ = next.(*Model)
+	next, _ = m.Update(keyPress("j"))
+	m, _ = next.(*Model)
+	under := m.selectedKey()
+	if under == "" {
+		t.Fatal("the filter left nothing under the cursor")
+	}
+
+	// The next page landing under a filter that has not changed: the rows are
+	// re-ranked because there are new ones to rank, and the cursor owes the row it
+	// was on rather than whatever now ranks best.
+	more := []jira.Issue{{Key: "PROJ-4", Summary: "Login"}}
+	next, _ = m.Update(pagedMsg{gen: m.gen, page: jira.NewPage(more, nil)})
+	m, _ = next.(*Model)
+
+	if !slices.Contains(visible(m), "PROJ-4") {
+		t.Fatal("the page that landed is not on screen, so this proves nothing about the cursor")
+	}
+	if got := m.selectedKey(); got != under {
+		t.Errorf("a page landing moved the cursor to %s, want it left on %s", got, under)
 	}
 }

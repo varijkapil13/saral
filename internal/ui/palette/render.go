@@ -273,12 +273,16 @@ func (m *Model) row(at int) string {
 // headKey is everything the rule line is built from, so that it is rebuilt when
 // one of them moves and never once per frame.
 type headKey struct {
-	width    int
-	gen      int
-	shown    int
-	hits     int
-	total    int
-	filtered bool
+	width int
+	gen   int
+	shown int
+	hits  int
+	// registered is every command the build put in the registry and total is the
+	// ones this site allows. Both, because a build with nothing in it and a build
+	// whose every command is refused are different answers.
+	registered int
+	total      int
+	filtered   bool
 }
 
 // rule is the line under the filter, with the count at its right end.
@@ -286,7 +290,7 @@ func (m *Model) rule() string {
 	key := headKey{
 		width: m.width, gen: m.styles.gen,
 		shown: len(m.shown) - len(m.hits), hits: len(m.hits),
-		total: m.offered(), filtered: m.query != "",
+		registered: len(m.rows), total: m.offered(), filtered: m.query != "",
 	}
 	if m.head != "" && key == m.headAt {
 		return m.head
@@ -308,8 +312,10 @@ func (m *Model) countLabel(key headKey) string {
 
 func commandCount(key headKey) string {
 	switch {
-	case key.total == 0:
+	case key.registered == 0:
 		return "nothing registered"
+	case key.total == 0:
+		return "none you can run here"
 	case key.filtered:
 		return strconv.Itoa(key.shown) + " of " + strconv.Itoa(key.total)
 	case key.total == 1:
@@ -369,19 +375,30 @@ func (m *Model) View() string {
 // appendEmpty says why there is nothing to run. A filter that matched only
 // commands this site refuses answers with the probe's own words rather than
 // with "nothing matches", which would be a lie about a command that exists.
+//
+// A build with nothing registered, a build whose every command this site refuses
+// and a filter that matched none of the ones it allows are three answers, and
+// only the first is about the build.
 func (m *Model) appendEmpty(lines []string, h int) []string {
 	at := len(lines)
 	room := max(m.width-marker, 8)
 	ell := m.deps.Theme.Glyphs.Ellipsis
 	switch {
-	case m.offered() == 0 && len(m.refused) == 0:
+	case len(m.rows) == 0:
 		lines = append(lines, m.styles.muted.Render("  Nothing has registered a command in this build."))
+	case m.offered() == 0:
+		lines = append(lines, m.styles.muted.Render("  No command in this build can be run on this site."))
+		shown := 0
+		for i := range m.rows {
+			if m.rows[i].offered() || shown == refusalLines {
+				continue
+			}
+			lines, shown = append(lines, m.refusalLine(i, room, ell)), shown+1
+		}
 	case len(m.refused) > 0:
 		lines = append(lines, m.styles.muted.Render("  Nothing you can run here matches that."))
 		for _, i := range m.refused[:min(len(m.refused), refusalLines)] {
-			r := &m.rows[i]
-			lines = append(lines, "  "+m.styles.muted.Render(
-				ansi.Truncate(r.cmd.Title+" "+m.deps.Theme.Glyphs.Separator+" "+r.reason, room, ell)))
+			lines = append(lines, m.refusalLine(i, room, ell))
 		}
 	default:
 		lines = append(lines, m.styles.muted.Render(
@@ -394,6 +411,13 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 		lines = append(lines, "")
 	}
 	return lines[:at+h]
+}
+
+// refusalLine is one refused command and why, in the probe's own words.
+func (m *Model) refusalLine(at, room int, ellipsis string) string {
+	r := &m.rows[at]
+	return "  " + m.styles.muted.Render(
+		ansi.Truncate(r.cmd.Title+" "+m.deps.Theme.Glyphs.Separator+" "+r.reason, room, ellipsis))
 }
 
 // padTruncate makes a string exactly width columns wide, counting grapheme

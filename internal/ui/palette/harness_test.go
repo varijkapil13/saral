@@ -94,7 +94,7 @@ func sample() []kernel.Command {
 
 // memoryTable is a frecency table with nowhere to write, which is what a first
 // run, an unwritable home and a test all have in common.
-func memoryTable() *table { return openTable("") }
+func memoryTable() *table { return openTable("", commandsPart) }
 
 // pilot drives the palette the way the kernel would, but keeps what the view
 // asked for instead of acting on it, so a test can assert that a keypress

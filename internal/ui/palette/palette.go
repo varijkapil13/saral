@@ -419,18 +419,7 @@ func (m *Model) refilter(keep mark) tea.Cmd {
 	}
 	// The filter decides which commands and frecency orders the equals, so a
 	// habit never demotes a better match: the query is the later intent.
-	slices.SortFunc(m.ranks, func(a, b ranked) int {
-		switch {
-		case a.score != b.score:
-			return b.score - a.score
-		case a.freq > b.freq:
-			return -1
-		case a.freq < b.freq:
-			return 1
-		default:
-			return a.at - b.at
-		}
-	})
+	sortRanks(m.ranks)
 	for _, rk := range m.ranks {
 		m.shown = append(m.shown, entry{at: rk.at})
 	}
@@ -443,6 +432,24 @@ func (m *Model) refilter(keep mark) tea.Cmd {
 	}
 	m.scrollToCursor()
 	return cmd
+}
+
+// sortRanks orders a filtered run best first, with a habit breaking a tie and
+// the list's own order breaking what is left. The project picker ranks the same
+// way, so the comparison is written once.
+func sortRanks(ranks []ranked) {
+	slices.SortFunc(ranks, func(a, b ranked) int {
+		switch {
+		case a.score != b.score:
+			return b.score - a.score
+		case a.freq > b.freq:
+			return -1
+		case a.freq < b.freq:
+			return 1
+		default:
+			return a.at - b.at
+		}
+	})
 }
 
 // markOf names one row, whichever half of the list it came from.
