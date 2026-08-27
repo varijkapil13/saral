@@ -15,10 +15,11 @@ today; comparing a run against a baseline is P9.2
 |---|---|---|
 | Cold start → first paint (no cache) | **< 250 ms** | `ci.yml`, best of five `saral --bench-first-paint` runs against an empty cache directory |
 | Cold start → first paint (warm cache) | < 60 ms | *measured, not guarded.* `hyperfine` on `saral --bench-first-paint`. Warming the cache needs a site, so CI cannot; the in-process half is `TestBudget_FirstPaintFromCache` |
-| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the palette, the form and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, so p99 waits on #30 |
+| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the timeline, the palette, the form and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, so p99 waits on #30 |
 | Scroll a 10k-row list | 1 allocation a frame | the frame string `View` returns, and nothing behind it. Asserted with the mouse on, under a kept filter and under terms in force |
+| Pan a chart across a thousand years of calendar | the allocations, the bytes and no more than twice the time that ten years costs | the timeline is the one view that scrolls in two dimensions. `TestBudget_TimelinePanningCostsTheSameOverAThousandYearsAsOverTen` compares all three because each catches a different mistake, and holds the count to a ceiling of 1700 besides |
 | Frame allocations at 200×60 | ceilings in `internal/ui/kernel/budget_test.go` | 297 for a frame, 310 for a keystroke and its frame, 324 with the mouse on, each held to a ceiling about a tenth above |
-| Full redraw at 200×60 | < 4 ms | asserted in list, issue, comment, filter, the form and the kernel chrome |
+| Full redraw at 200×60 | < 4 ms | asserted in list, issue, comment, filter, the timeline, the form and the kernel chrome |
 | RSS with 10k issues cached | < 60 MB | *measured, not guarded.* Nothing reads the number; the harness that would is #30 |
 | Stripped binary | **< 15 MiB** | `ci.yml`'s size step |
 | Cache read for a view's first paint | < 5 ms | `BenchmarkCacheReadFirstPaint` |
@@ -160,6 +161,13 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/sprint` | `TestBudget_SprintScrollingCostsTheSameOnTwoThousandSprintsAsOnTwenty` |
 | `internal/ui/sprint` | `TestBudget_SprintsFullRedrawAt200x60` |
 | `internal/ui/sprint` | `TestBudget_SprintsKeystrokeToFrame` |
+| `internal/ui/timeline` | `TestBudget_TimelineAMemoMissCostsThreeRowsAndNotAWindow` |
+| `internal/ui/timeline` | `TestBudget_TimelineAZoomRepaintsAWindowAndNotTheWholeChart` |
+| `internal/ui/timeline` | `TestBudget_TimelineFullRedrawAt200x60` |
+| `internal/ui/timeline` | `TestBudget_TimelineKeystrokeToFrameAtTenThousandBars` |
+| `internal/ui/timeline` | `TestBudget_TimelinePanningCostsTheSameOverAThousandYearsAsOverTen` |
+| `internal/ui/timeline` | `TestBudget_TimelineRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/timeline` | `TestBudget_TimelineScrollingCostsTheSameOnTenThousandBarsAsOnTwenty` |
 | `internal/ui/richtext` | `TestBudget_Render` |
 | `internal/ui/richtext` | `TestBudget_ScalesWithTheDocument` |
 | `internal/ui/richtext` | `TestBudget_Summary` |

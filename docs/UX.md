@@ -225,7 +225,7 @@ allocated here rather than picked, and `?` and the palette are where its digit i
 | 3 | backlog | P6.3 |
 | 4 | sprints | P6.3 |
 | 5 | releases | P5.1 ([#20](https://github.com/varijkapil13/saral/issues/20)) |
-| 6 | timeline | P8.2 ([#27](https://github.com/varijkapil13/saral/issues/27)) |
+| 6 | timeline | P8.2 ([#27](https://github.com/varijkapil13/saral/issues/27)) — shipped |
 | 7 | plans | P8.3 ([#28](https://github.com/varijkapil13/saral/issues/28)) |
 | 8, 9 | free | — |
 

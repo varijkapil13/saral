@@ -1,0 +1,12 @@
+reading the chart
+  acts   enter open · + zoom in · - zoom out · T today · n notes
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, G last row]
+  full   [→/l later, ←/h earlier]
+  full   [enter open this issue, + zoom in to a shorter period, - zoom out to a longer period, T centre the chart on today, n where these dates came from]
+nothing to chart
+  acts   n notes
+  full   [n where these dates came from]
+the notes pane
+  acts   n hide notes
+  full   [↓/j down, ↑/k up]
+  full   [n hide these notes]

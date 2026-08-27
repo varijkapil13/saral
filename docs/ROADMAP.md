@@ -914,7 +914,9 @@ are guesses.
   gets the raw JSON — `TestConformance_ASprintValueArrivesInTheShapeASchemaExpandedReadSends`. The
   cascade reads both shapes, so the second costs correctness nothing here and would cost the view
   everything.
-- [ ] **P8.2 — Timeline view** · [#27](https://github.com/varijkapil13/saral/issues/27) · **owns** `internal/ui/timeline/**`
+  Rule 4 needs [#38](https://github.com/varijkapil13/saral/issues/38) first: an issue's sprint value
+  carries `{id, name}` and no dates, and the timeline has no board id to look them up with.
+- [x] **P8.2 — Timeline view** · [#27](https://github.com/varijkapil13/saral/issues/27) · **owns** `internal/ui/timeline/**`
   Horizontal bars, zoom by day/week/month/quarter, today marker, version and sprint markers,
   milestone diamonds where only one date resolves. Virtualized like every other list.
 - [ ] **P8.3 — Plans** · [#28](https://github.com/varijkapil13/saral/issues/28) · **owns** `pkg/jira/cloud/plan.go`, `internal/ui/plan/**`
