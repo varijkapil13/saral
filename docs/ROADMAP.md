@@ -838,9 +838,15 @@ are guesses.
   refuses a blank one the way `Fake.IssueTypeStatuses` does: the cloud adapter refuses a blank key
   with a `*jira.ValidationError` naming `projectKey` and the fake answers a `*jira.NotFoundError`, so
   the rule is one nothing above the port meets.
-- [ ] **P6.2 — Sprint lifecycle** · [#23](https://github.com/varijkapil13/saral/issues/23) · **owns** `pkg/jira/cloud/sprint.go`
+- [x] **P6.2 — Sprint lifecycle** · [#23](https://github.com/varijkapil13/saral/issues/23) · **owns** `pkg/jira/cloud/sprint.go`
   `UpdateSprint` over the partial-update `POST`; `StartSprint`/`CompleteSprint` validate state
   locally first. **The raw `PUT` must never be reachable from the port** — it nulls omitted fields.
+  Left two things it could not fix from inside its own paths, both of which P6.3 runs into:
+  [#128](https://github.com/varijkapil13/saral/issues/128), six sprint rules the fake does not hold —
+  including a >50-issue move it refuses and the adapter chunks, so the cap is the endpoint's and not
+  the port's — which `TestSprintLifecycle_RulesTheFakeDoesNotHold` fails on rather than skipping; and
+  [#129](https://github.com/varijkapil13/saral/issues/129), `cloud.PartialMoveError` living in the one
+  package the views may not import.
 - [ ] **P6.3 — Board and backlog views** · [#24](https://github.com/varijkapil13/saral/issues/24) · **owns** `internal/ui/board/**`, `internal/ui/backlog/**`
   Column view, drag or key to move between sprint and backlog (50-issue cap per call), rank-aware
   reorder when the board exposes a rank field. Takes the footer slot PC.2 assigns it; the kernel
