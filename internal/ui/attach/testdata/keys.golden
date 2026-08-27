@@ -1,0 +1,21 @@
+files, and a token that may only read them
+  acts   enter show · o open · z bigger
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first file, end last file]
+  full   [enter show this file, o open it outside the terminal, z give the preview the whole pane]
+files, and a token that may add and remove them
+  acts   enter show · o open · u attach · d delete · z bigger
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first file, end last file]
+  full   [enter show this file, o open it outside the terminal, z give the preview the whole pane]
+  full   [u attach a file, d delete this file]
+nothing attached, and nothing this token may attach
+  acts   
+  full   []
+nothing attached, and a token that may attach one
+  acts   u attach
+  full   [u attach a file]
+typing a path
+  acts   ctrl+s attach it · esc leave it unattached
+  full   [ctrl+s attach it, esc leave it unattached]
+a deletion waiting for an answer
+  acts   y delete it · esc keep it
+  full   [y delete it, esc keep it]

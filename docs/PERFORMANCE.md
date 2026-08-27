@@ -102,6 +102,11 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/app` | `TestBudget_IndexSearchAtTenThousandIssues` |
 | `internal/app` | `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` |
 | `internal/app` | `TestBudget_TheDocumentNamesEveryGuardAndOnlyRealOnes` |
+| `internal/ui/attach` | `TestBudget_AttachAMemoLookupCostsNothing` |
+| `internal/ui/attach` | `TestBudget_AttachFullRedrawAt200x60` |
+| `internal/ui/attach` | `TestBudget_AttachKeystrokeToFrame` |
+| `internal/ui/attach` | `TestBudget_AttachRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/attach` | `TestBudget_AttachScrollingCostsTheSameOnTwoThousandFilesAsOnTwenty` |
 | `internal/ui/comment` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/comment` | `TestBudget_KeystrokeToFrameOnATenThousandCommentThread` |
 | `internal/ui/comment` | `TestBudget_ScrollingCostsTheSameOnTenThousandCommentsAsOnTwenty` |

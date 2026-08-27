@@ -802,9 +802,26 @@ are guesses.
   Ranged download with progress and resume, temp-file-then-rename.
 - [x] **P4.2 — Upload** · [#18](https://github.com/varijkapil13/saral/issues/18) · same file, second PR (sequential with P4.1)
   Multipart part named `file`, `X-Atlassian-Token: no-check`, multi-file, delete.
-- [ ] **P4.3 — Preview** · [#19](https://github.com/varijkapil13/saral/issues/19) · **owns** `internal/ui/attach/**`
+- [x] **P4.3 — Preview** · [#19](https://github.com/varijkapil13/saral/issues/19) · **owns** `internal/ui/attach/**`
   Inline images via kitty/iTerm2 graphics, chafa half-blocks fallback, name+size last resort;
   system handler for everything else.
+  **The bytes decide the protocol, not the name.** `MimeType` and the extension are both whatever the
+  uploader's machine said, and a graphics escape claiming a format the bytes are not paints itself
+  over the frame — so the file is sniffed before either protocol is claimed, and kitty takes only a
+  PNG (`f=100` is its one encoded format), which is why a JPEG on kitty falls to chafa. Every rung
+  falls to the next carrying the reason it could not be taken, because a pane showing a filename
+  where a picture was expected is otherwise indistinguishable from a broken one.
+  **The signed media URL never leaves the adapter.** The port takes an id and a writer, so this pane
+  has no URL to leak; what it hands chafa and the desktop handler is a file it wrote itself under the
+  cache directory, and a test drives every state asserting the URL reaches no frame, no status line,
+  no argument list and no hand-off. The temp-file-then-rename is here because the port hands over a
+  writer: a cancelled or refused download leaves nothing rather than a file of the right name and the
+  wrong length, and the partial is discarded rather than resumed because nothing here can prove a
+  file left behind is a prefix of this attachment.
+  Reading attachments needs no capability beyond seeing the issue; adding and removing them do, so
+  `CapAttachments` hides `u` and `d` with the site's own reason rather than hiding the pane. The pane
+  cannot pre-empt an oversized upload: `attachment/meta`'s `uploadLimit` is read inside the adapter
+  and is not on `jira.Capabilities`, so the site's number reaches the user only as a refusal.
 
 ## Batch 5 — Releases · parallel ×2
 
