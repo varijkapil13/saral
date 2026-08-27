@@ -1,0 +1,15 @@
+  PROJ board · running and planned
+------------------------------------------------------------------------------ waiting for an answer
+  Complete Sprint 2?
+
+  Closing a sprint on PROJ board cannot be undone.
+  Every issue in it that is not done leaves the sprint: Jira puts them back in the backlog.
+  This session cannot say how many that is — nothing in the port reads the issues in a sprint — so
+  check the board first if it matters.
+
+  y goes ahead · esc leaves it alone
+
+
+
+
+

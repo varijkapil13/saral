@@ -151,6 +151,10 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/release` | `TestBudget_ReleasesKeystrokeToFrame` |
 | `internal/ui/release` | `TestBudget_ReleasesRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/release` | `TestBudget_ReleasesScrollingCostsTheSameOnTwoThousandVersionsAsOnTwenty` |
+| `internal/ui/sprint` | `TestBudget_SprintRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/sprint` | `TestBudget_SprintScrollingCostsTheSameOnTwoThousandSprintsAsOnTwenty` |
+| `internal/ui/sprint` | `TestBudget_SprintsFullRedrawAt200x60` |
+| `internal/ui/sprint` | `TestBudget_SprintsKeystrokeToFrame` |
 | `internal/ui/richtext` | `TestBudget_Render` |
 | `internal/ui/richtext` | `TestBudget_ScalesWithTheDocument` |
 | `internal/ui/richtext` | `TestBudget_Summary` |
