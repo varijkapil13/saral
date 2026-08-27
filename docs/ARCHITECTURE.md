@@ -723,11 +723,15 @@ issue = 433                              # the sidebar's share of the pane, out 
 
 Three reasons it is there and not in a `Profile`. A pane width belongs to the terminal it was chosen
 in and not to a Jira account, so two profiles on one machine want one answer and a `config.toml`
-copied to a laptop should not carry a desktop's proportions. `config.toml` is a file people hand-edit
-and hand to each other, which a number a drag rewrites several times a gesture is not. And onboarding
-rebuilds the profile it writes from a zero value and the four fields it collects, so anything else
-kept there is dropped the next time somebody re-runs setup to re-check a token
-([#63](https://github.com/varijkapil13/saral/issues/63)) — a bug this neither fixes nor feeds.
+copied to a laptop should not carry a desktop's proportions. And `config.toml` is a file people
+hand-edit and hand to each other, which a number a drag rewrites several times a gesture is not.
+
+Onboarding writes **into** the profile it finds rather than over it. The profile a run is re-running
+over is matched on site *and* account email — the same account on one site is one profile, a second
+account on it is legitimately a second profile — and the four fields the wizard collects (site,
+account email, project, and where the token lives) are the only ones it replaces, so a theme, a glyph set, timeline field names and the searches on the number keys
+survive somebody re-checking a token. The review screen says so rather than asking, because there is
+no second thing to choose between.
 
 A **share** rather than a column count, so the choice survives a window of another size. `SaveSplit`
 re-reads before it writes and holds a mutex over the pair, so one view's entry cannot lose another's;

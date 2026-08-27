@@ -215,17 +215,22 @@ func (m Model) tokenSource() (config.TokenSource, error) {
 
 // profile is what will be written: everything collected so far, validated by
 // internal/config rather than by a second copy of its rules here.
+//
+// It starts from the profile already held for this account on this site, so that
+// re-running setup over one overwrites the four fields this view collects and
+// leaves the rest of it alone. The theme, the glyph set, the timeline fields and
+// the queries bound to the number keys are all things nothing here asks about,
+// and building from a zero value silently dropped every one of them.
 func (m Model) profile() (config.Profile, error) {
 	source, err := m.tokenSource()
 	if err != nil {
 		return config.Profile{}, err
 	}
-	p := config.Profile{
-		Name:    m.profileName(),
-		Site:    m.value(fieldSite),
-		Email:   m.value(fieldEmail),
-		Project: m.value(fieldProject),
-		Token:   source,
-	}
+	p, _ := m.target()
+	p.Name = m.profileName()
+	p.Site = m.value(fieldSite)
+	p.Email = m.value(fieldEmail)
+	p.Project = m.value(fieldProject)
+	p.Token = source
 	return p, p.Validate()
 }

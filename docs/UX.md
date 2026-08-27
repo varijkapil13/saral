@@ -33,7 +33,7 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 | Ongoing | JQL history with fuzzy recall; saved queries bound to `1`–`9` and kept in the profile. |
 | | Local fuzzy index — typing a key or a few words of a summary finds it with no round trip. Reached from the palette: `ctrl+k` and a few letters offers the issues already on disk beside the commands, ranked by `app.Index` over `app.Cache`. |
 | | Session resume: reopening lands exactly where you left, including scroll and filter. |
-| Fluent | `saral PROJ-142`, `saral board PROJ`, piping a JQL query in, scriptable subcommands for the rest. |
+| Fluent | `saral PROJ-142` and `saral https://…/browse/PROJ-142` open that issue; `saral board` opens a view by name; `--project` scopes the session. An argument that is none of those is named as the mistake it is rather than silently opening the default view. Piping a JQL query in and scriptable subcommands are not built. |
 
 Frecency is a plain local table of `(item, count, lastUsed)` scored `count * decay(lastUsed)`. No
 telemetry leaves the machine, ever.
@@ -276,15 +276,17 @@ answer with a refusal, which is the failure principle 2 describes rather than a 
 beside where a comment draft goes and where the palette's own frecency table is to go, for the
 reasons that directory already holds them: a pane width belongs to the terminal it was chosen in and not to a Jira
 account, so two profiles on one machine want one answer and a `config.toml` handed to somebody else
-should not carry your proportions. It is also what onboarding would have eaten — setup rebuilds
-a profile from a zero value and drops everything it did not collect
-([#63](https://github.com/varijkapil13/saral/issues/63)), so a number kept there would go the next
-time anybody re-checked a token. That bug is neither fixed nor made worse here; the split is simply
-not in its way.
+should not carry your proportions.
 
-The one thing this table still does not promise is jumping to an issue by key — typing `PROJ-142`, or
-pasting a Jira URL. That is not built; it is
-[#62](https://github.com/varijkapil13/saral/issues/62).
+Jumping to an issue by key is half built. **From the command line it works**: `saral PROJ-142` opens
+that issue over whichever root would have opened, and so does a pasted browse, board or backlog URL —
+a URL for another site is named as a mistake rather than read against this one, because the same key
+usually exists on both. **Inside a running session there is still no gesture**, because `g` is now the
+prefix the view slots sit behind and what completes it for a key has not been decided:
+[#62](https://github.com/varijkapil13/saral/issues/62) holds that half, and `app.ParseKey` and
+`app.ParseIssueURL` are what it will read with. The parse is a **shape** and never a claim the issue
+exists — the project key charset is per-instance — so what is not there comes back from the site,
+in the site's words.
 
 ## Mouse
 
