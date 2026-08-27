@@ -2,6 +2,7 @@ package onboarding
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/zalando/go-keyring"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -528,6 +530,119 @@ func TestSave_AddsToTheProfilesThatAreAlreadyThereAndBecomesTheActiveOne(t *test
 	}
 	if cfg.Active != "example" {
 		t.Errorf("active is %q, want the profile that was just set up", cfg.Active)
+	}
+}
+
+// TestSave_ReRunningOverAProfileKeepsWhatTheWizardNeverAsksAbout covers the
+// path a user reaches by re-checking a token: the same account on the same site
+// is one profile, and everything on it that no step here collects has to come
+// out the other side.
+func TestSave_ReRunningOverAProfileKeepsWhatTheWizardNeverAsksAbout(t *testing.T) {
+	keyring.MockInit()
+	t.Cleanup(keyring.MockInit)
+
+	held := config.Profile{
+		Name:     "example",
+		Site:     testSite,
+		Email:    testEmail,
+		Project:  "OLD",
+		Token:    config.TokenSource{Env: "JIRA_TOKEN"},
+		Theme:    "dark",
+		Glyphs:   "ascii",
+		Timeline: config.Timeline{Start: []string{"customfield_10015"}, End: []string{"duedate"}},
+		Queries:  []app.SavedQuery{{Name: "mine", JQL: "assignee = currentUser()", Slot: 1}},
+	}
+
+	d := newDriver(t, testFake())
+	d.send(configLoadedMsg{path: d.path, cfg: config.Config{
+		Active: held.Name, Mouse: true,
+		Profiles: map[string]config.Profile{held.Name: held},
+	}})
+
+	d.credentials()
+	d.atStep(stepStorage)
+	if got := d.model().profileName(); got != held.Name {
+		t.Fatalf("re-running setup writes %q, want the profile this account already has", got)
+	}
+	d.press("enter")
+	d.typeIn("PROJ")
+	d.press("enter")
+	d.atStep(stepReview)
+	d.mustContain("This updates example, the profile already there for this account")
+	d.press("enter")
+	d.atStep(stepDone)
+
+	cfg, err := config.LoadFile(d.path)
+	if err != nil {
+		t.Fatalf("loading back: %v", err)
+	}
+	if len(cfg.Profiles) != 1 {
+		t.Fatalf("the file holds %d profiles, want the one that was already there: %v", len(cfg.Profiles), cfg.Names())
+	}
+	got := cfg.Profiles[held.Name]
+	switch {
+	case got.Theme != held.Theme:
+		t.Errorf("theme is %q, want %q", got.Theme, held.Theme)
+	case got.Glyphs != held.Glyphs:
+		t.Errorf("glyphs is %q, want %q", got.Glyphs, held.Glyphs)
+	case !slices.Equal(got.Timeline.Start, held.Timeline.Start), !slices.Equal(got.Timeline.End, held.Timeline.End):
+		t.Errorf("timeline fields are %+v, want %+v", got.Timeline, held.Timeline)
+	case len(got.Queries) != 1 || got.Queries[0].Name != held.Queries[0].Name || got.Queries[0].Slot != held.Queries[0].Slot:
+		t.Errorf("saved queries are %+v, want %+v — the number keys stop working", got.Queries, held.Queries)
+	}
+	// The four the wizard does collect are the four it may overwrite.
+	if got.Project != "PROJ" {
+		t.Errorf("project is %q, want the one just picked", got.Project)
+	}
+	if got.Token.Keychain == "" {
+		t.Errorf("token source is %v, want the keychain entry just chosen", got.Token)
+	}
+}
+
+// TestSave_ASecondAccountOnOneSiteIsASecondProfile is the other half of matching
+// on site and email: one site with two accounts on it is two profiles, and the
+// second must not land on top of the first.
+func TestSave_ASecondAccountOnOneSiteIsASecondProfile(t *testing.T) {
+	t.Parallel()
+
+	d := newDriver(t, testFake())
+	d.send(configLoadedMsg{path: d.path, cfg: config.Config{
+		Mouse: true,
+		Profiles: map[string]config.Profile{"example": {
+			Name: "example", Site: testSite, Email: "someone@example.com",
+			Token: config.TokenSource{Env: "JIRA_TOKEN"}, Theme: "dark",
+		}},
+	}})
+
+	d.credentials()
+	d.atStep(stepStorage)
+	if got := d.model().profileName(); got != "example-2" {
+		t.Errorf("the second account on one site is written as %q, want a profile of its own", got)
+	}
+}
+
+// TestSave_TheSameAccountTypedAsAURLIsStillTheSameProfile holds the comparison
+// to normalised forms: the file keeps a bare lowercase host and the field keeps
+// whatever was pasted into it.
+func TestSave_TheSameAccountTypedAsAURLIsStillTheSameProfile(t *testing.T) {
+	t.Parallel()
+
+	d := newDriver(t, testFake())
+	d.send(configLoadedMsg{path: d.path, cfg: config.Config{
+		Mouse: true,
+		Profiles: map[string]config.Profile{"example": {
+			Name: "example", Site: testSite, Email: testEmail,
+			Token: config.TokenSource{Env: "JIRA_TOKEN"},
+		}},
+	}})
+
+	d.typeIn("https://EXAMPLE.atlassian.net/jira/software/projects")
+	d.press("enter")
+	d.typeIn(strings.ToUpper(testEmail))
+	d.press("enter")
+
+	if got := d.model().profileName(); got != "example" {
+		t.Errorf("the same account pasted as a URL writes %q, want the profile it already has", got)
 	}
 }
 

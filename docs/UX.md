@@ -33,7 +33,7 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 | Ongoing | JQL history with fuzzy recall; saved queries bound to `1`–`9` and kept in the profile. |
 | | Local fuzzy index — typing a key or a few words of a summary finds it with no round trip. Reached from the palette: `ctrl+k` and a few letters offers the issues already on disk beside the commands, ranked by `app.Index` over `app.Cache`. |
 | | Session resume: reopening lands exactly where you left, including scroll and filter. |
-| Fluent | `saral PROJ-142`, `saral board PROJ`, piping a JQL query in, scriptable subcommands for the rest. |
+| Fluent | `saral PROJ-142` and `saral https://…/browse/PROJ-142` open that issue; `saral board` opens a view by name; `--project` scopes the session. An argument that is none of those is named as the mistake it is rather than silently opening the default view. Piping a JQL query in and scriptable subcommands are not built. |
 
 Frecency is a plain local table of `(item, count, lastUsed)` scored `count * decay(lastUsed)`. No
 telemetry leaves the machine, ever.
@@ -54,6 +54,15 @@ is typing into, a thread being read. Half of what a user actually meets is some 
 open, an editor over the field list, a deletion waiting for a `y`, an onboarding step with nothing
 behind it. Advertising the resting keys there names strokes that do nothing, which is the failure
 principle 2 describes rather than a smaller version of it.
+
+**The one thing the row can be a run behind on is what the token may do.** The probe's answer is kept
+between runs so that the first frame is drawn knowing it, rather than hiding every gated view until a
+round trip lands — a stored answer gates a view exactly as a probed one does, and `Init` re-asks
+every time and reaches the footer through the same message `R` does. Inside the answer's hour that is
+the same situation as a second after a live probe and says nothing about itself; past it, the status
+line says when it was last checked until the fresh answer arrives. What the row will not do is show a
+key on an answer that failed: an expired token, a rate limit or an unreachable host leave the last
+real answer standing rather than becoming five denials.
 
 So a view whose keys move with its state implements `kernel.KeyReporter` and answers for the state it
 is in. `esc` is called *clear filter*, *put it aside*, *do not save yet* and *keep it* in four
@@ -128,6 +137,8 @@ every issue here       a              widen the search to the whole of the sessi
 edit this search       e              show the JQL on screen and run an edited one
 save this search       s              bind the query on screen to a number key
 refresh                r / R          current view / purge and refetch. both say what came back
+kill to end of line    alt+k          in any text field. ctrl+k is the palette and never reaches one,
+                                      so bubbles' own binding for this is rebound in one place
 ```
 
 Vim keys and arrows are both always bound. `j/k` and `↑/↓` are not a preference to configure.
@@ -276,15 +287,17 @@ answer with a refusal, which is the failure principle 2 describes rather than a 
 beside where a comment draft goes and where the palette's own frecency table is to go, for the
 reasons that directory already holds them: a pane width belongs to the terminal it was chosen in and not to a Jira
 account, so two profiles on one machine want one answer and a `config.toml` handed to somebody else
-should not carry your proportions. It is also what onboarding would have eaten — setup rebuilds
-a profile from a zero value and drops everything it did not collect
-([#63](https://github.com/varijkapil13/saral/issues/63)), so a number kept there would go the next
-time anybody re-checked a token. That bug is neither fixed nor made worse here; the split is simply
-not in its way.
+should not carry your proportions.
 
-The one thing this table still does not promise is jumping to an issue by key — typing `PROJ-142`, or
-pasting a Jira URL. That is not built; it is
-[#62](https://github.com/varijkapil13/saral/issues/62).
+Jumping to an issue by key is half built. **From the command line it works**: `saral PROJ-142` opens
+that issue over whichever root would have opened, and so does a pasted browse, board or backlog URL —
+a URL for another site is named as a mistake rather than read against this one, because the same key
+usually exists on both. **Inside a running session there is still no gesture**, because `g` is now the
+prefix the view slots sit behind and what completes it for a key has not been decided:
+[#62](https://github.com/varijkapil13/saral/issues/62) holds that half, and `app.ParseKey` and
+`app.ParseIssueURL` are what it will read with. The parse is a **shape** and never a claim the issue
+exists — the project key charset is per-instance — so what is not there comes back from the site,
+in the site's words.
 
 ## Mouse
 
@@ -302,6 +315,7 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 | click the line that names the search | show its JQL and offer to change it, the same as `e` |
 | click the footer's root cell | go back to that root, the same as `esc` from a pushed view |
 | click a footer action | do it — the view is handed the first stroke of the key that entry names |
+| right-click the body | open the menu of what can be done to what is in front of you: the footer's action cell, in full, with the descriptions the row had no room for |
 | click the footer's `+N` | open `?`, which lists what did not fit |
 | click the footer while `?` is up | close the overlay — the one entry the row has there |
 | click anything else a view draws | do what it says — write, send, delete, confirm, put aside, pick a value, go back to an onboarding step |
@@ -335,12 +349,41 @@ does. What tells a reader the boundary moves is `?`, the palette and the row in 
 a glyph.
 Everything a pointer can do to it, `<`, `>` and `=` do without one.
 
-One gesture this table used to promise is not built, and is not being built here:
+**The context menu asks the focused view what applies, and does not invent a scope.** The gesture
+used to be described here as *right-click a row → the actions valid for it*, which had no data source:
+`kernel.Command` carries `Requires`, a capability key that answers "can this token do this on this
+site?", and nothing that answers "does this apply to the thing under the pointer?" — so a menu built
+from the command registry would offer *Write a comment* and *Set up a Jira profile* on an issue row
+with equal confidence. Rather than adding a scope to `Command` and sweeping all five registrars, the
+menu is built from the **focused view's `Acts`**: the view's own inventory of what can be done to the
+thing it is showing, which is already what the footer's middle cell draws and already moves with the
+view's state through `kernel.KeyReporter`. Choosing an entry delivers the first stroke of the key that
+entry names, exactly as clicking a footer action does, so the key, the palette and the pointer stay
+one implementation and cannot drift.
 
-- **Right-click for a context menu of the actions valid for a row** —
-  [#76](https://github.com/varijkapil13/saral/issues/76). `kernel.Command` has no notion of what a
-  command applies to, so "the actions valid for this row" has no data source, and the menu itself
-  would be a second copy of the palette overlay.
+**The granularity is the row, and the row is the one the view has focused — not the one under the
+pointer.** Only the view can turn a coordinate into a row: it owns the zones, and the kernel sees a
+frame. A menu that guessed would offer *transition* and *delete* against the wrong issue, which is
+worse than no menu at all. So the right-click is forwarded to the focused view before the menu opens —
+a view that maps it to *select this row* makes the pointer and the menu agree, and none does yet — and
+until then the menu is about the row the view draws highlighted. It is deliberately not per **cell**:
+a cell is already a left-click gesture of its own (*filter by this value*), and a view has one focused
+thing rather than one per column.
+
+**It takes the body, the way `?` does, rather than floating at the pointer.** A box spliced into the
+view's own lines would have to cut strings carrying the zone markers every click is resolved through,
+and half the frame's mouse targets would quietly stop answering — a worse trade than a menu that is
+not under the pointer. The row at the bottom says what the menu answers to while it is up, and
+nothing — key, wheel or drag — reaches the view underneath, for the same reason nothing reaches it
+under `?`.
+
+A view with nothing in its `Acts` — a save in flight, a site being asked, an attachment pane with
+nothing attached and no permission to attach — opens no menu and says so, because a gesture that
+silently does nothing reads as a broken program. A view taking typing keeps the keyboard for the same
+reason: the menu spends the arrows and enter, and eating the rest of a pasted token to offer a list of
+things is not a trade. There is no keybinding for the menu, and inventing one is not on the table:
+every entry in it is already a key and already a palette command, which is principle 3 satisfied
+before the pointer is involved.
 
 **Labels are clickable nowhere**, because no view that can filter draws them: the issue list's
 columns are key, summary, type, status, assignee and updated, and the detail pane that does list

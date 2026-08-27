@@ -75,15 +75,15 @@ func (c *fakeCache) Forget(jql string) error {
 	return nil
 }
 
-func (c *fakeCache) EachIssue(fn func(jira.Issue, time.Time) bool) error {
+func (c *fakeCache) EachIssue(fn func(jira.Issue, time.Time) bool) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, key := range slices.Sorted(maps.Keys(c.issues)) {
 		if !fn(c.issues[key], cacheStoredAt) {
-			return nil
+			return 0, nil
 		}
 	}
-	return nil
+	return 0, nil
 }
 
 func (c *fakeCache) Generation() uint64 {

@@ -7,6 +7,7 @@ the first step, after it failed
 a step with something to type
   acts   enter continue · shift+tab back a step
   full   [enter continue, shift+tab back a step, ctrl+r try that again]
+  full   [alt+k delete to end of line]
 a step with something to choose
   acts   ↑/↓ choose · enter continue · shift+tab back a step
   full   [↑/↓ choose, enter continue, shift+tab back a step, ctrl+r try that again]

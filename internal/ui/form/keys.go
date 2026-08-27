@@ -1,6 +1,9 @@
 package form
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
+)
 
 var _ kernel.KeyReporter = (*Model)(nil)
 
@@ -104,15 +107,15 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	sets[keysFields] = k.keySet()
 	sets[keysText] = kernel.KeySet{
 		Acts: []kernel.Binding{kernel.Terse(k.Accept, "take it"), keepAndClose},
-		Full: [][]kernel.Binding{{k.Accept, k.Done}},
+		Full: [][]kernel.Binding{{k.Accept, k.Done}, {widget.KillLine}},
 	}
 	sets[keysDoc] = kernel.KeySet{
 		Acts: []kernel.Binding{kernel.Terse(k.DocDone, "finish"), keepAndClose},
-		Full: [][]kernel.Binding{{k.DocDone, k.Done}},
+		Full: [][]kernel.Binding{{k.DocDone, k.Done}, {widget.KillLine}},
 	}
 	sets[keysChoosing] = kernel.KeySet{
 		Acts: []kernel.Binding{kernel.Terse(k.Toggle, "pick"), kernel.Terse(k.Accept, "take it"), keepAndClose},
-		Full: [][]kernel.Binding{{k.Next, k.Prev, k.PageDown, k.PageUp}, {k.Toggle, k.Accept, k.Done}},
+		Full: [][]kernel.Binding{{k.Next, k.Prev, k.PageDown, k.PageUp}, {k.Toggle, k.Accept, k.Done}, {widget.KillLine}},
 	}
 	return sets
 }()

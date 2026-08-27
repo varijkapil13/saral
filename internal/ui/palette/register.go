@@ -1,6 +1,10 @@
 package palette
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+)
 
 // The palette claims no footer slot: docs/UX.md keeps the digits for the views a
 // session lives in, and this one is pushed over whatever it was opened from.
@@ -16,5 +20,18 @@ func init() {
 		ID:    kernel.PaletteViewID,
 		Title: "Commands",
 		New:   New,
+	})
+	// No Keys: nothing reaches the picker without the palette.
+	//
+	// Run builds the picker from the deps it is handed and never from a copy this
+	// file could close over: the kernel runs a command against the session as of
+	// the keypress, which is the project the picker has to mark as current.
+	kernel.RegisterCommand(kernel.Command{
+		ID:    switchCommandID,
+		Title: "Switch project",
+		Group: "Session",
+		Run: func(d kernel.Deps) tea.Cmd {
+			return kernel.Push(projectViewID, "Project", newProject(d))
+		},
 	})
 }

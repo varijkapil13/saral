@@ -22,8 +22,9 @@ const summaryFieldID = "summary"
 // without widening anything.
 type IssueCorpus interface {
 	// EachIssue visits every issue held, in key order, stopping early when fn
-	// returns false.
-	EachIssue(fn func(iss jira.Issue, storedAt time.Time) bool) error
+	// returns false, and reports how many records it had to skip because they
+	// could not be read.
+	EachIssue(fn func(iss jira.Issue, storedAt time.Time) bool) (dropped int, err error)
 	// Generation counts the changes made to what is held. It only ever
 	// increases, and it moves for any write.
 	Generation() uint64
@@ -64,11 +65,12 @@ type Hit struct {
 // is read and rebuilt on the event loop, like every other read a first paint
 // depends on.
 type Index struct {
-	corpus IssueCorpus
-	rows   []indexRow
-	hits   []Hit
-	built  uint64
-	walked bool
+	corpus  IssueCorpus
+	rows    []indexRow
+	hits    []Hit
+	built   uint64
+	dropped int
+	walked  bool
 }
 
 type indexRow struct {
@@ -100,9 +102,10 @@ func (ix *Index) Len() int {
 // something changed, not what: the cache evicts and merges under its own bound,
 // and no per-issue difference is recoverable from a counter.
 //
-// A walk that fails part way keeps the rows it did read and is not walked again
-// until the corpus moves, so one issue that cannot be decoded costs one report
-// rather than one per keystroke.
+// A record the corpus cannot read is skipped rather than ending the walk, and
+// the count of them is kept for Dropped. A walk that fails part way keeps the
+// rows it did read and is not walked again until the corpus moves, so a corpus
+// that cannot be read costs one report rather than one per keystroke.
 func (ix *Index) Refresh() (bool, error) {
 	if ix == nil || ix.corpus == nil {
 		return false, nil
@@ -112,7 +115,7 @@ func (ix *Index) Refresh() (bool, error) {
 		return false, nil
 	}
 	ix.rows = ix.rows[:0]
-	err := ix.corpus.EachIssue(func(iss jira.Issue, storedAt time.Time) bool {
+	dropped, err := ix.corpus.EachIssue(func(iss jira.Issue, storedAt time.Time) bool {
 		if iss.Key == "" {
 			return true
 		}
@@ -123,8 +126,19 @@ func (ix *Index) Refresh() (bool, error) {
 		ix.rows = append(ix.rows, row)
 		return true
 	})
+	ix.dropped = dropped
 	ix.built, ix.walked = gen, true
 	return true, err
+}
+
+// Dropped is how many records the last walk could not read and skipped. It is
+// what lets a caller tell a cache holding less than it looks from a project that
+// genuinely holds little — the two are the same short list otherwise.
+func (ix *Index) Dropped() int {
+	if ix == nil {
+		return 0
+	}
+	return ix.dropped
 }
 
 // Search ranks the issues held against what somebody typed, best first, and
@@ -136,8 +150,9 @@ func (ix *Index) Refresh() (bool, error) {
 // issue whose title nothing asked for is matched on its key alone.
 //
 // It refreshes first, so a caller cannot answer from a corpus that has moved
-// underneath it. The error is that refresh's: an issue that could not be read,
-// reported rather than swallowed, alongside the hits from the rest of them.
+// underneath it. The error is that refresh's, and it is the walk failing rather
+// than one record being unreadable: a record that cannot be decoded is skipped
+// and counted, which is what Dropped reports.
 //
 // The slice returned is the caller's own, so a view may keep it in its model
 // across frames.

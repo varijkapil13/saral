@@ -14,6 +14,7 @@ import (
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -106,6 +107,9 @@ type Model struct {
 	hits  []hit
 	shown []entry
 	ranks []ranked
+	// said is the drop count already reported, so a cache holding less than it
+	// looks is said once rather than on every keystroke over the same walk.
+	said int
 	// refused are the commands the filter matched that this site does not allow.
 	// They are not offered, and their reason is what the palette says instead of
 	// "nothing matches".
@@ -162,7 +166,7 @@ func build(d kernel.Deps, cmds []kernel.Command, freq *table) *Model {
 // to keep issues is normal, and offering to search them there would name
 // something that cannot work.
 func newInput(cached bool) textinput.Model {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = "> "
 	ti.Placeholder = "what do you want to do?"
 	if cached {
@@ -419,18 +423,7 @@ func (m *Model) refilter(keep mark) tea.Cmd {
 	}
 	// The filter decides which commands and frecency orders the equals, so a
 	// habit never demotes a better match: the query is the later intent.
-	slices.SortFunc(m.ranks, func(a, b ranked) int {
-		switch {
-		case a.score != b.score:
-			return b.score - a.score
-		case a.freq > b.freq:
-			return -1
-		case a.freq < b.freq:
-			return 1
-		default:
-			return a.at - b.at
-		}
-	})
+	sortRanks(m.ranks)
 	for _, rk := range m.ranks {
 		m.shown = append(m.shown, entry{at: rk.at})
 	}
@@ -443,6 +436,24 @@ func (m *Model) refilter(keep mark) tea.Cmd {
 	}
 	m.scrollToCursor()
 	return cmd
+}
+
+// sortRanks orders a filtered run best first, with a habit breaking a tie and
+// the list's own order breaking what is left. The project picker ranks the same
+// way, so the comparison is written once.
+func sortRanks(ranks []ranked) {
+	slices.SortFunc(ranks, func(a, b ranked) int {
+		switch {
+		case a.score != b.score:
+			return b.score - a.score
+		case a.freq > b.freq:
+			return -1
+		case a.freq < b.freq:
+			return 1
+		default:
+			return a.at - b.at
+		}
+	})
 }
 
 // markOf names one row, whichever half of the list it came from.

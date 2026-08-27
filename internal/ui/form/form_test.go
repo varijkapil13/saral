@@ -763,3 +763,68 @@ func answer(cmd tea.Cmd) tea.Msg {
 	}
 	return msg
 }
+
+// A create screen states what Jira will fill a field in with. Showing it and
+// seeding the widget with it are not the same thing: a seeded widget is not
+// empty, a field that is not empty goes into the FieldSet, and the request then
+// names the value explicitly — so the project's own default stops applying to
+// anything made here the moment somebody changes it.
+func TestForm_ShowsTheDefaultJiraWillUseAndDoesNotPutItInTheWidget(t *testing.T) {
+	t.Parallel()
+
+	c := newFake(20)
+	dr := openOn(t, testDeps(c), 100, 24, fakeStory)
+
+	priority := dr.field("priority")
+	if !priority.meta.HasDefault {
+		t.Fatal("the fake's create screen states no default for the priority, so this proves nothing")
+	}
+	stated, says := priority.stated()
+	if !says || stated == "" {
+		t.Fatalf("the priority states %q, says=%v; the screen named a value and the form has to be able to show it", stated, says)
+	}
+	if !strings.Contains(dr.view(), "Jira will use "+stated) {
+		t.Errorf("the form does not say what Jira will use for the priority:\n%s", dr.view())
+	}
+
+	if !priority.empty() {
+		t.Errorf("the priority widget holds %q / %+v; a stated default is shown, never put in the widget",
+			priority.text, priority.picked)
+	}
+
+	dr.focus("summary")
+	dr.key("enter")
+	dr.typeText("Nothing was chosen for the priority")
+	dr.key("enter")
+
+	in := dr.m.issueInput()
+	if _, sent := in.Fields.ByID("priority"); sent {
+		t.Error("the create request names the priority; a request that sends the site's own default " +
+			"freezes it, and a later change to the project's default stops reaching Saral")
+	}
+}
+
+// The screen can say a field has a default and decline to say what — the
+// reporter comes from the credential. A form that read that as "no default" would
+// draw the field as merely blank.
+func TestForm_SaysJiraFillsAFieldInWhenTheScreenWillNotNameTheValue(t *testing.T) {
+	t.Parallel()
+
+	f := newField(jira.FieldMeta{
+		Field:      jira.FieldRef{ID: "reporter", Name: "Reporter", Schema: jira.FieldSchema{Type: "user", System: "reporter"}},
+		Name:       "Reporter",
+		HasDefault: true,
+		Operations: []string{"set"},
+	}, time.UTC)
+
+	stated, says := f.stated()
+	if !says {
+		t.Fatal("a field whose screen states a default reads as having none")
+	}
+	if stated != "" {
+		t.Errorf("the stated default reads %q, want nothing to show", stated)
+	}
+	if got := placeholder(f, "*"); !strings.Contains(got, "Jira fills this in") {
+		t.Errorf("the row reads %q, want it to say the site will fill the field in", got)
+	}
+}

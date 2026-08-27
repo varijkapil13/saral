@@ -1,6 +1,9 @@
 package release
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
+)
 
 var _ kernel.KeyReporter = (*Model)(nil)
 
@@ -110,6 +113,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Full: [][]kernel.Binding{
 			{k.NextField, k.PrevField},
 			{k.Save, k.Cancel},
+			{widget.KillLine},
 		},
 	}
 	// A save in flight answers nothing at all. The text is still on screen and

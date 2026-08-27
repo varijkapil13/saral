@@ -70,8 +70,10 @@ var emptyPanes = []struct {
 		file:  "none",
 		build: func(t *testing.T, w, h int) *Model { return newDriver(t, testDeps(newFake(0)), w, h).m },
 		// The search named here is the whole project: a default that found nothing
-		// assigned to the account widens to it before anybody sees this pane.
-		says: []string{"Nothing matches this search.", `project = "PROJ" ORDER BY updated DESC`, "0 issues"},
+		// assigned to the account widens to it before anybody sees this pane, and
+		// the pane says which of the two reasons that was.
+		says: []string{"Nothing matches this search.", `project = "PROJ" ORDER BY updated DESC`, "0 issues",
+			nothingAssignedPane},
 	},
 	{
 		name: "a search that failed",

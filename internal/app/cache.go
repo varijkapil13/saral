@@ -29,6 +29,7 @@ const (
 	KindCreateMeta  Kind = "createmeta"
 	KindBoardConfig Kind = "boardconfig"
 	KindVersions    Kind = "versions"
+	KindCaps        Kind = "caps"
 )
 
 // TTL is how long an entry of this kind counts as current. Past it the entry is
@@ -43,7 +44,11 @@ func (k Kind) TTL() time.Duration {
 	switch k {
 	case KindFields, KindCreateMeta:
 		return 24 * time.Hour
-	case KindBoardConfig:
+	// A probe answer is site configuration and a permission scheme, so it moves
+	// at an administrator's pace rather than a user's — but being wrong about it
+	// costs a view offered that 403s or hidden that would have worked, which a
+	// stale field catalogue does not. So an hour, and not the catalogue's day.
+	case KindBoardConfig, KindCaps:
 		return time.Hour
 	case KindVersions:
 		return 10 * time.Minute
@@ -107,7 +112,13 @@ type Cache interface {
 	// EachIssue visits every issue held, in key order, stopping early when fn
 	// returns false. It is how an index over what is already on disk is built
 	// without a round trip.
-	EachIssue(fn func(iss jira.Issue, storedAt time.Time) bool) error
+	//
+	// A record that cannot be decoded is skipped, not fatal: keys sort, so
+	// stopping at the first one would hide every issue after it, and a list that
+	// is quietly short is indistinguishable from a project that shrank. How many
+	// were dropped is returned so a caller can say so, and it is the whole count
+	// whether or not the error is nil.
+	EachIssue(fn func(iss jira.Issue, storedAt time.Time) bool) (dropped int, err error)
 
 	// Generation counts the changes this cache has made to what is on disk. It
 	// only ever increases, and it moves for any write, so something holding a
@@ -118,6 +129,41 @@ type Cache interface {
 	// affect a particular reader still moves it, which costs that reader a
 	// rebuild and never leaves it holding a stale answer.
 	Generation() uint64
+}
+
+// CapsSnapshot is the capability probe's answer as the last run left it: what it
+// said, when it said it, and whether that was long enough ago to say so.
+type CapsSnapshot struct {
+	Caps     jira.Capabilities
+	StoredAt time.Time
+	Stale    bool
+}
+
+// CapsCache is the part of the cache that keeps the capability probe's answer,
+// so that the first frame is drawn knowing what this token can do here instead
+// of hiding every gated view until a round trip lands.
+//
+// It is a second interface rather than two more methods on Cache because it is
+// optional in both directions: a session with nowhere to keep one draws from the
+// probe alone, which is what every session did before this, and a Cache that is
+// only a map of rows stays a Cache.
+type CapsCache interface {
+	// Caps returns what the probe last answered for a project, whatever its age.
+	// Stale is the badge, not a refusal: an answer from yesterday plus the
+	// revalidation behind the frame beats hiding half the program for a second.
+	//
+	// There is no error, for the reason Rows has none: this read is on the path
+	// to the first frame and has nowhere to put one.
+	Caps(project string) (CapsSnapshot, bool)
+
+	// PutCaps stores a probe answer for a project.
+	//
+	// Only a real answer may be stored. The probe reports auth, rate-limit and
+	// transport failures as an error rather than as an all-negative answer for
+	// exactly this reason: storing five confident denials would outlive the
+	// minute that caused them, and the next run would draw a program that can do
+	// nothing.
+	PutCaps(project string, caps jira.Capabilities) error
 }
 
 // DefaultIssueBound is how many issues the cache keeps before it starts dropping
@@ -135,7 +181,10 @@ type DiskCache struct {
 	gen atomic.Uint64
 }
 
-var _ Cache = (*DiskCache)(nil)
+var (
+	_ Cache     = (*DiskCache)(nil)
+	_ CapsCache = (*DiskCache)(nil)
+)
 
 // CacheOption adjusts a DiskCache at construction.
 type CacheOption func(*DiskCache)
@@ -292,23 +341,40 @@ func (c *DiskCache) Forget(jql string) error {
 }
 
 // EachIssue implements Cache.
-func (c *DiskCache) EachIssue(fn func(jira.Issue, time.Time) bool) error {
+func (c *DiskCache) EachIssue(fn func(jira.Issue, time.Time) bool) (int, error) {
 	if c == nil || c.db == nil || fn == nil {
-		return nil
+		return 0, nil
 	}
-	var bad error
-	err := c.db.Each(c.scope, string(KindIssue), func(rec store.Record) bool {
-		iss, err := decodeIssue(rec.Value)
-		if err != nil {
-			bad = fmt.Errorf("the cached copy of %s cannot be read: %w", rec.Key, err)
-			return false
+	var bad []string
+	short, err := c.db.Each(c.scope, string(KindIssue), func(rec store.Record) bool {
+		iss, decErr := decodeIssue(rec.Value)
+		if decErr != nil {
+			bad = append(bad, rec.Key)
+			return true
 		}
 		return fn(iss, rec.StoredAt)
 	})
+	if len(short) > 0 {
+		bad = append(bad, short...)
+	}
 	if err != nil {
+		return len(bad), err
+	}
+	return len(bad), c.prune(bad)
+}
+
+// prune drops the records a walk could not read. Nothing is lost that was not
+// already unreadable, and a record left in place would be counted again on every
+// walk for the rest of the file's life.
+func (c *DiskCache) prune(keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	if err := c.db.Delete(c.scope, string(KindIssue), keys...); err != nil {
 		return err
 	}
-	return bad
+	c.gen.Add(1)
+	return nil
 }
 
 // Generation implements Cache.
@@ -317,6 +383,117 @@ func (c *DiskCache) Generation() uint64 {
 		return 0
 	}
 	return c.gen.Load()
+}
+
+// Caps implements CapsCache.
+func (c *DiskCache) Caps(project string) (CapsSnapshot, bool) {
+	if c == nil || c.db == nil {
+		return CapsSnapshot{}, false
+	}
+	rec, ok, err := c.db.Get(c.scope, string(KindCaps), capsKey(project))
+	if err != nil || !ok {
+		return CapsSnapshot{}, false
+	}
+	caps, err := decodeCaps(rec.Value)
+	if err != nil {
+		return CapsSnapshot{}, false
+	}
+	return CapsSnapshot{
+		Caps:     caps,
+		StoredAt: rec.StoredAt,
+		Stale:    c.now().Sub(rec.StoredAt) > KindCaps.TTL(),
+	}, true
+}
+
+// PutCaps implements CapsCache.
+func (c *DiskCache) PutCaps(project string, caps jira.Capabilities) error {
+	if c == nil || c.db == nil {
+		return nil
+	}
+	value, err := encodeCaps(caps)
+	if err != nil {
+		return err
+	}
+	if err := c.db.Put(c.scope, string(KindCaps), store.Record{
+		Key: capsKey(project), Value: value, StoredAt: c.now(),
+	}); err != nil {
+		return err
+	}
+	c.gen.Add(1)
+	return nil
+}
+
+// capsSiteKey is the entry for a session scoped to no project. A project key is
+// uppercase alphanumeric on every site, so it can never be this, and the two
+// answers must not share a key: probing without a project answers boards, Move
+// and Delete as unavailable-because-nothing-was-named, which is a real answer
+// about the site and a wrong one about any project in it.
+const capsSiteKey = "*"
+
+func capsKey(project string) string {
+	if key := strings.TrimSpace(project); key != "" {
+		return key
+	}
+	return capsSiteKey
+}
+
+// wireCaps is how a probe answer is encoded.
+//
+// Two of the fields it does not carry are the point of it. TimeZone is a
+// *time.Location, which encodes as an empty object, so the zone's name is stored
+// and reloaded the way a user's is. Graphics is not stored at all: it is what
+// this terminal can draw rather than anything about the site, and a stored kitty
+// answer restored into a terminal that cannot speak it prints escape bytes over
+// the frame — the detection is local and free, so a restored answer waits for it
+// rather than guessing upwards.
+type wireCaps struct {
+	Plans          jira.Capability `json:"plans,omitzero"`
+	BulkMove       jira.Capability `json:"bulkMove,omitzero"`
+	Boards         jira.Capability `json:"boards,omitzero"`
+	Attachments    jira.Capability `json:"attachments,omitzero"`
+	DeleteIssues   jira.Capability `json:"deleteIssues,omitzero"`
+	People         jira.Capability `json:"people,omitzero"`
+	TimeZone       string          `json:"timeZone,omitempty"`
+	TimeZoneReason string          `json:"timeZoneReason,omitempty"`
+}
+
+func encodeCaps(caps jira.Capabilities) ([]byte, error) {
+	out := wireCaps{
+		Plans: caps.Plans, BulkMove: caps.BulkMove, Boards: caps.Boards,
+		Attachments: caps.Attachments, DeleteIssues: caps.DeleteIssues,
+		People: caps.People, TimeZoneReason: caps.TimeZoneReason,
+	}
+	if caps.TimeZone != nil {
+		out.TimeZone = caps.TimeZone.String()
+	}
+	data, err := json.Marshal(out)
+	if err != nil {
+		return nil, fmt.Errorf("encoding what this token can do: %w", err)
+	}
+	return data, nil
+}
+
+func decodeCaps(data []byte) (jira.Capabilities, error) {
+	var in wireCaps
+	if err := json.Unmarshal(data, &in); err != nil {
+		return jira.Capabilities{}, fmt.Errorf("decoding what this token could do: %w", err)
+	}
+	out := jira.Capabilities{
+		Plans: in.Plans, BulkMove: in.BulkMove, Boards: in.Boards,
+		Attachments: in.Attachments, DeleteIssues: in.DeleteIssues,
+		People: in.People, TimeZoneReason: in.TimeZoneReason,
+	}
+	if in.TimeZone != "" {
+		out.TimeZone = location(in.TimeZone)
+		// TimeZoneReason is empty exactly when the zone is the account's own, and
+		// a name this machine has no entry for would otherwise break that on the
+		// way back in: every date would render in UTC with nothing saying why.
+		if out.TimeZone == nil && out.TimeZoneReason == "" {
+			out.TimeZoneReason = "This machine has no zoneinfo entry for " + in.TimeZone +
+				", the timezone this account is set to"
+		}
+	}
+	return out, nil
 }
 
 // rowsKey is how a search is spelt on disk: the JQL itself, trimmed. It is the

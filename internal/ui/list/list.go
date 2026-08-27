@@ -64,10 +64,9 @@ type Model struct {
 	missing []string
 	view    []int
 
-	// needles holds one lowercased haystack per issue, built while a filter is
-	// open so that a keystroke costs a substring search rather than a fresh
-	// lowercasing of every row. It is dropped when the filter is.
-	needles []string
+	// ranks is the scored run the filter is ordered from, kept between keystrokes
+	// so that ranking ten thousand rows costs no allocation of its own.
+	ranks []ranked
 
 	cursor int
 	top    int
@@ -116,6 +115,17 @@ type Model struct {
 	// project being asked the same question twice, and a project switch clears
 	// it because that derives a fresh default.
 	widened bool
+
+	// asked and answered track the one question a session asks about the
+	// credential: whether the site has anything assigned to this account
+	// anywhere. It is asked once — the answer is about the token, which does not
+	// change while the program runs — and a project switch does not ask again.
+	asked    bool
+	answered bool
+	// assignedNowhere is that answer. It is why the search on screen is not the
+	// one this view opens on, and the pane says so for as long as the list is
+	// empty.
+	assignedNowhere bool
 
 	// saved is the kernel's set of saved queries, as this view was built and as
 	// the kernel last changed it, kept so that binding a key can name what that
@@ -226,7 +236,7 @@ func (m *Model) fromCache() {
 	if !ok || len(snap.Issues) == 0 {
 		return
 	}
-	m.issues, m.needles = snap.Issues, nil
+	m.issues = snap.Issues
 	m.page, m.missing = jira.Page[jira.Issue]{}, nil
 	m.cachedMore, m.stale = snap.More, snap.Stale
 	m.loaded, m.cursor, m.top = true, 0, 0
@@ -236,7 +246,7 @@ func (m *Model) fromCache() {
 }
 
 func newFilterInput() textinput.Model {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = "/"
 	ti.Placeholder = "filter these rows"
 	return ti
@@ -262,9 +272,30 @@ type ClearFilterMsg struct{}
 // Init asks the site for what the first frame could not draw from disk.
 func (m *Model) Init() tea.Cmd {
 	if m.loaded {
-		return tea.Batch(m.revalidate(), m.pageAheadIfNeeded())
+		return tea.Batch(m.revalidate(), m.pageAheadIfNeeded(), m.probeAssignment())
 	}
-	return m.load()
+	return tea.Batch(m.load(), m.probeAssignment())
+}
+
+// probeAssignment asks whether this credential belongs to an account anybody
+// assigns work to. The search a session opens on narrows by currentUser(), which
+// resolves for a service token and matches nothing at all, so without an answer
+// the opening frame is empty and the reason for it is a guess.
+//
+// It costs a second round trip, and it is skipped wherever the answer is already
+// in hand: rows for the default off disk are proof of work, and an unscoped
+// session's own default asks the same question.
+func (m *Model) probeAssignment() tea.Cmd {
+	if m.search == nil || m.asked || m.answered || !m.defaulted || len(m.issues) > 0 {
+		return nil
+	}
+	jql := probeQuery()
+	if jql == m.jql {
+		return nil
+	}
+	m.asked = true
+	ctx, cancel := context.WithCancel(context.Background())
+	return kernel.Reply(withCancel(cancel, probeAssigned(ctx, m.search, jql)), m.addr)
 }
 
 // revalidate re-reads rows that came off disk, and only once they are past their
@@ -341,6 +372,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case failedMsg:
 		cmd = m.failed(msg)
+
+	case assignedMsg:
+		cmd = m.assigned(msg)
 
 	case pollMsg:
 		cmd = m.polled(msg)
@@ -548,7 +582,7 @@ func (m *Model) setQuery(jql, title string, byDefault bool) tea.Cmd {
 	if title != "" {
 		m.title = title
 	}
-	m.issues, m.page, m.missing, m.view, m.needles = nil, jira.Page[jira.Issue]{}, nil, nil, nil
+	m.issues, m.page, m.missing, m.view = nil, jira.Page[jira.Issue]{}, nil, nil
 	m.cursor, m.top, m.loaded = 0, 0, false
 	m.cachedMore, m.stale, m.failure = false, false, nil
 	m.checked = time.Time{}
@@ -577,7 +611,7 @@ func (m *Model) loadedPage(msg loadedMsg) tea.Cmd {
 	}
 	before := m.issues
 	m.loading, m.loaded = false, true
-	m.issues, m.needles = slices.Clone(msg.page.Items), nil
+	m.issues = slices.Clone(msg.page.Items)
 	m.page, m.missing = msg.page, msg.missing
 	m.cachedMore, m.stale, m.checked = false, false, m.now()
 	m.rows.reset()
@@ -596,7 +630,7 @@ func (m *Model) nextPage(msg pagedMsg) tea.Cmd {
 		return nil
 	}
 	m.loading = false
-	m.issues, m.needles = append(m.issues, msg.page.Items...), nil
+	m.issues = append(m.issues, msg.page.Items...)
 	m.page = msg.page
 	m.cachedMore, m.stale, m.checked = false, false, m.now()
 	m.relayout()
@@ -612,7 +646,7 @@ func (m *Model) patch(msg patchedMsg) tea.Cmd {
 	}
 	m.loading, m.loaded = false, true
 	under, before := m.selectedKey(), m.issues
-	m.issues, m.page, m.needles = msg.issues, msg.page, nil
+	m.issues, m.page = msg.issues, msg.page
 	m.cachedMore, m.stale, m.checked = false, false, m.now()
 	m.rows.reset()
 	m.relayout()
@@ -719,50 +753,87 @@ func (m *Model) restore(key string) {
 	m.clampScroll()
 }
 
-// refilter recomputes which rows the local filter leaves visible. It reuses the
-// index slice so that typing in the filter does not allocate one per keystroke.
+// refilter recomputes which rows the local filter leaves visible, keeping the
+// cursor on the row it was on. Everything but typing — a page landing, a
+// refresh, a retarget — rebuilds the view for a reason nobody asked for.
 func (m *Model) refilter() {
 	under := m.selectedKey()
-	m.view = m.view[:0]
-	needle := strings.ToLower(m.query)
-	if needle == "" {
-		for i := range m.issues {
-			m.view = append(m.view, i)
-		}
-		m.restore(under)
-		return
-	}
-	m.buildNeedles()
-	for i := range m.issues {
-		if strings.Contains(m.needles[i], needle) {
-			m.view = append(m.view, i)
-		}
-	}
+	m.rankRows()
 	m.restore(under)
 }
 
-// buildNeedles lowercases what a row can be found by, once per row rather than
-// once per row per keystroke.
-func (m *Model) buildNeedles() {
-	if len(m.needles) == len(m.issues) {
+// refilterTyped is the keystroke path: typing lands the cursor on the best
+// match. Deleting back to nothing has no best match, so that keeps the place.
+func (m *Model) refilterTyped() {
+	if strings.TrimSpace(m.query) == "" {
+		m.refilter()
 		return
 	}
-	m.needles = slices.Grow(m.needles[:0], len(m.issues))
-	var b strings.Builder
-	for i := range m.issues {
-		iss := &m.issues[i]
-		b.Reset()
-		b.Grow(len(iss.Key) + len(iss.Summary) + 48)
-		for _, field := range [...]string{iss.Key, iss.Summary, iss.Status.Name, iss.Type.Name, assigneeName(iss, "")} {
-			b.WriteString(field)
-			b.WriteByte(' ')
+	m.rankRows()
+	m.cursor = 0
+}
+
+// rankRows orders the rows the filter leaves best first, and leaves them in the
+// order the search returned them when nothing is typed. Both slices it works in
+// are the model's own, so a keystroke over ten thousand rows allocates nothing.
+func (m *Model) rankRows() {
+	m.view, m.ranks = m.view[:0], m.ranks[:0]
+	pattern := app.NewPattern(strings.TrimSpace(m.query))
+	if pattern.Empty() {
+		for i := range m.issues {
+			m.view = append(m.view, i)
 		}
-		for _, label := range iss.Labels {
-			b.WriteString(label)
-			b.WriteByte(' ')
-		}
-		m.needles = append(m.needles, strings.ToLower(b.String()))
+		return
 	}
+	for i := range m.issues {
+		if score, ok := score(&m.issues[i], pattern); ok {
+			m.ranks = append(m.ranks, ranked{at: i, score: score})
+		}
+	}
+	// The pattern decides which rows and the search's own order settles the
+	// equals, so the site's sort is never re-ordered into a ranking of ours.
+	slices.SortFunc(m.ranks, func(a, b ranked) int {
+		if a.score != b.score {
+			return b.score - a.score
+		}
+		return a.at - b.at
+	})
+	for _, r := range m.ranks {
+		m.view = append(m.view, r.at)
+	}
+}
+
+// ranked is one row's place in the order.
+type ranked struct {
+	at    int
+	score int
+}
+
+// fieldPenalty is what finding a row by something other than its key or its
+// summary costs: app.Pattern's ranking step nine times over, the calibration the
+// palette and the value picker already use.
+const fieldPenalty = 9 * 256
+
+// score is the best of the ways a row can be found: the key and the summary
+// answer for themselves and the rest of the row pays the penalty. Each field is
+// scored on its own because one concatenated haystack matches across the
+// boundaries between them, so "flowdone" would find a login flow that is Done.
+func score(iss *jira.Issue, p app.Pattern) (int, bool) {
+	best, ok := p.Score(iss.Key)
+	if other, hit := p.Score(iss.Summary); hit && (!ok || other > best) {
+		best, ok = other, true
+	}
+	for _, field := range [...]string{iss.Status.Name, iss.Type.Name, assigneeName(iss, "")} {
+		if other, hit := p.Score(field); hit && (!ok || other-fieldPenalty > best) {
+			best, ok = other-fieldPenalty, true
+		}
+	}
+	for _, label := range iss.Labels {
+		if other, hit := p.Score(label); hit && (!ok || other-fieldPenalty > best) {
+			best, ok = other-fieldPenalty, true
+		}
+	}
+	return best, ok
 }
 
 func (m *Model) moveTo(at int) tea.Cmd {
@@ -870,7 +941,7 @@ func (m *Model) filterKey(msg tea.KeyPressMsg, stroke string) tea.Cmd {
 	m.filter, _ = m.filter.Update(msg)
 	if q := m.filter.Value(); q != m.query {
 		m.query = q
-		m.refilter()
+		m.refilterTyped()
 		m.scrollToCursor()
 		return m.pageAheadIfNeeded()
 	}
@@ -891,7 +962,7 @@ func (m *Model) clearFilter() tea.Cmd {
 // dropFilter forgets the query and the haystacks that were built to match it.
 func (m *Model) dropFilter() {
 	m.filter.Reset()
-	m.query, m.needles = "", nil
+	m.query = ""
 	m.refilter()
 	m.scrollToCursor()
 }
@@ -1206,6 +1277,9 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 	default:
 		lines = append(lines, m.styles.muted.Render("  Nothing matches this search."),
 			m.styles.muted.Render("  "+m.jql))
+		if m.defaulted && m.assignedNowhere {
+			lines = append(lines, "", m.styles.muted.Render("  "+nothingAssignedPane))
+		}
 	}
 	for len(lines)-at < h {
 		lines = append(lines, "")

@@ -113,9 +113,11 @@ func (k AccountKind) String() string {
 // User is a Jira account. Email is often absent — Jira hides it unless the
 // account's privacy settings allow it, so nothing may depend on having one.
 //
-// Kind is AccountUnknown on any read that did not carry an accountType, which is
-// most of them: it is filled by the people endpoints, and its absence elsewhere
-// means the answer was silent rather than that the account is odd.
+// Kind is filled wherever an account arrives: one decoder reads accountType, so
+// an issue's assignee and reporter, a comment's author and update author,
+// /myself and the people endpoints all carry a kind. It is AccountUnknown on a
+// read that did not carry one, which means the answer was silent rather than
+// that the account is odd.
 type User struct {
 	AccountID   string
 	DisplayName string
@@ -711,10 +713,21 @@ func (p IssuePatch) IsEmpty() bool {
 
 // FieldMeta describes one field on a create, edit or transition screen.
 type FieldMeta struct {
-	Field           FieldRef
-	Name            string
-	Required        bool
-	HasDefault      bool
+	Field    FieldRef
+	Name     string
+	Required bool
+	// HasDefault is the site saying it will fill this field in when the request
+	// omits it.
+	HasDefault bool
+	// Default is what it will fill it in with, and is meaningful only when
+	// HasDefault. A screen may say there is a default and not say what it is —
+	// Jira sends a null beside hasDefaultValue true for the reporter — and that
+	// arrives here as KindEmpty, which is a different answer from no default.
+	//
+	// It is for showing, not for sending. A caller that seeds a write with it
+	// turns a server-side default into an explicit value in the request, and the
+	// project's default then stops applying to anything this client creates.
+	Default         FieldValue
 	Operations      []string
 	AllowedValues   []Option
 	AutoCompleteURL string

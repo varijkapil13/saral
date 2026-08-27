@@ -1,6 +1,9 @@
 package onboarding
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
+)
 
 var _ kernel.KeyReporter = Model{}
 
@@ -28,11 +31,12 @@ func defaultKeys() keyMap {
 	}
 }
 
-// keySet is the resting state: a step with a field in it, part way through.
+// keySet is the resting state: a step with a field in it, part way through. The
+// field is focused throughout, so the motion that edits it works here too.
 func (k keyMap) keySet() kernel.KeySet {
 	return kernel.KeySet{
 		Acts: []kernel.Binding{k.Continue, k.Back},
-		Full: [][]kernel.Binding{{k.Continue, k.Back, k.Retry}},
+		Full: [][]kernel.Binding{{k.Continue, k.Back, k.Retry}, {widget.KillLine}},
 	}
 }
 

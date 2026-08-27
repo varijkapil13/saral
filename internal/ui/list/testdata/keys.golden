@@ -11,6 +11,7 @@ a filter kept on the rows
 filter open
   acts   enter keep filter · esc clear filter
   full   [enter keep filter, esc clear filter]
+  full   [alt+k delete to end of line]
 picking the number key
   acts   1-9 the key to bind it to · esc leave it alone
   full   [1-9 the key to bind it to, esc leave it alone]
@@ -20,3 +21,4 @@ confirming a number key that is taken
 editing the search on screen
   acts   enter run this search · esc keep the one on screen
   full   [enter run this search, esc keep the one on screen]
+  full   [alt+k delete to end of line]

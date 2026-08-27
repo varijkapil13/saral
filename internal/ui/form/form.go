@@ -162,8 +162,8 @@ func newWith(d kernel.Deps, cache *schemaCache, store *draftStore) *Model {
 		styles:  newStyles(d.Theme),
 		rows:    newRowCache(rowCacheLimit),
 		project: strings.TrimSpace(d.Project),
-		input:   textinput.New(),
-		area:    textarea.New(),
+		input:   widget.NewInput(),
+		area:    widget.NewArea(),
 		filter:  newFilter(),
 	}
 	m.inList, m.inChoose = defaultKeys().tables()
@@ -177,7 +177,7 @@ func newWith(d kernel.Deps, cache *schemaCache, store *draftStore) *Model {
 }
 
 func newFilter() textinput.Model {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = "/"
 	ti.Placeholder = "narrow these values"
 	return ti
@@ -302,7 +302,7 @@ func (m *Model) widestLabel() int {
 		widest = max(widest, labelWidth(f))
 	}
 	for _, h := range m.hidden {
-		widest = max(widest, len(h.name))
+		widest = max(widest, h.width())
 	}
 	return widest
 }

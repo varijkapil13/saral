@@ -176,7 +176,7 @@ func TestRows_StayInsideTheProfileThatStoredThem(t *testing.T) {
 		t.Error("one account read another's rows off the same file")
 	}
 	seen := 0
-	if err := theirs.EachIssue(func(jira.Issue, time.Time) bool { seen++; return true }); err != nil {
+	if _, err := theirs.EachIssue(func(jira.Issue, time.Time) bool { seen++; return true }); err != nil {
 		t.Fatalf("EachIssue: %v", err)
 	}
 	if seen != 0 {
@@ -209,7 +209,7 @@ func TestPutRows_DropsTheIssuesStoredLongestAgoOnceItIsOverTheBound(t *testing.T
 	}
 
 	var held []string
-	if err := cache.EachIssue(func(iss jira.Issue, _ time.Time) bool {
+	if _, err := cache.EachIssue(func(iss jira.Issue, _ time.Time) bool {
 		held = append(held, iss.Key)
 		return true
 	}); err != nil {
@@ -244,7 +244,7 @@ func TestForget_DropsASearchAndKeepsTheIssuesItMatched(t *testing.T) {
 	}
 
 	held := 0
-	if err := cache.EachIssue(func(jira.Issue, time.Time) bool { held++; return true }); err != nil {
+	if _, err := cache.EachIssue(func(jira.Issue, time.Time) bool { held++; return true }); err != nil {
 		t.Fatalf("EachIssue: %v", err)
 	}
 	if held != len(stored) {
@@ -262,7 +262,7 @@ func TestEachIssue_VisitsEveryIssueInKeyOrderAndStopsWhenAsked(t *testing.T) {
 	}
 
 	var seen []string
-	if err := cache.EachIssue(func(iss jira.Issue, storedAt time.Time) bool {
+	if _, err := cache.EachIssue(func(iss jira.Issue, storedAt time.Time) bool {
 		if !storedAt.Equal(testNow) {
 			t.Errorf("%s says it was stored at %s", iss.Key, storedAt)
 		}
@@ -277,7 +277,7 @@ func TestEachIssue_VisitsEveryIssueInKeyOrderAndStopsWhenAsked(t *testing.T) {
 	}
 
 	seen = nil
-	if err := cache.EachIssue(func(iss jira.Issue, _ time.Time) bool {
+	if _, err := cache.EachIssue(func(iss jira.Issue, _ time.Time) bool {
 		seen = append(seen, iss.Key)
 		return false
 	}); err != nil {
@@ -300,7 +300,7 @@ func TestGeneration_TellsAnIndexBuiltFromTheCacheThatItIsBehind(t *testing.T) {
 
 	indexed := cache.Generation()
 	var index []string
-	if err := cache.EachIssue(func(iss jira.Issue, _ time.Time) bool {
+	if _, err := cache.EachIssue(func(iss jira.Issue, _ time.Time) bool {
 		index = append(index, iss.Key)
 		return true
 	}); err != nil {
@@ -341,7 +341,7 @@ func TestNilCache_AnswersEveryCallWithoutPanicking(t *testing.T) {
 	if err := cache.Forget(cacheJQL); err != nil {
 		t.Errorf("forgetting in a cache that does not exist failed: %v", err)
 	}
-	if err := cache.EachIssue(func(jira.Issue, time.Time) bool { return true }); err != nil {
+	if _, err := cache.EachIssue(func(jira.Issue, time.Time) bool { return true }); err != nil {
 		t.Errorf("walking a cache that does not exist failed: %v", err)
 	}
 	if got := cache.Generation(); got != 0 {
@@ -661,4 +661,64 @@ func BenchmarkCacheReadFirstPaint(b *testing.B) {
 			b.Fatal("the rows went away")
 		}
 	}
+}
+
+// A record that could not be decoded used to end the walk. Keys sort, so a bad
+// PROJ-3 hid PROJ-4 onwards: a short list with no error anywhere, which is the
+// one failure a user has no way to see.
+func TestEachIssue_SkipsARecordItCannotReadAndSaysHowMany(t *testing.T) {
+	t.Parallel()
+
+	db := openDB(t)
+	c := &clock{at: testNow}
+	cache := NewCache(db, testScope, WithClock(c.now))
+	if err := cache.PutRows(cacheJQL, listRows(5), false); err != nil {
+		t.Fatalf("PutRows: %v", err)
+	}
+	// Written past the codec, which is what a jira.Issue field changing shape
+	// between releases leaves behind: the record is there and cannot be read.
+	if err := db.Put(testScope, string(KindIssue), store.Record{
+		Key: "PROJ-3", Value: []byte(`{"key":"PROJ-3","fields":`), StoredAt: testNow,
+	}); err != nil {
+		t.Fatalf("writing a record that cannot be decoded: %v", err)
+	}
+
+	before := cache.Generation()
+	want := []string{"PROJ-1", "PROJ-2", "PROJ-4", "PROJ-5"}
+	seen, dropped, err := walk(t, cache)
+	if err != nil {
+		t.Fatalf("EachIssue: %v", err)
+	}
+	if !slices.Equal(seen, want) {
+		t.Errorf("the walk visited %v, want %v: one record it could not read hid the issues sorted after it", seen, want)
+	}
+	if dropped != 1 {
+		t.Errorf("the walk reported %d dropped records, want 1; a cache answering less than it holds and saying nothing "+
+			"cannot be told from a project that shrank", dropped)
+	}
+	if cache.Generation() == before {
+		t.Error("dropping a record left the generation where it was, so an index built before the drop cannot tell it is behind")
+	}
+
+	seen, dropped, err = walk(t, cache)
+	if err != nil {
+		t.Fatalf("the second EachIssue: %v", err)
+	}
+	if dropped != 0 {
+		t.Errorf("the second walk dropped %d again, so the record that cannot be read is still on disk and will be "+
+			"counted for the rest of the file's life", dropped)
+	}
+	if !slices.Equal(seen, want) {
+		t.Errorf("the second walk visited %v, want %v", seen, want)
+	}
+}
+
+func walk(t *testing.T, cache *DiskCache) (seen []string, dropped int, err error) {
+	t.Helper()
+
+	dropped, err = cache.EachIssue(func(iss jira.Issue, _ time.Time) bool {
+		seen = append(seen, iss.Key)
+		return true
+	})
+	return seen, dropped, err
 }

@@ -1148,9 +1148,12 @@ func (f *Fake) CreateMeta(ctx context.Context, projectKey, issueTypeID string) (
 	}
 	schema := jira.Schema{Project: proj.ref, IssueType: *typ}
 	add := func(id string, required bool, allowed []jira.Option) {
-		if meta, found := f.fakeFieldMeta(id, required, allowed); found {
-			schema.Fields = append(schema.Fields, meta)
+		meta, found := f.fakeFieldMeta(id, required, allowed)
+		if !found {
+			return
 		}
+		meta.HasDefault, meta.Default = fakeCreateDefault(id)
+		schema.Fields = append(schema.Fields, meta)
 	}
 	add("summary", true, nil)
 	add("issuetype", true, nil)
@@ -1675,6 +1678,18 @@ func fakePriorityByID(id string) *jira.Priority {
 		}
 	}
 	return nil
+}
+
+// fakeCreateDefault is what this create screen says it will fill a field in
+// with when the request omits it. A site states the priority's default as the
+// whole option, which is what makes it showable; a caller that sent it back
+// would freeze the project's default into every issue made here.
+func fakeCreateDefault(id string) (has bool, value jira.FieldValue) {
+	if id != "priority" {
+		return false, jira.FieldValue{}
+	}
+	p := fakePriorities[len(fakePriorities)/2]
+	return true, jira.FieldValue{Kind: jira.KindOption, Options: []jira.Option{{ID: p.ID, Label: p.Name}}}
 }
 
 func fakePriorityOptions() []jira.Option {

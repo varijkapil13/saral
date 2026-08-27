@@ -119,6 +119,10 @@ func labelWidth(f *field) int {
 	return n
 }
 
+// width is a hidden field's name as it measures on screen. A name comes from
+// createmeta as the site spells it, so on a localised site it is not ASCII.
+func (h hiddenField) width() int { return ansi.StringWidth(h.name) }
+
 // View draws the visible window and nothing else, so that a screen with six
 // fields and one with two hundred cost the same per frame.
 func (m *Model) View() string {
@@ -343,8 +347,18 @@ func renderField(f *field, lay layout, selected bool, st *styles) string {
 
 // placeholder says what an empty field would take, which is the only hint a
 // user gets about a widget they have not opened yet.
+//
+// A field the screen states a default for says that instead: what Jira will put
+// there is more use than what shape it takes, and the word "empty" stays because
+// the widget is empty — the value is the site's and is not in the request.
 func placeholder(f *field, bullet string) string {
 	head := "empty " + bullet + " "
+	if stated, says := f.stated(); says {
+		if stated == "" {
+			return head + "Jira fills this in"
+		}
+		return head + "Jira will use " + stated
+	}
 	switch f.kind {
 	case kindDate:
 		return head + "2026-03-27"

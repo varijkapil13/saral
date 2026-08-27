@@ -708,7 +708,7 @@ type form struct {
 }
 
 func newForm() form {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = "> "
 	return form{input: ti}
 }

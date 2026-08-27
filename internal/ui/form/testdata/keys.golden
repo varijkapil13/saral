@@ -8,10 +8,13 @@ the field list
 a one-line field open
   acts   enter take it · esc keep and close
   full   [enter take this value, esc close the editor, keeping what is typed]
+  full   [alt+k delete to end of line]
 the long-text pane open
   acts   ctrl+d finish · esc keep and close
   full   [ctrl+d finish this text, esc close the editor, keeping what is typed]
+  full   [alt+k delete to end of line]
 the value chooser open
   acts   tab pick · enter take it · esc keep and close
   full   [↓ next value, ↑ previous value, pgdn page down, pgup page up]
   full   [tab pick or unpick, enter take this value, esc close the editor, keeping what is typed]
+  full   [alt+k delete to end of line]

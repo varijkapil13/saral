@@ -255,7 +255,7 @@ func (m *Model) focus(on bool) {
 }
 
 func newInput() textinput.Model {
-	ti := textinput.New()
+	ti := widget.NewInput()
 	ti.Prompt = "> "
 	return ti
 }

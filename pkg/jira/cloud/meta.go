@@ -3,6 +3,7 @@ package cloud
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -176,6 +177,25 @@ func createMetaProject(fields []createMetaField, projectKey string) jira.Project
 	return out
 }
 
+// defaultFieldValue reads the value a screen says it will fill a field in with.
+//
+// A screen sends hasDefaultValue and defaultValue side by side, and the two
+// disagree often enough that the flag is what decides: the reporter arrives as
+// true beside a null, because the site fills it in from the credential and will
+// not say who that is until the issue exists. That reaches a caller as no value
+// under a true flag, which is the honest answer and is why this does not infer
+// the flag from the value.
+func defaultFieldValue(has bool, raw json.RawMessage, schema jira.FieldSchema) jira.FieldValue {
+	if !has || isJSONNull(raw) {
+		return jira.FieldValue{}
+	}
+	value, ok := decodeFieldValue(raw, schema)
+	if !ok {
+		return jira.FieldValue{}
+	}
+	return value
+}
+
 // createMetaField is one field of a create screen, kept beside the allowed
 // values it was decoded from: jira.Option carries an id and a label, and the
 // project's own entry also carries the key that names it.
@@ -219,6 +239,7 @@ type apiCreateMetaField struct {
 	Key             string                `json:"key"`
 	FieldID         string                `json:"fieldId"`
 	HasDefaultValue bool                  `json:"hasDefaultValue"`
+	DefaultValue    json.RawMessage       `json:"defaultValue"`
 	Operations      []string              `json:"operations"`
 	AllowedValues   []apiCreateMetaOption `json:"allowedValues"`
 	AutoCompleteURL string                `json:"autoCompleteUrl"`
@@ -232,6 +253,7 @@ func (f apiCreateMetaField) domain() createMetaField {
 		Name:            f.Name,
 		Required:        f.Required,
 		HasDefault:      f.HasDefaultValue,
+		Default:         defaultFieldValue(f.HasDefaultValue, f.DefaultValue, schema),
 		Operations:      append([]string(nil), f.Operations...),
 		AutoCompleteURL: f.AutoCompleteURL,
 	}

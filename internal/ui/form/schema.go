@@ -75,6 +75,9 @@ func cloneSchema(in jira.Schema) jira.Schema {
 		meta := in.Fields[i]
 		meta.Operations = slices.Clone(in.Fields[i].Operations)
 		meta.AllowedValues = cloneOptions(in.Fields[i].AllowedValues)
+		meta.Default.Options = cloneOptions(in.Fields[i].Default.Options)
+		meta.Default.Users = slices.Clone(in.Fields[i].Default.Users)
+		meta.Default.Doc = in.Fields[i].Default.Doc.Clone()
 		out.Fields[i] = meta
 	}
 	return out

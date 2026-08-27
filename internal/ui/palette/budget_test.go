@@ -42,3 +42,12 @@ func TestBudget_PaletteOpeningIsOnTheKeystrokeBudget(t *testing.T) {
 		t.Errorf("building the palette over 64 commands took %s, want under the 16ms in docs/PERFORMANCE.md", per)
 	}
 }
+
+// The picker is a list that ranks on every keystroke like the palette itself, so
+// it is on the same budget.
+func TestBudget_ProjectPickerKeystroke(t *testing.T) {
+	res := testing.Benchmark(BenchmarkProjectKeystroke)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("a keystroke into the project picker took %s, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+}

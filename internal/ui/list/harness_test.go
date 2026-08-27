@@ -161,6 +161,18 @@ func (d *driver) typeText(text string) {
 
 func (d *driver) view() string { return ansi.Strip(d.m.View()) }
 
+// said reports whether any status line this session wrote carried the words.
+// The reason for a widened default is one of several lines a start-up produces,
+// and which of them is last depends on the order the answers land in.
+func (d *driver) said(want string) bool {
+	for _, status := range d.statuses {
+		if strings.Contains(status.Text, want) {
+			return true
+		}
+	}
+	return false
+}
+
 func (d *driver) lastStatus() kernel.StatusMsg {
 	if len(d.statuses) == 0 {
 		return kernel.StatusMsg{}

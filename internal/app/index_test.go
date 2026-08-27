@@ -19,17 +19,18 @@ type stubCorpus struct {
 	stored time.Time
 	gen    uint64
 	walks  int
+	drops  int
 	fail   error
 }
 
-func (c *stubCorpus) EachIssue(fn func(jira.Issue, time.Time) bool) error {
+func (c *stubCorpus) EachIssue(fn func(jira.Issue, time.Time) bool) (int, error) {
 	c.walks++
 	for i := range c.issues {
 		if !fn(c.issues[i], c.stored) {
 			break
 		}
 	}
-	return c.fail
+	return c.drops, c.fail
 }
 
 func (c *stubCorpus) Generation() uint64 { return c.gen }
@@ -418,6 +419,47 @@ func TestIndex_SearchesTheIssuesTheDiskCacheHolds(t *testing.T) {
 	searched(t, ix, "", 1)
 	if ix.Len() != before {
 		t.Errorf("the index holds %d issues after a second search stored the same keys, want %d", ix.Len(), before)
+	}
+}
+
+// The count a walk skipped is carried to whoever draws the index: it is the only
+// account there is of a corpus holding less than it looks, because a skipped
+// record leaves no error behind.
+func TestDropped_CarriesTheCountTheLastWalkSkipped(t *testing.T) {
+	t.Parallel()
+
+	corpus := newStubCorpus(listRows(3)...)
+	corpus.drops = 2
+	ix := NewIndex(corpus)
+	if got := ix.Dropped(); got != 0 {
+		t.Errorf("an index that has not walked reports %d dropped, want 0", got)
+	}
+
+	if walked, err := ix.Refresh(); !walked || err != nil {
+		t.Fatalf("Refresh walked=%v: %v", walked, err)
+	}
+	if got := ix.Dropped(); got != 2 {
+		t.Errorf("the index reports %d dropped records, want 2", got)
+	}
+	if got := ix.Len(); got != 3 {
+		t.Errorf("the index holds %d issues, want the 3 the walk could read", got)
+	}
+
+	corpus.drops, corpus.gen = 0, corpus.gen+1
+	if walked, err := ix.Refresh(); !walked || err != nil {
+		t.Fatalf("the second Refresh walked=%v: %v", walked, err)
+	}
+	if got := ix.Dropped(); got != 0 {
+		t.Errorf("a walk that skipped nothing still reports %d dropped, so the count is never cleared", got)
+	}
+}
+
+func TestDropped_OverANilIndexIsZeroRatherThanAPanic(t *testing.T) {
+	t.Parallel()
+
+	var ix *Index
+	if got := ix.Dropped(); got != 0 {
+		t.Errorf("a nil index reports %d dropped", got)
 	}
 }
 

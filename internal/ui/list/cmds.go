@@ -132,3 +132,25 @@ func reload(ctx context.Context, search *app.Search, cache app.Cache, jql string
 		}
 	}
 }
+
+// assignedMsg answers the one question a session asks about the credential
+// rather than about the site: whether anything anywhere on it is assigned to the
+// account the credential belongs to.
+type assignedMsg struct {
+	has bool
+	err error
+}
+
+// probeAssigned runs the opening search unscoped and one row deep. One row is
+// the whole answer — what is asked is whether this is an account work is
+// assigned to, not what that work is — so the projection is the narrow one and
+// the page is the smallest a site will send.
+func probeAssigned(ctx context.Context, search *app.Search, jql string) tea.Cmd {
+	return func() tea.Msg {
+		res, err := search.Run(ctx, app.Request{JQL: jql, Projection: app.ListProjection(), MaxResults: 1})
+		if err != nil {
+			return assignedMsg{err: err}
+		}
+		return assignedMsg{has: len(res.Page.Items) > 0}
+	}
+}
