@@ -9,42 +9,27 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// destZone is the zone one destination is marked with, under the kernel's own
-// prefix. A click there spends the gesture on that slot, which is exactly what
-// pressing its digit does.
 const destZone = "dest:"
 
-// destMarker is the gutter the cursor's arrow sits in, so that which row enter
-// would take is legible with no colour at all — the palette's own list has the
-// same one for the same reason.
+// destMarker is the width of the cursor's gutter, in columns.
 const destMarker = 2
 
-// What the box says about itself. The list is not self-evident from a column of
-// keys, and neither is the block under it: those are the strokes the focused
-// view spends this same prefix on, named here so that a gesture this overlay
-// covers is taught by it rather than hidden behind it.
 const (
 	destHere = "In this view"
 	destNone = "no view in this build sits on a digit"
 	destOn   = "on screen"
 )
 
-// destTitle says what the box is and which key it belongs to, spelt from the
-// keymap the kernel is running rather than written down here.
 func (m Model) destTitle() string { return "Where " + m.keys.Go.Help().Key + " goes" }
 
 // The keys the overlay adds to a latched prefix. They are not in GlobalKeys
-// because they work in exactly one place and mean something else everywhere
-// else, which is why the right-click menu's are not either.
+// because they answer in one place only.
 var (
 	destUp     = Bind([]string{"up", "k"}, "up", "up")
 	destDown   = Bind([]string{"down", "j"}, "up/down", "choose")
 	destChoose = Bind([]string{"enter"}, "enter", "go there")
 )
 
-// The overlay has a palette entry as well as a key, because docs/UX.md asks for
-// an action to be reachable three ways and because the palette is where somebody
-// who has not learnt the prefix is already looking.
 func init() { registerDestinationCommand() }
 
 func registerDestinationCommand() {
@@ -57,33 +42,33 @@ func registerDestinationCommand() {
 	})
 }
 
-// latchPrefixMsg latches the go-to prefix without a keypress, which is how the
-// palette entry opens the overlay the key opens. It carries no stroke of its own:
-// the kernel spells the prefix from the keymap it is running, so a rebound prefix
-// cannot leave the palette latching a key that no longer means this.
+// latchPrefixMsg latches the go-to prefix without a keypress. It carries no
+// stroke of its own, so a rebound prefix cannot leave the palette latching a key
+// that no longer means this.
 type latchPrefixMsg struct{}
 
-// latchPrefix buffers the prefix the keymap binds. The stroke is spelt back
-// rather than assumed, so a key handed to the view on the way out of the gesture
-// is the one the user would have pressed to start it.
 func (m Model) latchPrefix() (tea.Model, tea.Cmd) {
 	press, ok := Stroke(m.keys.Go)
 	if !ok {
 		return m, nil
 	}
+	// A view with the keyboard would be handed the keys the box advertises, so
+	// there is nothing to draw here — the same answer pressing the prefix into a
+	// field gets, said out loud because the palette entry was chosen on purpose.
+	if m.capturing() {
+		m.status, m.statusLevel = "this screen is taking typing; leave the field, then press "+
+			m.keys.Go.Help().Key, LevelInfo
+		return m, nil
+	}
 	return m.latch(press)
 }
 
-// latch holds the prefix and opens the overlay on the view this session is in.
 func (m Model) latch(press tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.prefix, m.prefixSet = press, true
 	m.dest = m.destStart()
 	return m, nil
 }
 
-// destination is one row: the slot's gesture, the view it reaches, and the note
-// saying why it is not somewhere to go — the probe's own words for a view this
-// token cannot reach, and that it is already up for the one on screen.
 type destination struct {
 	slot      int
 	title     string
@@ -92,9 +77,6 @@ type destination struct {
 	reachable bool
 }
 
-// destinations is every slot a view has claimed, in slot order, read off the
-// registry rather than written down: RegisterView refuses a duplicate slot at
-// startup, so what it holds is the whole allocation.
 func (m Model) destinations() []destination {
 	root := ""
 	if len(m.stack) > 0 {
@@ -120,9 +102,6 @@ func (m Model) destinations() []destination {
 	return out
 }
 
-// destStart is where the cursor opens: on the view this session is in, so that
-// the overlay says which row you are on by putting the cursor there, and on the
-// first reachable row when the root holds no digit at all.
 func (m Model) destStart() int {
 	dests := m.destinations()
 	for i, d := range dests {
@@ -138,9 +117,6 @@ func (m Model) destStart() int {
 	return -1
 }
 
-// destAt is the row a motion lands on, skipping the ones nothing can reach: a
-// view whose capability is absent is an answer with a reason attached rather
-// than a place the cursor may rest.
 func (m Model) destAt(step int) int {
 	dests := m.destinations()
 	n := len(dests)
@@ -157,9 +133,7 @@ func (m Model) destAt(step int) int {
 	return m.dest
 }
 
-// destKey answers the three keys the overlay adds to a latched prefix: the two
-// that move its cursor, which leave the gesture latched, and the one that spends
-// it on the row under the cursor. Everything else resolves the way it did before
+// destKey leaves every key it does not answer to resolve the way it did before
 // this overlay existed, so the prefix stays a pass-through rather than a mode.
 func (m Model) destKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 	switch {
@@ -175,9 +149,8 @@ func (m Model) destKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 	return m, nil, true
 }
 
-// chooseDest spends the gesture on one row. It goes through openSlot, so a row
-// nothing can reach answers with the reason rather than with nothing — the same
-// answer its digit gives.
+// chooseDest spends the gesture on one row, through openSlot so that a row
+// nothing can reach answers with the reason its digit gives.
 func (m Model) chooseDest(at int) (tea.Model, tea.Cmd) {
 	m.prefix, m.prefixSet = tea.KeyPressMsg{}, false
 	dests := m.destinations()
@@ -187,9 +160,6 @@ func (m Model) chooseDest(at int) (tea.Model, tea.Cmd) {
 	return m.openSlot(dests[at].slot)
 }
 
-// destMouse handles a click while the overlay is up. A click on a row spends the
-// gesture on it, a click anywhere else throws the gesture away, and a wheel or a
-// drag does nothing: what is under this is not being looked at.
 func (m Model) destMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	click, ok := msg.(tea.MouseClickMsg)
 	if !ok || !m.mouse || click.Button != tea.MouseLeft {
@@ -204,9 +174,6 @@ func (m Model) destMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// destFooterActs is the row while the overlay is up. The kernel answers for
-// itself here for the reason it does under the ? overlay and the menu: it is
-// holding the keys, so the view's own inventory is not what works right now.
 func (m Model) destFooterActs() []Binding {
 	return []Binding{
 		Bind(m.keys.Slot.Keys(), "1-9", "switch view"),
@@ -217,23 +184,28 @@ func (m Model) destFooterActs() []Binding {
 }
 
 // viewGestures is what the focused view spends this same prefix on, taken from
-// the keys it says work right now rather than written down here. A view spells a
-// two-stroke gesture as the label of the binding it lands on — "g g" on a
-// binding whose stroke is home — so the label is where the pair is recorded.
+// the keys it says work right now. A view spells a two-stroke gesture as the
+// label of the binding it lands on — "g g" on a binding whose stroke is home —
+// so the label is where the pair is recorded.
 func (m Model) viewGestures() []Binding {
 	set, _ := m.viewKeys()
 	lead := m.keys.Go.Help().Key + " "
 	out := make([]Binding, 0, 2)
 	each := func(b Binding) {
-		if !b.Enabled() || !strings.HasPrefix(b.Help().Key, lead) {
+		gesture, ok := gestureIn(b, lead)
+		if !ok {
 			return
 		}
 		for _, held := range out {
-			if held.Help().Key == b.Help().Key {
+			if held.Help().Key == gesture {
 				return
 			}
 		}
-		out = append(out, b)
+		if gesture == b.Help().Key {
+			out = append(out, b)
+			return
+		}
+		out = append(out, Bind(b.Keys(), gesture, b.Help().Desc))
 	}
 	for _, b := range set.Acts {
 		each(b)
@@ -249,20 +221,40 @@ func (m Model) viewGestures() []Binding {
 	return out
 }
 
-// destRow is one line of the box before it is measured: what to press, what that
-// reaches, the note beside it, and the zone a click on it resolves through.
+// gestureIn is the gesture on this prefix a binding's label spells, if any. A
+// binding answering to more than one thing lists them — "↑/k", "G / g e" — so
+// the label is a list before it is a name.
+func gestureIn(b Binding, lead string) (string, bool) {
+	if !b.Enabled() {
+		return "", false
+	}
+	label := b.Help().Key
+	if strings.HasPrefix(label, lead) {
+		return label, true
+	}
+	if !strings.Contains(label, "/") {
+		return "", false
+	}
+	for alt := range strings.SplitSeq(label, "/") {
+		if alt = strings.TrimSpace(alt); strings.HasPrefix(alt, lead) {
+			return alt, true
+		}
+	}
+	return "", false
+}
+
 type destRow struct {
 	key, name, note, zone string
-	// head marks the line that names the block under the destinations. It is a
-	// heading rather than a row, so it starts where the box does.
+	// head marks a line that names the block under it rather than a row in it,
+	// so it starts where the box does.
 	head    bool
 	dim, on bool
 }
 
-// destRows is the box's content in order. The nine slots and the title always
-// fit — there are nine digits and the body is at least fifteen rows at the
-// documented minimum — so the block that folds when the terminal is short is the
-// one naming the view's own gestures, and no destination is ever dropped.
+// destRows is the box's content in order. Nine slots and a title fit in the
+// smallest terminal the program draws in, so the block that folds when the
+// terminal is short is the one naming the view's own gestures, and no
+// destination is ever dropped.
 func (m Model) destRows(height int) []destRow {
 	dests := m.destinations()
 	rows := make([]destRow, 0, len(dests)+4)
@@ -277,9 +269,9 @@ func (m Model) destRows(height int) []destRow {
 		})
 	}
 	gestures := m.viewGestures()
-	// Two rows for the blank one and the heading, and one line of border at each
-	// end of the box.
-	left := height - 2 - len(rows) - 2
+	// The five rows destView adds around this block: the title, the blank row and
+	// the heading, and a line of border at each end of the box.
+	left := height - len(rows) - 5
 	if len(gestures) == 0 || left <= 0 {
 		return rows
 	}
@@ -299,11 +291,9 @@ func (m Model) destRows(height int) []destRow {
 
 // destView draws the destinations into the body while the prefix is latched.
 //
-// It takes the whole body, the way the ? overlay and the right-click menu do,
-// rather than floating over the view at the cursor: a box spliced into the
-// view's own lines would have to cut the strings carrying the zone markers a
-// click is resolved through, and half the frame's mouse targets would stop
-// answering.
+// It takes the whole body rather than floating over the view at the cursor,
+// because a box spliced into the view's own lines would have to cut the strings
+// carrying the zone markers a click is resolved through.
 func (m Model) destView() string {
 	t := m.deps.Theme
 	w, h := m.bodySize()
@@ -332,10 +322,7 @@ func (m Model) destView() string {
 		}
 		widest = max(widest, width)
 	}
-	// The border takes two columns and the style's padding two more. A row longer
-	// than what is left is cut rather than wrapped, because the box is sized by
-	// its widest row and a wrapped row's second line is outside the zone a click
-	// resolves through.
+	// The border takes two columns and the style's padding two more.
 	rowW := min(widest, max(w-4, lipgloss.Width(title)))
 
 	lines := make([]string, 0, len(rows)+1)
@@ -346,8 +333,6 @@ func (m Model) destView() string {
 	return t.Overlay.Render(strings.Join(lines, "\n"))
 }
 
-// destGutter is the cursor's own column: the glyph on the row enter would spend
-// the gesture on, and spaces on every other.
 func (m Model) destGutter(on bool) string {
 	t := m.deps.Theme
 	if !on {
@@ -357,6 +342,9 @@ func (m Model) destGutter(on bool) string {
 		strings.Repeat(" ", max(destMarker-ansi.StringWidth(t.Glyphs.Collapsed), 0))
 }
 
+// destLine draws one row. It is cut rather than wrapped, because the box is
+// sized by its widest row and a wrapped row's second line is outside the zone a
+// click resolves through.
 func (m Model) destLine(r destRow, keyW, nameW, rowW int) string {
 	t := m.deps.Theme
 	if r.key == "" && r.name == "" {

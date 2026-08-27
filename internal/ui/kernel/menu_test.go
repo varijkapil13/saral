@@ -357,3 +357,41 @@ func TestMenu_MouseOffLeavesTheGestureWithTheTerminal(t *testing.T) {
 		t.Errorf("the click did not reach the view either: %v", board.seen)
 	}
 }
+
+// BenchmarkFrameWithTheMenuOpen is the third of the chrome's overlays, over the
+// same view as the other two.
+func BenchmarkFrameWithTheMenuOpen(b *testing.B) {
+	resetRegistry()
+	b.Cleanup(resetRegistry)
+	RegisterView(ViewSpec{ID: "board", Title: "Board", Slot: 1,
+		New: func(Deps) View { return &stubView{id: "board", content: strings.Repeat("row\n", 40)} }})
+	RegisterKeys("board", KeySet{
+		Acts: []Binding{
+			Bind([]string{"enter"}, "enter", "open"),
+			Bind([]string{"e"}, "e", "edit"),
+			Bind([]string{"t"}, "t", "status"),
+		},
+		Full: [][]Binding{{
+			Bind([]string{"enter"}, "enter", "open the row under the cursor"),
+			Bind([]string{"e"}, "e", "edit the fields of this issue"),
+			Bind([]string{"t"}, "t", "change the status of this issue"),
+		}},
+	})
+
+	m, err := New(testDeps(), WithSize(200, 60), WithMouse(true))
+	if err != nil {
+		b.Fatal(err)
+	}
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
+	next, _ = next.(Model).Update(rightClick(10, 5))
+	m = next.(Model)
+	if !m.menu.open {
+		b.Fatal("a right-click did not open the menu")
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = m.Frame()
+	}
+}

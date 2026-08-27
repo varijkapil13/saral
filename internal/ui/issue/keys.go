@@ -56,7 +56,7 @@ func defaultKeys() keyMap {
 		HalfDown: kernel.Bind([]string{"d", "ctrl+d"}, "d/ctrl+d", "half page down"),
 		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
 		Top:      kernel.Bind([]string{"home"}, "g g", "top"),
-		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "bottom"),
+		Bottom:   kernel.Bind([]string{"G", "end"}, "G / g e", "bottom"),
 		// The renderer never wraps code and never cuts a table, so a description
 		// really does reach past its box: a Go signature is around eighty cells
 		// and the widest box the wide mode gives it is seventy-eight.

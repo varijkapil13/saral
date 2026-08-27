@@ -1,18 +1,18 @@
- saral | Issues                                                                                   example.atlassian.net 
-┌──────────────────────────────────────────────────────────────────────────────┐                                        
-│ Where g goes                                                                 │                                        
-│ > g1   Issues     on screen                                                  │                                        
-│   g2   Board                                                                 │                                        
-│   g3   Backlog                                                               │                                        
-│   g7   Plans      Plans need Administer Jira, which this token does not have │                                        
-│                                                                              │                                        
-│ In this view                                                                 │                                        
-│   g g  first row                                                             │                                        
-│   g e  last row                                                              │                                        
-└──────────────────────────────────────────────────────────────────────────────┘                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
+ saral | Issues                                                                            PROJ | example.atlassian.net 
+┌───────────────────────────────────────────────────────────────────────────────────────────────────────┐               
+│ Where g goes                                                                                          │               
+│ > g1   Issues     on screen                                                                           │               
+│   g2   Board      nothing has been checked on this site yet, so whether Board works here is unknown   │               
+│   g3   Backlog    nothing has been checked on this site yet, so whether Backlog works here is unknown │               
+│   g4   Sprints    nothing has been checked on this site yet, so whether Sprints works here is unknown │               
+│   g5   Releases                                                                                       │               
+│   g6   Timeline                                                                                       │               
+│   g7   Plans                                                                                          │               
+│                                                                                                       │               
+│ In this view                                                                                          │               
+│   g g  first row                                                                                      │               
+│   g e  last row                                                                                       │               
+└───────────────────────────────────────────────────────────────────────────────────────────────────────┘               
                                                                                                                         
                                                                                                                         
                                                                                                                         

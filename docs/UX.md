@@ -271,7 +271,9 @@ written down so that six later packets do not each pick a number.
 **Pressing `g` draws the destinations.** The program was already sitting there waiting for the key
 that completes the gesture and saying nothing about it, so this costs no width at rest, changes no
 gesture, and `g2` typed fast behaves exactly as it always did. The palette's *switch view* opens the
-same overlay for somebody who has not learnt the prefix.
+same overlay for somebody who has not learnt the prefix — except over a view that is taking typing,
+where the keys the box advertises are that view's: it says so on the status line instead. A gesture
+already waiting is thrown away the moment a view takes the keyboard, for the same reason.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -283,6 +285,7 @@ same overlay for somebody who has not learnt the prefix.
 │                                                                              │
 │ In this view                                                                 │
 │   g g  first row                                                             │
+│   g e  last row                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -300,12 +303,14 @@ What it holds, and why each half is there:
 - **What the focused view spends the same prefix on**, so that `g g` and the rest are taught by the
   overlay rather than shadowed by it. They are read off the view's own key set — a two-stroke gesture
   is spelt as the label of the binding it lands on, `g g` on a binding whose stroke is `home` — so a
-  view teaches this by registering its keys and by nothing else. Where the terminal is too short for
-  all of them the block folds to a `+N`; the destinations do not fold.
-  **`ge` is the gap this exposes**: the issue list, the detail pane and the comment thread all answer
-  it and none of them registers a binding that says so, so neither this overlay nor `?` can teach it.
-  Whichever packet next touches those three keymaps should spell it on the binding it lands on, the
-  way `g g` already is.
+  view teaches this by registering its keys and by nothing else. A binding that answers to a stroke
+  and to a gesture lists both, the way a binding on two strokes already does: `G / g e`, `↑/k`. The
+  block names the half that is a gesture on this prefix, and `?` shows the whole label. Where the
+  terminal is too short for all of them the block folds to a `+N`; the destinations do not fold.
+  **`ge` was the gap this exposed**: the issue list, the detail pane, the comment thread and the
+  board all answer it in the branch behind their own `g`, and none of them registered a binding that
+  said so, so neither this overlay nor `?` could teach it. All four now spell it on the binding it
+  lands on. The backlog and the version list answer `gg` only, and say only that.
 - **The row you are on**, marked, so the overlay teaches its own gesture by example: the cursor opens
   on the view that is up.
 

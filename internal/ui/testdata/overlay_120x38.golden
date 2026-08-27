@@ -13,18 +13,18 @@ m     move these issues to a sprint or the backlog    pgdn page down    g g    f
                                                       pgup page up      G      last row
 
 board
-enter open                                 ↓/j down               pgdn page down                 ...
-m     move this issue to another column    ↑/k up                 pgup page up
-b     another board of this project        ←/h previous column    g g  first card in this column
-                                           →/l next column        G    last card in this column
+enter open                                 ↓/j down               pgdn    page down                 ...
+m     move this issue to another column    ↑/k up                 pgup    page up
+b     another board of this project        ←/h previous column    g g     first card in this column
+                                           →/l next column        G / g e last card in this column
 
 comment
-a write a comment    ↓/j  down         ctrl+d half page down    1-9   saved query           ctrl+k commands
-e edit this one      ↑/k  up           ctrl+u half page up      g     where to go           ?      help
-d delete this one    pgdn page down    g g    oldest            g 1-9 switch view           q      quit
-                     pgup page up      G      newest            esc   back
-                                       ←/h    pan left          r     refresh
-                                       →/l    pan right         R     refetch everything
+a write a comment    ↓/j  down         ctrl+d  half page down    1-9   saved query           ctrl+k commands
+e edit this one      ↑/k  up           ctrl+u  half page up      g     where to go           ?      help
+d delete this one    pgdn page down    g g     oldest            g 1-9 switch view           q      quit
+                     pgup page up      G / g e newest            esc   back
+                                       ←/h     pan left          r     refresh
+                                       →/l     pan right         R     refetch everything
 
 filter
 enter choose what to filter by    ↓/j  down         1-9   saved query           ctrl+k commands
@@ -46,7 +46,7 @@ issue
 tab next pane        ↓/j    down         d/ctrl+d  half page down        1-9   saved query           ctrl+k commands
 e   edit fields      ↑/k    up           u/ctrl+u  half page up          g     where to go           ?      help
 t   change status    f/pgdn page down    g g       top                   g 1-9 switch view           q      quit
-C   comment          b/pgup page up      G         bottom                esc   back
+C   comment          b/pgup page up      G / g e   bottom                esc   back
                      →/l    pan right    shift+tab previous pane         r     refresh
                      ←/h    pan left     z         expand or collapse    R     refetch everything
                                          <         wider sidebar
@@ -70,12 +70,12 @@ enter choose    ↓/j down    1-9   saved query           ctrl+k commands
                             R     refetch everything
 
 list
-enter open                                     ↓/j  down         ctrl+d half page down    1-9   saved query        ...
-f     filter by a person, a status, a label    ↑/k  up           ctrl+u half page up      g     where to go
-/     filter                                   pgdn page down    g g    first row         g 1-9 switch view
-a     all issues                               pgup page up      G      last row          esc   back
-e     edit this search                                                                    r     refresh
-s     save this query to a key                                                            R     refetch everything
+enter open                                     ↓/j  down         ctrl+d  half page down    1-9   saved query        ...
+f     filter by a person, a status, a label    ↑/k  up           ctrl+u  half page up      g     where to go
+/     filter                                   pgdn page down    g g     first row         g 1-9 switch view
+a     all issues                               pgup page up      G / g e last row          esc   back
+e     edit this search                                                                     r     refresh
+s     save this query to a key                                                             R     refetch everything
 
 move
 enter use the project under the cursor    ↓/j  down         1-9   saved query           ctrl+k commands

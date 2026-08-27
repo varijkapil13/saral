@@ -45,9 +45,8 @@ type GlobalKeys struct {
 	Refresh Binding
 	Purge   Binding
 	// Go is the prefix the view slots sit behind. The kernel buffers it rather
-	// than forwarding it, because three views already spend g on gg and ge — and
-	// while it is buffered it draws the destinations, so it is a key with an
-	// answer of its own rather than half of a gesture.
+	// than forwarding it, because five views spend g on gestures of their own,
+	// and answers it with the destinations while it waits.
 	Go Binding
 	// Slot switches to a footer slot. Its keys are the bare digits because that
 	// is what arrives after the prefix; its help text is the whole gesture.

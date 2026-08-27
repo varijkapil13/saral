@@ -36,7 +36,7 @@ func defaultKeys() keyMap {
 		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
 		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
 		Top:      kernel.Bind([]string{"home"}, "g g", "first card in this column"),
-		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "last card in this column"),
+		Bottom:   kernel.Bind([]string{"G", "end"}, "G / g e", "last card in this column"),
 		Open:     kernel.Bind([]string{"enter"}, "enter", "open"),
 		Pick:     kernel.Bind([]string{"m"}, "m", "move this issue to another column"),
 		Drop:     kernel.Bind([]string{"enter"}, "enter", "move it to this column"),

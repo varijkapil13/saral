@@ -55,7 +55,7 @@ func defaultKeys() keyMap {
 		HalfDown: kernel.Bind([]string{"ctrl+d"}, "ctrl+d", "half page down"),
 		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
 		Top:      kernel.Bind([]string{"home"}, "g g", "first row"),
-		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "last row"),
+		Bottom:   kernel.Bind([]string{"G", "end"}, "G / g e", "last row"),
 		Open:     kernel.Bind([]string{"enter"}, "enter", "open"),
 		Filter:   kernel.Bind([]string{"/"}, "/", "filter"),
 		FilterBy: kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),

@@ -441,6 +441,33 @@ func BenchmarkFrame(b *testing.B) {
 	}
 }
 
+// BenchmarkFrameWithTheHelpOverlayUp is the ? overlay over the view
+// BenchmarkFrame draws, so the two are the same frame either side of an overlay.
+func BenchmarkFrameWithTheHelpOverlayUp(b *testing.B) {
+	resetRegistry()
+	b.Cleanup(resetRegistry)
+	RegisterView(ViewSpec{ID: "board", Title: "Board", Slot: 1,
+		New: func(Deps) View { return &stubView{id: "board", content: strings.Repeat("row\n", 40)} }})
+	RegisterKeys("board", KeySet{Short: []Binding{Bind([]string{"enter"}, "enter", "open")}})
+
+	m, err := New(testDeps(), WithSize(200, 60), WithMouse(false))
+	if err != nil {
+		b.Fatal(err)
+	}
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
+	next, _ = next.(Model).Update(keyPress("?"))
+	m = next.(Model)
+	if !m.showHelp {
+		b.Fatal("? did not open the help overlay")
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = m.Frame()
+	}
+}
+
 func BenchmarkKeyToFrame(b *testing.B) {
 	resetRegistry()
 	b.Cleanup(resetRegistry)

@@ -236,8 +236,7 @@ type Model struct {
 	// prefix holds the go-to key while it waits for the one that completes it.
 	// It is buffered rather than forwarded, because a view that spends g on its
 	// own gestures must not be left half way through one when the kernel takes
-	// the digit that follows. While it is held the frame says where the gesture
-	// can go, and dest is which of those rows the cursor is on.
+	// the digit that follows. dest is the overlay's cursor while it is held.
 	prefix    tea.KeyPressMsg
 	prefixSet bool
 	dest      int
@@ -478,10 +477,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	had := m.status != ""
 	next, cmd := m.route(msg)
 	updated, ok := next.(Model)
-	if !ok || (updated.status != "") == had {
+	if !ok {
+		return next, cmd
+	}
+	if dropped, yes := updated.dropCapturedPrefix(); yes {
+		updated, next = dropped, dropped
+	}
+	if (updated.status != "") == had {
 		return next, cmd
 	}
 	return updated, tea.Batch(cmd, updated.resizeAll())
+}
+
+// dropCapturedPrefix throws a latched prefix away once a view has the keyboard:
+// handleKey hands that view the keys before it looks at the prefix, so the
+// gesture can never be completed. It runs after routing because a view starts
+// capturing on an answer it was handed, not on a key the kernel saw.
+func (m Model) dropCapturedPrefix() (Model, bool) {
+	if !m.prefixSet || !m.capturing() {
+		return m, false
+	}
+	m.prefix, m.prefixSet = tea.KeyPressMsg{}, false
+	return m, true
 }
 
 func (m Model) route(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -674,9 +691,10 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 // it advertises rather than as a second way of doing it, which is the only way
 // docs/UX.md's three routes to an action stay one implementation.
 //
-// While the overlay is up the row offers one action — the key that closes it — and
-// the other two cells are left alone: switching root view under an overlay would
-// leave it covering a view nobody asked to see.
+// While an overlay is up the row is that overlay's own — one action under `?`,
+// four behind a latched prefix — and the root cell and the `+N` are left alone:
+// switching root view under an overlay would leave it covering a view nobody
+// asked to see.
 func (m Model) clickFooter(click tea.MouseClickMsg) (tea.Model, tea.Cmd, bool) {
 	if len(m.stack) == 0 {
 		return m, nil, false
@@ -767,10 +785,9 @@ func (m Model) openSlot(slot int) (tea.Model, tea.Cmd) {
 }
 
 // resolvePrefix spends the buffered go-to key on whatever followed it. A digit
-// is the kernel's, and so are the three keys that move the overlay's cursor and
-// spend the gesture on the row under it; esc throws the gesture away; anything
-// else was meant for the view, which then sees both keys in the order they were
-// typed.
+// is the kernel's, and so are the overlay's own keys; esc throws the gesture
+// away; anything else was meant for the view, which then sees both keys in the
+// order they were typed.
 func (m Model) resolvePrefix(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if next, cmd, handled := m.destKey(msg); handled {
 		return next, cmd

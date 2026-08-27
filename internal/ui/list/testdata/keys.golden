@@ -1,12 +1,12 @@
 browsing
   acts   enter open · f filter by · / filter · a all · e search · s save
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
-  full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
+  full   [ctrl+d half page down, ctrl+u half page up, g g first row, G / g e last row]
   full   [enter open, f filter by a person, a status, a label, / filter, a all issues, e edit this search, s save this query to a key]
 a filter kept on the rows
   acts   enter open · f filter by · / filter · ctrl+g clear · a all · e search · s save
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
-  full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
+  full   [ctrl+d half page down, ctrl+u half page up, g g first row, G / g e last row]
   full   [enter open, f filter by a person, a status, a label, / filter, ctrl+g clear filter, a all issues, e edit this search, s save this query to a key]
 filter open
   acts   enter keep filter · esc clear filter
