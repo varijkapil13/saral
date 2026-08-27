@@ -755,6 +755,47 @@ three situations that mean three different things, and every view had to guess w
   underneath. Every guard was checked by mutation: removing the kernel's routing, and dropping the
   address from any one view, turns exactly that view's case red.
 
+## W1 · the seam Batches 4 to 8 code against
+
+Three batches reach for the same three things — attachments, versions, sprints — and eight packets
+would each have invented their own fixtures, their own role interface and their own guess at a body
+for them. This wave lands the seam once so a packet arrives to something it can test against on a
+machine with no Jira site, and so the guesses are written down in one place with a marker saying they
+are guesses.
+
+- [x] **W1 — Role interfaces, one sprint read, and the fixtures for three batches** ·
+  [#38](https://github.com/varijkapil13/saral/issues/38) ·
+  [#59](https://github.com/varijkapil13/saral/issues/59) ·
+  [#60](https://github.com/varijkapil13/saral/issues/60) ·
+  **owns** `pkg/jira/{port,roles,types}.go`, `pkg/jira/types_test.go`, `pkg/jira/jiratest/**`,
+  `docs/{API-NOTES,ROADMAP}.md`, `.gitignore`
+  Ten role interfaces — `AttachmentReader`/`Attacher`, `VersionReader`/`Releaser`, `BoardReader`,
+  `SprintReader`/`SprintManager`, `TaskWatcher`, `Relocator`, `PlanReader` — so a view holds the
+  narrowest thing it needs rather than the whole `Client`, and `*Fake` asserts every one of them at
+  compile time. `Client` grows `Sprint(ctx, id)`
+  ([#38](https://github.com/varijkapil13/saral/issues/38)): an issue's sprint value carries an id and
+  a name and no dates, so a timeline has no board to reach the sprint through and walking every board
+  of the project was the alternative. `jira.TaskState` gains the seventh state the schema has always
+  had, `TaskCancelRequested` ([#59](https://github.com/varijkapil13/saral/issues/59)), and `Done()`
+  deliberately reports it as **still running** — a poller sees it several times before `CANCELLED`.
+  The fake's `BulkMove` now hands back a `/rest/api/3/bulk/queue/{id}` URL
+  ([#60](https://github.com/varijkapil13/saral/issues/60)); it pointed at `/rest/api/3/task/{id}`,
+  which is a different registry answering a body that does not decode as the queue's.
+  Eleven fixtures and fourteen routes for the three batches: the three shapes an attachment answers
+  in and its content as streamed bytes over a `/media/` route standing in for the host the redirect
+  points at, the version read / create / release / unresolved-count set, and one sprint per state a
+  write can leave. **There is deliberately no `PUT /rest/agile/1.0/sprint/{id}` route** and a test
+  holds it that way, so P6.2 cannot reach the full replace even by accident.
+  Every guess is an `assumed` or `schema` row in `docs/API-NOTES.md` under *Attachments, versions and
+  sprint writes*, with the legend saying what those markers are worth; the first capture that touches
+  one of those endpoints promotes the row or deletes it.
+  **The capture ignore rule had a hole and it is closed here.** `/testdata/live/` was root-anchored
+  while an unignored `pkg/jira/jiratest/fixtures/testdata/live/` chain existed **inside the
+  `//go:embed fixtures` tree**, so a capture written there was both committable by `git add -A` and
+  compiled into the binary, with every half of `checkleak.py` that CI runs reporting clean. The rule
+  now reads `/testdata/live/` **and** `**/testdata/live/`, and the empty chain is gone. That is why
+  `.gitignore` is in this packet's owned paths.
+
 ## Batch 4 — Attachments · parallel ×3
 
 - [ ] **P4.1 — List and download** · [#17](https://github.com/varijkapil13/saral/issues/17) · **owns** `pkg/jira/cloud/attachment.go`

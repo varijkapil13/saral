@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// These two keep docs/PERFORMANCE.md's promise about the budgets mechanical
+// These three keep docs/PERFORMANCE.md's promise about the budgets mechanical
 // rather than honour-system. They are the only budget tests built with the race
 // detector, because they measure nothing: they read the tree.
 
@@ -25,7 +25,18 @@ const (
 		"that a budget is no longer held"
 )
 
-var guardDecl = regexp.MustCompile(`(?m)^func (TestBudget_\w+)\(`)
+var (
+	guardDecl  = regexp.MustCompile(`(?m)^func (TestBudget_\w+)\(`)
+	testDecl   = regexp.MustCompile(`(?m)^func (Test\w*)\(`)
+	noDetector = regexp.MustCompile(`(?m)^//go:build [^\n]*!race`)
+
+	// The two shapes a wall-clock budget takes here. A relational operator
+	// against a fixed duration is the giveaway: the corpus compares durations
+	// for correctness with == and !=, passes timeouts as arguments, and bounds
+	// a polling loop with a deadline and After.
+	perOp      = regexp.MustCompile(`\bNsPerOp\(\)`)
+	clockBound = regexp.MustCompile(`[<>]=?[^=<>]*\btime\.(?:Nanosecond|Microsecond|Millisecond|Second|Minute|Hour)\b`)
+)
 
 type guard struct{ pkg, test string }
 
@@ -217,5 +228,84 @@ func repoRoot(t *testing.T) string {
 			t.Fatalf("no go.mod in any parent of the working directory")
 		}
 		dir = parent
+	}
+}
+
+// A wall-clock assertion outside a budget file is the hole the other two guards
+// leave open: the race suite builds it, the detector inflates what it measures
+// about twentyfold, and because the name is not TestBudget_ the table above
+// never misses it. Three palette assertions, two form ones and cmd/saral's
+// first paint sat in that hole and were the whole of a suite that failed about
+// half the time, each run on a different one of them.
+func TestBudget_EveryWallClockAssertionSitsInAGuard(t *testing.T) {
+	t.Parallel()
+
+	root := repoRoot(t)
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case d.IsDir() && skipWalk(d.Name()):
+			return fs.SkipDir
+		case d.IsDir() || !strings.HasSuffix(d.Name(), "_test.go"):
+			return nil
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		holdOneFile(t, filepath.ToSlash(rel), string(content))
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking the tree for wall-clock assertions: %v", err)
+	}
+}
+
+// holdOneFile checks the two halves of the mechanism on one test file: a
+// wall-clock assertion belongs in a budget file, and a test in a budget file has
+// to carry the name the only lane that runs one selects on.
+func holdOneFile(t *testing.T, rel, content string) {
+	t.Helper()
+
+	named := strings.HasSuffix(rel, "budget_test.go")
+	tagged := noDetector.MatchString(content)
+
+	if named && tagged {
+		for _, m := range testDecl.FindAllStringSubmatch(content, -1) {
+			if !strings.HasPrefix(m[1], "TestBudget_") {
+				t.Errorf("%s is built without the detector and defines %s. The budget lane selects "+
+					"%s and the race suite does not build this file, so it runs in neither: rename it",
+					rel, m[1], "'^TestBudget_'")
+			}
+		}
+		return
+	}
+
+	for i, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "//") {
+			continue
+		}
+		var what string
+		switch {
+		case perOp.MatchString(line):
+			what = "reads a benchmark's ns/op"
+		case clockBound.MatchString(line):
+			what = "compares a duration against a fixed bound"
+		default:
+			continue
+		}
+		fix := "move it to a budget_test.go beside it, built without the detector, as a TestBudget_"
+		if named {
+			fix = "add the !race build constraint to this file"
+		}
+		t.Errorf("%s:%d %s, which makes it a wall-clock budget, and this file is built with the race "+
+			"detector. The detector puts about twenty times the cost on the paths these measure, so "+
+			"what the assertion reads is the instrumentation and it fails on whichever run loses the "+
+			"lottery: %s, and %s\n\t%s", rel, i+1, what, fix, guardsAnswer, strings.TrimSpace(line))
 	}
 }

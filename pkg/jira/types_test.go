@@ -944,6 +944,7 @@ func TestTaskState_DoneOnlyWhenTheTaskHasStopped(t *testing.T) {
 		{state: jira.TaskRunning, want: false},
 		{state: jira.TaskComplete, want: true},
 		{state: jira.TaskFailed, want: true},
+		{state: jira.TaskCancelRequested, want: false},
 		{state: jira.TaskCancelled, want: true},
 		{state: jira.TaskDead, want: true},
 		{state: jira.TaskState(""), want: false},

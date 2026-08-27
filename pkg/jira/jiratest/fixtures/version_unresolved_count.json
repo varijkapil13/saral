@@ -1,0 +1,5 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/version/10100",
+  "issuesUnresolvedCount": 8,
+  "issuesCount": 14
+}

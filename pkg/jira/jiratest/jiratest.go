@@ -53,6 +53,17 @@ var (
 	_ jira.SessionClient  = (*Fake)(nil)
 
 	_ jira.FilterVocabulary = (*Fake)(nil)
+
+	_ jira.AttachmentReader = (*Fake)(nil)
+	_ jira.Attacher         = (*Fake)(nil)
+	_ jira.VersionReader    = (*Fake)(nil)
+	_ jira.Releaser         = (*Fake)(nil)
+	_ jira.BoardReader      = (*Fake)(nil)
+	_ jira.SprintReader     = (*Fake)(nil)
+	_ jira.SprintManager    = (*Fake)(nil)
+	_ jira.TaskWatcher      = (*Fake)(nil)
+	_ jira.Relocator        = (*Fake)(nil)
+	_ jira.PlanReader       = (*Fake)(nil)
 )
 
 // BoardKind is what WithProject builds alongside a project.

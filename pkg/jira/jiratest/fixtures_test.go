@@ -10,12 +10,15 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/varijkapil13/saral/pkg/adf"
+	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
@@ -179,6 +182,9 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 
 	want := []string{
 		"approximate_count.json",
+		"attachment_disabled.json",
+		"attachment_meta.json",
+		"attachment_upload.json",
 		"board.json",
 		"board_config_estimation.json",
 		"board_config_no_estimation.json",
@@ -213,7 +219,11 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"rate_limited.json",
 		"search_page1.json",
 		"search_page2.json",
+		"sprint_created.json",
+		"sprint_one.json",
 		"sprint_page.json",
+		"sprint_updated.json",
+		"task_cancel_requested.json",
 		"task_complete.json",
 		"task_enqueued.json",
 		"task_failed.json",
@@ -224,6 +234,10 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"user_bulk_page2.json",
 		"user_search.json",
 		"validation_error.json",
+		"version_created.json",
+		"version_one.json",
+		"version_released.json",
+		"version_unresolved_count.json",
 		"versions.json",
 	}
 	got := slices.Sorted(maps.Keys(srvJSONFixtures(t)))
@@ -716,13 +730,20 @@ type srvBulkProgress struct {
 }
 
 var srvTaskStates = map[string]string{
-	"task_enqueued.json": "ENQUEUED",
-	"task_running.json":  "RUNNING",
-	"task_complete.json": "COMPLETE",
-	"task_failed.json":   "FAILED",
+	"task_enqueued.json":         "ENQUEUED",
+	"task_running.json":          "RUNNING",
+	"task_cancel_requested.json": "CANCEL_REQUESTED",
+	"task_complete.json":         "COMPLETE",
+	"task_failed.json":           "FAILED",
 }
 
 func srvTaskFixtureNames() []string { return slices.Sorted(maps.Keys(srvTaskStates)) }
+
+// srvTaskHasStopped is the port's own predicate, so a fixture and Done() cannot
+// drift apart. CANCEL_REQUESTED is deliberately on the running side of it.
+func srvTaskHasStopped(status string) bool {
+	return jira.TaskState(status).Done()
+}
 
 func srvDecodeStrict(t *testing.T, body []byte, into any) {
 	t.Helper()
@@ -838,8 +859,7 @@ func TestFixtures_GenericTaskFinishesOnlyWhenItHasStopped(t *testing.T) {
 			t.Parallel()
 			task := srvTask(t, name)
 
-			stopped := task.Status == "COMPLETE" || task.Status == "FAILED"
-			if stopped != (task.Finished != nil) {
+			if stopped := srvTaskHasStopped(task.Status); stopped != (task.Finished != nil) {
 				t.Errorf("status %s with finished set = %v", task.Status, task.Finished != nil)
 			}
 			if task.Finished != nil && *task.Finished != task.LastUpdate {
@@ -859,7 +879,7 @@ func TestFixtures_GenericTaskResultIsOnlyReadableAsRawJSON(t *testing.T) {
 			t.Parallel()
 			task := srvTask(t, name)
 
-			if task.Status == "ENQUEUED" || task.Status == "RUNNING" {
+			if !srvTaskHasStopped(task.Status) {
 				if task.Result != nil {
 					t.Errorf("a %s task already carries a result: %s", task.Status, task.Result)
 				}
@@ -944,6 +964,356 @@ func srvSharedKeys(t *testing.T, left, right []byte) map[string]struct{} {
 		}
 	}
 	return shared
+}
+
+func TestFixtures_CoverTheShapesAnAttachmentAnswersIn(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the metadata read is one object carrying every key the port maps from", func(t *testing.T) {
+		t.Parallel()
+		meta := srvDecode(t, srvFixture(t, "attachment_meta.json"))
+
+		for _, key := range []string{"self", "id", "filename", "mimeType", "size", "created", "author", "content", "thumbnail"} {
+			if _, ok := meta[key]; !ok {
+				t.Errorf("attachment_meta.json sends no %s", key)
+			}
+		}
+		author, ok := meta["author"].(map[string]any)
+		if !ok {
+			t.Fatalf("author = %v, want the account object every read carries", meta["author"])
+		}
+		for _, key := range []string{"accountId", "accountType", "displayName"} {
+			if _, ok := author[key]; !ok {
+				t.Errorf("the author sends no %s", key)
+			}
+		}
+	})
+
+	t.Run("the upload answers a bare array, so a two-file upload has two rows to decode", func(t *testing.T) {
+		t.Parallel()
+		rows := srvAttachments(t, "attachment_upload.json")
+
+		if len(rows) < 2 {
+			t.Fatalf("attachment_upload.json holds %d rows, want the several a multi-file upload answers", len(rows))
+		}
+		for _, row := range rows {
+			for _, key := range []string{"id", "filename", "mimeType", "size", "created", "author", "content"} {
+				if _, ok := row[key]; !ok {
+					t.Errorf("an uploaded attachment sends no %s", key)
+				}
+			}
+		}
+	})
+
+	t.Run("an id is a number on the metadata read and a string wherever else it appears", func(t *testing.T) {
+		t.Parallel()
+
+		if _, ok := srvDecode(t, srvFixture(t, "attachment_meta.json"))["id"].(float64); !ok {
+			t.Error("attachment_meta.json sends its id as something other than a JSON number")
+		}
+		for _, fixture := range []string{"attachment_upload.json", "issue_rich_adf.json"} {
+			for _, row := range srvAttachments(t, fixture) {
+				if _, ok := row["id"].(string); !ok {
+					t.Errorf("%s sends an attachment id as something other than a string: %v", fixture, row["id"])
+				}
+			}
+		}
+	})
+
+	t.Run("a thumbnail is there only for a file the site could make one of", func(t *testing.T) {
+		t.Parallel()
+
+		var withThumb, without int
+		for _, row := range srvAttachments(t, "attachment_upload.json") {
+			kind, _ := row["mimeType"].(string)
+			_, ok := row["thumbnail"]
+			switch {
+			case ok && strings.HasPrefix(kind, "image/"):
+				withThumb++
+			case !ok && !strings.HasPrefix(kind, "image/"):
+				without++
+			default:
+				t.Errorf("a %s attachment sends thumbnail = %v", kind, ok)
+			}
+		}
+		if withThumb == 0 || without == 0 {
+			t.Errorf("the upload answers %d thumbnailed and %d plain rows, and a renderer has to survive both", withThumb, without)
+		}
+	})
+
+	t.Run("attachments switched off refuse in the classic envelope", func(t *testing.T) {
+		t.Parallel()
+		body := srvDecode(t, srvFixture(t, "attachment_disabled.json"))
+
+		if msgs, _ := body["errorMessages"].([]any); len(msgs) == 0 {
+			t.Error("attachment_disabled.json carries no errorMessages, which is the only part that says anything")
+		}
+		if errs, ok := body["errors"].(map[string]any); !ok || len(errs) != 0 {
+			t.Errorf("errors = %v, want the empty object this endpoint sends beside the sentence", body["errors"])
+		}
+		for _, key := range []string{"type", "title", "status", "detail"} {
+			if _, ok := body[key]; ok {
+				t.Errorf("attachment_disabled.json carries %s, and the classic envelope does not", key)
+			}
+		}
+	})
+}
+
+func srvAttachments(t *testing.T, fixture string) []map[string]any {
+	t.Helper()
+
+	body := srvFixture(t, fixture)
+	var rows []map[string]any
+	if err := json.Unmarshal(body, &rows); err == nil {
+		return rows
+	}
+	var issue struct {
+		Fields struct {
+			Attachment []map[string]any `json:"attachment"`
+		} `json:"fields"`
+	}
+	if err := json.Unmarshal(body, &issue); err != nil {
+		t.Fatalf("%s is neither an array of attachments nor an issue carrying them: %v", fixture, err)
+	}
+	if len(issue.Fields.Attachment) == 0 {
+		t.Fatalf("%s carries no attachments", fixture)
+	}
+	return issue.Fields.Attachment
+}
+
+func TestFixtures_TheUnresolvedCountIsItsOwnCallAndOutrunsTheStatusBuckets(t *testing.T) {
+	t.Parallel()
+
+	count := srvDecode(t, srvFixture(t, "version_unresolved_count.json"))
+	unresolved, ok := count["issuesUnresolvedCount"].(float64)
+	if !ok {
+		t.Fatalf("issuesUnresolvedCount = %v, and that spelling is the whole reason this fixture exists", count["issuesUnresolvedCount"])
+	}
+	if _, ok := count["issuesCount"].(float64); !ok {
+		t.Errorf("issuesCount = %v, want the total the endpoint sends beside the unresolved one", count["issuesCount"])
+	}
+	if unresolved <= 0 {
+		t.Error("the count is zero, so nothing here reaches the decision a release gate exists to put in front of a user")
+	}
+	for _, name := range srvVersionEndpoints {
+		if strings.Contains(string(srvFixture(t, name)), "issuesUnresolvedCount") {
+			t.Errorf("%s carries the unresolved count, and no version read does", name)
+		}
+	}
+
+	// The buckets count by status category and the gate counts by resolution, so
+	// an issue can be done and unresolved at once and the two numbers differ.
+	self, _ := count["self"].(string)
+	buckets := srvVersionBuckets(t, self)
+	var open float64
+	for _, key := range []string{"unmapped", "toDo", "inProgress"} {
+		value, ok := buckets[key].(float64)
+		if !ok {
+			t.Fatalf("the version's %s bucket is %v", key, buckets[key])
+		}
+		open += value
+	}
+	if unresolved == open {
+		t.Errorf("the unresolved count and the open buckets both say %v, so nothing pins that only the count is the gate", open)
+	}
+}
+
+func srvVersionBuckets(t *testing.T, self string) map[string]any {
+	t.Helper()
+
+	var page struct {
+		Values []struct {
+			Self   string         `json:"self"`
+			Status map[string]any `json:"issuesStatusForFixVersion"`
+		} `json:"values"`
+	}
+	if err := json.Unmarshal(srvFixture(t, "versions.json"), &page); err != nil {
+		t.Fatalf("decoding versions.json: %v", err)
+	}
+	for _, v := range page.Values {
+		if v.Self == self && v.Status != nil {
+			return v.Status
+		}
+	}
+	t.Fatalf("versions.json lists no version %q with status buckets, so the count is for a version nothing else here holds", self)
+	return nil
+}
+
+// A version reached other than from a version endpoint — an issue's fixVersions,
+// a createmeta allowedValue — arrives trimmed, and the overdue rule below does
+// not hold for those.
+var srvVersionEndpoints = []string{"version_created.json", "version_one.json", "version_released.json", "versions.json"}
+
+func TestFixtures_EveryVersionSaysWhetherItShippedTheWayASiteDoes(t *testing.T) {
+	t.Parallel()
+
+	var released, unreleased, trimmed int
+	for _, name := range slices.Sorted(maps.Keys(srvJSONFixtures(t))) {
+		for _, found := range srvVersions(t, name) {
+			at := name + found.at
+			if id, ok := found.version["projectId"]; ok {
+				if _, number := id.(float64); !number {
+					t.Errorf("%s: projectId = %v, and a site sends a JSON number there whatever the port's field type is", at, id)
+				}
+			}
+			if _, ok := found.version["archived"].(bool); !ok {
+				t.Errorf("%s: archived = %v, want the bool every version carries", at, found.version["archived"])
+			}
+			shipped, ok := found.version["released"].(bool)
+			if !ok {
+				t.Errorf("%s: released = %v, want the bool every version carries", at, found.version["released"])
+				continue
+			}
+			_, overdue := found.version["overdue"]
+			switch {
+			case !slices.Contains(srvVersionEndpoints, name):
+				if overdue {
+					t.Errorf("%s: a version trimmed into another read carries overdue, which only a version endpoint sends", at)
+				}
+				trimmed++
+			case shipped && overdue:
+				t.Errorf("%s: a released version carries overdue, and a site drops the key", at)
+			case !shipped && !overdue:
+				t.Errorf("%s: an unreleased version sends no overdue, and a site sends it explicitly false", at)
+			case shipped:
+				released++
+			default:
+				unreleased++
+			}
+		}
+	}
+	if released == 0 || unreleased == 0 || trimmed == 0 {
+		t.Errorf("the sweep saw %d released, %d unreleased and %d trimmed versions, and it means nothing without all three", released, unreleased, trimmed)
+	}
+}
+
+type srvVersionAt struct {
+	at      string
+	version map[string]any
+}
+
+// Nothing but a version carries any of these, so one is enough to sweep an
+// incomplete version in rather than let it escape the walk.
+var srvVersionKeys = []string{
+	"archived",
+	"issuesStatusForFixVersion",
+	"overdue",
+	"releaseDate",
+	"released",
+	"userReleaseDate",
+	"userStartDate",
+}
+
+func srvVersions(t *testing.T, fixture string) []srvVersionAt {
+	t.Helper()
+
+	var body any
+	if err := json.Unmarshal(srvFixture(t, fixture), &body); err != nil {
+		t.Fatalf("decoding %s: %v", fixture, err)
+	}
+	var out []srvVersionAt
+	var walk func(node any, at string)
+	walk = func(node any, at string) {
+		switch node := node.(type) {
+		case map[string]any:
+			if slices.ContainsFunc(srvVersionKeys, func(key string) bool { _, ok := node[key]; return ok }) {
+				out = append(out, srvVersionAt{at: at, version: node})
+			}
+			for _, key := range slices.Sorted(maps.Keys(node)) {
+				walk(node[key], at+"."+key)
+			}
+		case []any:
+			for i, item := range node {
+				walk(item, at+"["+strconv.Itoa(i)+"]")
+			}
+		}
+	}
+	walk(body, "")
+	return out
+}
+
+// srvPlatformLayout is what parses a date-time on a platform field: an offset of
+// four digits with no colon in it.
+const srvPlatformLayout = "2006-01-02T15:04:05.000-0700"
+
+func TestFixtures_SprintDatesNeedRFC3339InBothSpellingsASiteSends(t *testing.T) {
+	t.Parallel()
+
+	if _, err := time.Parse(srvPlatformLayout, srvAttachmentCreated(t)); err != nil {
+		t.Fatalf("the platform layout no longer parses an attachment's created: %v", err)
+	}
+
+	zulu := make(map[bool][]string)
+	for _, fixture := range []string{"sprint_one.json", "sprint_created.json", "sprint_updated.json", "sprint_page.json"} {
+		for _, sprint := range srvSprints(t, fixture) {
+			for _, key := range []string{"startDate", "endDate", "completeDate", "createdDate"} {
+				raw, sent := sprint[key]
+				if !sent {
+					continue
+				}
+				at, ok := raw.(string)
+				if !ok {
+					t.Errorf("%s: %s = %v is a %T, and every Agile route spells a sprint date as a string; epoch millis is the generic task endpoint", fixture, key, raw, raw)
+					continue
+				}
+				if _, err := time.Parse(time.RFC3339, at); err != nil {
+					t.Errorf("%s: %s = %q does not parse as RFC 3339: %v", fixture, key, at, err)
+				}
+				if _, err := time.Parse(srvPlatformLayout, at); err == nil {
+					t.Errorf("%s: %s = %q parses with the platform layout, so it is not the Agile spelling", fixture, key, at)
+				}
+				spelling := strings.HasSuffix(at, "Z")
+				zulu[spelling] = append(zulu[spelling], fixture+" "+key)
+			}
+		}
+	}
+	if len(zulu[true]) == 0 || len(zulu[false]) == 0 {
+		t.Errorf("every sprint date is spelt one way — %d normalised to Z, %d with an offset — and a site sends both", len(zulu[true]), len(zulu[false]))
+	}
+}
+
+func srvAttachmentCreated(t *testing.T) string {
+	t.Helper()
+
+	created, _ := srvDecode(t, srvFixture(t, "attachment_meta.json"))["created"].(string)
+	if created == "" {
+		t.Fatal("attachment_meta.json carries no created")
+	}
+	return created
+}
+
+func srvSprints(t *testing.T, fixture string) []map[string]any {
+	t.Helper()
+
+	body := srvDecode(t, srvFixture(t, fixture))
+	values, ok := body["values"].([]any)
+	if !ok {
+		return []map[string]any{body}
+	}
+	out := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		sprint, ok := value.(map[string]any)
+		if !ok {
+			t.Fatalf("%s carries a sprint that is not an object: %v", fixture, value)
+		}
+		out = append(out, sprint)
+	}
+	return out
+}
+
+func TestFixtures_AGenericTaskMessageIsNotAlwaysASentence(t *testing.T) {
+	t.Parallel()
+
+	var keys int
+	for _, name := range srvTaskFixtureNames() {
+		message := srvTask(t, name).Message
+		if message != "" && !strings.Contains(message, " ") && strings.Contains(message, ".") {
+			keys++
+		}
+	}
+	if keys == 0 {
+		t.Error("every message reads as prose, and a live poll answered one with an unresolved i18n key that a view would print verbatim")
+	}
 }
 
 func TestServer_TaskRoutesServeTheTwoShapesSeparately(t *testing.T) {

@@ -14,6 +14,7 @@ import (
 	"path"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -214,6 +215,15 @@ var srvDefaultRoutes = []srvRoute{
 	{http.MethodGet, "/rest/api/3/issue/{key}", srvFixtureHandler(http.StatusOK, "issue_rich_adf.json")},
 	{http.MethodGet, "/rest/api/3/issue/{key}/comment", srvFixtureHandler(http.StatusOK, "comments.json")},
 	{http.MethodGet, "/rest/api/3/issue/{key}/transitions", srvFixtureHandler(http.StatusOK, "transitions.json")},
+	// An attachment id is a number on this route and a string in the upload's
+	// answer, which is one attachment answering in two JSON types.
+	{http.MethodGet, "/rest/api/3/attachment/{id}", srvFixtureHandler(http.StatusOK, "attachment_meta.json")},
+	{http.MethodPost, "/rest/api/3/issue/{key}/attachments", srvUpload},
+	{http.MethodDelete, "/rest/api/3/attachment/{id}", srvFixtureHandler(http.StatusNoContent, "")},
+	// The media route below is not a Jira endpoint: it stands in for the host
+	// the redirect points at, which is where a 206 really comes from.
+	{http.MethodGet, "/rest/api/3/attachment/content/{id}", srvAttachmentContent},
+	{http.MethodGet, srvMediaPath + "{id}", srvAttachmentBytes},
 	{http.MethodGet, "/rest/api/3/field", srvFixtureHandler(http.StatusOK, "field.json")},
 	{http.MethodGet, "/rest/api/3/issue/createmeta/{projectIdOrKey}/issuetypes", srvFixtureHandler(http.StatusOK, "createmeta_issuetypes.json")},
 	{http.MethodGet, "/rest/api/3/issue/createmeta/{projectIdOrKey}/issuetypes/{issueTypeId}", srvCreateMeta},
@@ -232,9 +242,19 @@ var srvDefaultRoutes = []srvRoute{
 	// versions.json is a paged envelope, which is what the singular /version
 	// endpoint answers; the plural /versions answers a bare array and cannot page.
 	{http.MethodGet, "/rest/api/3/project/{key}/version", srvFixtureHandler(http.StatusOK, "versions.json")},
+	{http.MethodPost, "/rest/api/3/version", srvFixtureHandler(http.StatusCreated, "version_created.json")},
+	{http.MethodGet, "/rest/api/3/version/{id}", srvFixtureHandler(http.StatusOK, "version_one.json")},
+	{http.MethodGet, "/rest/api/3/version/{id}/unresolvedIssueCount", srvFixtureHandler(http.StatusOK, "version_unresolved_count.json")},
+	{http.MethodPut, "/rest/api/3/version/{id}", srvFixtureHandler(http.StatusOK, "version_released.json")},
 	{http.MethodGet, "/rest/agile/1.0/board", srvFixtureHandler(http.StatusOK, "board.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/configuration", srvFixtureHandler(http.StatusOK, "board_config_estimation.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/sprint", srvFixtureHandler(http.StatusOK, "sprint_page.json")},
+	{http.MethodGet, "/rest/agile/1.0/sprint/{id}", srvFixtureHandler(http.StatusOK, "sprint_one.json")},
+	{http.MethodPost, "/rest/agile/1.0/sprint", srvFixtureHandler(http.StatusCreated, "sprint_created.json")},
+	// There is deliberately no PUT route: it nulls every field the request omits.
+	{http.MethodPost, "/rest/agile/1.0/sprint/{id}", srvFixtureHandler(http.StatusOK, "sprint_updated.json")},
+	{http.MethodPost, "/rest/agile/1.0/sprint/{id}/issue", srvFixtureHandler(http.StatusNoContent, "")},
+	{http.MethodPost, "/rest/agile/1.0/backlog/issue", srvFixtureHandler(http.StatusNoContent, "")},
 	// Three Agile paging envelopes, one per shape: these two name their array
 	// issues and send no isLast, the epics send no total, and the sprints above
 	// send all four keys.
@@ -340,6 +360,49 @@ func srvStartAt(r *http.Request) int {
 		return 0
 	}
 	return at
+}
+
+// AttachmentContent is the payload the attachment content route streams.
+const AttachmentContent = "saral fixture attachment: deterministic bytes for a resumed download\n"
+
+// srvMediaPath stands in for the media host a real site redirects an attachment
+// download to.
+const srvMediaPath = "/media/attachment/content/"
+
+const srvUploadMemory = 1 << 20
+
+// srvUpload's two refusals are neither of them the classic error envelope a
+// decoder written for the rest of the API expects.
+func srvUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Atlassian-Token") != "no-check" {
+		w.Header().Set("Content-Type", "text/plain;charset=UTF-8")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte("XSRF check failed"))
+		return
+	}
+	if err := r.ParseMultipartForm(srvUploadMemory); err != nil {
+		srvWriteProblem(w, http.StatusBadRequest, "The request body could not be read as a multipart upload.", r.URL.Path)
+		return
+	}
+	if len(r.MultipartForm.File["file"]) == 0 {
+		srvWriteProblem(w, http.StatusBadRequest, `The multipart request carries no part named "file".`, r.URL.Path)
+		return
+	}
+	srvServeFixture(w, http.StatusOK, "attachment_upload.json")
+}
+
+func srvAttachmentContent(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("redirect") != "false" {
+		w.Header().Set("Location", srvMediaPath+r.PathValue("id")+"?token=fixture-signed-token&expires=1770814500")
+		w.WriteHeader(http.StatusSeeOther)
+		return
+	}
+	srvAttachmentBytes(w, r)
+}
+
+func srvAttachmentBytes(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/octet-stream")
+	http.ServeContent(w, r, "", time.Time{}, strings.NewReader(AttachmentContent))
 }
 
 func srvCreateMeta(w http.ResponseWriter, r *http.Request) {

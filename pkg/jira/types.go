@@ -1025,12 +1025,15 @@ type TaskState string
 
 // The task states Jira reports.
 const (
-	TaskEnqueued  TaskState = "ENQUEUED"
-	TaskRunning   TaskState = "RUNNING"
-	TaskComplete  TaskState = "COMPLETE"
-	TaskFailed    TaskState = "FAILED"
-	TaskCancelled TaskState = "CANCELLED"
-	TaskDead      TaskState = "DEAD"
+	TaskEnqueued TaskState = "ENQUEUED"
+	TaskRunning  TaskState = "RUNNING"
+	TaskComplete TaskState = "COMPLETE"
+	TaskFailed   TaskState = "FAILED"
+	// Not a stopped task: a switch with no case for it reports a running task
+	// as finished.
+	TaskCancelRequested TaskState = "CANCEL_REQUESTED"
+	TaskCancelled       TaskState = "CANCELLED"
+	TaskDead            TaskState = "DEAD"
 )
 
 // Done reports whether the task has stopped, however it ended.

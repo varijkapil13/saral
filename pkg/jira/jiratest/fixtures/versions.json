@@ -35,6 +35,7 @@
       "userStartDate": "02/Mar/26",
       "userReleaseDate": "27/Mar/26",
       "projectId": 10000,
+      "overdue": false,
       "issuesStatusForFixVersion": {
         "unmapped": 1,
         "toDo": 4,
