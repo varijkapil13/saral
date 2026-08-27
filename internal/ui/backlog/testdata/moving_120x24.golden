@@ -1,0 +1,24 @@
+  PROJ board | 2 open sprints | 93 of 140 issues
+> v Backlog | 93 issues                                                                                                 
+  + PROJ-1    Add the nightly export                                                      Building      Grace Hopper    
+  + PROJ-3    Investigate the onboarding wizard                                           Triage        Ada Lovelace    
+  + PROJ-4    Document CSV import                                                         Building      unassigned      
+  + PROJ-6    Speed up session expiry                                                     Triage        Ada Lovelace    
+  + PROJ-7    Fix the search index                                                        Building      Grace Hopper    
+  + PROJ-9    Rework the mobile layout                                                    Triage        Ada Lovelace    
+  + PROJ-10   Investigate the release checklist                                           Building      Grace Hopper    
+  + PROJ-12   Retire the nightly export                                                   Triage        unassigned      
+  + PROJ-13   Speed up webhook retries                                                    Building      Grace Hopper    
+  + PROJ-15   Add CSV import                                                              Triage        Ada Lovelace    
+  + PROJ-16   Rework the audit trail                                                      Building      unassigned      
+  + PROJ-18   Document the search index                                                   Triage        Ada Lovelace    
+  + PROJ-19   Retire invoice rounding                                                     Building      Grace Hopper    
+  + PROJ-21   Fix the release checklist                                                   Triage        Ada Lovelace    
+  + PROJ-22   Add the login flow                                                          Building      Grace Hopper    
+  + PROJ-24   Investigate webhook retries                                                 Triage        unassigned      
+  + PROJ-25   Document the onboarding wizard                                              Building      Grace Hopper    
+  + PROJ-27   Speed up the audit trail                                                    Triage        Ada Lovelace    
+  + PROJ-28   Fix session expiry                                                          Building      unassigned      
+  Rank order. Rows cannot be reordered here: nothing can write a rank.
+  93 issues picked
+  moving 93 issues into Sprint 2 | batch 1 of 2, 0 moved
