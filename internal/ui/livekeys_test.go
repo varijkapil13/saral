@@ -7,31 +7,60 @@ import (
 
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/ui/attach"
+	"github.com/varijkapil13/saral/internal/ui/backlog"
+	"github.com/varijkapil13/saral/internal/ui/board"
 	"github.com/varijkapil13/saral/internal/ui/comment"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/list"
+	"github.com/varijkapil13/saral/internal/ui/move"
 	"github.com/varijkapil13/saral/internal/ui/onboarding"
+	"github.com/varijkapil13/saral/internal/ui/plan"
+	"github.com/varijkapil13/saral/internal/ui/release"
+	"github.com/varijkapil13/saral/internal/ui/sprint"
+	"github.com/varijkapil13/saral/internal/ui/timeline"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
+
+// Four of these views take more than deps to build, so each gets one builder here
+// rather than the same closure written out in three tables.
+func newAttach(d kernel.Deps) kernel.View { return attach.New(d) }
+func newMove(d kernel.Deps) kernel.View   { return move.New(d) }
+func newPlan(d kernel.Deps) kernel.View   { return plan.New(d) }
+
+// newFlow builds the release screen the way the versions list pushes it. A count
+// above zero is what opens it on the decision rather than straight on the confirm.
+func newFlow(d kernel.Deps) kernel.View {
+	return release.NewFlow(d, jira.Version{ID: "10100", ProjectID: "10000", Name: "1.4.0"}, 3, nil)
+}
 
 // keyReporters names the model that answers for each registered key scope. The
 // kernel cannot hold the views to this — it may not import one — and a view
 // checking itself is the drift, so the sweep lives here, above every view and
 // below nothing.
 //
-// Every scope in the key registry has to appear, so a seventh view fails this
+// Every scope in the key registry has to appear, so the next view fails this
 // until somebody has decided which half of the table it belongs in.
 var keyReporters = map[string]func(kernel.Deps) kernel.View{
-	list.ViewID:       list.New,
-	filter.ViewID:     func(d kernel.Deps) kernel.View { return filter.New(d) },
-	form.ViewID:       form.New,
-	comment.ViewID:    comment.New,
-	onboarding.ViewID: onboarding.New,
-	issue.EditViewID:  func(d kernel.Deps) kernel.View { return issue.NewEdit(d, seed()) },
-	issue.MoveViewID:  func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
+	list.ViewID:        list.New,
+	filter.ViewID:      func(d kernel.Deps) kernel.View { return filter.New(d) },
+	form.ViewID:        form.New,
+	comment.ViewID:     comment.New,
+	onboarding.ViewID:  onboarding.New,
+	issue.EditViewID:   func(d kernel.Deps) kernel.View { return issue.NewEdit(d, seed()) },
+	issue.MoveViewID:   func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
+	attach.ViewID:      newAttach,
+	backlog.ViewID:     backlog.New,
+	board.ViewID:       board.New,
+	move.ViewID:        newMove,
+	plan.ViewID:        newPlan,
+	release.ViewID:     release.New,
+	release.FlowViewID: newFlow,
+	sprint.ViewID:      sprint.New,
+	timeline.ViewID:    timeline.New,
 }
 
 // staticKeys are the scopes whose view deliberately reports nothing, each with
@@ -121,11 +150,12 @@ func TestLiveKeys_AFreshlyBuiltViewAdvertisesSomething(t *testing.T) {
 //
 // The states themselves are private to their packages, so each package holds its
 // own states to this; what belongs here is the record of which views have one at
-// all, so that a seventh view cannot quietly join them.
+// all, so that the next view cannot quietly join them.
 var actionFree = map[string]string{
 	issue.EditViewID:  "a save in flight refuses every key until the site answers",
 	issue.MoveViewID:  "a transition in flight refuses every key until the site answers",
 	onboarding.ViewID: "a step being checked against the site refuses enter and shift+tab both",
+	attach.ViewID:     "a pane with nothing attached, on a token that may not attach, has nothing to offer but the way out",
 }
 
 // Every state a footer can be drawn from has to name what can be done in it, or
@@ -189,8 +219,8 @@ func TestLiveKeys_EveryAdvertisedActionCanBeClicked(t *testing.T) {
 // it may not import one — and a view checking itself is the drift, so the sweep
 // lives here.
 //
-// Every scope in the key registry has to appear in exactly one half, so a
-// seventh view fails this until somebody has decided which.
+// Every scope in the key registry has to appear in exactly one half, so the next
+// view fails this until somebody has decided which.
 var closers = map[string]func(kernel.Deps) kernel.View{
 	filter.ViewID:    func(d kernel.Deps) kernel.View { return filter.New(d) },
 	form.ViewID:      form.New,
@@ -198,6 +228,17 @@ var closers = map[string]func(kernel.Deps) kernel.View{
 	issue.ViewID:     func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
 	issue.EditViewID: func(d kernel.Deps) kernel.View { return issue.NewEdit(d, seed()) },
 	issue.MoveViewID: func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
+	// Neither of these registers a view spec, so a push with the issue or the
+	// issues it is about is the only way either is ever on screen.
+	attach.ViewID: newAttach,
+	move.ViewID:   newMove,
+	// The release screen is pushed by the versions list with the version and the
+	// count; nothing opens it by name.
+	release.FlowViewID: newFlow,
+	// Both of these hold a footer slot, so nothing pushes them and neither Close is
+	// ever called; they are here because withdrawing the method is theirs to do.
+	board.ViewID: board.New,
+	plan.ViewID:  newPlan,
 }
 
 // parked are the views nothing ever pushes, each with the reason. A root the
@@ -216,6 +257,22 @@ var parked = map[string]struct {
 	onboarding.ViewID: {
 		build: onboarding.New,
 		why:   "setup is where the program starts and what the palette reopens, and neither of those is a push",
+	},
+	backlog.ViewID: {
+		build: backlog.New,
+		why:   "the backlog holds a footer slot and nothing pushes it, so it is only ever a root",
+	},
+	sprint.ViewID: {
+		build: sprint.New,
+		why:   "the sprints hold a footer slot and nothing pushes them, so they are only ever a root",
+	},
+	release.ViewID: {
+		build: release.New,
+		why:   "the versions list holds a footer slot; what it pushes is the release screen, which is not itself",
+	},
+	timeline.ViewID: {
+		build: timeline.New,
+		why:   "the timeline holds a footer slot and nothing pushes it, so it is only ever a root",
 	},
 }
 
@@ -285,6 +342,17 @@ var answerable = map[string]func(kernel.Deps) kernel.View{
 	issue.ViewID:      func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
 	issue.EditViewID:  func(d kernel.Deps) kernel.View { return issue.NewEdit(d, seed()) },
 	issue.MoveViewID:  func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
+	attach.ViewID:     newAttach,
+	backlog.ViewID:    backlog.New,
+	board.ViewID:      board.New,
+	move.ViewID:       newMove,
+	plan.ViewID:       newPlan,
+	release.ViewID:    release.New,
+	// The release screen is pushed with its count already read, so the only answer
+	// it waits for is the release it sends.
+	release.FlowViewID: newFlow,
+	sprint.ViewID:      sprint.New,
+	timeline.ViewID:    timeline.New,
 }
 
 // synchronous are the views that answer every question they are asked without
@@ -374,11 +442,14 @@ func sweepEnv(t *testing.T) {
 
 func depsFor(t *testing.T) kernel.Deps {
 	t.Helper()
+	// A session is always scoped to a project, and the plans view opens on what it
+	// derives from that: without one it is built in a state the program never has.
 	return kernel.Deps{
-		Theme: kernel.NewTheme(kernel.ThemeNoColor, true, kernel.ASCIIGlyphs()),
-		Zones: zone.New(),
-		Site:  "example.atlassian.net",
-		Now:   func() time.Time { return time.Date(2026, 8, 20, 9, 0, 0, 0, time.UTC) },
+		Theme:   kernel.NewTheme(kernel.ThemeNoColor, true, kernel.ASCIIGlyphs()),
+		Zones:   zone.New(),
+		Site:    "example.atlassian.net",
+		Project: "PROJ",
+		Now:     func() time.Time { return time.Date(2026, 8, 20, 9, 0, 0, 0, time.UTC) },
 	}
 }
 

@@ -221,19 +221,23 @@ allocated here rather than picked, and `?` and the palette are where its digit i
 | Slot | View | Arrives with |
 |---|---|---|
 | 1 | issues | P1.5 — shipped |
-| 2 | board | P6.3 ([#24](https://github.com/varijkapil13/saral/issues/24)) |
-| 3 | backlog | P6.3 |
-| 4 | sprints | P6.3 |
-| 5 | releases | P5.1 ([#20](https://github.com/varijkapil13/saral/issues/20)) |
+| 2 | board | P6.3 ([#24](https://github.com/varijkapil13/saral/issues/24)) — shipped |
+| 3 | backlog | P6.3 — shipped |
+| 4 | sprints | P6.3 — shipped |
+| 5 | releases | P5.1 ([#20](https://github.com/varijkapil13/saral/issues/20)) — shipped |
 | 6 | timeline | P8.2 ([#27](https://github.com/varijkapil13/saral/issues/27)) — shipped |
-| 7 | plans | P8.3 ([#28](https://github.com/varijkapil13/saral/issues/28)) |
+| 7 | plans | P8.3 ([#28](https://github.com/varijkapil13/saral/issues/28)) — shipped |
 | 8, 9 | free | — |
 
 Everything else registers `Slot: 0` and is reached by being pushed, by name or from the palette:
-issue detail, onboarding, the palette itself, forms, comments, attachment preview and the move
-wizard. `kernel.RegisterView` refuses a second claim on a slot at startup, so the table above is
-enforced rather than merely written down — but it is written down so that six later packets do not
-each pick a number.
+issue detail, onboarding, the palette itself, forms and comments. Three go further and register no
+`ViewSpec` at all, because a registry constructor has nothing to open them over — `internal/ui/attach`
+is pushed with the issue whose files it lists, `internal/ui/move` with the issues it is moving, and
+the release screen inside `internal/ui/release` with the version and the count of what is still open
+on it. Each of the three still registers its keys, so the footer, the `?` overlay and the sweeps in
+`internal/ui` find it exactly as they find a slotted view. `kernel.RegisterView` refuses a second
+claim on a slot at startup, so the table above is enforced rather than merely written down — but it is
+written down so that six later packets do not each pick a number.
 
 A view that cannot be built without knowing what it is about is reached from the view that knows.
 The comment thread is the case: the issue detail pane draws it in its own sidebar and `C` hands the

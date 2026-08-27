@@ -9,8 +9,10 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/ui/attach"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/list"
+	"github.com/varijkapil13/saral/internal/ui/move"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -25,6 +27,10 @@ import (
 type program struct {
 	t *testing.T
 	m kernel.Model
+
+	// deps is what the program was built with, kept so a case can push a view the
+	// registry cannot build: one needs an issue, the other the issues to move.
+	deps kernel.Deps
 
 	// held keeps a view's own answers back instead of delivering them. An answer
 	// that has already landed cannot be covered by anything, so this is the only
@@ -44,7 +50,7 @@ func boot(t *testing.T, d kernel.Deps, root string, w, h int) *program {
 	if err != nil {
 		t.Fatalf("kernel.New: %v", err)
 	}
-	p := &program{t: t, m: m}
+	p := &program{t: t, m: m, deps: d}
 	p.send(tea.WindowSizeMsg{Width: w, Height: h})
 	return p
 }
@@ -255,6 +261,75 @@ func TestReply_AnAnswerLandingUnderThePaletteStillReachesTheViewThatAskedForIt(t
 			settle: func(p *program) { p.run(p.m.Init()) },
 			arrive: func(p *program) { p.press("enter", "C") },
 			want:   []string{threadLine},
+		},
+		{
+			// The six views a footer slot reaches are switched to as roots rather
+			// than pushed, so each is covered where it stands and the palette is
+			// the only thing on the stack above it.
+			name:   "the board, switched to as a root",
+			settle: func(p *program) { p.run(p.m.Init()) },
+			arrive: func(p *program) { p.send(kernel.RunCommandMsg{ID: "board.open"}) },
+			want:   []string{"In Progress", "3 columns"},
+			gone:   []string{"Asking which boards"},
+		},
+		{
+			name:   "the backlog, switched to as a root",
+			settle: func(p *program) { p.run(p.m.Init()) },
+			arrive: func(p *program) { p.send(kernel.RunCommandMsg{ID: "backlog.open"}) },
+			want:   []string{"2 open sprints"},
+			gone:   []string{"Reading the board"},
+		},
+		{
+			name:   "the sprints, switched to as a root",
+			settle: func(p *program) { p.run(p.m.Init()) },
+			arrive: func(p *program) { p.send(kernel.RunCommandMsg{ID: "sprints.open"}) },
+			want:   []string{"Make it usable"},
+			gone:   []string{"Asking the site"},
+		},
+		{
+			name:   "the versions list, switched to as a root",
+			settle: func(p *program) { p.run(p.m.Init()) },
+			arrive: func(p *program) { p.send(kernel.RunCommandMsg{ID: "releases.open"}) },
+			want:   []string{"The one being worked on"},
+			gone:   []string{"Reading the versions"},
+		},
+		{
+			name:   "the timeline, switched to as a root",
+			settle: func(p *program) { p.run(p.m.Init()) },
+			arrive: func(p *program) { p.send(kernel.RunCommandMsg{ID: "timeline.open"}) },
+			want:   []string{"12 of 12 dated"},
+			gone:   []string{"Reading the fields"},
+		},
+		{
+			// The plans view draws the profile's own before it asks, so what proves
+			// the site's answer landed is the row saying where it came from.
+			name:   "the plans, switched to as a root",
+			settle: func(p *program) { p.run(p.m.Init()) },
+			arrive: func(p *program) { p.send(kernel.RunCommandMsg{ID: "plans.open"}) },
+			want:   []string{"read from the site"},
+			gone:   []string{"Asking the site for its plans"},
+		},
+		{
+			// Neither of the last two registers a view spec, so the case pushes it
+			// the way the view holding the issue does.
+			name:   "the attachment pane, pushed with the issue it is about",
+			settle: func(p *program) { p.run(p.m.Init()) },
+			arrive: func(p *program) {
+				p.send(kernel.PushMsg{ID: attach.ViewID, Title: "Files",
+					View: attach.New(p.deps, attach.WithIssue("PROJ-12"))})
+			},
+			want: []string{"Nothing is attached to PROJ-12."},
+			gone: []string{"Reading what is attached"},
+		},
+		{
+			name:   "the move wizard, pushed with the issues it is about",
+			settle: func(p *program) { p.run(p.m.Init()) },
+			arrive: func(p *program) {
+				p.send(kernel.PushMsg{ID: move.ViewID, Title: "Move",
+					View: move.New(p.deps, move.WithIssues([]jira.Issue{{ID: "10012", Key: "PROJ-12"}}))})
+			},
+			want: []string{"which project"},
+			gone: []string{"Asking the site"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
