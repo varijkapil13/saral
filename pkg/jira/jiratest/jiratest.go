@@ -400,9 +400,18 @@ func (f *Fake) fakeBegin(ctx context.Context, name string) error {
 	return queued
 }
 
-func (f *Fake) fakeNextID(prefix string) string {
+// fakeMintedIDBase is where minted ids start, above every id the generator and
+// the seeded projects hold, so a minted one is never a generated one.
+const fakeMintedIDBase = 100000
+
+// fakeNextID mints an id in the only shape a site mints one: a number, from a
+// single sequence, so that the kind the caller names is nowhere in the id. An
+// id like att-1 or ver-3 is an id no site answers with, and cloud refuses a
+// non-numeric version id outright, so minting one here would let code pass
+// against the fake that the adapter turns down.
+func (f *Fake) fakeNextID(string) string {
 	f.seq++
-	return prefix + "-" + strconv.Itoa(f.seq)
+	return strconv.Itoa(fakeMintedIDBase + f.seq)
 }
 
 // fakeAddProject registers a project, or upgrades one that was auto-registered

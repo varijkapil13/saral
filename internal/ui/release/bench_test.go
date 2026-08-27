@@ -47,7 +47,7 @@ func benchVersions(n int) []jira.Version {
 	out := make([]jira.Version, 0, n)
 	for i := range n {
 		v := jira.Version{
-			ID:          "ver-" + strconv.Itoa(i),
+			ID:          strconv.Itoa(60000 + i),
 			Name:        "release-1." + strconv.Itoa(i),
 			Description: "the release that carries the work of week " + strconv.Itoa(i%52),
 			Released:    i%4 == 0,

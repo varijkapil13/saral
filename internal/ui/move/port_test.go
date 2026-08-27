@@ -47,16 +47,15 @@ func TestMove_PollsWithTheWholeRefAndNotJustTheId(t *testing.T) {
 	}
 }
 
-// The queue keys its failures by numeric issue id while a fixture keys them by
-// issue key, so the outcome has to recognise both and fall back to what came
-// back rather than drawing nothing.
-func TestMove_NamesTheIssuesAQueueFailedByIdOrByKey(t *testing.T) {
+// The queue names its failures by numeric issue id and carries nothing that
+// turns one back into a key, so the selection this wizard submitted is what
+// resolves them: whichever issue the queue names, the row draws that issue's own
+// key and not the number.
+func TestMove_NamesAFailedIssueByTheKeyItSubmittedForThatId(t *testing.T) {
 	t.Parallel()
-	for name, failed := range map[string][]string{
-		"keyed by issue key": {"PROJ-2"},
-		"keyed by issue id":  {"20002"},
-	} {
-		t.Run(name, func(t *testing.T) {
+	_, all := twoProjects(t)
+	for _, want := range all {
+		t.Run(want.Key, func(t *testing.T) {
 			t.Parallel()
 			f, iss := twoProjects(t)
 			w := &immediate{}
@@ -64,26 +63,13 @@ func TestMove_NamesTheIssuesAQueueFailedByIdOrByKey(t *testing.T) {
 			dr.walkTo("OTHER")
 			dr.running()
 			dr.send(taskMsg{gen: dr.m.gen, status: jira.TaskStatus{
-				State: jira.TaskComplete, Progress: 100, Failed: failed,
+				State: jira.TaskComplete, Progress: 100, Failed: []string{want.ID},
 			}})
-			mustContain(t, dr.view(), "PROJ-2", "did not move")
+			frame := dr.view()
+			mustContain(t, frame, want.Key, "did not move")
+			mustNotContain(t, frame, want.ID)
 		})
 	}
-}
-
-// An id the selection does not hold is drawn as it came back: inventing a key for
-// it would be worse than showing the number the queue used.
-func TestMove_DrawsAFailureItCannotNameAsItCameBack(t *testing.T) {
-	t.Parallel()
-	f, iss := twoProjects(t)
-	w := &immediate{}
-	dr := newDriver(t, testDeps(f), 100, 24, WithIssues(iss), withWaiter(w.wait))
-	dr.walkTo("OTHER")
-	dr.running()
-	dr.send(taskMsg{gen: dr.m.gen, status: jira.TaskStatus{
-		State: jira.TaskComplete, Progress: 100, Failed: []string{"999999"},
-	}})
-	mustContain(t, dr.view(), "999999")
 }
 
 // The pause between two questions is a timer in the binary and injected in every

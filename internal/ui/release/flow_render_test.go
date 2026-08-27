@@ -75,5 +75,5 @@ func TestFlow_Golden(t *testing.T) {
 func dated() []jira.Version {
 	three := threeOhVersion()
 	three.ReleaseDate = jira.Date{Year: 2026, Month: 6, Day: 1}
-	return []jira.Version{three, {ID: "ver-PROJ-9", Name: "4.0"}}
+	return []jira.Version{three, {ID: "60009", Name: "4.0"}}
 }

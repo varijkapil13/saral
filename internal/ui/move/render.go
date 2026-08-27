@@ -425,20 +425,22 @@ func (m *Model) mappingLines() []string {
 }
 
 // namedFailure turns one entry of the queue's failure list into something a
-// reader recognises. The body keys its failures by issue id while a fixture keys
-// them by issue key, so both are looked for among the issues being moved and
-// what came back is drawn only when neither matches.
+// reader recognises. The queue names its failures by numeric issue id and
+// carries nothing that turns one back into a key, so they are matched against the
+// issues this wizard submitted. An id that is none of them is said to be an id: a
+// subtask travels with its parent and was never on the list, and a bare number on
+// a line of keys reads as a key nobody can find.
 func (m *Model) namedFailure(at int) string {
 	if at < 0 || at >= len(m.failed) {
 		return ""
 	}
 	got := m.failed[at]
 	for i := range m.issues {
-		if m.issues[i].Key == got || m.issues[i].ID == got {
+		if m.issues[i].ID == got {
 			return m.issues[i].Key
 		}
 	}
-	return got
+	return "issue id " + got
 }
 
 func (m *Model) notifyWords() string {
