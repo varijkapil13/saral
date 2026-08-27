@@ -1041,7 +1041,12 @@ are guesses.
 
 ## Batch 9 — Ship it · parallel ×3
 
-- [ ] **P9.1 — Release engineering** · [#29](https://github.com/varijkapil13/saral/issues/29) — goreleaser dry-run, Homebrew tap, install script, `v0.1.0`.
+- [x] **P9.1 — Release engineering** · [#29](https://github.com/varijkapil13/saral/issues/29) — goreleaser dry-run, Homebrew tap, install script, `v0.1.0`.
+  `goreleaser check` and a snapshot release are green, `scripts/install.sh` verifies a checksum
+  before it unpacks, and the cask gates itself on `HOMEBREW_TAP_TOKEN` so a tag pushed before the
+  tap exists publishes a clean GitHub release instead of half of one. Installing is documented in
+  [`docs/INSTALL.md`](INSTALL.md) and the tag's ordered prerequisites in
+  [`docs/RELEASING.md`](RELEASING.md). The `v0.1.0` tag itself is the owner's, on a green `main`.
 - [ ] **P9.2 — Performance gate** · [#30](https://github.com/varijkapil13/saral/issues/30) — benchmarks in CI with `benchstat` regression detection.
 - [ ] **P9.3 — README, demo GIF, docs pass.** · [#31](https://github.com/varijkapil13/saral/issues/31)
 

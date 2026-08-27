@@ -1,5 +1,9 @@
 version: 2
 project_name: saral
+report_sizes: true
+
+# A GITLAB_TOKEN in the environment is otherwise enough to retarget every release URL.
+force_token: github
 
 before:
   hooks:
@@ -44,16 +48,29 @@ changelog:
   filters:
     exclude: ['^docs', '^test', '^chore', '^ci']
 
-brews:
+homebrew_casks:
   - name: saral
     repository:
       owner: varijkapil13
       name: homebrew-tap
+      token: '{{ index .Env "HOMEBREW_TAP_TOKEN" }}'
+    # Without a tap to push to, publishing the release still has to succeed.
+    skip_upload: '{{ if index .Env "HOMEBREW_TAP_TOKEN" }}false{{ else }}true{{ end }}'
     homepage: https://github.com/varijkapil13/saral
     description: Jira in your terminal, made simple
     license: MIT
-    test: |
-      system "#{bin}/saral", "version"
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"], print_stderr: false).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/saral"]
+          end
+    zap:
+      trash:
+        - ~/.config/saral
+        - ~/.cache/saral
 
 release:
   prerelease: auto
+  # So re-running a tag's workflow is a retry rather than a conflict.
+  replace_existing_artifacts: true
