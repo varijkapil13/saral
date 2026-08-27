@@ -608,12 +608,17 @@ func (f *Fake) Boards(ctx context.Context, projectKey string) ([]jira.Board, err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	project := strings.TrimSpace(projectKey)
+	if project == "" {
+		return nil, fakeInvalid("projectKey",
+			"a project is required: a listing with no project asks the site for every board it has")
+	}
 	if err := f.caps.Require(jira.CapBoards); err != nil {
 		return nil, err
 	}
-	proj, ok := f.projects[projectKey]
+	proj, ok := f.projects[project]
 	if !ok {
-		return nil, fakeNotFound("project", projectKey)
+		return nil, fakeNotFound("project", project)
 	}
 	if proj.boardID == 0 {
 		return nil, nil
@@ -674,6 +679,9 @@ func (f *Fake) Sprints(ctx context.Context, boardID int64, states ...jira.Sprint
 		if err := f.caps.Require(jira.CapBoards); err != nil {
 			return nil, 0, false, err
 		}
+		if err := fakeBoardIDCheck(boardID); err != nil {
+			return nil, 0, false, err
+		}
 		if _, ok := f.boards[boardID]; !ok {
 			return nil, 0, false, fakeNotFound("board", strconv.FormatInt(boardID, 10))
 		}
@@ -694,6 +702,9 @@ func (f *Fake) Sprint(ctx context.Context, id int64) (jira.Sprint, error) {
 	if err := f.caps.Require(jira.CapBoards); err != nil {
 		return jira.Sprint{}, err
 	}
+	if err := fakeSprintIDCheck(id); err != nil {
+		return jira.Sprint{}, err
+	}
 	sp, ok := f.sprints[id]
 	if !ok {
 		return jira.Sprint{}, fakeNotFound("sprint", strconv.FormatInt(id, 10))
@@ -708,17 +719,24 @@ func (f *Fake) CreateSprint(ctx context.Context, in jira.SprintInput) (jira.Spri
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if in.BoardID <= 0 {
+		return jira.Sprint{}, fakeInvalid("originBoardId", "a board id is required to create a sprint")
+	}
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		return jira.Sprint{}, fakeInvalid("name", "a sprint needs a name")
+	}
+	if err := fakeSprintDatesInOrder(in.Start, in.End); err != nil {
+		return jira.Sprint{}, err
+	}
 	if _, ok := f.boards[in.BoardID]; !ok {
 		return jira.Sprint{}, fakeNotFound("board", strconv.FormatInt(in.BoardID, 10))
-	}
-	if strings.TrimSpace(in.Name) == "" {
-		return jira.Sprint{}, fakeInvalid("name", "a sprint needs a name")
 	}
 	sp := jira.Sprint{
 		ID:      f.fakeNextSprintID(in.BoardID),
 		BoardID: in.BoardID,
-		Name:    in.Name,
-		Goal:    in.Goal,
+		Name:    name,
+		Goal:    strings.TrimSpace(in.Goal),
 		State:   jira.SprintFuture,
 		Start:   fakeClonePtr(in.Start),
 		End:     fakeClonePtr(in.End),
@@ -736,6 +754,12 @@ func (f *Fake) UpdateSprint(ctx context.Context, id int64, in jira.SprintPatch) 
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := fakeSprintIDCheck(id); err != nil {
+		return jira.Sprint{}, err
+	}
+	if err := fakeCheckSprintPatch(in); err != nil {
+		return jira.Sprint{}, err
+	}
 	sp, ok := f.sprints[id]
 	if !ok {
 		return jira.Sprint{}, fakeNotFound("sprint", strconv.FormatInt(id, 10))
@@ -753,7 +777,7 @@ func (f *Fake) UpdateSprint(ctx context.Context, id int64, in jira.SprintPatch) 
 		}
 	}
 	if in.Name != nil {
-		sp.Name = *in.Name
+		sp.Name = strings.TrimSpace(*in.Name)
 	}
 	if in.Goal != nil {
 		sp.Goal = *in.Goal
@@ -775,6 +799,9 @@ func (f *Fake) StartSprint(ctx context.Context, id int64) (jira.Sprint, error) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := fakeSprintIDCheck(id); err != nil {
+		return jira.Sprint{}, err
+	}
 	sp, ok := f.sprints[id]
 	if !ok {
 		return jira.Sprint{}, fakeNotFound("sprint", strconv.FormatInt(id, 10))
@@ -803,6 +830,9 @@ func (f *Fake) CompleteSprint(ctx context.Context, id int64) (jira.Sprint, error
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := fakeSprintIDCheck(id); err != nil {
+		return jira.Sprint{}, err
+	}
 	sp, ok := f.sprints[id]
 	if !ok {
 		return jira.Sprint{}, fakeNotFound("sprint", strconv.FormatInt(id, 10))
@@ -816,23 +846,31 @@ func (f *Fake) CompleteSprint(ctx context.Context, id int64) (jira.Sprint, error
 	return fakeCloneSprint(*sp), nil
 }
 
-// MoveToSprint moves issues into a sprint, in batches of at most 50 because
-// that is what the endpoint underneath accepts.
+// MoveToSprint moves issues into a sprint. The endpoint underneath takes fifty
+// keys per call and the adapter chunks to stay inside that, so the length of
+// the list is not a limit the port passes on to a caller.
 func (f *Fake) MoveToSprint(ctx context.Context, sprintID int64, keys []string) error {
 	if err := f.fakeBegin(ctx, "MoveToSprint"); err != nil {
 		return err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := fakeSprintIDCheck(sprintID); err != nil {
+		return err
+	}
+	moving, err := fakeMoveKeys(keys)
+	if err != nil {
+		return err
+	}
 	sp, ok := f.sprints[sprintID]
 	if !ok {
 		return fakeNotFound("sprint", strconv.FormatInt(sprintID, 10))
 	}
-	if err := f.fakeCheckBatch(keys); err != nil {
+	if err := f.fakeKnownIssues(moving); err != nil {
 		return err
 	}
 	ref, hasField := fakeRefByName(f.fields, "Sprint")
-	for _, key := range keys {
+	for _, key := range moving {
 		f.sprintOf[key] = sprintID
 		iss := f.issues[key]
 		if hasField {
@@ -853,11 +891,15 @@ func (f *Fake) MoveToBacklog(ctx context.Context, keys []string) error {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if err := f.fakeCheckBatch(keys); err != nil {
+	moving, err := fakeMoveKeys(keys)
+	if err != nil {
+		return err
+	}
+	if err := f.fakeKnownIssues(moving); err != nil {
 		return err
 	}
 	ref, hasField := fakeRefByName(f.fields, "Sprint")
-	for _, key := range keys {
+	for _, key := range moving {
 		delete(f.sprintOf, key)
 		iss := f.issues[key]
 		if hasField {
@@ -915,22 +957,35 @@ func (f *Fake) BulkMove(ctx context.Context, in jira.MoveRequest) (jira.TaskRef,
 	if err := f.caps.Require(jira.CapBulkMove); err != nil {
 		return jira.TaskRef{}, err
 	}
+	keys, err := fakeMoveKeys(in.Keys)
+	if err != nil {
+		return jira.TaskRef{}, err
+	}
+	project := strings.TrimSpace(in.TargetProjectKey)
+	issueType := strings.TrimSpace(in.TargetIssueTypeID)
 	switch {
-	case len(in.Keys) == 0:
+	case len(keys) == 0:
 		return jira.TaskRef{}, fakeInvalid("issues", "a bulk move needs at least one issue")
-	case len(in.Keys) > 1000:
+	case len(keys) > 1000:
 		return jira.TaskRef{}, fakeInvalid("issues", "a bulk move takes at most 1000 issues")
+	case project == "":
+		return jira.TaskRef{}, fakeInvalid("project", "a target project is required to move an issue")
+	case issueType == "":
+		return jira.TaskRef{}, fakeInvalid("issuetype",
+			"a target issue type id is required; resolve it from createmeta rather than by name")
+	case strings.Contains(project, ","), strings.Contains(issueType, ","):
+		return jira.TaskRef{}, fakeInvalid("project",
+			"neither the target project nor the target issue type may contain a comma: the endpoint keys its mapping by project,issuetype")
 	}
-	for _, key := range in.Keys {
-		if _, ok := f.issues[key]; !ok {
-			return jira.TaskRef{}, fakeNotFound("issue", key)
-		}
+	in.Keys, in.TargetProjectKey, in.TargetIssueTypeID = keys, project, issueType
+	if err := f.fakeKnownIssues(keys); err != nil {
+		return jira.TaskRef{}, err
 	}
-	if _, ok := f.projects[in.TargetProjectKey]; !ok {
-		return jira.TaskRef{}, fakeNotFound("project", in.TargetProjectKey)
+	if _, ok := f.projects[project]; !ok {
+		return jira.TaskRef{}, fakeNotFound("project", project)
 	}
-	if fakeIssueTypeByID(in.TargetIssueTypeID) == nil {
-		return jira.TaskRef{}, fakeNotFound("issuetype", in.TargetIssueTypeID)
+	if fakeIssueTypeByID(issueType) == nil {
+		return jira.TaskRef{}, fakeNotFound("issuetype", issueType)
 	}
 
 	id := f.fakeNextID("task")
@@ -948,6 +1003,9 @@ func (f *Fake) Task(ctx context.Context, ref jira.TaskRef) (jira.TaskStatus, err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := fakeTaskEndpoint(ref); err != nil {
+		return jira.TaskStatus{}, err
+	}
 	task, ok := f.tasks[ref.ID]
 	if !ok {
 		return jira.TaskStatus{}, fakeNotFound("task", ref.ID)
@@ -962,7 +1020,7 @@ func (f *Fake) Task(ctx context.Context, ref jira.TaskRef) (jira.TaskStatus, err
 		if task.fails {
 			status.State, status.Progress = jira.TaskFailed, 50
 			status.Message = "the target project rejected the move"
-			status.Failed = slices.Clone(task.req.Keys)
+			status.Failed = f.fakeFailedIDs(task.req.Keys)
 		} else {
 			status.State, status.Progress, status.Message = jira.TaskComplete, 100, "moved"
 			if task.polls == 2 {
@@ -974,7 +1032,9 @@ func (f *Fake) Task(ctx context.Context, ref jira.TaskRef) (jira.TaskStatus, err
 	return status, nil
 }
 
-// Plans lists Advanced Roadmaps plans, one per project.
+// Plans lists Advanced Roadmaps plans, one per project. A project source
+// carries the project's numeric id and not its key, because that is what
+// issueSources[].value holds and nothing in the port turns one into the other.
 func (f *Fake) Plans(ctx context.Context) ([]jira.Plan, error) {
 	if err := f.fakeBegin(ctx, "Plans"); err != nil {
 		return nil, err
@@ -990,7 +1050,7 @@ func (f *Fake) Plans(ctx context.Context) ([]jira.Plan, error) {
 			ID:      "plan-" + strconv.Itoa(i+1),
 			Name:    key + " delivery",
 			Status:  "Active",
-			Sources: []jira.PlanSource{{Type: jira.PlanSourceProject, Value: key}},
+			Sources: []jira.PlanSource{{Type: jira.PlanSourceProject, Value: f.projects[key].ref.ID}},
 		})
 	}
 	return out, nil
@@ -1031,14 +1091,101 @@ func (f *Fake) fakeSprintsOn(boardID int64) []jira.Sprint {
 	return out
 }
 
-func (f *Fake) fakeCheckBatch(keys []string) error {
-	if len(keys) > 50 {
-		return fakeInvalid("issues", "the backlog and sprint endpoints take at most 50 issues per call")
+// fakeMoveKeys is the keys of a move, trimmed. There is no cap here: the two
+// endpoints take fifty per call, the adapter chunks to respect that, and a
+// caller of the port passes as many keys as it has.
+func fakeMoveKeys(keys []string) ([]string, error) {
+	out := make([]string, 0, len(keys))
+	for _, key := range keys {
+		trimmed := strings.TrimSpace(key)
+		if trimmed == "" {
+			return nil, fakeInvalid("issues", "an issue key in the list is blank")
+		}
+		out = append(out, trimmed)
 	}
+	return out, nil
+}
+
+func (f *Fake) fakeKnownIssues(keys []string) error {
 	for _, key := range keys {
 		if _, ok := f.issues[key]; !ok {
 			return fakeNotFound("issue", key)
 		}
+	}
+	return nil
+}
+
+// fakeFailedIDs is a failed move's issues as the bulk queue names them: numeric
+// ids, sorted, because the body keys them by id in an object with no order. An
+// issue stored without an id is named by one derived from its key, since a key
+// here is an identifier no site answers with.
+func (f *Fake) fakeFailedIDs(keys []string) []string {
+	out := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if iss, ok := f.issues[key]; ok && iss.ID != "" {
+			out = append(out, iss.ID)
+			continue
+		}
+		out = append(out, strconv.Itoa(20000+int(fakeHash32(key)%9000)))
+	}
+	slices.Sort(out)
+	return out
+}
+
+// fakeTaskEndpoint refuses a ref that carries no progress endpoint. A submit
+// answers an id and no link, so the URL is the only record of which of the two
+// registries the task is in, and they answer bodies that read as empty versions
+// of each other.
+func fakeTaskEndpoint(ref jira.TaskRef) error {
+	at := strings.TrimSpace(ref.URL)
+	switch {
+	case at == "":
+		return fakeInvalid("task",
+			"this task carries no progress endpoint; poll the ref the submit returned rather than one rebuilt from the id")
+	case !strings.Contains(at, "/rest/api/3/bulk/queue/") && !strings.Contains(at, "/rest/api/3/task/"):
+		return fakeInvalid("task", "the task's progress endpoint is neither the bulk queue nor the task registry: "+at)
+	}
+	return nil
+}
+
+func fakeSprintIDCheck(id int64) error {
+	if id <= 0 {
+		return fakeInvalid("sprintId", "a sprint id is required")
+	}
+	return nil
+}
+
+func fakeBoardIDCheck(boardID int64) error {
+	if boardID <= 0 {
+		return fakeInvalid("boardId", "a board id is required")
+	}
+	return nil
+}
+
+func fakeSprintDatesInOrder(start, end *time.Time) error {
+	if start == nil || end == nil {
+		return nil
+	}
+	if end.Before(*start) {
+		return fakeInvalid("endDate", "a sprint cannot end before it starts")
+	}
+	return nil
+}
+
+// fakeCheckSprintPatch refuses the patches the endpoint refuses. A patch naming
+// no field would be a write with an empty body, which the site rejects rather
+// than treating as a change of nothing.
+func fakeCheckSprintPatch(in jira.SprintPatch) error {
+	if err := fakeSprintDatesInOrder(in.Start, in.End); err != nil {
+		return err
+	}
+	if in.Name != nil && strings.TrimSpace(*in.Name) == "" {
+		return fakeInvalid("name", "a sprint needs a name")
+	}
+	if in.Name == nil && in.Goal == nil && in.Start == nil && in.End == nil {
+		return &jira.ValidationError{Messages: []string{
+			"an update that names no field has nothing to change; a nil field in the patch means leave it alone",
+		}}
 	}
 	return nil
 }

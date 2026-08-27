@@ -20,6 +20,10 @@ import (
 
 var fakeNarrow = []string{"summary", "status", "assignee", "labels"}
 
+// fakeQueuedAt is where the fake says a bulk move reports its progress, which a
+// ref has to carry: the id alone does not say which registry a task is in.
+const fakeQueuedAt = "https://jira.example.invalid/rest/api/3/bulk/queue/"
+
 func fakeNewWithIssues(t *testing.T, n int, opts ...jiratest.Option) *jiratest.Fake {
 	t.Helper()
 	all := append([]jiratest.Option{
@@ -1082,7 +1086,7 @@ func TestUpdateSprint_RefusesDatesOnAClosedSprint(t *testing.T) {
 	}
 }
 
-func TestMoveToSprint_RecordsMembershipAndRefusesMoreThanFiftyAtOnce(t *testing.T) {
+func TestMoveToSprint_RecordsMembershipAndTakesMoreThanOneCallOfTheEndpointHolds(t *testing.T) {
 	t.Parallel()
 	c := fakeNewWithIssues(t, 60)
 	ctx := t.Context()
@@ -1117,14 +1121,291 @@ func TestMoveToSprint_RecordsMembershipAndRefusesMoreThanFiftyAtOnce(t *testing.
 		t.Error("the backlog move must take the sprint field off the issue")
 	}
 
-	tooMany := make([]string, 0, 51)
+	overTheCap := make([]string, 0, 51)
 	for i := 1; i <= 51; i++ {
-		tooMany = append(tooMany, "PROJ-"+strconv.Itoa(i))
+		overTheCap = append(overTheCap, "PROJ-"+strconv.Itoa(i))
 	}
-	var ve *jira.ValidationError
-	if err := c.MoveToSprint(ctx, sprint.ID, tooMany); !errors.As(err, &ve) {
-		t.Fatalf("want a validation error past the 50-issue cap, got %v", err)
+	if err := c.MoveToSprint(ctx, sprint.ID, overTheCap); err != nil {
+		t.Fatalf("moving %d issues, which is more than one call of the endpoint takes: %v", len(overTheCap), err)
 	}
+	last, err := c.Issue(ctx, "PROJ-51")
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if opts, present := last.Fields.Options(sprintField.Ref()); !present || len(opts) != 1 {
+		t.Errorf("PROJ-51 is not in the sprint, so the move stopped at a cap the port does not have: %v", opts)
+	}
+	if err := c.MoveToBacklog(ctx, overTheCap); err != nil {
+		t.Fatalf("moving %d issues back to the backlog: %v", len(overTheCap), err)
+	}
+}
+
+func TestMoveIssues_TrimTheKeysAndRefuseABlankOneAsABadRequest(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 3)
+	ctx := t.Context()
+	sprint := fakeSprintsOf(t, c, fakeBoard(t, c).ID)[2]
+
+	if err := c.MoveToSprint(ctx, sprint.ID, []string{"  PROJ-1  "}); err != nil {
+		t.Fatalf("moving a padded key: %v", err)
+	}
+	if got := fakeSprintOn(t, c, "PROJ-1"); got != sprint.Name {
+		t.Errorf("PROJ-1 is in %q, want %q: a padded key names the same issue", got, sprint.Name)
+	}
+
+	var invalid *jira.ValidationError
+	if err := c.MoveToSprint(ctx, sprint.ID, []string{"PROJ-2", "   "}); !errors.As(err, &invalid) {
+		t.Fatalf("got %#v, want a validation error: a blank key is a bad request and not a missing issue", err)
+	}
+	if _, named := invalid.For("issues"); !named {
+		t.Errorf("the refusal says %v and never names issues", invalid)
+	}
+	if err := c.MoveToBacklog(ctx, []string{"   "}); !errors.As(err, &invalid) {
+		t.Fatalf("got %#v from a backlog move of a blank key, want a validation error", err)
+	}
+	var missing *jira.NotFoundError
+	if err := c.MoveToBacklog(ctx, []string{"PROJ-999"}); !errors.As(err, &missing) {
+		t.Fatalf("got %#v, want a not-found: a key nobody holds is missing rather than malformed", err)
+	}
+}
+
+func TestUpdateSprint_RefusesAPatchThatNamesNothingAndARenameToSpaces(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 1)
+	ctx := t.Context()
+	active := fakeSprintsOf(t, c, fakeBoard(t, c).ID)[1]
+	blank := "   "
+	padded := "  " + active.Name + ", renamed  "
+
+	var invalid *jira.ValidationError
+	if _, err := c.UpdateSprint(ctx, active.ID, jira.SprintPatch{}); !errors.As(err, &invalid) {
+		t.Fatalf("got %#v, want a validation error: an update naming no field is a write with an empty body", err)
+	}
+	if _, err := c.UpdateSprint(ctx, active.ID, jira.SprintPatch{Name: &blank}); !errors.As(err, &invalid) {
+		t.Fatalf("got %#v, want a validation error for a rename to nothing but spaces", err)
+	}
+	if _, named := invalid.For("name"); !named {
+		t.Errorf("the refusal says %v and never names name", invalid)
+	}
+	unchanged, err := c.Sprint(ctx, active.ID)
+	if err != nil {
+		t.Fatalf("Sprint: %v", err)
+	}
+	if unchanged.Name != active.Name {
+		t.Errorf("the refused rename left the sprint called %q, want %q", unchanged.Name, active.Name)
+	}
+
+	got, err := c.UpdateSprint(ctx, active.ID, jira.SprintPatch{Name: &padded})
+	if err != nil {
+		t.Fatalf("renaming a sprint: %v", err)
+	}
+	if want := strings.TrimSpace(padded); got.Name != want {
+		t.Errorf("Name = %q, want %q: the write goes out trimmed", got.Name, want)
+	}
+}
+
+func TestSprintDates_RefuseAnEndThatComesBeforeTheStart(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 1)
+	ctx := t.Context()
+	board := fakeBoard(t, c)
+	late := time.Date(2026, time.March, 1, 8, 0, 0, 0, time.UTC)
+	early := late.AddDate(0, 0, -14)
+
+	var invalid *jira.ValidationError
+	_, err := c.CreateSprint(ctx, jira.SprintInput{BoardID: board.ID, Name: "Sprint 4", Start: &late, End: &early})
+	if !errors.As(err, &invalid) {
+		t.Fatalf("got %#v, want a validation error: a sprint cannot end before it starts", err)
+	}
+	if _, named := invalid.For("endDate"); !named {
+		t.Errorf("the refusal says %v and never names endDate, which is the field to focus", invalid)
+	}
+	future := fakeSprintsOf(t, c, board.ID)[2]
+	if _, err := c.UpdateSprint(ctx, future.ID, jira.SprintPatch{Start: &late, End: &early}); !errors.As(err, &invalid) {
+		t.Fatalf("got %#v from a patch whose end precedes its start, want a validation error", err)
+	}
+	if _, err := c.CreateSprint(ctx, jira.SprintInput{BoardID: board.ID, Name: "Sprint 5", Start: &early, End: &late}); err != nil {
+		t.Fatalf("creating a sprint whose dates are in order: %v", err)
+	}
+}
+
+// TestSprintCalls_RefuseAnIdThatIdentifiesNothing is about the classification
+// and not the message: an id of zero identifies nothing, so it is the request
+// that is wrong rather than the sprint that is missing, and a form can annotate
+// the first and has nowhere to put the second.
+func TestSprintCalls_RefuseAnIdThatIdentifiesNothing(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 1)
+	ctx := t.Context()
+	name := "Sprint 4"
+	calls := map[string]struct {
+		field string
+		run   func() error
+	}{
+		"Sprint":         {"sprintId", func() error { _, err := c.Sprint(ctx, 0); return err }},
+		"UpdateSprint":   {"sprintId", func() error { _, err := c.UpdateSprint(ctx, 0, jira.SprintPatch{Name: &name}); return err }},
+		"StartSprint":    {"sprintId", func() error { _, err := c.StartSprint(ctx, 0); return err }},
+		"CompleteSprint": {"sprintId", func() error { _, err := c.CompleteSprint(ctx, 0); return err }},
+		"MoveToSprint":   {"sprintId", func() error { return c.MoveToSprint(ctx, 0, []string{"PROJ-1"}) }},
+		"Sprints":        {"boardId", func() error { _, err := c.Sprints(ctx, 0); return err }},
+		"CreateSprint":   {"originBoardId", func() error { _, err := c.CreateSprint(ctx, jira.SprintInput{Name: name}); return err }},
+	}
+	for method, tc := range calls {
+		var invalid *jira.ValidationError
+		if err := tc.run(); !errors.As(err, &invalid) {
+			t.Errorf("%s: got %#v, want a *jira.ValidationError", method, err)
+			continue
+		}
+		if _, named := invalid.For(tc.field); !named {
+			t.Errorf("%s: the refusal says %v and never names %s", method, invalid, tc.field)
+		}
+	}
+}
+
+func TestBoards_TrimTheProjectKeyAndRefuseABlankOne(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 1)
+	ctx := t.Context()
+
+	got, err := c.Boards(ctx, "   ")
+	var invalid *jira.ValidationError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("got %+v, %#v; want a validation error for a blank project key", got, err)
+	}
+	if _, named := invalid.For("projectKey"); !named {
+		t.Errorf("the refusal says %v and never names projectKey", invalid)
+	}
+	if len(got) != 0 {
+		t.Errorf("the refusal came back with %+v attached", got)
+	}
+	padded, err := c.Boards(ctx, "  PROJ  ")
+	if err != nil {
+		t.Fatalf("listing the boards on a padded key: %v", err)
+	}
+	if len(padded) != 1 {
+		t.Errorf("a padded key listed %d boards and PROJ has one, so one key answers two ways", len(padded))
+	}
+}
+
+func TestPlans_DrawOnTheProjectIdRatherThanItsKey(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 1)
+	ctx := t.Context()
+	iss, err := c.Issue(ctx, "PROJ-1")
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	plans, err := c.Plans(ctx)
+	if err != nil {
+		t.Fatalf("Plans: %v", err)
+	}
+	sourced := 0
+	for _, plan := range plans {
+		for _, source := range plan.Sources {
+			if source.Type != jira.PlanSourceProject {
+				continue
+			}
+			sourced++
+			if _, err := strconv.ParseInt(source.Value, 10, 64); err != nil {
+				t.Errorf("plan %s draws on project %q, and issueSources[].value is a numeric project id", plan.ID, source.Value)
+			}
+			if source.Value != iss.Project.ID {
+				t.Errorf("plan %s names project %q and the store calls that project %q", plan.ID, source.Value, iss.Project.ID)
+			}
+		}
+	}
+	if sourced == 0 {
+		t.Fatal("no plan drew on a project, so this proves nothing about project sources")
+	}
+}
+
+func TestBulkMove_RefusesABlankTargetForWhatItSaysRatherThanForBeingMissing(t *testing.T) {
+	t.Parallel()
+	c := fakeThatMoves(t)
+	ctx := t.Context()
+	cases := map[string]struct {
+		in    jira.MoveRequest
+		field string
+	}{
+		"no target project":    {jira.MoveRequest{Keys: []string{"PROJ-1"}, TargetIssueTypeID: "10303"}, "project"},
+		"no target issue type": {jira.MoveRequest{Keys: []string{"PROJ-1"}, TargetProjectKey: "OTHER"}, "issuetype"},
+		"a blank issue key":    {jira.MoveRequest{Keys: []string{"   "}, TargetProjectKey: "OTHER", TargetIssueTypeID: "10303"}, "issues"},
+	}
+	for name, tc := range cases {
+		var invalid *jira.ValidationError
+		ref, err := c.BulkMove(ctx, tc.in)
+		if !errors.As(err, &invalid) {
+			t.Errorf("%s: got %#v, want a *jira.ValidationError", name, err)
+			continue
+		}
+		if _, named := invalid.For(tc.field); !named {
+			t.Errorf("%s: the refusal says %v and never names %s", name, invalid, tc.field)
+		}
+		if ref != (jira.TaskRef{}) {
+			t.Errorf("%s: the refusal came back with %+v attached", name, ref)
+		}
+	}
+	padded := jira.MoveRequest{Keys: []string{" PROJ-1 "}, TargetProjectKey: " OTHER ", TargetIssueTypeID: " 10303 "}
+	if _, err := c.BulkMove(ctx, padded); err != nil {
+		t.Fatalf("a request whose values are padded rather than absent: %v", err)
+	}
+}
+
+func TestTask_RefusesARefThatCarriesNoProgressEndpoint(t *testing.T) {
+	t.Parallel()
+	c := fakeThatMoves(t)
+	ctx := t.Context()
+	ref, err := c.BulkMove(ctx, jira.MoveRequest{Keys: []string{"PROJ-1"}, TargetProjectKey: "OTHER", TargetIssueTypeID: "10303"})
+	if err != nil {
+		t.Fatalf("BulkMove: %v", err)
+	}
+	var invalid *jira.ValidationError
+	got, err := c.Task(ctx, jira.TaskRef{ID: ref.ID})
+	if !errors.As(err, &invalid) {
+		t.Fatalf("polling %q on the id alone answered %+v, %#v; want a validation error", ref.ID, got, err)
+	}
+	if !strings.Contains(invalid.Error(), "no progress endpoint") {
+		t.Errorf("the refusal reads %q and never says the ref carries no endpoint, which is the one thing the caller can fix", invalid)
+	}
+	elsewhere := jira.TaskRef{ID: ref.ID, URL: "https://jira.example.invalid/rest/api/3/issue/" + ref.ID}
+	if got, err = c.Task(ctx, elsewhere); !errors.As(err, &invalid) {
+		t.Fatalf("polling an endpoint that is neither registry answered %+v, %#v; want a validation error", got, err)
+	}
+	if _, err := c.Task(ctx, ref); err != nil {
+		t.Fatalf("polling the ref the submit returned: %v", err)
+	}
+}
+
+// fakeThatMoves is a fake with somewhere to move issues to.
+func fakeThatMoves(t *testing.T) *jiratest.Fake {
+	t.Helper()
+	return jiratest.New(
+		jiratest.WithProject("PROJ", jiratest.Scrum),
+		jiratest.WithProject("OTHER", jiratest.Kanban),
+		jiratest.WithIssues(jiratest.Gen(2)),
+	)
+}
+
+// fakeSprintOn is the name of the sprint an issue says it is in.
+func fakeSprintOn(t *testing.T, c *jiratest.Fake, key string) string {
+	t.Helper()
+	fields, err := c.Fields(t.Context())
+	if err != nil {
+		t.Fatalf("Fields: %v", err)
+	}
+	sprintField, ok := jira.FieldByName(fields, "Sprint")
+	if !ok {
+		t.Fatal("the catalogue must carry a sprint field")
+	}
+	iss, err := c.Issue(t.Context(), key)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	opts, present := iss.Fields.Options(sprintField.Ref())
+	if !present || len(opts) != 1 {
+		t.Fatalf("%s is in no one sprint: %v", key, opts)
+	}
+	return opts[0].Label
 }
 
 func TestReleaseVersion_HandlesEveryUnresolvedPolicy(t *testing.T) {
@@ -1575,7 +1856,7 @@ func TestBulkMove_ReferencesTheBulkQueueAndNotTheGenericTaskEndpoint(t *testing.
 	}
 }
 
-func TestBulkMove_ReportsAFailedTaskWithTheKeysItCouldNotMove(t *testing.T) {
+func TestBulkMove_ReportsAFailedTaskWithTheIssueIdsItCouldNotMove(t *testing.T) {
 	t.Parallel()
 	c := jiratest.New(
 		jiratest.WithProject("PROJ", jiratest.Scrum),
@@ -1598,11 +1879,13 @@ func TestBulkMove_ReportsAFailedTaskWithTheKeysItCouldNotMove(t *testing.T) {
 	if status.State != jira.TaskFailed || !status.State.Done() {
 		t.Fatalf("want a failed task, got %s", status.State)
 	}
-	if len(status.Failed) != 1 || status.Failed[0] != "PROJ-2" {
-		t.Errorf("a failed task must name the keys it could not move, got %v", status.Failed)
+	left, err := c.Issue(ctx, "PROJ-2")
+	if err != nil {
+		t.Fatalf("a failed move must leave the issue alone, got %v", err)
 	}
-	if _, err := c.Issue(ctx, "PROJ-2"); err != nil {
-		t.Errorf("a failed move must leave the issue alone, got %v", err)
+	if len(status.Failed) != 1 || status.Failed[0] != left.ID {
+		t.Errorf("a failed task named %v; the queue keys its failures by numeric issue id, so this list must read %q",
+			status.Failed, left.ID)
 	}
 }
 
@@ -1610,6 +1893,7 @@ func TestUnknownKeysAndIDs_ComeBackAsNotFound(t *testing.T) {
 	t.Parallel()
 	c := fakeNewWithIssues(t, 3)
 	ctx := t.Context()
+	goal := "a goal no sprint here will get"
 	calls := map[string]func() error{
 		"Issue":            func() error { _, err := c.Issue(ctx, "PROJ-999"); return err },
 		"UpdateIssue":      func() error { return c.UpdateIssue(ctx, "PROJ-999", jira.IssuePatch{}) },
@@ -1627,12 +1911,18 @@ func TestUnknownKeysAndIDs_ComeBackAsNotFound(t *testing.T) {
 		"Sprints":          func() error { _, err := c.Sprints(ctx, 999999); return err },
 		"StartSprint":      func() error { _, err := c.StartSprint(ctx, 999999); return err },
 		"CompleteSprint":   func() error { _, err := c.CompleteSprint(ctx, 999999); return err },
-		"UpdateSprint":     func() error { _, err := c.UpdateSprint(ctx, 999999, jira.SprintPatch{}); return err },
-		"CreateSprint":     func() error { _, err := c.CreateSprint(ctx, jira.SprintInput{BoardID: 999999}); return err },
-		"MoveToSprint":     func() error { return c.MoveToSprint(ctx, 999999, nil) },
-		"MoveToBacklog":    func() error { return c.MoveToBacklog(ctx, []string{"PROJ-999"}) },
-		"CreateMeta":       func() error { _, err := c.CreateMeta(ctx, "NOPE", "10301"); return err },
-		"Task":             func() error { _, err := c.Task(ctx, jira.TaskRef{ID: "task-999"}); return err },
+		"UpdateSprint":     func() error { _, err := c.UpdateSprint(ctx, 999999, jira.SprintPatch{Goal: &goal}); return err },
+		"CreateSprint": func() error {
+			_, err := c.CreateSprint(ctx, jira.SprintInput{BoardID: 999999, Name: "Sprint 4"})
+			return err
+		},
+		"MoveToSprint":  func() error { return c.MoveToSprint(ctx, 999999, nil) },
+		"MoveToBacklog": func() error { return c.MoveToBacklog(ctx, []string{"PROJ-999"}) },
+		"CreateMeta":    func() error { _, err := c.CreateMeta(ctx, "NOPE", "10301"); return err },
+		"Task": func() error {
+			_, err := c.Task(ctx, jira.TaskRef{ID: "task-999", URL: fakeQueuedAt + "task-999"})
+			return err
+		},
 	}
 	for name, call := range calls {
 		var nf *jira.NotFoundError
