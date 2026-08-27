@@ -446,3 +446,20 @@ func TestProject_TheCommandBuildsThePickerFromTheSessionAsItIsNow(t *testing.T) 
 		t.Errorf("the picker was built against project %q, want the one the session is on now", got)
 	}
 }
+
+// A scope changing under the picker — this pane is not the only thing that can
+// change one — re-marks the rows without asking the site again.
+func TestProject_AScopeChangingUnderThePickerReMarksTheRows(t *testing.T) {
+	t.Parallel()
+
+	p := openPicker(t, projectDeps(twoProjects()), memoryProjects(), 120, 24)
+	p.send(kernel.ProjectMsg{Project: "OPSHOP"})
+
+	for _, at := range p.m.shown {
+		row := &p.m.rows[at]
+		if want := row.key == "OPSHOP"; row.current != want {
+			t.Errorf("%q is marked current=%t after the switch, want %t", row.label, row.current, want)
+		}
+	}
+	mustContain(t, p.frame(), "OPSHOP  (current)")
+}

@@ -97,6 +97,9 @@ type projectModel struct {
 	rows  []projectRow
 	shown []int
 	ranks []ranked
+	// found is what the read answered with, kept so that a scope changing under
+	// the picker rebuilds the rows without asking the site again.
+	found []project
 
 	// looking is a read in flight, and problem is why the last one answered
 	// with nothing. A failure is a note and never a refusal: the whole site and
@@ -246,7 +249,10 @@ func (m *projectModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.head = ""
 
 	case projectsFoundMsg:
-		m.found(msg)
+		m.landed(msg)
+
+	case kernel.ProjectMsg:
+		m.rescope(msg.Project)
 
 	case projectsFailedMsg:
 		m.stop()
@@ -266,15 +272,32 @@ func (m *projectModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *projectModel) found(msg projectsFoundMsg) {
+func (m *projectModel) landed(msg projectsFoundMsg) {
 	m.stop()
-	under := m.selection()
-	m.rows = m.buildRows(msg.found)
-	m.memo.reset()
-	m.head = ""
 	if len(msg.found) == 0 {
 		m.problem = "nothing this account has touched recently names a project"
 	}
+	m.found = msg.found
+	m.rebuild()
+}
+
+// rescope is the session changing scope while the picker is up, which is what
+// choosing here does and what another view doing it looks like from here.
+func (m *projectModel) rescope(key string) {
+	if key == m.deps.Project {
+		return
+	}
+	m.deps.Project = key
+	m.rebuild()
+}
+
+// rebuild redraws the list around what it holds, landing back on the row the
+// cursor was on: nothing here was typed, so nothing may move the selection.
+func (m *projectModel) rebuild() {
+	under := m.selection()
+	m.rows = m.buildRows(m.found)
+	m.memo.reset()
+	m.head = ""
 	m.refilter()
 	if at := m.indexOf(under); at >= 0 {
 		m.cursor = at
