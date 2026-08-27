@@ -452,7 +452,7 @@ func (m *Model) tookTask(msg taskMsg) tea.Cmd {
 }
 
 // finished says on the status line what the queue reported, in the words of what
-// the task actually did. A complete task with keys in Failed is a partial
+// the task actually did. A complete task with issues in Failed is a partial
 // outcome and is reported as one rather than as a success.
 func (m *Model) finished() tea.Cmd {
 	moved := len(m.issues) - len(m.failed)

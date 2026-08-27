@@ -247,7 +247,10 @@ func TestMove_ATaskAskedToCancelIsStillRunningAndIsStillFollowed(t *testing.T) {
 	}
 }
 
-func TestMove_AFailedTaskDrawsTheKeysItCouldNotMove(t *testing.T) {
+// The queue names what it could not move by numeric issue id, so the ids are
+// what the wizard keeps and the keys it submitted are what it draws: an id is
+// not something anybody can search for, open or hand to somebody else.
+func TestMove_AFailedTaskDrawsTheKeysBehindTheIdsTheQueueReports(t *testing.T) {
 	t.Parallel()
 	f, iss := twoProjects(t)
 	w := &immediate{}
@@ -259,18 +262,43 @@ func TestMove_AFailedTaskDrawsTheKeysItCouldNotMove(t *testing.T) {
 	if dr.m.state != jira.TaskFailed {
 		t.Fatalf("the task ended %q rather than failed", dr.m.state)
 	}
-	if len(dr.m.failed) == 0 {
-		t.Fatal("a failed task reported no keys and the wizard kept none")
+	if len(dr.m.failed) != len(iss) {
+		t.Fatalf("a failed move of %d issues left the wizard holding %v", len(iss), dr.m.failed)
 	}
 	frame := dr.view()
-	for _, key := range dr.m.failed {
-		mustContain(t, frame, key, "did not move")
+	for i := range iss {
+		if iss[i].ID == "" {
+			t.Fatalf("%s came out of the fake with no id, so this asserts nothing", iss[i].Key)
+		}
+		mustContain(t, frame, iss[i].Key, "did not move")
+	}
+	// A raw id drawn beside the keys reads as a key of a project nobody has.
+	for _, id := range dr.m.failed {
+		mustNotContain(t, frame, id)
 	}
 }
 
-// A complete task with keys in Failed is a legal partial outcome, and reporting
-// it as a success is how a move that left issues behind reads as one that did
-// not.
+// An id the wizard cannot place is a real answer and not a broken one: a subtask
+// travels with its parent and was never on the list this view submitted.
+func TestMove_AFailureItCannotPlaceIsDrawnAsAnIdAndSaidToBeOne(t *testing.T) {
+	t.Parallel()
+	f, iss := twoProjects(t)
+	w := &immediate{}
+	dr := newDriver(t, testDeps(f), 100, 24, WithIssues(iss), withWaiter(w.wait))
+	dr.walkTo("OTHER")
+	dr.running()
+
+	const subtask = "90017"
+	dr.send(taskMsg{gen: dr.m.gen, status: jira.TaskStatus{
+		State: jira.TaskFailed, Progress: 50, Failed: []string{subtask},
+	}})
+
+	mustContain(t, dr.view(), "issue id "+subtask, "did not move")
+}
+
+// A complete task with issues in Failed is a legal partial outcome, and
+// reporting it as a success is how a move that left issues behind reads as one
+// that did not.
 func TestMove_APartialOutcomeIsReportedRatherThanReadAsASuccess(t *testing.T) {
 	t.Parallel()
 	f, iss := twoProjects(t)
@@ -279,8 +307,9 @@ func TestMove_APartialOutcomeIsReportedRatherThanReadAsASuccess(t *testing.T) {
 	dr.walkTo("OTHER")
 	dr.running()
 
+	left := iss[2]
 	dr.send(taskMsg{gen: dr.m.gen, status: jira.TaskStatus{
-		State: jira.TaskComplete, Progress: 100, Failed: []string{"PROJ-3"},
+		State: jira.TaskComplete, Progress: 100, Failed: []string{left.ID},
 	}})
 
 	if dr.m.step != stepDone {
@@ -291,7 +320,7 @@ func TestMove_APartialOutcomeIsReportedRatherThanReadAsASuccess(t *testing.T) {
 		t.Errorf("a move that left an issue behind reported at level %v", got.Level)
 	}
 	mustContain(t, got.Text, "2 issues moved to OTHER", "1 issue did not")
-	mustContain(t, dr.view(), "PROJ-3", "did not move")
+	mustContain(t, dr.view(), left.Key, "did not move")
 }
 
 func TestMove_AsksAboutATaskLessOftenTheLongerItRuns(t *testing.T) {

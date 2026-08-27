@@ -404,3 +404,58 @@ func TestReleaseVersion_BothAdaptersReturnTheCallersOwnCancellation(t *testing.T
 			}
 		})
 }
+
+// A version id is a number on every Jira site, so the shape is a property of the
+// port and not of one adapter: ReleaseVersion's sweep names the version in JQL,
+// where a non-numeric fixVersion matches version *names* instead, so the cloud
+// adapter refuses one outright. While the fake minted ids like ver-EX-1 that
+// refusal could not be reached through it, and a view written against the fake's
+// ids passed here and was turned down on a site.
+func TestVersionList_BothAdaptersNameAVersionWithAnIdASiteCouldHaveMinted(t *testing.T) {
+	t.Parallel()
+
+	bothReleasers(t,
+		func(t *testing.T) (jira.Releaser, string) { return releaserFromSite(t) },
+		func(t *testing.T) (jira.Releaser, string) { return releaserFake(t) },
+		func(t *testing.T, client jira.Releaser, version string) {
+			if !isNumeric(version) {
+				t.Errorf("the version this adapter offers to release is %q, which ReleaseVersion refuses", version)
+			}
+			got, err := client.Versions(t.Context(), conformProject)
+			if err != nil {
+				t.Fatalf("listing versions: %v", err)
+			}
+			if len(got) == 0 {
+				t.Fatal("a project with versions came back with none")
+			}
+			for _, v := range got {
+				if !isNumeric(v.ID) {
+					t.Errorf("version %q (%s) is named by something no site could have minted, so it is a version this adapter will not release",
+						v.ID, v.Name)
+				}
+			}
+		})
+}
+
+// And handed one anyway, neither adapter releases anything. The cloud adapter
+// refuses before it asks the site anything, which is the branch that stops the
+// sweep from matching a name; the fake has no version by that id.
+func TestReleaseVersion_NeitherAdapterReleasesAnIdNoSiteCouldHaveMinted(t *testing.T) {
+	t.Parallel()
+
+	// The shape the fake used to mint, which is how this arrived above the port.
+	const notAnID = "ver-" + conformProject + "-1"
+
+	bothReleasers(t,
+		func(t *testing.T) (jira.Releaser, string) { return releaserFromSite(t) },
+		func(t *testing.T) (jira.Releaser, string) { return releaserFake(t) },
+		func(t *testing.T, client jira.Releaser, _ string) {
+			got, err := client.ReleaseVersion(t.Context(), notAnID, releaseInput(jira.StripUnresolved, ""))
+			if err == nil {
+				t.Fatalf("releasing %q answered %+v and no error", notAnID, got)
+			}
+			if got.Released {
+				t.Errorf("a refused release came back released: %+v", got)
+			}
+		})
+}

@@ -511,8 +511,12 @@ func TestReleases_SwitchingProjectReadsTheNewOnesVersions(t *testing.T) {
 
 	dr.send(kernel.ProjectMsg{Project: "OPS"})
 
+	ops := make(map[string]bool)
+	for _, v := range jiratest.VersionsFor("OPS") {
+		ops[v.ID] = true
+	}
 	for _, v := range dr.list().versions {
-		if !strings.HasPrefix(v.ID, "ver-OPS") {
+		if !ops[v.ID] {
 			t.Errorf("PROJ's version %q survived the switch to OPS", v.ID)
 		}
 	}
@@ -612,7 +616,7 @@ func manyVersions(n int) []jira.Version {
 	out := make([]jira.Version, 0, n)
 	for i := range n {
 		out = append(out, jira.Version{
-			ID:          "ver-" + strconv.Itoa(i),
+			ID:          strconv.Itoa(60000 + i),
 			Name:        "1." + strconv.Itoa(i),
 			Description: "release number " + strconv.Itoa(i),
 			Released:    i%3 == 0,

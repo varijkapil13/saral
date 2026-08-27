@@ -71,7 +71,8 @@ func TestMove_Golden(t *testing.T) {
 				dr.walkTo("OTHER")
 				dr.running()
 				dr.send(taskMsg{gen: dr.m.gen, status: jira.TaskStatus{
-					State: jira.TaskComplete, Progress: 100, Failed: []string{"PROJ-2", "PROJ-3"},
+					State: jira.TaskComplete, Progress: 100,
+					Failed: []string{dr.m.issues[1].ID, dr.m.issues[2].ID},
 				}})
 			},
 		},

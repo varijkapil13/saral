@@ -25,12 +25,16 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
-// The versions every fake project is seeded with, by id. They are the fake's
-// own, so a test names them rather than inventing an id the store does not hold.
-const (
-	oneOh   = "ver-PROJ-0"
-	twoOh   = "ver-PROJ-1"
-	threeOh = "ver-PROJ-2"
+// The versions every fake project is seeded with, by id. They are read out of
+// the fake rather than written down: a site mints a version id as a number, the
+// fake mints the same shape, and a test that spelled one out would be asserting
+// the shape instead of the behaviour.
+var seededVersions = jiratest.VersionsFor("PROJ")
+
+var (
+	oneOh   = seededVersions[0].ID
+	twoOh   = seededVersions[1].ID
+	threeOh = seededVersions[2].ID
 )
 
 func fullCaps() jira.Capabilities {
