@@ -132,11 +132,12 @@ func defaultRemap(rows []remap, targets []jira.Status) []remap {
 // matter without the whole list.
 func mandatory(schema jira.Schema) []pending {
 	out := make([]pending, 0, len(schema.Fields))
-	for _, meta := range schema.Required() {
-		if suppliedFields[meta.Field.ID] {
+	required := schema.Required()
+	for i := range required {
+		if suppliedFields[required[i].Field.ID] {
 			continue
 		}
-		out = append(out, pending{meta: meta, options: meta.AllowedValues, chosen: -1})
+		out = append(out, pending{meta: required[i], options: required[i].AllowedValues, chosen: -1})
 	}
 	return out
 }

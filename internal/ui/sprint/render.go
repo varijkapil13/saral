@@ -325,16 +325,16 @@ func (m *Model) chromeKey() chromeKey {
 
 // chromeLines is the head and the rule under it, memoized together because they
 // are built from the same key.
-func (m *Model) chromeLines() (string, string) {
+func (m *Model) chromeLines() (head, rule string) {
 	key := m.chromeKey()
 	if m.chrome[0] != "" && key == m.chromeAt {
 		return m.chrome[0], m.chrome[1]
 	}
 	ell := m.deps.Theme.Glyphs.Ellipsis
-	head := m.styles.muted.Render(ansi.Truncate("  "+headWords(key), max(m.width, 8), ell))
+	head = m.styles.muted.Render(ansi.Truncate("  "+headWords(key), max(m.width, 8), ell))
 	count := countLabel(key)
 	dashes := max(m.width-ansi.StringWidth(count)-1, 0)
-	rule := m.styles.rule.Render(strings.Repeat(m.deps.Theme.Glyphs.HLine, dashes)) +
+	rule = m.styles.rule.Render(strings.Repeat(m.deps.Theme.Glyphs.HLine, dashes)) +
 		" " + m.styles.muted.Render(count)
 	m.chrome, m.chromeAt = [2]string{head, rule}, key
 	return head, rule
@@ -508,7 +508,7 @@ func (m *Model) refusalLine() string {
 
 // appendBlock puts a screen of prose under the head, cut to the room there is
 // and padded out to it so that the frame is exactly the box the kernel gave.
-func (m *Model) appendBlock(lines []string, block []string, h int) []string {
+func (m *Model) appendBlock(lines, block []string, h int) []string {
 	at := len(lines)
 	lines = append(lines, block[:min(len(block), h)]...)
 	for len(lines)-at < h {

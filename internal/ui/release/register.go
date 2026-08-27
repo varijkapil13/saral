@@ -46,7 +46,7 @@ func init() {
 		},
 		{
 			id: "releases.release", title: "Release the version you are on",
-			key: keys.Release, msg: ReleaseMsg{},
+			key: keys.Release, msg: ShipMsg{},
 		},
 	} {
 		kernel.RegisterCommand(kernel.Command{

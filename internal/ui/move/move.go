@@ -61,6 +61,7 @@ const (
 	steps
 )
 
+// Option configures a wizard at construction.
 type Option func(*Model)
 
 // WithIssues names the issues to move. It is how the view holding them opens
@@ -80,6 +81,7 @@ func withWaiter(w waiter) Option {
 	}
 }
 
+// Model is the move wizard.
 type Model struct {
 	deps   kernel.Deps
 	keys   keyMap
@@ -201,6 +203,7 @@ func (m *Model) Init() tea.Cmd {
 	return m.reply(candidates(ctx, m.deps.Jira, gen))
 }
 
+// Update handles one message.
 func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {

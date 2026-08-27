@@ -397,8 +397,8 @@ func (c *memCache) Forget(jql string) error {
 
 func (c *memCache) EachIssue(fn func(jira.Issue, time.Time) bool) error {
 	for _, issues := range c.rows {
-		for _, iss := range issues {
-			if !fn(iss, c.stamp) {
+		for i := range issues {
+			if !fn(issues[i], c.stamp) {
 				return nil
 			}
 		}

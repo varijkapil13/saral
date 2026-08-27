@@ -106,6 +106,9 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	return sets
 }()
 
+// LiveKeys reports the keys that work in the state the backlog is actually in.
+// A selection offers the key that schedules it, the sprint list and the confirm
+// answer two strokes each, and a move in flight answers nothing.
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	state := keysBrowsing
 	switch {

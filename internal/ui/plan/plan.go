@@ -168,7 +168,8 @@ func (m *Model) capReason() string {
 
 func (m *Model) takeProfilePlans() {
 	m.plans = m.plans[:0]
-	for i, d := range m.defined {
+	for i := range m.defined {
+		d := &m.defined[i]
 		jql, problem := d.clause()
 		name := strings.TrimSpace(d.Name)
 		if name == "" {
@@ -183,7 +184,7 @@ func (m *Model) takeProfilePlans() {
 				Sources: d.sources(),
 				Local:   true,
 			},
-			origin:  originOf(d, m.derived),
+			origin:  originOf(*d, m.derived),
 			jql:     jql,
 			problem: problem,
 			dates:   d.dates(),

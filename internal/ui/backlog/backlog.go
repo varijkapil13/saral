@@ -99,6 +99,7 @@ func (mv *move) chunk(at int) []string {
 	return mv.keys[start:min(start+moveChunk, len(mv.keys))]
 }
 
+// Model is the board's backlog.
 type Model struct {
 	deps   kernel.Deps
 	search *app.Search
@@ -223,6 +224,7 @@ func (m *Model) Addr() kernel.Addr { return m.addr }
 // the board's rank field, which is itself an answer.
 func (m *Model) Init() tea.Cmd { return m.load() }
 
+// Update handles one message.
 func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {

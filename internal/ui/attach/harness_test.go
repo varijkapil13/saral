@@ -388,8 +388,7 @@ func countCalls(f *jiratest.Fake, name string) int {
 // the bytes before claiming a format, so this is what a real image looks like to
 // them.
 func pngBytes() []byte {
-	head := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
-	return append(head, []byte("IHDR-and-then-some-pixels")...)
+	return append([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}, "IHDR-and-then-some-pixels"...)
 }
 
 // lipglossWidth is what a terminal would count of a line. A graphics escape is a

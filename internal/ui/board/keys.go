@@ -128,13 +128,13 @@ const (
 // footer says it does, and a keystroke costs one map probe rather than a walk
 // over every binding.
 func (k keyMap) tables() (browsing, holding map[string]action) {
-	motions := []binding{
-		{k.Up, actUp}, {k.Down, actDown}, {k.Left, actLeft}, {k.Right, actRight},
-		{k.PageUp, actPageUp}, {k.PageDown, actPageDown},
-		{k.Go, actGo}, {k.Top, actTop}, {k.Bottom, actBottom},
-	}
-	browsing = table(append(motions,
-		binding{k.Open, actOpen}, binding{k.Pick, actPick}, binding{k.Board, actBoard})...)
+	browsing = table(
+		binding{k.Up, actUp}, binding{k.Down, actDown},
+		binding{k.Left, actLeft}, binding{k.Right, actRight},
+		binding{k.PageUp, actPageUp}, binding{k.PageDown, actPageDown},
+		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
+		binding{k.Open, actOpen}, binding{k.Pick, actPick}, binding{k.Board, actBoard},
+	)
 	// A card in hand answers only the keys the holding state advertises: the two
 	// that aim it and the two that end the gesture. A motion that moved the
 	// cursor here would leave the card behind whatever it moved to.

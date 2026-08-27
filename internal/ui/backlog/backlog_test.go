@@ -543,7 +543,7 @@ func TestPort_TakesEveryKeyItIsGivenAndTheViewStillChunks(t *testing.T) {
 			"adapter chunks for it: %v", len(keys), err)
 	}
 	for _, key := range keys {
-		iss, err := c.Fake.Issue(t.Context(), key)
+		iss, err := c.Issue(t.Context(), key)
 		if err != nil {
 			t.Fatalf("reading %s back: %v", key, err)
 		}

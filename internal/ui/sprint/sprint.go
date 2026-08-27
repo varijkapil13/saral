@@ -62,11 +62,16 @@ const (
 // The two that name a lifecycle move still go through the confirm: the palette
 // is a way to reach an action and never a way round the question it asks.
 type (
-	NewMsg      struct{}
-	EditMsg     struct{}
-	StartMsg    struct{}
+	// NewMsg opens the form on a sprint that does not exist yet.
+	NewMsg struct{}
+	// EditMsg opens the form on the sprint under the cursor.
+	EditMsg struct{}
+	// StartMsg asks to start the sprint under the cursor.
+	StartMsg struct{}
+	// CompleteMsg asks to complete the sprint under the cursor.
 	CompleteMsg struct{}
-	ClosedMsg   struct{}
+	// ClosedMsg shows or hides the closed sprints.
+	ClosedMsg struct{}
 )
 
 // pending is the move a confirm is standing in front of.
@@ -738,11 +743,4 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 		return
 	}
 	m.clampScroll()
-}
-
-func (m *Model) now() time.Time {
-	if m.deps.Now == nil {
-		return time.Time{}
-	}
-	return m.deps.Now()
 }

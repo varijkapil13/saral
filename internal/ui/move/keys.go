@@ -103,6 +103,8 @@ var liveSets = func() [steps]kernel.KeySet {
 	return sets
 }()
 
+// LiveKeys reports the keys that work at the step the wizard is actually on. A
+// run in flight answers nothing, and the step after it answers only the way out.
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	return liveSets[m.step], int(m.step)
 }

@@ -514,7 +514,8 @@ func (m *Model) marked(msg markersMsg) {
 		return
 	}
 	m.versionMarks = m.versionMarks[:0]
-	for _, v := range msg.versions {
+	for i := range msg.versions {
+		v := &msg.versions[i]
 		if v.ReleaseDate.IsZero() || v.Archived {
 			continue
 		}

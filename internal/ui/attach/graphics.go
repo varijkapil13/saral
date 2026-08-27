@@ -165,14 +165,14 @@ func kittyEscape(data []byte, box previewBox) string {
 	var b strings.Builder
 	b.Grow(len(payload) + 64)
 	first := true
-	for len(payload) > 0 {
+	for payload != "" {
 		chunk := payload
 		if len(chunk) > kittyChunk {
 			chunk = chunk[:kittyChunk]
 		}
 		payload = payload[len(chunk):]
 		more := "0"
-		if len(payload) > 0 {
+		if payload != "" {
 			more = "1"
 		}
 		b.WriteString("\x1b_G")

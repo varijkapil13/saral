@@ -137,7 +137,7 @@ func TestTimeline_DrawsEachProvenanceAsItsOwnShape(t *testing.T) {
 	guessed.Created = time.Date(2026, time.March, 2, 9, 0, 0, 0, time.UTC)
 	guessed.FixVersions = []jira.Version{{ID: "v1", Name: "2.0", ReleaseDate: day(2026, time.March, 20)}}
 
-	real := issueIn("PROJ-2", "Set by somebody")
+	explicit := issueIn("PROJ-2", "Set by somebody")
 	milestone := issueIn("PROJ-3", "One date")
 	milestone.Due = day(2026, time.March, 10)
 
@@ -147,10 +147,10 @@ func TestTimeline_DrawsEachProvenanceAsItsOwnShape(t *testing.T) {
 	kid.Parent = &jira.IssueRef{ID: "9PROJ-4", Key: "PROJ-4"}
 
 	f := customFake(nil)
-	real = withDate(real, fieldRef(t, f, "Target start"), day(2026, time.March, 2))
-	real = withDate(real, fieldRef(t, f, "Target end"), day(2026, time.March, 20))
+	explicit = withDate(explicit, fieldRef(t, f, "Target start"), day(2026, time.March, 2))
+	explicit = withDate(explicit, fieldRef(t, f, "Target end"), day(2026, time.March, 20))
 
-	dr := newDriver(t, testDeps(customFake([]jira.Issue{guessed, real, milestone, parent, kid})), 140, 24)
+	dr := newDriver(t, testDeps(customFake([]jira.Issue{guessed, explicit, milestone, parent, kid})), 140, 24)
 	g := dr.m.styles.glyphs
 	for key, want := range map[string]string{
 		"PROJ-1": g.faded,
@@ -357,10 +357,9 @@ func TestTimeline_SaysWhySprintMarkersAreMissingWhenBoardsAreRefused(t *testing.
 	t.Parallel()
 
 	f := newFake(10, jiratest.WithCapabilities(jiratest.NoBoards))
-	dr := newDriver(t, testDeps(f), 120, 24)
 	deps := testDeps(f)
 	deps.Caps.Boards = jira.Capability{Reason: "this project has no board"}
-	dr = newDriver(t, deps, 120, 24)
+	dr := newDriver(t, deps, 120, 24)
 
 	notes := strings.Join(dr.m.noteLines, "\n")
 	mustContain(t, notes, "no sprint markers", "this project has no board")
@@ -778,22 +777,6 @@ func TestTimeline_SaysWhenItIsShowingOnlyPartOfTheSearch(t *testing.T) {
 
 // --- helpers ----------------------------------------------------------------
 
-func itoa(n int) string {
-	return strings.TrimSpace(strings.Join([]string{"", ""}, "")) + intToString(n)
-}
-
-func intToString(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var digits []byte
-	for n > 0 {
-		digits = append([]byte{byte('0' + n%10)}, digits...)
-		n /= 10
-	}
-	return string(digits)
-}
-
 func mustModel(t *testing.T, view kernel.View) *Model {
 	t.Helper()
 	m, ok := view.(*Model)
@@ -933,7 +916,7 @@ func TestTimeline_LeavesAnArchivedVersionOffTheChart(t *testing.T) {
 		},
 	})
 
-	var names []string
+	names := make([]string, 0, len(dr.m.versionMarks))
 	for _, v := range dr.m.versionMarks {
 		names = append(names, v.name)
 	}

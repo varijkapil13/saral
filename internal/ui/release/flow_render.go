@@ -95,7 +95,8 @@ func (f *Flow) row(at int) string {
 // the note says which it is rather than leaving the row bare.
 func (f *Flow) buildTargets() []choice {
 	out := make([]choice, 0, len(f.targets))
-	for _, v := range f.targets {
+	for i := range f.targets {
+		v := &f.targets[i]
 		note := "no release date"
 		if !v.ReleaseDate.IsZero() {
 			note = "releases " + v.ReleaseDate.String()

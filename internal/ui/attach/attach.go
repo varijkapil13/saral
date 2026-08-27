@@ -49,6 +49,7 @@ const (
 	confirming
 )
 
+// Option configures a pane at construction.
 type Option func(*Model)
 
 // WithIssue names the issue whose files these are. There is no default: a pane
@@ -58,6 +59,7 @@ func WithIssue(key string) Option {
 	return func(m *Model) { m.issue = strings.TrimSpace(key) }
 }
 
+// Model is the attachment pane.
 type Model struct {
 	deps  kernel.Deps
 	issue string
@@ -119,6 +121,8 @@ type Model struct {
 	zones widget.Zoner
 }
 
+// New builds the pane. It reads nothing until it is told which issue it is
+// about, which is what WithIssue is for.
 func New(d kernel.Deps, opts ...Option) kernel.View {
 	m := &Model{
 		deps: d, input: newInput(), addr: kernel.NewAddr(),
@@ -181,6 +185,7 @@ func (m *Model) Init() tea.Cmd {
 	return m.load()
 }
 
+// Update handles one message.
 func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {

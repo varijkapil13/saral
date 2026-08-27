@@ -455,8 +455,9 @@ func (m *Model) notifyWords() string {
 // and its description has reported zero issues for a run of sixty.
 func (m *Model) runningLines() []string {
 	out := make([]string, 0, 4)
-	out = append(out, m.line(m.styles.muted, "task "+m.ref.ID))
-	out = append(out, m.line(m.styles.accent, m.bar()+"  "+strconv.Itoa(m.percent)+"%  "+m.stateWords()))
+	out = append(out,
+		m.line(m.styles.muted, "task "+m.ref.ID),
+		m.line(m.styles.accent, m.bar()+"  "+strconv.Itoa(m.percent)+"%  "+m.stateWords()))
 	if m.paused > 0 {
 		out = append(out, m.line(m.styles.warn,
 			"Jira asked for a pause; asking again in "+m.paused.Round(time.Second).String()))

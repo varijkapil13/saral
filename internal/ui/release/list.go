@@ -21,7 +21,7 @@ var (
 	_ kernel.Addressed   = (*Model)(nil)
 )
 
-// NewVersionMsg, EditVersionMsg, ArchiveMsg and ReleaseMsg are what the palette
+// NewVersionMsg, EditVersionMsg, ArchiveMsg and ShipMsg are what the palette
 // sends this view. They are broadcasts because the palette knows which command
 // was run and never which version is under the cursor.
 type (
@@ -31,8 +31,8 @@ type (
 	EditVersionMsg struct{}
 	// ArchiveMsg archives the version under the cursor, or unarchives it.
 	ArchiveMsg struct{}
-	// ReleaseMsg opens the release flow over the version under the cursor.
-	ReleaseMsg struct{}
+	// ShipMsg opens the release flow over the version under the cursor.
+	ShipMsg struct{}
 )
 
 // mode is what the list is doing.
@@ -186,7 +186,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case ArchiveMsg:
 		cmd = m.toggleArchive()
 
-	case ReleaseMsg:
+	case ShipMsg:
 		cmd = m.startRelease()
 
 	case tea.KeyPressMsg:
@@ -791,7 +791,7 @@ func (f *form) height(showing bool) int {
 // input builds what the site is sent, or says in one sentence why it cannot be.
 // Both dates are read with the port's own parser, so a typed one is refused
 // here rather than turned into a day somewhere east of the reader.
-func (f *form) versionInput(project string) (jira.VersionInput, string) {
+func (f *form) versionInput(project string) (in jira.VersionInput, problem string) {
 	values := f.values
 	values[f.at] = f.input.Value()
 
@@ -810,7 +810,7 @@ func (f *form) versionInput(project string) (jira.VersionInput, string) {
 	if !start.IsZero() && !release.IsZero() && release.Before(start) {
 		return jira.VersionInput{}, "a version cannot be released before it starts"
 	}
-	in := jira.VersionInput{
+	in = jira.VersionInput{
 		ID:          f.id,
 		Name:        name,
 		Description: strings.TrimSpace(values[fieldDescription]),
@@ -823,7 +823,7 @@ func (f *form) versionInput(project string) (jira.VersionInput, string) {
 	return in, ""
 }
 
-func readDay(typed, what string) (jira.Date, string) {
+func readDay(typed, what string) (day jira.Date, problem string) {
 	typed = strings.TrimSpace(typed)
 	if typed == "" {
 		return jira.Date{}, ""

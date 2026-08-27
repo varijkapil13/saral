@@ -30,7 +30,7 @@ func (a *asked) BoardIssues(ctx context.Context, boardID int64, q jira.BoardQuer
 	return a.Fake.BoardIssues(ctx, boardID, q)
 }
 
-func (a *asked) last() (jira.BoardQuery, int64) {
+func (a *asked) last() (q jira.BoardQuery, boardID int64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if len(a.queries) == 0 {
