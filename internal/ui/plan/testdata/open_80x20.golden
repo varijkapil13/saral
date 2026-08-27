@@ -1,0 +1,20 @@
+  plans defined in this profile
+------------------------------------------------------------------------ 2 plans
+> Q3 delivery                           profile     defined in this profile     
+    source    project PROJ                                                      
+    source    filter 10023                                                      
+    search    (project = "PROJ" OR filter IN (10023)) AND (labels = roadmap)    
+    dates     Target start -> Target end                                        
+    releases  1.0  released  2026-01-02                                         
+              2.0  unreleased  2026-04-02                                       
+              3.0  unreleased                                                   
+  Everything open                       profile     defined in this profile     
+
+
+
+
+
+
+
+
+  the Plans API needs Administer Jira
