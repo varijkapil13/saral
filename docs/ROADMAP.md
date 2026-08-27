@@ -1041,20 +1041,26 @@ are guesses.
 
 ## Batch 9 — Ship it · parallel ×3
 
-  `goreleaser check` and a snapshot release are green, `scripts/install.sh` verifies a checksum
-  before it unpacks, and the cask gates itself on `HOMEBREW_TAP_TOKEN` so a tag pushed before the
-  tap exists publishes a clean GitHub release instead of half of one. Installing is documented in
-  [`docs/INSTALL.md`](INSTALL.md) and the tag's ordered prerequisites in
-  [`docs/RELEASING.md`](RELEASING.md). The `v0.1.0` tag itself is the owner's, on a green `main`.
-- [ ] **P9.1 — Release engineering** · [#29](https://github.com/varijkapil13/saral/issues/29) — goreleaser dry-run, Homebrew tap, install script, `v0.1.0`.
+- [x] **P9.1 — Release engineering** · [#29](https://github.com/varijkapil13/saral/issues/29)
+  `goreleaser check` and a snapshot release are green — `check` was **already failing** before this
+  packet: `brews:` is deprecated as of goreleaser 2.16 and is now `homebrew_casks:`, which has no
+  `test` field and which Homebrew refuses on Linux, so `brew install` is macOS-only and Linux takes
+  the script or `go install`. The action is pinned `~> v2`; `latest` would have broken a release on
+  the next major. `force_token: github`, because goreleaser picks its SCM from whichever token is in
+  the environment, and a stray `GITLAB_TOKEN` made a dry run emit gitlab.com URLs and report success.
+  `scripts/install.sh` verifies a checksum before it unpacks and renames into place, so a failure
+  leaves nothing behind; `scripts/install_test.sh` drives it against a fake release with no network,
+  14 checks under dash, bash and ksh. The cask gates itself on `HOMEBREW_TAP_TOKEN`, so a tag pushed
+  before the tap exists publishes a clean GitHub release rather than half of one. Installing is in
+  [`docs/INSTALL.md`](INSTALL.md), the tag's ordered prerequisites in
+  [`docs/RELEASING.md`](RELEASING.md).
+- [x] **P9.2 — Performance gate** · [#30](https://github.com/varijkapil13/saral/issues/30)
   The gate is on `allocs/op` and `B/op`, not on wall clock, and the reason is in
   [`docs/PERFORMANCE.md`](PERFORMANCE.md): two runs of the same commit on an idle machine disagreed
   about `ns/op` by up to **821%** with `benchstat` calling it significant, on nineteen of the 141
   benchmarks, while `allocs/op` repeated to the unit on 134 of them. Timings are reported on the run
   summary and never fail a build. The baseline is a second checkout of the base commit benchmarked
   beside the branch, so no stored number can go stale.
-- [ ] **P9.3 — README, demo GIF, docs pass.** · [#31](https://github.com/varijkapil13/saral/issues/31)
-- [ ] **P9.2 — Performance gate** · [#30](https://github.com/varijkapil13/saral/issues/30) — benchmarks in CI with `benchstat` regression detection.
 - [x] **P9.3 — README, demo tape, docs pass.** · [#31](https://github.com/varijkapil13/saral/issues/31)
   The demo is committed as `demo.tape` and not as a GIF: a tape is re-recordable when the UI moves.
   [`docs/DEMO.md`](DEMO.md) is how to record it, and records the one finding — `cmd/saral` cannot be
