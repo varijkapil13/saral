@@ -59,6 +59,7 @@ type Client struct {
 	concurrency int
 	gate        chan struct{}
 	flight      *singleflight.Group
+	attachMeta  *attachmentMetaCache
 
 	// joined, when set, is called once per caller that has been registered with
 	// the flight for a key. A test coalescing N callers cannot otherwise know
@@ -98,6 +99,7 @@ func New(site, email, token string, opts ...Option) (*Client, error) {
 		agent:       defaultUserAgent,
 		concurrency: DefaultMaxConcurrent,
 		flight:      &singleflight.Group{},
+		attachMeta:  &attachmentMetaCache{},
 	}
 	for _, o := range opts {
 		if o != nil {
@@ -187,10 +189,9 @@ func defaultHTTPClient(concurrency int) *http.Client {
 	t.ResponseHeaderTimeout = 30 * time.Second
 	return &http.Client{
 		Transport: t,
-		// Go keeps the Authorization header across a redirect it judges to stay on
-		// one host, and on loopback every redirect stays on one host. An attachment
-		// is answered with a 303 to another host, so no redirect is followed here
-		// and whoever sent the request decides what crosses.
+		// Go carries the Authorization header across a redirect it judges to stay
+		// on one host, and on loopback every redirect stays on one host, so no
+		// redirect is followed here: the caller decides what crosses.
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 }
@@ -419,9 +420,8 @@ func (c *Client) attempt(ctx context.Context, pending call) (*response, error) {
 	return &response{status: res.StatusCode, header: res.Header, body: payload}, nil
 }
 
-// newRequest builds the HTTP request one attempt sends. It is shared with the
-// streaming path so that there is one place where the credential is attached,
-// and that place is last: a caller's own header can never replace it.
+// newRequest builds the HTTP request one attempt sends. The credential is
+// attached last, so a caller's own header cannot replace it.
 func (c *Client) newRequest(ctx context.Context, pending call) (*http.Request, error) {
 	var body io.Reader
 	if len(pending.encoded) > 0 {
@@ -446,19 +446,20 @@ func (c *Client) newRequest(ctx context.Context, pending call) (*http.Request, e
 }
 
 // streamErrorLimit bounds the body the streaming path buffers to find a reason
-// in. A status it does not read is a refusal, whose body is an error envelope —
-// and nothing says a site cannot answer one enormously.
+// in: nothing says a site cannot answer an error envelope enormously.
 const streamErrorLimit = 64 << 10
 
-// stream is a response whose body has not been read. An attachment is as large
-// as the site's upload limit allows, so a download copies it from the wire into
-// the caller's writer rather than through a []byte the size of the file.
+// stream is a response whose body has not been read, so that a download copies
+// the bytes into the caller's writer rather than through a []byte the size of the
+// file.
 //
-// The caller closes it on every path, cancellation included. Closing is also
-// what gives back the concurrency slot the request is holding, so a stream left
-// open holds a slot until it is.
+// The caller closes it on every path. Closing is also what gives back the
+// concurrency slot the request holds, so a stream left open holds one.
 type stream struct {
 	status int
+	// op names the request this body came from, which is not always the Jira
+	// endpoint: a download's bytes arrive from the host it was redirected to.
+	op     string
 	header http.Header
 	body   io.ReadCloser
 
@@ -483,11 +484,10 @@ func (s *stream) close() {
 // doStream sends a request and hands back the open response body, classifying a
 // refusal and retrying a safe failure exactly as do does. answered says which
 // statuses this caller reads the body of rather than treats as a refusal, which
-// is how an attachment download gets to see the 303 it has to follow itself.
+// is how a download gets to see the 303 it has to follow itself.
 //
-// It must not be coalesced, and cannot retry past the first byte: one body
-// cannot be read twice, so neither two callers nor a second attempt can have it.
-// A connection that breaks mid-body is the callers to resume.
+// One body cannot be read twice, so a stream is neither coalesced nor retried
+// once its first byte is out.
 func (c *Client) doStream(ctx context.Context, r request, answered func(status int) bool) (*stream, error) {
 	encoded, contentType, err := encodeBody(r)
 	if err != nil {
@@ -512,9 +512,8 @@ func (c *Client) doStream(ctx context.Context, r request, answered func(status i
 	}
 }
 
-// streamAttempt sends one attempt of a streaming request. A status the caller
-// does not read is buffered and handed back to be classified like any other
-// refusal; a status it does read keeps the body open, and with it the slot.
+// streamAttempt sends one attempt of a streaming request. A status the caller does
+// not read is buffered and handed back to be classified like any other refusal.
 func (c *Client) streamAttempt(ctx context.Context, pending call, answered func(int) bool) (*stream, *response, error) {
 	if err := c.acquire(ctx); err != nil {
 		return nil, nil, err
@@ -543,7 +542,13 @@ func (c *Client) streamAttempt(ctx context.Context, pending call, answered func(
 		return nil, &response{status: res.StatusCode, header: res.Header, body: payload}, nil
 	}
 	handed = true
-	return &stream{status: res.StatusCode, header: res.Header, body: res.Body, done: c.release}, nil, nil
+	return &stream{
+		status: res.StatusCode,
+		op:     pending.op(),
+		header: res.Header,
+		body:   res.Body,
+		done:   c.release,
+	}, nil, nil
 }
 
 func (c *Client) endpoint(r request) string {
