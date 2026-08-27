@@ -24,6 +24,7 @@ today; comparing a run against a baseline is P9.2
 | Cache read for a view's first paint | < 5 ms | `BenchmarkCacheReadFirstPaint` |
 | Rank 10k cached issues against a keystroke | **< 16 ms**, 1 allocation | `BenchmarkIndexSearch10k` and its two siblings |
 | Rebuild the local index over 10k cached issues | < 16 ms | `BenchmarkIndexRebuild10k` |
+| Resolve the date cascade over a timeline's worth of issues | **< 16 ms**, and linear in the issues | `BenchmarkResolveDates2k` against `BenchmarkResolveDates10k` |
 | Render a description to styled lines | **≤ 8 allocations a line**, and linear in the lines | `BenchmarkRender`, over four widths and both palettes |
 
 ## How a budget is guarded
@@ -82,6 +83,8 @@ table, which is the same thing as writing down that the budget is no longer held
 |---|---|
 | `internal/app` | `TestBudget_CacheReadForAViewsFirstPaint` |
 | `internal/app` | `TestBudget_CIRunsTheGuardsWithoutTheDetector` |
+| `internal/app` | `TestBudget_DateCascadeCostsNoMoreThanTheIssuesItIsGiven` |
+| `internal/app` | `TestBudget_DateCascadeOverATimelineOfIssues` |
 | `internal/app` | `TestBudget_EveryWallClockAssertionSitsInAGuard` |
 | `internal/app` | `TestBudget_IndexRebuildAtTenThousandIssues` |
 | `internal/app` | `TestBudget_IndexSearchAllocatesOnlyTheAnswerItHandsBack` |

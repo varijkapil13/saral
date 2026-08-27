@@ -878,7 +878,7 @@ are guesses.
 
 ## Batch 8 — Timeline and plans · parallel ×3
 
-- [ ] **P8.1 — Date resolution** · [#26](https://github.com/varijkapil13/saral/issues/26) · **owns** `internal/app/dates.go`
+- [x] **P8.1 — Date resolution** · [#26](https://github.com/varijkapil13/saral/issues/26) · **owns** `internal/app/dates.go`
   The cascade that gives every issue a start and an end (see below). Reports provenance per bar.
   Rule 4 needs [#38](https://github.com/varijkapil13/saral/issues/38) first: an issue's sprint value
   carries `{id, name}` and no dates, and the timeline has no board id to look them up with.
