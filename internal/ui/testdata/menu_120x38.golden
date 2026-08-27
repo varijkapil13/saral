@@ -1,0 +1,117 @@
+attach
+  no issue
+------------------------------------------------------------------------------------------------------- nothing read yet
+  There is no issue behind this pane.
+ there is nothing to do to what is on this screen yet
+
+backlog
+┌─────────────────────────────────────────────────────┐
+│ What can be done here                               │
+│ space  pick or unpick this issue                    │
+│ v      pick every issue in this section             │
+│ m      move these issues to a sprint or the backlog │
+└─────────────────────────────────────────────────────┘
+
+board
+┌──────────────────────────────────────────┐
+│ What can be done here                    │
+│ enter  open                              │
+│ m      move this issue to another column │
+│ b      another board of this project     │
+└──────────────────────────────────────────┘
+
+comment
+┌───────────────────────┐
+│ What can be done here │
+│ a  write a comment    │
+│ e  edit this one      │
+│ d  delete this one    │
+└───────────────────────┘
+
+filter
+┌─────────────────────────────────┐
+│ What can be done here           │
+│ enter  choose what to filter by │
+└─────────────────────────────────┘
+
+form
+┌────────────────────────────┐
+│ What can be done here      │
+│ enter  use this issue type │
+└────────────────────────────┘
+
+issue
+┌───────────────────────┐
+│ What can be done here │
+│ tab  next pane        │
+│ e    edit fields      │
+│ t    change status    │
+│ C    comment          │
+└───────────────────────┘
+
+issue.edit
+┌───────────────────────────┐
+│ What can be done here     │
+│ enter   change this field │
+│ del     empty this field  │
+│ ctrl+s  save              │
+│ X       discard changes   │
+└───────────────────────────┘
+
+issue.move
+┌───────────────────────┐
+│ What can be done here │
+│ enter  choose         │
+└───────────────────────┘
+
+list
+┌──────────────────────────────────────────────┐
+│ What can be done here                        │
+│ enter  open                                  │
+│ f      filter by a person, a status, a label │
+│ /      filter                                │
+│ a      all issues                            │
+│ e      edit this search                      │
+│ s      save this query to a key              │
+└──────────────────────────────────────────────┘
+
+move
+┌─────────────────────────────────────────┐
+│ What can be done here                   │
+│ enter  use the project under the cursor │
+│ i      type a project key               │
+└─────────────────────────────────────────┘
+
+plans
+┌───────────────────────────────────────┐
+│ What can be done here                 │
+│ enter  show what this plan is made of │
+└───────────────────────────────────────┘
+
+release.flow
+┌───────────────────────────────────────────────┐
+│ What can be done here                         │
+│ enter  choose what happens to the open issues │
+└───────────────────────────────────────────────┘
+
+releases
+┌────────────────────────────────┐
+│ What can be done here          │
+│ enter  release this version    │
+│ n      new version             │
+│ e      edit this version       │
+│ A      archive or unarchive it │
+└────────────────────────────────┘
+
+sprints
+┌────────────────────────────────┐
+│ What can be done here          │
+│ o  show or hide closed sprints │
+└────────────────────────────────┘
+
+timeline
+┌────────────────────────────────┐
+│ What can be done here          │
+│ n  where these dates came from │
+└────────────────────────────────┘
+

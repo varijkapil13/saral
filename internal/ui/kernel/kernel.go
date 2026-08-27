@@ -168,6 +168,7 @@ type chromeKey struct {
 	project   string
 	status    string
 	help      bool
+	menu      bool
 	depth     int
 	palette   bool
 	capturing bool
@@ -227,6 +228,10 @@ type Model struct {
 	// none is — which is also the sequence the startup probe carries.
 	capsSeq  int
 	scopeSeq int
+
+	// menu is the right-click menu. It is open only while it has entries, so the
+	// zero value is the ordinary state.
+	menu menuState
 
 	// prefix holds the go-to key while it waits for the one that completes it.
 	// It is buffered rather than forwarded, because a view that spends g on its
@@ -553,6 +558,12 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	}
+	// Before the capturing check, not after: a view can start taking typing while
+	// the menu is over it — an answer landing behind it is enough — and a menu
+	// whose keys had gone to the view would have no way left to close.
+	if m.menu.open {
+		return m.menuKey(msg)
+	}
 	// A view taking typing gets the keys first. ctrl+c above and the palette key
 	// here are the only exceptions: neither is a character anybody types into a
 	// field, and a palette that cannot be opened from a filter, a form or an
@@ -631,9 +642,19 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // forwards them: nothing is reporting, so nothing arrives, and a view handed one
 // anyway looks its zones up in a manager that is disabled and misses.
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if click, ok := msg.(tea.MouseClickMsg); ok && m.mouse && click.Button == tea.MouseLeft {
-		if next, cmd, hit := m.clickFooter(click); hit {
-			return next, cmd
+	if m.menu.open {
+		return m.menuMouse(msg)
+	}
+	if click, ok := msg.(tea.MouseClickMsg); ok && m.mouse {
+		switch click.Button {
+		case tea.MouseLeft:
+			if next, cmd, hit := m.clickFooter(click); hit {
+				return next, cmd
+			}
+		case tea.MouseRight:
+			if !m.showHelp {
+				return m.openMenu(click)
+			}
 		}
 	}
 	if m.showHelp {
@@ -1359,7 +1380,7 @@ func (m Model) chromeFor() (header, footer string) {
 	key := chromeKey{
 		width: m.width, themeGen: m.deps.Theme.Gen, capsGen: m.capsGen,
 		savedGen: m.savedGen, keysGen: keysGen, project: m.deps.Project,
-		status: m.status, help: m.showHelp,
+		status: m.status, help: m.showHelp, menu: m.menu.open,
 		depth: len(m.stack), palette: palette,
 		capturing: m.capturing(), prefixed: m.prefixSet,
 	}
@@ -1413,6 +1434,8 @@ func (m Model) body() string {
 	switch {
 	case m.showHelp:
 		content = m.helpView()
+	case m.menu.open:
+		content = m.menuView()
 	case len(m.stack) == 0:
 		content = m.emptyState()
 	default:
@@ -1575,7 +1598,7 @@ func (m Model) globalCell() (cell string, width int) {
 	// The overlay swallows every global but the one that closes it, and a latched
 	// gesture holds all of them until it is finished or thrown away. Both say so
 	// in the action cell instead.
-	if m.showHelp || m.prefixSet {
+	if m.showHelp || m.menu.open || m.prefixSet {
 		return "", 0
 	}
 	_, palette := LookupView(PaletteViewID)
@@ -1610,6 +1633,8 @@ func (m Model) footerActs() []Binding {
 	switch {
 	case m.showHelp:
 		return []Binding{Bind([]string{"?", "esc", "q"}, "?", "close help")}
+	case m.menu.open:
+		return menuFooterActs()
 	case m.prefixSet:
 		return []Binding{
 			Bind(m.keys.Slot.Keys(), "1-9", "switch view"),

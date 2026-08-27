@@ -755,6 +755,41 @@ three situations that mean three different things, and every view had to guess w
   underneath. Every guard was checked by mutation: removing the kernel's routing, and dropping the
   address from any one view, turns exactly that view's case red.
 
+- [x] **K3 — The right-click menu, built from what the focused view says applies** ·
+  [#76](https://github.com/varijkapil13/saral/issues/76) ·
+  **owns** `internal/ui/kernel/{menu.go,menu_test.go}`, the mouse, key and chrome hooks in
+  `internal/ui/kernel/kernel.go`, `internal/ui/kernel/testdata/menu_*.golden`,
+  `internal/ui/{menu_test.go,testdata/menu_120x38.golden}`, `docs/{UX,ROADMAP}.md`
+  `docs/UX.md`'s mouse table promised *right-click a row → the actions valid for it* and P3.3 cut it,
+  because `kernel.Command` has `Requires` — a capability key — and nothing that says what a command
+  applies to. The recommendation on the issue was a `Command.Scope` field plus an adoption in each of
+  the five `register.go` files. **That is not what this does.** The kernel already knows the focused
+  view and the view already publishes its `Acts`, which is by definition the inventory of what can be
+  done to the thing on screen and already moves with the view's state through `KeyReporter`. So the
+  menu is the footer's middle cell in full, and **the kernel contract does not move**: no field on
+  `Command`, no method on `View`, no registrar swept.
+  **Choosing an entry delivers the binding's first stroke** through `handleKey`, which is the rule a
+  footer-action click already follows, so key, palette and pointer cannot drift into three
+  implementations of one action.
+  **Row granularity, and the row is the focused one** — recorded in `docs/UX.md` before any code:
+  only the view can turn a coordinate into a row, so a kernel that guessed would offer *delete*
+  against the wrong issue. The right-click is forwarded to the focused view first, which is the seam
+  for a view to adopt *right-click selects this row*; no view does yet, and that is a per-view
+  follow-up rather than a kernel change.
+  **A view with no `Acts` opens no menu and says so.** There is no keybinding for the menu and none is
+  invented: `g` is the slot prefix, and every entry in the menu is already a key and a palette command.
+  **The menu takes the body, like `?`, and not a floating box at the pointer.** Splicing one into the
+  view's own lines means cutting strings that carry the zone markers a click is resolved through, and
+  half the frame's mouse targets would stop answering — the boundary the overlay already respects.
+  Held over the real views rather than a stub: `internal/ui/menu_test.go` opens the menu on every
+  registered view and keeps a golden of all seventeen, asserts that every action a view publishes is
+  named in it — the row folds what does not fit into a `+N` and the menu does not — and drives
+  right-click-then-enter on the issue list end to end. The one view that publishes nothing, the
+  attachment pane with nothing attached and no permission to attach, is asserted to explain itself
+  instead. Every guard checked by mutation: dropping the right-click branch, the key interception,
+  the capturing guard, the forwarded click, the stroke delivery or the footer's own row each turns
+  exactly the case that covers it red.
+
 ## W1 · the seam Batches 4 to 8 code against
 
 Three batches reach for the same three things — attachments, versions, sprints — and eight packets
