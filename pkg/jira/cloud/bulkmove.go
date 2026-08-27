@@ -261,17 +261,15 @@ func (p apiBulkProgress) domain(ref jira.TaskRef) jira.TaskStatus {
 // show: a description has reported zero issues for a run of sixty, and a message
 // is sometimes an unresolved i18n key.
 //
-// A running body carries neither count, so a task part way through says nothing
-// about issues rather than reporting none processed beside a progress bar at 65
-// per cent, which is the louder of the two contradictions.
+// The total gates that sentence: a body carries both counts or neither, never a
+// processed list without the total it is out of, so a task part way through says
+// nothing about issues rather than reporting none processed beside a progress bar
+// at 65 per cent.
 func (p apiBulkProgress) counts() string {
-	done := len(p.ProcessedAccessibleIssues)
 	parts := make([]string, 0, 3)
-	switch {
-	case p.TotalIssueCount > 0:
-		parts = append(parts, strconv.Itoa(done)+" of "+strconv.Itoa(p.TotalIssueCount)+" issues processed")
-	case done > 0:
-		parts = append(parts, issueCount(done)+" processed")
+	if p.TotalIssueCount > 0 {
+		parts = append(parts,
+			strconv.Itoa(len(p.ProcessedAccessibleIssues))+" of "+strconv.Itoa(p.TotalIssueCount)+" issues processed")
 	}
 	if failed := len(p.FailedAccessibleIssues); failed > 0 {
 		parts = append(parts, strconv.Itoa(failed)+" failed")
@@ -593,11 +591,4 @@ func prose(message string) string {
 		}
 	}
 	return ""
-}
-
-func issueCount(n int) string {
-	if n == 1 {
-		return "1 issue"
-	}
-	return strconv.Itoa(n) + " issues"
 }

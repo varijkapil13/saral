@@ -1094,6 +1094,73 @@ func TestParseErrorBody_FallsBackToTheProblemTitleAndNeverToItsInstance(t *testi
 	}
 }
 
+// The fourth envelope: the /bulk/** endpoints declare BulkOperationErrorResponse
+// for their refusals, an array under errors whose entries carry a message and no
+// field name. The bodies are inline because no fixture holds this shape and
+// pkg/jira/jiratest owns the fixtures; one belongs there.
+func TestParseErrorBody_ReadsTheArrayTheBulkEndpointsRefuseIn(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		want   []string
+	}{
+		{
+			name:   "one entry, on the status it is declared for",
+			status: http.StatusBadRequest,
+			body:   `{"errors":[{"message":"The target project has no issue type with that id.","errorType":"VALIDATION"}]}`,
+			want:   []string{"The target project has no issue type with that id."},
+		},
+		{
+			name:   "every entry, in the order the site wrote them",
+			status: http.StatusBadRequest,
+			body:   `{"errors":[{"message":"first"},{"message":"second"}]}`,
+			want:   []string{"first", "second"},
+		},
+		{
+			// Two of the four bulk routes document this envelope for their 403
+			// and the other two document no 403 at all, so a refusal has to be
+			// read here as well as on a 400.
+			name:   "a permission refusal in the same envelope",
+			status: http.StatusForbidden,
+			body:   `{"errors":[{"message":"You do not have the Bulk Change global permission."}]}`,
+			want:   []string{"You do not have the Bulk Change global permission."},
+		},
+		{
+			name:   "an entry with no message",
+			status: http.StatusBadRequest,
+			body:   `{"errors":[{"errorType":"VALIDATION"},{"message":"the only sentence"}]}`,
+			want:   []string{"the only sentence"},
+		},
+		{
+			name:   "the Agile API's empty array",
+			status: http.StatusBadRequest,
+			body:   `{"errorMessages":["nope"],"errors":[]}`,
+			want:   []string{"nope"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := parseErrorBody(tt.status, []byte(tt.body))
+
+			if !slices.Equal(got.messages, tt.want) {
+				t.Errorf("messages = %v, want %v", got.messages, tt.want)
+			}
+			if len(got.fields) != 0 {
+				t.Errorf("fields = %v, want none: an entry in the array names no field for a form to annotate", got.fields)
+			}
+			if strings.Contains(got.reason(), "VALIDATION") {
+				t.Errorf("the reason reads %q and shows errorType, which is an enum and not a sentence", got.reason())
+			}
+		})
+	}
+}
+
 // agileBoardReason is the sentence the fixture puts under its URL parameter, read
 // from the fixture so the assertion cannot drift from it.
 func agileBoardReason(t *testing.T) string {

@@ -537,6 +537,89 @@ func TestBulkMove_SaysTheCapCountsSubtasksItWasNotGiven(t *testing.T) {
 	}
 }
 
+// TestBulkMove_SaysWhereARefusedFieldValueBelongs covers the wording and not only
+// the field name. The edit endpoint refuses these same two with "use BulkMove"
+// and "move the issue with Transition", which inside a move sends the reader back
+// to where they already are.
+func TestBulkMove_SaysWhereARefusedFieldValueBelongs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		field string
+		says  string
+	}{
+		{field: "project", says: "MoveRequest.TargetProjectKey"},
+		{field: "status", says: "MoveRequest.StatusMap"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.field, func(t *testing.T) {
+			t.Parallel()
+
+			c, _ := moveClient(t)
+
+			in := aMove()
+			in.Fields = jira.NewFieldSet(map[string]jira.FieldValue{
+				tt.field: {Kind: jira.KindText, Text: "EX2"},
+			})
+
+			_, err := c.BulkMove(t.Context(), in)
+
+			var invalid *jira.ValidationError
+			if !errors.As(err, &invalid) {
+				t.Fatalf("got %T (%v), want a *jira.ValidationError", err, err)
+			}
+			said, named := invalid.For(tt.field)
+			if !named {
+				t.Fatalf("the refusal does not name %s: %v", tt.field, invalid)
+			}
+			if !strings.Contains(said, tt.says) {
+				t.Errorf("the refusal reads %q and never says the value belongs in %s", said, tt.says)
+			}
+			if strings.Contains(said, "BulkMove") || strings.Contains(said, "Transition") {
+				t.Errorf("the refusal reads %q, which sends a caller of BulkMove to another call", said)
+			}
+		})
+	}
+}
+
+// TestBulkMove_ReadsARefusalInTheBulkEndpointsOwnEnvelope covers the 403 a bulk
+// route answers in its own shape rather than the platform one plans_403.json
+// carries. The body is inline because no fixture holds this shape and
+// pkg/jira/jiratest owns the fixtures; a bulk one belongs there.
+func TestBulkMove_ReadsARefusalInTheBulkEndpointsOwnEnvelope(t *testing.T) {
+	t.Parallel()
+
+	const says = "You do not have the Bulk Change global permission."
+	const body = `{"errors":[{"message":"` + says + `","errorType":"PERMISSION"}]}`
+
+	for _, call := range moveCalls() {
+		if !call.capability {
+			continue
+		}
+		t.Run(call.name, func(t *testing.T) {
+			t.Parallel()
+
+			c, s := moveClient(t, jiratest.WithHandler(call.method, call.route,
+				jsonHandler(http.StatusForbidden, body)))
+
+			err := call.run(t.Context(), c, s.URL())
+
+			var refused *jira.CapabilityError
+			if !errors.As(err, &refused) {
+				t.Fatalf("got %T (%v), want a *jira.CapabilityError", err, err)
+			}
+			if !strings.Contains(refused.Reason, says) {
+				t.Errorf("the refusal reads %q and not the site's own %q, which only this envelope carries",
+					refused.Reason, says)
+			}
+			if refused.Capability != jira.CapBulkMove {
+				t.Errorf("the refusal names the capability %q, want %q", refused.Capability, jira.CapBulkMove)
+			}
+		})
+	}
+}
+
 func TestBulkMove_ReportsASubmitThatNamesNoTask(t *testing.T) {
 	t.Parallel()
 

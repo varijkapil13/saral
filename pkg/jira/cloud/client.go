@@ -626,14 +626,19 @@ func (e jiraError) reasonOr(fallback string) string {
 	return fallback
 }
 
-// parseErrorBody reads the three envelopes a Jira Cloud site refuses in.
+// parseErrorBody reads the four envelopes a Jira Cloud site refuses in.
 //
 // The platform API sends errorMessages and errors, the latter keyed by field.
 // The Agile API sends the same two keys but writes its sentence into errors
 // under the name of a URL parameter, leaving errorMessages empty. Anything that
 // never reaches a Jira handler at all — an unknown route, a method a route does
 // not take — answers RFC 7807 problem+json, where the sentence is detail and
-// title only spells out the status.
+// title only spells out the status. The /bulk/** endpoints send errors as an
+// array of objects instead, each with a message and no field to attach it to.
+//
+// Precedence: errorMessages, message, detail, title if nothing else spoke, then
+// whatever errors held — one key carrying either the object or the array and
+// never both, so the fourth envelope cannot reorder the first three.
 //
 // Nothing here may read the text of a message: the messages are localised, so a
 // rule that depends on their wording holds on an English site only.
@@ -664,6 +669,32 @@ func parseErrorBody(status int, body []byte) jiraError {
 			continue
 		}
 		out.messages = append(out.messages, entry.Message)
+	}
+	out.messages = append(out.messages, parseErrorList(envelope.Errors)...)
+	return out
+}
+
+// parseErrorList reads the errors array the /bulk/** endpoints refuse in, whose
+// entries declare message and nothing else. An entry names no field, so it is a
+// reason whatever the status — two of the bulk routes document this envelope for
+// their 403 and the other two document no 403 at all. errorType, where an entry
+// carries one, is an enum and is never shown.
+func parseErrorList(raw json.RawMessage) []string {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '[' {
+		return nil
+	}
+	var entries []struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(trimmed, &entries); err != nil {
+		return nil
+	}
+	var out []string
+	for _, entry := range entries {
+		if entry.Message != "" {
+			out = append(out, entry.Message)
+		}
 	}
 	return out
 }
