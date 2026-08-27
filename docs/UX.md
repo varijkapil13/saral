@@ -55,6 +55,15 @@ open, an editor over the field list, a deletion waiting for a `y`, an onboarding
 behind it. Advertising the resting keys there names strokes that do nothing, which is the failure
 principle 2 describes rather than a smaller version of it.
 
+**The one thing the row can be a run behind on is what the token may do.** The probe's answer is kept
+between runs so that the first frame is drawn knowing it, rather than hiding every gated view until a
+round trip lands — a stored answer gates a view exactly as a probed one does, and `Init` re-asks
+every time and reaches the footer through the same message `R` does. Inside the answer's hour that is
+the same situation as a second after a live probe and says nothing about itself; past it, the status
+line says when it was last checked until the fresh answer arrives. What the row will not do is show a
+key on an answer that failed: an expired token, a rate limit or an unreachable host leave the last
+real answer standing rather than becoming five denials.
+
 So a view whose keys move with its state implements `kernel.KeyReporter` and answers for the state it
 is in. `esc` is called *clear filter*, *put it aside*, *do not save yet* and *keep it* in four
 different places, and each of those is the one on screen at the time. A state with nothing of its own

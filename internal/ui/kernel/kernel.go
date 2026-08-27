@@ -209,6 +209,19 @@ type Model struct {
 	// nothing, and the kernel invents a denial for a question never asked.
 	capsProbed bool
 
+	// capsStored records that the answer being drawn came off disk, and when it
+	// was written. It is not capsProbed: this session has asked the site nothing
+	// yet, and what is on screen is the last run's answer being revalidated
+	// behind the frame it was drawn into.
+	capsStored bool
+	capsAt     time.Time
+
+	// capsNotice is the sentence a stale stored answer put on the status line,
+	// kept so that the probe landing can take it back down — and only if it is
+	// still the sentence there, since a startup notice from the composition root
+	// arrives after this one and must not be swallowed.
+	capsNotice string
+
 	// capsSeq tags each probe so that an answer overtaken by a newer one is
 	// dropped; scopeSeq is the probe a project switch is waiting on, zero when
 	// none is — which is also the sequence the startup probe carries.
@@ -339,6 +352,7 @@ func New(d Deps, opts ...Option) (Model, error) {
 	// markers into a frame that nothing scans them back out of.
 	m.deps.Zones.SetEnabled(m.mouse)
 	m.zonePrefix = m.deps.Zones.NewPrefix()
+	m.restoreCaps()
 	m.roots = Views()
 
 	spec, ok := m.startView()
@@ -349,6 +363,60 @@ func New(d Deps, opts ...Option) (Model, error) {
 	m.live[spec.ID] = root
 	m.stack = []stackEntry{{spec: spec, view: root}}
 	return m, nil
+}
+
+// restoreCaps draws the first frame from what the last run learnt about this
+// token, rather than from the zero Capabilities.
+//
+// A stored answer gates a view exactly as a probed one does. The alternative —
+// pre-filling but not gating — is what the zero value already did: every gated
+// view hidden, no footer slot for it, and `saral board` bounced to the issue
+// list without a word. A stored positive that has since been revoked costs a
+// request that comes back 403 with the site's own sentence in it, which is the
+// same failure as a permission revoked one second after a live probe, and the
+// kernel already has to survive that one.
+//
+// It is safe in that direction because a failed probe is an error and never an
+// all-negative answer: an expired token, a rate limit and an unreachable host
+// leave the stored answer standing rather than overwriting it with five denials.
+// Init revalidates unconditionally either way, so a stored answer is at most one
+// round trip old on screen.
+func (m *Model) restoreCaps() {
+	held, ok := m.deps.Cache.(app.CapsCache)
+	if !ok || held == nil {
+		return
+	}
+	snap, found := held.Caps(m.deps.Project)
+	if !found {
+		return
+	}
+	m.deps.Caps, m.capsStored, m.capsAt = snap.Caps, true, snap.StoredAt
+	if !snap.Stale {
+		// Within the TTL this is indistinguishable from a second after a live
+		// probe, and docs/UX.md principle 1 asks for a first frame drawn from
+		// disk without a word about it.
+		return
+	}
+	m.capsNotice = "what this token can do here was last checked " +
+		since(m.deps.Now(), snap.StoredAt) + ", and Saral is re-checking it now"
+	m.status, m.statusLevel = m.capsNotice, LevelInfo
+}
+
+// since is how long ago something was, in the largest unit that still says
+// something. A clock that moved backwards reads as just now rather than as a
+// negative age.
+func since(now, then time.Time) string {
+	age := now.Sub(then)
+	switch {
+	case age < time.Minute:
+		return "just now"
+	case age < time.Hour:
+		return strconv.Itoa(int(age.Minutes())) + " minutes ago"
+	case age < 24*time.Hour:
+		return strconv.Itoa(int(age.Hours())) + " hours ago"
+	default:
+		return strconv.Itoa(int(age.Hours()/24)) + " days ago"
+	}
 }
 
 func (m Model) startView() (ViewSpec, bool) {
@@ -378,8 +446,10 @@ func (m Model) available(spec ViewSpec) bool {
 // Init starts the model. It asks the terminal for its background colour so the
 // theme can settle before the second frame; the first frame is already drawn.
 //
-// It also asks the site what this token can do here: until that answers, every
-// capability-gated view is hidden with nothing to say about why.
+// It also asks the site what this token can do here, every time and whatever is
+// on disk. A stored answer is what the first frame was drawn from; this is the
+// revalidation behind it, and a session that never re-asked would gate views on
+// last week's permissions.
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{tea.RequestBackgroundColor, m.probeAt(m.capsSeq)}
 	if len(m.stack) > 0 {
@@ -845,7 +915,7 @@ func (m Model) refusal(needs jira.CapabilityKey, what string) string {
 	if reason := m.deps.Caps.Capability(needs).Reason; reason != "" {
 		return reason
 	}
-	if !m.capsProbed {
+	if !m.capsProbed && !m.capsStored {
 		return fmt.Sprintf("nothing has been checked on this site yet, so whether %s works here is unknown", what)
 	}
 	return fmt.Sprintf("%s is not available on this site", what)
@@ -1141,22 +1211,80 @@ func scopeNote(key string, probing bool) string {
 // for, replaces the note that said it was still being checked.
 func (m Model) settle(seq int, caps jira.Capabilities) (tea.Model, tea.Cmd) {
 	awaited := m.scopeSeq != 0 && seq == m.scopeSeq
+	keep := m.keepCaps(caps)
 	next, cmd := m.applyCaps(caps)
 	model, ok := next.(Model)
-	if !ok || !awaited {
-		return next, cmd
+	if !ok {
+		return next, tea.Batch(cmd, keep)
 	}
-	model.status, model.statusLevel = scopeNote(model.deps.Project, false), LevelInfo
-	return model, cmd
+	switch {
+	case awaited:
+		model.status, model.statusLevel = scopeNote(model.deps.Project, false), LevelInfo
+	// The sentence saying a stored answer was being re-checked has been answered.
+	// Only this one is taken down: the composition root's own startup notice
+	// lands on the same line and is not this to clear.
+	case model.capsNotice != "" && model.status == model.capsNotice:
+		model.status, model.statusLevel = "", LevelInfo
+	}
+	model.capsNotice = ""
+	return model, tea.Batch(cmd, keep)
+}
+
+// keepCaps writes a probe answer to disk, so that the next run draws its first
+// frame knowing it.
+//
+// Only the kernel's own probe reaches here. A CapabilitiesMsg from a view is
+// applied but not stored: onboarding probes the site being set up, which is not
+// necessarily the one this profile's cache is scoped to.
+func (m Model) keepCaps(caps jira.Capabilities) tea.Cmd {
+	held, ok := m.deps.Cache.(app.CapsCache)
+	if !ok || held == nil {
+		return nil
+	}
+	project := m.deps.Project
+	return func() tea.Msg {
+		if err := held.PutCaps(project, caps); err != nil {
+			return StatusMsg{
+				Text:  "this session knows what the token can do, but keeping it for the next one failed: " + err.Error(),
+				Level: LevelWarn,
+			}
+		}
+		return nil
+	}
 }
 
 // applyCaps installs a probe result. Views hear one message whichever probe
 // answered, so a view has a single case to write.
 func (m Model) applyCaps(caps jira.Capabilities) (tea.Model, tea.Cmd) {
-	m.deps.Caps, m.capsProbed = caps, true
+	m.deps.Caps, m.capsProbed, m.capsStored = caps, true, false
 	m.roots = Views()
 	m.capsGen++
-	return m.forwardAll(CapabilitiesMsg{Caps: caps})
+	told, cmd := m.forwardAll(CapabilitiesMsg{Caps: caps})
+	model, ok := told.(Model)
+	if !ok {
+		return told, cmd
+	}
+	return model.openWhenNothingCould(cmd)
+}
+
+// openWhenNothingCould opens a root for a session that had none.
+//
+// A build whose every view is gated has an empty stack until an answer arrives,
+// and nothing else re-runs the choice: New made it once, and a switch needs
+// something to switch away from. Without this the frame says no views are
+// registered for the rest of the run.
+func (m Model) openWhenNothingCould(cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	if len(m.stack) > 0 {
+		return m, cmd
+	}
+	spec, found := m.startView()
+	if !found {
+		return m, cmd
+	}
+	view := spec.New(m.deps)
+	m.live[spec.ID] = view
+	m.stack = []stackEntry{{spec: spec, view: view}}
+	return m, tea.Batch(cmd, view.Init(), m.focus(), m.resizeAll())
 }
 
 // probeCaps re-runs the capability probe, which is what R means beyond a

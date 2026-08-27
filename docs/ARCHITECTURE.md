@@ -219,11 +219,37 @@ reports of Jira returning a token that loops back to page one.
 
 ## Capabilities as a value object
 
-The probe runs once per site and project, on the kernel's `Init`, and is refreshable with `R`. Views
-read it; nobody re-probes ad hoc. It is **not** kept between runs: what a token may do is exactly the
-kind of answer that changes without warning, and a first frame drawn from a stored one would hide or
-offer a view on last week's permissions. Persisting it needs the kernel to revalidate behind the
-frame, which is [#81](https://github.com/varijkapil13/saral/issues/81).
+The probe runs on the kernel's `Init`, once per site and project, and is refreshable with `R`. Views
+read it; nobody re-probes ad hoc.
+
+**It is kept between runs, and revalidated on every start.** `app.KindCaps` holds the last answer for
+one project — `*` for a session scoped to none, which is a real answer about the site and not the
+absence of one — under a one-hour TTL, and `kernel.New` installs it before the first frame. A stored
+answer **gates** a view exactly as a probed one does, because the alternative is what the zero
+`Capabilities` already did: every gated view hidden, no footer slot for it, and `saral board` quietly
+bounced to the issue list. Past the TTL the answer is still served, with one sentence on the status
+line saying when it was last checked, taken down by the probe that settles it.
+
+Three things make serving a stored answer safe:
+
+- **A failed probe is an error and never an answer.** `cloud.capsVoid` returns the `*jira.AuthError`,
+  `*jira.RateLimitError` or `*jira.TransportError` rather than five confident denials, so an expired
+  token or one dropped packet leaves the stored answer standing instead of writing "this token may do
+  nothing" to disk, where it would outlive the minute that caused it.
+- **`Init` re-asks unconditionally**, whatever the entry's age, and the answer reaches every view
+  through `CapabilitiesMsg` the same way `R` and a project switch do. A cache that served the stored
+  value and never refreshed would not be stale-while-revalidate, just stale.
+- **Only the kernel's own probe is written.** A `CapabilitiesMsg` from a view is applied and not
+  stored: onboarding probes the site being set up, which is not the one this profile's cache is
+  scoped to.
+
+`Graphics` is deliberately **not** stored. It is what this terminal can draw rather than anything
+about the site, the detection is local and free, and a stored `kitty` answer restored into a terminal
+that cannot speak it prints escape bytes over the frame — so a restored answer carries
+`GraphicsNone` until the probe lands, which is the direction that costs blocks rather than garbage.
+`TimeZone` is stored by name and reloaded, the way `jira.User`'s is, and a name this machine has no
+zoneinfo entry for comes back with the sentence that says so, because `TimeZoneReason` is empty
+exactly when the zone is the account's own.
 
 ```go
 type Capabilities struct {
@@ -583,8 +609,16 @@ Stale-while-revalidate, as it actually runs:
    failure over the top of it — is badged with `Theme.StaleBadge` rather than cleared. Seeing
    yesterday's rows beats seeing none.
 
-TTLs by kind, from `Kind.TTL()`: fields and createmeta 24h, board config 1h, versions 10m, issue 60s,
-search 30s. All refreshable on demand; `R` also drops the stored answer rather than only refetching.
+TTLs by kind, from `Kind.TTL()`: fields and createmeta 24h, board config and the capability probe 1h,
+versions 10m, issue 60s, search 30s. All refreshable on demand; `R` also drops the stored answer
+rather than only refetching. The probe's hour is a judgement about cost rather than about change: a
+permission scheme moves about as often as a field catalogue does, but being wrong about it offers a
+view that 403s or hides one that would have worked, which a stale field catalogue does not.
+
+`app.CapsCache` is a second, smaller interface over the same file rather than two more methods on
+`Cache`, because it is optional in both directions: a session with nowhere to keep one draws from the
+probe alone, and a `Cache` that is only a map of rows stays a `Cache`. The kernel asks for it with a
+type assertion and works without it.
 The cache is keyed by site + account through `store.Scope`, so profiles cannot bleed into each other.
 The account is the profile's email: the Jira account ID takes a round trip to learn, and the first
 frame is drawn before one could have answered.

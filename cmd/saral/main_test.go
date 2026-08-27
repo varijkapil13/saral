@@ -611,6 +611,49 @@ func TestBuild_ThePollFlagIsOffUnlessItIsGiven(t *testing.T) {
 	}
 }
 
+// TestFirstPaint_GatesAViewOnWhatTheLastRunLearnt runs the capability half of
+// that same path: bbolt on disk, through app.CapsCache, onto kernel.Deps, into
+// whether a gated view is on the first frame at all. It is here rather than in
+// the kernel's own tests because the type assertion the kernel makes on
+// Deps.Cache is only true of what this file builds.
+func TestFirstPaint_GatesAViewOnWhatTheLastRunLearnt(t *testing.T) {
+	writeProfile(t)
+	t.Setenv("SARAL_TEST_TOKEN", "a-token")
+
+	deps, _, _, releaseCache, err := build(options{project: "PROJ"})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	defer releaseCache()
+	held, ok := deps.Cache.(app.CapsCache)
+	if !ok {
+		t.Fatalf("the cache this build opens is a %T, which the kernel cannot ask about capabilities", deps.Cache)
+	}
+	if err := held.PutCaps("PROJ", jira.Capabilities{Boards: jira.Capability{OK: true}}); err != nil {
+		t.Fatalf("PutCaps: %v", err)
+	}
+
+	// The next run of the program over the same file. The first has to let the
+	// lock go for this to open at all.
+	releaseCache()
+	deps, opts, _, releaseCache, err := build(options{project: "PROJ"})
+	if err != nil {
+		t.Fatalf("second build: %v", err)
+	}
+	defer releaseCache()
+	if deps.Caps.Allows(jira.CapBoards) {
+		t.Fatal("build hands the kernel capabilities of its own, so this proves nothing about the kernel's read")
+	}
+
+	_, frame, err := kernel.FirstPaint(deps, 120, 40, append(opts, kernel.WithInitialView("board"))...)
+	if err != nil {
+		t.Fatalf("FirstPaint: %v", err)
+	}
+	if !strings.Contains(frame, "Board") {
+		t.Errorf("the board is gated on jira.CapBoards and the stored answer allows it, so the first frame should be it:\n%s", frame)
+	}
+}
+
 // TestFirstPaint_DrawsRowsOutOfTheRealCacheFile is the one test that runs the
 // whole path: bbolt on disk, through app.Cache, onto kernel.Deps, into the list's
 // constructor, and out as a frame. Everything above the store is otherwise tested
