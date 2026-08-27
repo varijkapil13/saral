@@ -581,6 +581,13 @@ func TestDo_CoalescesIdenticalRequestsThatAreInFlightAtOnce(t *testing.T) {
 	r := fieldRequest()
 
 	const callers = 5
+	// Counted at the coalescer rather than at the server: a follower still on
+	// its way to the flight has not been collapsed into it yet, and the second
+	// request it then makes is correct behaviour that would read here as a
+	// coalescer which failed.
+	var attached atomic.Int64
+	c.joined = func() { attached.Add(1) }
+
 	results := make(chan error, callers)
 	for range callers {
 		go func() {
@@ -590,10 +597,8 @@ func TestDo_CoalescesIdenticalRequestsThatAreInFlightAtOnce(t *testing.T) {
 	}
 
 	receive(t, "the one request to reach the site", arrived)
-	// Give the four followers time to reach the coalescer; if they had not, the
-	// site would see more than one request and the assertion below would say so.
-	waitUntil(t, "every caller to be waiting on the one call in flight", func() bool {
-		return runtime.NumGoroutine() > 0 && len(s.Requests()) == 1
+	waitUntil(t, "every caller to be registered with the one call in flight", func() bool {
+		return attached.Load() == callers
 	})
 	letGo()
 	for range callers {

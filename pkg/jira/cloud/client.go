@@ -58,6 +58,12 @@ type Client struct {
 	concurrency int
 	gate        chan struct{}
 	flight      *singleflight.Group
+
+	// joined, when set, is called once per caller that has been registered with
+	// the flight for a key. A test coalescing N callers cannot otherwise know
+	// they have all attached, and releasing the leader before they have makes a
+	// correct second request look like a coalescer that failed to collapse one.
+	joined func()
 }
 
 // Option configures a Client at construction.
@@ -635,6 +641,9 @@ func (c *Client) coalesce(ctx context.Context, key string, fn func(context.Conte
 			}
 			return resp, err
 		})
+		if c.joined != nil {
+			c.joined()
+		}
 		select {
 		case <-ctx.Done():
 			// This caller is leaving. Forget the key so that whoever comes next
