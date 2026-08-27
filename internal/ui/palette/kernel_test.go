@@ -114,15 +114,17 @@ func TestSession_OpensACachedIssueOverTheViewThePaletteWasOpenedFrom(t *testing.
 	}
 }
 
-// resetShared empties the table the running program shares between opens, so
+// resetShared empties the tables the running program shares between opens, so
 // that a test asserting an order does not depend on what another test ran. The
-// kernel builds the palette through New, which is the shared table's only user.
+// kernel builds the palette through New and the picker through the registered
+// command, and those are the shared tables' only users.
 func resetShared(t *testing.T) {
 	t.Helper()
-	freq := sharedTable()
-	freq.mu.Lock()
-	defer freq.mu.Unlock()
-	freq.uses = make(map[string]use, 8)
+	for _, freq := range []*table{sharedTable(), sharedProjectTable()} {
+		freq.mu.Lock()
+		freq.uses = make(map[string]use, 8)
+		freq.mu.Unlock()
+	}
 }
 
 // session drives the whole program: the kernel, the registered views and the
@@ -242,4 +244,64 @@ func firstLine(frame string) string {
 func lastLine(frame string) string {
 	lines := strings.Split(strings.TrimRight(frame, "\n"), "\n")
 	return lines[len(lines)-1]
+}
+
+// The whole gesture through the running program: ctrl+k, the command, the
+// picker, a project. kernel.SetProject had no caller anywhere in the tree, so a
+// session was stuck in the scope it started in — this is the proof it is not.
+func TestSession_SwitchesProjectFromThePalette(t *testing.T) {
+	resetShared(t)
+
+	s := boot(t, 120, 30)
+	s.send(kernel.ProjectMsg{Project: "OTHER"})
+	s.press("ctrl+k")
+	s.typeText("switch project")
+	s.press("enter")
+
+	header := firstLine(ansi.Strip(s.m.Frame()))
+	if !strings.Contains(header, "Project") {
+		t.Fatalf("the frame is headed %q, want the picker the command opens", header)
+	}
+	mustContain(t, ansi.Strip(s.m.Frame()), "which project?", "The whole site")
+
+	s.typeText("PROJ")
+	s.press("enter")
+
+	// The picker is gone and the view underneath it is on the new scope: the
+	// kernel forwards the switch to the roots parked off screen, so the search
+	// this session is looking at is the one the project chose.
+	frame := ansi.Strip(s.m.Frame())
+	mustNotContain(t, frame, "which project?")
+	mustContain(t, frame, "PROJ", "All issues in PROJ")
+	if got := s.scoped(); len(got) == 0 || got[len(got)-1] != "PROJ" {
+		t.Errorf("the session was re-scoped to %v, want PROJ last", got)
+	}
+}
+
+// And the whole site, which is a scope of its own: the kernel says so in its own
+// words rather than reading as a cleared field.
+func TestSession_SwitchesToTheWholeSiteFromThePalette(t *testing.T) {
+	resetShared(t)
+
+	s := boot(t, 120, 30)
+	s.press("ctrl+k")
+	s.typeText("switch project")
+	s.press("enter")
+	s.press("enter")
+
+	mustContain(t, ansi.Strip(s.m.Frame()), "no project is selected")
+	if got := s.scoped(); len(got) != 1 || got[0] != "" {
+		t.Errorf("the session was re-scoped to %v, want the whole site", got)
+	}
+}
+
+// scoped is every project the session was re-scoped to, in order.
+func (s *session) scoped() []string {
+	out := []string{}
+	for _, msg := range s.msgs {
+		if project, ok := msg.(kernel.ProjectMsg); ok {
+			out = append(out, project.Project)
+		}
+	}
+	return out
 }

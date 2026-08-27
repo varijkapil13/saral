@@ -288,9 +288,10 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   **Not built here:** the "Switch project" command from the PC.3 note on
   [#12](https://github.com/varijkapil13/saral/issues/12). It needs a source of project keys — a fetch,
   or a walk over the cached issues — and a second pane with a frecency table of its own, which is a
-  packet beside this one rather than a corner of it. It is
-  [#87](https://github.com/varijkapil13/saral/issues/87), filed with the three places the project keys
-  could come from and how each behaves on a first run.
+  packet beside this one rather than a corner of it. It was
+  [#87](https://github.com/varijkapil13/saral/issues/87), and it is built: a pane of its own in this
+  package, its keys from a narrow read over recent issues, its frecency the same table code over a
+  file of its own, and `kernel.SetProject` finally has a caller.
   **There is one fuzzy scorer, and it is `app.Pattern`.** This packet wrote its own because P3.4's
   ([#86](https://github.com/varijkapil13/saral/pull/86)) did not exist on any commit it could branch
   from, and `internal/app` must not import `internal/ui`, so neither packet could consume the other.
@@ -365,7 +366,7 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
 - [x] **P3.4 — Local fuzzy index** · [#15](https://github.com/varijkapil13/saral/issues/15) · **owns** `internal/app/{index,match}.go`, their tests and benchmarks, `docs/{PERFORMANCE,ROADMAP}.md` · **after P3.2**
   **This row used to promise "instant search over cached issues with no round trip".** Half of that
   already shipped in P1.5: `internal/ui/list` filters as you type with no round trip and no
-  allocation — `refilter` reuses its slice over needles built once per page, and
+  allocation — `refilter` reuses the index slice it appends into, and
   `BenchmarkFilterKeystroke10k` guards it. What was missing is **ranking**, and **reach past the rows
   on screen** — the second being the cache, which is why this followed P3.2 rather than running
   beside it.
@@ -382,15 +383,19 @@ This is the batch that earns the habit. Deliberately ahead of the remaining feat
   delta the cache cannot express. `Hit` carries `HasSummary`, because PC.1's mask means a narrow read
   stores an issue whose title nothing asked for, and `StoredAt`, so a caller badges age against
   `Deps.Now` and the index needs no clock.
-  **The list's filter was deliberately left alone.** It is the budgeted keystroke path at 1 alloc/op
-  and another packet in this wave is in that directory; ranking it is
-  [#84](https://github.com/varijkapil13/saral/issues/84).
+  **The list's filter was deliberately left alone**, and is not any more:
+  [#84](https://github.com/varijkapil13/saral/issues/84) ranks it with `app.Pattern`, scoring the key,
+  the summary and each of the row's other fields on its own rather than one concatenated haystack, and
+  typing lands the cursor on the best match while every other rebuild keeps the row it was on. The
+  keystroke path still allocates nothing of its own: the scored run and the index slice are both the
+  model's.
   **Its consumer is P3.1** ([#12](https://github.com/varijkapil13/saral/issues/12)): the palette
   ranks commands with `app.Pattern`, and the signature was published on #12 and #15 before this
-  packet was finished so it could be coded against. `app.Index` itself has no view yet —
-  [#85](https://github.com/varijkapil13/saral/issues/85) reaches it from the palette and
-  [#62](https://github.com/varijkapil13/saral/issues/62) from a key jump — whose command-line half
-  landed in K5 below, and whose in-session gesture is still undecided.
+  packet was finished so it could be coded against. `app.Index` has a view as well —
+  [#85](https://github.com/varijkapil13/saral/issues/85) reached it from the palette, which searches
+  every cached issue inside the keystroke; [#62](https://github.com/varijkapil13/saral/issues/62) is
+  the key jump, whose command-line half landed in K5 below and whose in-session gesture is still
+  undecided — it reuses that index rather than opening a second one.
 - [x] **P3.5a — The contextual footer, the `?` overlay and the theme switch** · [#16](https://github.com/varijkapil13/saral/issues/16) · **owns** `internal/ui/kernel/{theme,chrome_test,theme_test}.go`, the chrome functions in `internal/ui/kernel/kernel.go`, the `KeyReporter` lines in `internal/ui/kernel/{view,registry}.go`, `internal/ui/kernel/testdata/**`, the `keys*.go` and `testdata/keys.golden` of `internal/ui/{list,issue,form,comment,onboarding}`, `internal/ui/livekeys_test.go`, `docs/{UX,ARCHITECTURE,ROADMAP}.md`
   Contextual footer showing only valid keys, `?` overlay from the key registry, light/dark/no-color
   themes switchable while the program runs.

@@ -177,3 +177,34 @@ func TestRowRendering_CostsNothingOnceMemoized(t *testing.T) {
 		t.Errorf("a memoized row allocates %.1f times, want none", got)
 	}
 }
+
+// scopesFound is more projects than a read of one page can turn up, so the
+// picker's keystroke is measured against more than it will ever hold.
+func scopesFound(n int) []project {
+	out := make([]project, 0, n)
+	for i := range n {
+		id := strconv.Itoa(i)
+		out = append(out, project{key: "OPS" + id, name: "Operations " + id})
+	}
+	return out
+}
+
+// BenchmarkProjectKeystroke is the picker's budgeted path: a character into the
+// filter, every scope ranked again, then a frame.
+func BenchmarkProjectKeystroke(b *testing.B) {
+	m := buildProject(paletteDeps(), memoryTable())
+	next, _ := m.Update(kernel.SizeMsg{Width: 120, Height: 40})
+	m, _ = next.(*projectModel)
+	next, _ = m.Update(projectsFoundMsg{found: scopesFound(suggestionLimit)})
+	m, _ = next.(*projectModel)
+	_ = m.View()
+
+	keys := []tea.Msg{tea.KeyPressMsg{Code: 'o', Text: "o"}, tea.KeyPressMsg{Code: tea.KeyBackspace}}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		next, _ := m.Update(keys[i%2])
+		m, _ = next.(*projectModel)
+		_ = m.View()
+	}
+}

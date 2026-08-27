@@ -118,3 +118,28 @@ func TestBudget_FirstPaintFromCache(t *testing.T) {
 			"the whole start-up budget it sits under is 60ms", per)
 	}
 }
+
+// Ranking cannot be built by appending indexes in corpus order any more, so the
+// slice it sorts is one the model owns and the run it scores into is another. Two
+// buffers reused rather than two allocations a keystroke.
+func TestBudget_FilterRankingReusesItsBuffers(t *testing.T) {
+	m := loaded(t, 10000, 120, 40)
+	m.query = "log"
+	m.rankRows()
+	if len(m.view) == 0 || len(m.view) == len(m.issues) {
+		t.Fatalf("the filter left %d of %d rows, so this is measuring the wrong thing", len(m.view), len(m.issues))
+	}
+	if got := testing.AllocsPerRun(50, func() { m.rankRows() }); got != 0 {
+		t.Errorf("ranking ten thousand rows allocates %.1f times, want none", got)
+	}
+}
+
+// The ranked filter scores every field of every row against every keystroke, so
+// it is on the keystroke budget rather than on nothing at all: the benchmark has
+// been here since the substring filter and guarded nothing.
+func TestBudget_FilterKeystrokeAtTenThousandRows(t *testing.T) {
+	res := testing.Benchmark(BenchmarkFilterKeystroke10k)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("a keystroke into the filter took %s at 10k rows, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+}

@@ -143,6 +143,8 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/kernel` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/kernel` | `TestBudget_KeystrokeToFrame` |
 | `internal/ui/list` | `TestBudget_AMemoMissCostsOneRowAndNotAWindow` |
+| `internal/ui/list` | `TestBudget_FilterKeystrokeAtTenThousandRows` |
+| `internal/ui/list` | `TestBudget_FilterRankingReusesItsBuffers` |
 | `internal/ui/list` | `TestBudget_FirstPaintFromCache` |
 | `internal/ui/list` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/list` | `TestBudget_KeystrokeToFrameAtTenThousandRows` |
@@ -159,6 +161,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverEveryCachedIssue` |
 | `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverTwoThousandCommands` |
 | `internal/ui/palette` | `TestBudget_PaletteOpeningIsOnTheKeystrokeBudget` |
+| `internal/ui/palette` | `TestBudget_ProjectPickerKeystroke` |
 | `internal/ui/plan` | `TestBudget_APlansMemoMissCostsTwoRowsAndNotAWindow` |
 | `internal/ui/plan` | `TestBudget_PlanRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/plan` | `TestBudget_PlansFullRedrawAt200x60` |

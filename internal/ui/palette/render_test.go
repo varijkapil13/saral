@@ -5,10 +5,12 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 func TestView_Golden(t *testing.T) {
@@ -208,4 +210,98 @@ func TestView_DrawsNothingBeforeItHasBeenGivenASize(t *testing.T) {
 	if got := m.View(); got != "" {
 		t.Errorf("an unsized palette drew %q", got)
 	}
+}
+
+// allRefused is a build whose every command needs a capability this site does
+// not allow. It is what a token with no permissions reaches, and it is the
+// difference between "nothing registered" and "none you can run here".
+func allRefused() []kernel.Command {
+	run := func(kernel.Deps) tea.Cmd { return nil }
+	return []kernel.Command{
+		{
+			ID: "issue.move", Title: "Move issues between projects", Group: "Issue",
+			Requires: jira.CapBulkMove, Run: run,
+		},
+		{
+			ID: "issue.move-one", Title: "Move this issue", Group: "Issue",
+			Requires: jira.CapBulkMove, Run: run,
+		},
+	}
+}
+
+func TestCommandCount_TellsAnEmptyBuildApartFromOneWhoseCommandsAreAllRefused(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		key  headKey
+		want string
+	}{
+		{name: "nothing registered", key: headKey{}, want: "nothing registered"},
+		{
+			name: "every command refused",
+			key:  headKey{registered: 6},
+			want: "none you can run here",
+		},
+		{
+			name: "every command refused under a filter",
+			key:  headKey{registered: 6, filtered: true},
+			want: "none you can run here",
+		},
+		{
+			name: "nothing registered under a filter",
+			key:  headKey{filtered: true},
+			want: "nothing registered",
+		},
+		{name: "one command", key: headKey{registered: 1, total: 1, shown: 1}, want: "1 command"},
+		{name: "several", key: headKey{registered: 6, total: 6, shown: 6}, want: "6 commands"},
+		{
+			name: "a filter over what is allowed",
+			key:  headKey{registered: 6, total: 4, shown: 2, filtered: true},
+			want: "2 of 4",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := commandCount(tt.key); got != tt.want {
+				t.Errorf("commandCount(%+v) = %q, want %q", tt.key, got, tt.want)
+			}
+		})
+	}
+}
+
+// Drawn from the palette rather than from a headKey built by hand: what the
+// palette put in the key was the offered count, which every refusal takes one
+// off.
+func TestView_ABuildWhoseEveryCommandIsRefusedDoesNotClaimNothingIsRegistered(t *testing.T) {
+	t.Parallel()
+
+	p := fly(t, paletteDeps(), allRefused(), memoryTable(), 120, 28)
+	frame := p.frame()
+	mustContain(t, frame, "none you can run here", noBulkMove)
+	mustNotContain(t, frame, "nothing registered", "Nothing has registered a command in this build.")
+	// Nothing was typed, so nothing may be said about a query.
+	mustNotContain(t, frame, "matches that")
+}
+
+// A filter over an all-refused build matches no command, so the reasons are not
+// in m.refused either, and the empty state still owes an answer about the site
+// rather than about the build.
+func TestView_AFilterMatchingNothingInAnAllRefusedBuildStillSaysWhichNoneItIs(t *testing.T) {
+	t.Parallel()
+
+	p := fly(t, paletteDeps(), allRefused(), memoryTable(), 120, 28)
+	p.typeText("zzzz")
+	frame := p.frame()
+	mustContain(t, frame, "none you can run here", "No command in this build can be run on this site.", noBulkMove)
+	mustNotContain(t, frame, "nothing registered", "Nothing has registered a command in this build.")
+}
+
+func TestView_GoldenWithEveryCommandRefused(t *testing.T) {
+	t.Parallel()
+
+	p := fly(t, paletteDeps(), allRefused(), memoryTable(), 120, 28)
+	golden(t, "palette_all_refused_120x28.golden", p.frame())
 }

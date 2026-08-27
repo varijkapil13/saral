@@ -22,12 +22,18 @@ const halfLife = 7 * 24 * time.Hour
 // behind renames.
 const bound = 200
 
-// Where the table is kept. It is the palette's own file under the cache
+// Where the tables are kept. They are the palette's own files under the cache
 // directory rather than the profile: docs/ARCHITECTURE.md asks that config.toml
 // stay safe to share, and what a person runs most is not.
+//
+// Commands and projects are one shape and two answers, so they are one type over
+// two files rather than one map keyed by both.
 const (
-	usageDir  = "palette"
-	usageFile = "usage.json"
+	usageDir     = "palette"
+	usageFile    = "usage.json"
+	projectFile  = "projects.json"
+	commandsPart = "commands"
+	projectsPart = "projects"
 )
 
 // use is one command's history: how often it has been reached from the palette
@@ -45,7 +51,10 @@ type use struct {
 // ranking degrades to the registry's own order across restarts rather than
 // failing or refusing to draw.
 type table struct {
-	mu   sync.Mutex
+	mu sync.Mutex
+	// part is the object the entries sit under in the file, so that a table read
+	// as commands can never be written back as projects.
+	part string
 	path string
 	uses map[string]use
 	// stopped records a write that failed. Ranking carries on in memory; there
@@ -58,25 +67,35 @@ type table struct {
 var (
 	sharedOnce sync.Once
 	shared     *table
+
+	projectOnce sync.Once
+	sharedProj  *table
 )
 
 func sharedTable() *table {
-	sharedOnce.Do(func() { shared = openTable(usagePath()) })
+	sharedOnce.Do(func() { shared = openTable(usagePath(usageFile), commandsPart) })
 	return shared
 }
 
-// usagePath is where the table lives, and "" for a session with nowhere to keep
+// sharedProjectTable is the projects' own table. The picker is built fresh on
+// every "Switch project", so what it counts has to outlive the instance.
+func sharedProjectTable() *table {
+	projectOnce.Do(func() { sharedProj = openTable(usagePath(projectFile), projectsPart) })
+	return sharedProj
+}
+
+// usagePath is where a table lives, and "" for a session with nowhere to keep
 // one — no home directory, an unwritable cache.
-func usagePath() string {
+func usagePath(file string) string {
 	dir, err := config.CacheDir()
 	if err != nil || strings.TrimSpace(dir) == "" {
 		return ""
 	}
-	return filepath.Join(dir, usageDir, usageFile)
+	return filepath.Join(dir, usageDir, file)
 }
 
-func openTable(path string) *table {
-	t := &table{path: path, uses: make(map[string]use, 32)}
+func openTable(path, part string) *table {
+	t := &table{part: part, path: path, uses: make(map[string]use, 32)}
 	t.load()
 	return t
 }
@@ -145,13 +164,11 @@ func (t *table) load() {
 	if err != nil {
 		return
 	}
-	var stored struct {
-		Commands map[string]use `json:"commands"`
-	}
+	var stored map[string]map[string]use
 	if err := json.Unmarshal(raw, &stored); err != nil {
 		return
 	}
-	for id, held := range stored.Commands {
+	for id, held := range stored[t.part] {
 		if strings.TrimSpace(id) == "" || held.Count <= 0 {
 			continue
 		}
@@ -174,9 +191,7 @@ func (t *table) save() {
 }
 
 func (t *table) write() error {
-	raw, err := json.Marshal(struct {
-		Commands map[string]use `json:"commands"`
-	}{Commands: t.uses})
+	raw, err := json.Marshal(map[string]map[string]use{t.part: t.uses})
 	if err != nil {
 		return err
 	}

@@ -72,11 +72,11 @@ func TestTable_SurvivesTheProcessThatWroteIt(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "palette", "usage.json")
-	first := openTable(path)
+	first := openTable(path, commandsPart)
 	first.ran("issues.mine", clockAt)
 	first.ran("issues.mine", clockAt)
 
-	second := openTable(path)
+	second := openTable(path, commandsPart)
 	if got := second.ran("issues.mine", clockAt); got != 3 {
 		t.Errorf("a new table counted the next run as %d, want 3: nothing was read back off disk", got)
 	}
@@ -109,7 +109,7 @@ func TestTable_CarriesOnInMemoryAfterAWriteFails(t *testing.T) {
 	if err := os.WriteFile(blocked, []byte("in the way"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	freq := openTable(filepath.Join(blocked, "usage.json"))
+	freq := openTable(filepath.Join(blocked, "usage.json"), commandsPart)
 
 	if got := freq.ran("issue.edit", clockAt); got != 1 {
 		t.Errorf("the run was counted as %d", got)
@@ -145,7 +145,7 @@ func TestTable_IgnoresAFileItCannotUnderstand(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{not json at all"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	freq := openTable(path)
+	freq := openTable(path, commandsPart)
 	if got := freq.ran("issue.edit", clockAt); got != 1 {
 		t.Errorf("a table over an unreadable file counted the first run as %d", got)
 	}
