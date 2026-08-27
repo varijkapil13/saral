@@ -225,9 +225,11 @@ jobs:
               go test -run "^$" -bench . -benchmem -benchtime=100x -count=6 ./... > .bench/head.txt
               (cd .base && go test -run "^$" -bench . -benchmem -benchtime=100x -count=6 ./...) > .bench/base.txt
             '
-      - name: give the caches back to the runner
+      # .bench too: the benchmarks ran under sudo, so the directory and both
+      # results belong to root and the comparison below cannot write beside them.
+      - name: give the caches and the results back to the runner
         if: always()
-        run: sudo chown -R "$(id -u):$(id -g)" "$(go env GOCACHE)" "$(go env GOMODCACHE)"
+        run: sudo chown -R "$(id -u):$(id -g)" "$(go env GOCACHE)" "$(go env GOMODCACHE)" .bench
       - name: nothing budgeted allocates more than it did on the base commit
         run: |
           benchstat -format csv .bench/base.txt .bench/head.txt > .bench/cmp.csv
