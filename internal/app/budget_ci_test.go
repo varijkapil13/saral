@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// These four keep docs/PERFORMANCE.md's promise about the budgets mechanical
+// These six keep docs/PERFORMANCE.md's promise about the budgets mechanical
 // rather than honour-system. They are the only budget tests built with the race
 // detector, because they measure nothing: they read the tree.
 
@@ -23,6 +23,8 @@ const (
 	guardsAnswer = "add it to the table between the budget-guards markers in " + perfDoc +
 		", or delete the guard and the row together — which is how this repo says out loud " +
 		"that a budget is no longer held"
+	gateScript = "scripts/benchgate.py"
+	gateTest   = "scripts/benchgate_test.py"
 )
 
 var (
@@ -40,13 +42,14 @@ var (
 	// The pieces of the ratio rule. A timing is read either off a variable a
 	// benchmark result was put in or off the call itself; the operators are the
 	// ones that can put two of them on the same side of a pass or fail.
-	nsInline = regexp.MustCompile(`testing\.Benchmark\((.*?)\)\.NsPerOp\(\)`)
-	nsRead   = regexp.MustCompile(`(\w+)\.NsPerOp\(\)`)
-	nsAssign = regexp.MustCompile(`^\s*(?:\w+\s+)?(\w+(?:\s*,\s*\w+)*)\s*:?=[^=]`)
-	combine  = regexp.MustCompile(`[-+*/]|[<>]=?`)
-	joinOp   = regexp.MustCompile(`[-+*/(,]$`)
-	literal  = regexp.MustCompile("\"(?:[^\"\\\\]|\\\\.)*\"|`[^`]*`")
-	funcTop  = regexp.MustCompile(`^func\b`)
+	nsInline  = regexp.MustCompile(`testing\.Benchmark\((.*?)\)\.NsPerOp\(\)`)
+	nsRead    = regexp.MustCompile(`(\w+)\.NsPerOp\(\)`)
+	nsAssign  = regexp.MustCompile(`^\s*(?:\w+\s+)?(\w+(?:\s*,\s*\w+)*)\s*:?=[^=]`)
+	runsBench = regexp.MustCompile(`\btesting\.Benchmark\(`)
+	combine   = regexp.MustCompile(`[-+*/]|[<>]=?`)
+	joinOp    = regexp.MustCompile(`[-+*/(,]$`)
+	literal   = regexp.MustCompile("\"(?:[^\"\\\\]|\\\\.)*\"|`[^`]*`")
+	funcTop   = regexp.MustCompile(`^func\b`)
 )
 
 type guard struct{ pkg, test string }
@@ -105,10 +108,15 @@ func TestBudget_CIRunsTheGuardsWithoutTheDetector(t *testing.T) {
 }
 
 // budgetLane returns the workflow's `go test` line that selects the budget
-// guards, and whether it sits inside an `unshare -n` block. The block runs from
-// the unshare to the next list item indented outside it, which in a workflow is
-// the next step.
+// guards, and whether it sits inside an `unshare -n` block.
 func budgetLane(content string) (lane string, jailed bool) {
+	return goTestLane(content, func(line string) bool { return strings.Contains(line, "TestBudget_") })
+}
+
+// goTestLane returns the first `go test` line the predicate accepts, and whether
+// it sits inside an `unshare -n` block. The block runs from the unshare to the
+// next list item indented outside it, which in a workflow is the next step.
+func goTestLane(content string, want func(string) bool) (lane string, jailed bool) {
 	jailIndent := -1
 	for _, line := range strings.Split(content, "\n") {
 		body := strings.TrimLeft(line, " ")
@@ -119,7 +127,7 @@ func budgetLane(content string) (lane string, jailed bool) {
 		if strings.Contains(line, "unshare -n") {
 			jailIndent = indent
 		}
-		if strings.Contains(line, "go test") && strings.Contains(line, "TestBudget_") {
+		if strings.Contains(line, "go test") && want(line) {
 			return strings.TrimSpace(line), jailIndent >= 0
 		}
 	}
@@ -511,4 +519,121 @@ func sorted(set map[string]bool) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// Running a benchmark from a test is the shape both other guards were written
+// about, and neither of them covers the allocation half. The detector puts about
+// twenty times the cost on these paths, and an allocation count comes from
+// process-wide MemStats, so a benchmark run beside another test is handed that
+// test's allocations divided by its own iteration count — 733 for a scroll that
+// costs 1. A parallel test in a race-built file gets both at once, which is
+// where the form's and the palette's scroll assertions sat: outside the table,
+// under the detector, and beside whatever else the package was running.
+func TestBudget_NoTestOutsideAGuardRunsABenchmark(t *testing.T) {
+	t.Parallel()
+
+	root := repoRoot(t)
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case d.IsDir() && skipWalk(d.Name()):
+			return fs.SkipDir
+		case d.IsDir() || !strings.HasSuffix(d.Name(), "_test.go"):
+			return nil
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		holdOneFileAgainstLooseBenchmarks(t, filepath.ToSlash(rel), string(content))
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking the tree for benchmarks run from tests: %v", err)
+	}
+}
+
+// holdOneFileAgainstLooseBenchmarks reports a file that calls testing.Benchmark
+// and is not a guard file: either the detector builds it, or the name the only
+// lane that runs one selects on is missing.
+func holdOneFileAgainstLooseBenchmarks(t *testing.T, rel, content string) {
+	t.Helper()
+
+	if !runsBench.MatchString(content) {
+		return
+	}
+	if !noDetector.MatchString(content) {
+		t.Errorf("%s runs a benchmark from a test and is built with the race detector. What the "+
+			"benchmark reports there is the instrumentation's cost and its neighbours' allocations: "+
+			"move it to a budget_test.go beside it, built without the detector, as a TestBudget_, "+
+			"and %s\n\t%s", rel, guardsAnswer, firstMatch(runsBench, content))
+		return
+	}
+	for _, m := range testDecl.FindAllStringSubmatch(content, -1) {
+		if !strings.HasPrefix(m[1], "TestBudget_") {
+			t.Errorf("%s runs a benchmark from %s, and the lane that runs a file built without the "+
+				"detector selects %s. Rename it, or it runs in no suite at all",
+				rel, m[1], "'^TestBudget_'")
+		}
+	}
+}
+
+// firstMatch is the line the report quotes, so the message names a place and not
+// only a file.
+func firstMatch(re *regexp.Regexp, content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		if re.MatchString(line) {
+			return strings.TrimSpace(line)
+		}
+	}
+	return ""
+}
+
+// A ceiling catches a step past a number and cannot catch a slide that stays
+// under one, which is what the regression lane is for: it benchmarks this commit
+// and the base commit on one runner and fails on a budgeted path that allocates
+// more than it did. The lane can be deleted and nothing else would notice, so
+// this is what notices — in the suite everything already runs in.
+func TestBudget_CIComparesTheBenchmarksAgainstTheBaseBranch(t *testing.T) {
+	t.Parallel()
+
+	root := repoRoot(t)
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(ciWorkflow)))
+	if err != nil {
+		t.Fatalf("reading %s: %v", ciWorkflow, err)
+	}
+	text := string(content)
+
+	lane, jailed := goTestLane(text, func(line string) bool { return strings.Contains(line, "-bench") })
+	switch {
+	case lane == "":
+		t.Fatalf("%s no longer benchmarks anything. A budget ceiling fails on a step past a number "+
+			"and passes a path that got thirty per cent slower under it, which is what comparing a "+
+			"run against the base commit is for", ciWorkflow)
+	case strings.Contains(lane, "-race"):
+		t.Errorf("the benchmark lane in %s runs with the race detector: %s\n"+
+			"The detector puts about twenty times the cost on these paths, so what it compares is "+
+			"the instrumentation on both sides", ciWorkflow, lane)
+	}
+	if !jailed {
+		t.Errorf("the benchmark lane in %s runs outside the network namespace: %s\n"+
+			"docs/TESTING.md says no test opens a non-loopback connection, and a lane that runs "+
+			"benchmarks the race suite skips is a lane where that stops being checked", ciWorkflow, lane)
+	}
+
+	for _, want := range []struct{ needle, why string }{
+		{"benchstat", "nothing turns the two runs into a comparison"},
+		{gateScript, "nothing applies the rule to the comparison, so the numbers are printed and read by nobody"},
+		{gateTest, "the gate has never been seen to fail, which makes it a claim rather than a check"},
+		{"pull_request.base.sha", "there is no second tree to compare against, so a baseline would have to be stored — and a stored one goes stale the first time a real improvement lands"},
+	} {
+		if !strings.Contains(text, want.needle) {
+			t.Errorf("%s no longer names %s, so %s", ciWorkflow, want.needle, want.why)
+		}
+	}
 }

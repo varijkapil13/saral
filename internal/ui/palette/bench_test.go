@@ -56,6 +56,29 @@ func BenchmarkPaletteRedraw2000(b *testing.B) { redraw(b, opened(b, 2000, 120, 4
 
 func BenchmarkPaletteRedraw20(b *testing.B) { redraw(b, opened(b, 20, 120, 40)) }
 
+// BenchmarkPaletteScroll2000 and its twenty-command twin are the scroll path:
+// the cursor moves, the window under it moves, and every row it lands on has
+// already been rendered.
+func BenchmarkPaletteScroll2000(b *testing.B) { scrollOver(b, 2000) }
+
+func BenchmarkPaletteScroll20(b *testing.B) { scrollOver(b, 20) }
+
+func scrollOver(b *testing.B, n int) {
+	m := opened(b, n, 120, 40)
+	var down, up tea.Msg = stroke("down"), stroke("up")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		key := down
+		if i%2 == 1 {
+			key = up
+		}
+		next, _ := m.Update(key)
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
 // BenchmarkPaletteKeystroke2000 is the budgeted path: a character into the
 // filter, the whole list ranked again, then a frame.
 func BenchmarkPaletteKeystroke2000(b *testing.B) {
@@ -157,24 +180,6 @@ func BenchmarkMatch(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		_, _ = r.match(pattern)
-	}
-}
-
-func TestDrawing_CostsTheSameOnTwoThousandCommandsAsOnTwenty(t *testing.T) {
-	t.Parallel()
-
-	long := testing.Benchmark(BenchmarkPaletteRedraw2000)
-	short := testing.Benchmark(BenchmarkPaletteRedraw20)
-	if long.AllocsPerOp() > short.AllocsPerOp() {
-		t.Errorf("2000 commands allocate %d per frame against %d for twenty; the drawing is not virtualized",
-			long.AllocsPerOp(), short.AllocsPerOp())
-	}
-}
-
-func TestRowRendering_CostsNothingOnceMemoized(t *testing.T) {
-	m := opened(t, 2000, 120, 40)
-	if got := testing.AllocsPerRun(200, func() { _ = m.row(0) }); got != 0 {
-		t.Errorf("a memoized row allocates %.1f times, want none", got)
 	}
 }
 

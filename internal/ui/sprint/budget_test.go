@@ -19,8 +19,8 @@ import (
 // The list is virtualized, so a board with two thousand sprints behind it costs
 // what one with twenty costs per frame.
 func TestBudget_SprintScrollingCostsTheSameOnTwoThousandSprintsAsOnTwenty(t *testing.T) {
-	big := testing.Benchmark(func(b *testing.B) { scrollOver(b, 2000) })
-	small := testing.Benchmark(func(b *testing.B) { scrollOver(b, 20) })
+	big := testing.Benchmark(BenchmarkSprintsScroll)
+	small := testing.Benchmark(BenchmarkSprintsScroll20)
 
 	bigAllocs, smallAllocs := big.AllocsPerOp(), small.AllocsPerOp()
 	t.Logf("a steady frame allocates %d over two thousand sprints and %d over twenty", bigAllocs, smallAllocs)

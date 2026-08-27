@@ -9,3 +9,5 @@ coverage.*
 **/testdata/live/
 pkg/jira/jiratest/fixtures/*.raw
 /.claude/
+/.base/
+/.bench/

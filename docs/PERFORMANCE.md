@@ -6,8 +6,13 @@ These are budgets, not aspirations — but only where the **Guarded by** column 
 benchmark on its own guards nothing: it prints a number, and for three batches the frame budgets were
 held because a person ran `make bench` and read the output after each merge. Remove the person and
 the budget is a comment. Every row that says *measured, not guarded* is one no build will fail on
-today; comparing a run against a baseline is P9.2
-([#30](https://github.com/varijkapil13/saral/issues/30)) and is the thing that will close them.
+today.
+
+Two mechanisms hold the rest, and they catch different mistakes. A **guard** is a ceiling: it fails
+on a step past a number. The **regression gate** compares this commit against the base commit and
+fails on a path that allocates more than it used to, whether or not it is still under its ceiling.
+Both are described below; the gate is what closes the case a ceiling cannot see, which is a path
+getting thirty per cent worse with room to spare.
 
 ## Budgets
 
@@ -15,12 +20,13 @@ today; comparing a run against a baseline is P9.2
 |---|---|---|
 | Cold start → first paint (no cache) | **< 250 ms** | `ci.yml`, best of five `saral --bench-first-paint` runs against an empty cache directory |
 | Cold start → first paint (warm cache) | < 60 ms | *measured, not guarded.* `hyperfine` on `saral --bench-first-paint`. Warming the cache needs a site, so CI cannot; the in-process half is `TestBudget_FirstPaintFromCache` |
-| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the timeline, the palette, the form and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, so p99 waits on #30 |
+| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the timeline, the palette, the form and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, and the regression gate reads the same means, so p99 is still unmeasured here and stays on the list below |
 | Scroll a 10k-row list | 1 allocation a frame | the frame string `View` returns, and nothing behind it. Asserted with the mouse on, under a kept filter and under terms in force |
+| Scroll any other list | the frame and the lines the keystroke changed | every view that scrolls asserts `allocs/op` against a ceiling and against the same view at twenty rows: the backlog, the board, the comment thread, the attachment pane, the filter picker, the form, the move confirm screen, the palette, plans, releases, sprints and the timeline |
 | Pan a chart across a thousand years of calendar | the allocations and the bytes that ten years costs, and **< 16 ms** a frame over either span | the timeline is the one view that scrolls in two dimensions. `TestBudget_TimelinePanningCostsTheSameOverAThousandYearsAsOverTen` compares the two runs on the counts and the bytes, holds the count to a ceiling of 1700 besides, and holds each frame's time against the budget rather than against the other run |
 | Frame allocations at 200×60 | ceilings in `internal/ui/kernel/budget_test.go` | 297 for a frame, 310 for a keystroke and its frame, 324 with the mouse on, each held to a ceiling about a tenth above |
 | Full redraw at 200×60 | < 4 ms | asserted in list, issue, comment, filter, the timeline, the form and the kernel chrome |
-| RSS with 10k issues cached | < 60 MB | *measured, not guarded.* Nothing reads the number; the harness that would is #30 |
+| RSS with 10k issues cached | < 60 MB | *measured, not guarded.* Nothing reads the number. The regression gate compares `B/op`, which is allocation and not residency, so it is not this |
 | Stripped binary | **< 15 MiB** | `ci.yml`'s size step |
 | Cache read for a view's first paint | < 5 ms | `BenchmarkCacheReadFirstPaint` |
 | Rank 10k cached issues against a keystroke | **< 16 ms**, 1 allocation | `BenchmarkIndexSearch10k` and its two siblings |
@@ -48,7 +54,13 @@ with. Five things make one of them worth trusting, and each was got wrong once h
   wall-clock assertion that never became a guard at all: three in the palette, two in the form and
   one in `cmd/saral` sat in an untagged file, ran under the detector, and failed on whichever run
   lost the lottery — about half of them. `TestBudget_EveryWallClockAssertionSitsInAGuard` is why
-  that shape now fails the build instead of the suite.
+  that shape now fails the build instead of the suite. It looks for a *timing*, though, and the same
+  hole stayed open for an allocation count: the form's and the palette's scroll assertions ran
+  `testing.Benchmark` from a `t.Parallel()` test in an untagged `bench_test.go`, which is both
+  mistakes at once and named neither of them `TestBudget_`.
+  `TestBudget_NoTestOutsideAGuardRunsABenchmark` closes it by the shape rather than by the
+  measurement: running a benchmark from a test is what belongs in a guard, whichever number is then
+  read off it.
 - **It is not parallel.** An allocation count comes from process-wide `MemStats`, so a benchmark run
   beside another test is handed that test's allocations divided by its own iteration count. Measured
   here: a scroll that costs 1 allocation a frame reports **733** when one neighbouring parallel test
@@ -97,6 +109,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | Package | Guard |
 |---|---|
 | `internal/app` | `TestBudget_CacheReadForAViewsFirstPaint` |
+| `internal/app` | `TestBudget_CIComparesTheBenchmarksAgainstTheBaseBranch` |
 | `internal/app` | `TestBudget_CIRunsTheGuardsWithoutTheDetector` |
 | `internal/app` | `TestBudget_DateCascadeCostsNoMoreThanTheIssuesItIsGiven` |
 | `internal/app` | `TestBudget_DateCascadeOverATimelineOfIssues` |
@@ -105,6 +118,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/app` | `TestBudget_IndexSearchAllocatesOnlyTheAnswerItHandsBack` |
 | `internal/app` | `TestBudget_IndexSearchAtTenThousandIssues` |
 | `internal/app` | `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` |
+| `internal/app` | `TestBudget_NoTestOutsideAGuardRunsABenchmark` |
 | `internal/app` | `TestBudget_TheDocumentNamesEveryGuardAndOnlyRealOnes` |
 | `internal/ui/attach` | `TestBudget_AttachAMemoLookupCostsNothing` |
 | `internal/ui/attach` | `TestBudget_AttachFullRedrawAt200x60` |
@@ -132,8 +146,10 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/filter` | `TestBudget_PickerRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/filter` | `TestBudget_PickerScrollingCostsTheSameOnTwoThousandRowsAsOnTwenty` |
 | `internal/ui/filter` | `TestBudget_RankingReusesItsBuffers` |
+| `internal/ui/form` | `TestBudget_FormFieldsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/form` | `TestBudget_FormFullRedrawAt200x60` |
 | `internal/ui/form` | `TestBudget_FormKeystrokeToFrameOnALongScreen` |
+| `internal/ui/form` | `TestBudget_FormScrollingCostsTheSameOnTwoHundredFieldsAsOnEight` |
 | `internal/ui/issue` | `TestBudget_DragCostsAFrameWhileHeldAndAResizeWhileMoving` |
 | `internal/ui/issue` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/issue` | `TestBudget_KeystrokeToFrame` |
@@ -161,6 +177,9 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverEveryCachedIssue` |
 | `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverTwoThousandCommands` |
 | `internal/ui/palette` | `TestBudget_PaletteOpeningIsOnTheKeystrokeBudget` |
+| `internal/ui/palette` | `TestBudget_PaletteRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/palette` | `TestBudget_PaletteScrollingCostsTheSameOnTwoThousandCommandsAsOnTwenty` |
+| `internal/ui/palette` | `TestBudget_PaletteStandingStillCostsNoMoreThanScrolling` |
 | `internal/ui/palette` | `TestBudget_ProjectPickerKeystroke` |
 | `internal/ui/plan` | `TestBudget_APlansMemoMissCostsTwoRowsAndNotAWindow` |
 | `internal/ui/plan` | `TestBudget_PlanRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
@@ -200,9 +219,124 @@ is as visible as the list of what is:
 - **RSS with 10k issues cached.** No harness measures it.
 - **Cold start with a warm cache.** The cache has to be filled from a site first.
 - **p99 of anything.** `testing.Benchmark` reports a mean over its iterations and throws the
-  distribution away.
+  distribution away, and the regression gate compares those means. A p99 needs a harness that keeps
+  per-frame timings, which nothing here has.
 - **Every benchmark outside the table** — `pkg/adf`, `pkg/jira/cloud`'s decode and the onboarding
-  view — which are watched by eye and by #30 when it lands.
+  view. No ceiling holds them, but the regression gate below compares all of them against the base
+  commit, so a change that doubles what one of them allocates is reported on the pull request even
+  though it cannot fail it.
+
+## The regression gate
+
+A ceiling with a tenth of headroom passes a path that got nine per cent worse, and passes it again
+next month. The `regressions` job in `ci.yml` is what notices: on every pull request it benchmarks
+the branch and the base commit on one runner, puts both through
+[`benchstat`](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat), and fails the build on a budgeted
+path that allocates more than it did.
+
+### What it fails on
+
+**It gates `allocs/op` and `B/op`. It prints `ns/op` and never fails on it.** A row fails when all
+four hold:
+
+1. `benchstat` calls the difference significant — it prints a percentage rather than `~`.
+2. The change is an increase of more than **10%**.
+3. The unit is `allocs/op` or `B/op`.
+4. A `TestBudget_*` guard reads that benchmark by name, which is what makes the path a budgeted one.
+
+A significant increase over 10% on a benchmark no guard reads is a `::warning::` on the run and does
+not fail it — that is `pkg/adf`, `pkg/jira/cloud`'s decode and the onboarding view. Below the
+threshold, or on a difference `benchstat` calls noise, nothing is said. An improvement is never a
+failure: tightening a ceiling after one is a judgement call and stays one.
+
+`scripts/benchgate.py` applies the rule; `scripts/benchgate_test.py` plants a regression of each shape
+and reads the message back, and CI runs the test before the gate. A gate nobody has watched fail is a
+claim, not a gate.
+
+### Why it does not gate on wall clock
+
+Because gating on wall clock here would fail an empty diff. Two runs of *the same commit*, on an idle
+M2 Pro, `-benchtime=100x -count=6`, over the 141 benchmarks in the tree:
+
+| Unit | Rows `benchstat` called significant | Of those, a regression over 10% | Worst |
+|---|---|---|---|
+| `sec/op` | 74 | **19** | **+821%** (`app.IndexRebuild10k`) |
+| `B/op` | 1 | **0** | −0.74%, an improvement (`kernel.Frame`) |
+| `allocs/op` | **0** | **0** | — |
+
+So a 10% wall-clock gate would have failed that no-op comparison on nineteen benchmarks, one of them
+claiming a path had got nine times slower. The same runs agreed to the unit on `allocs/op` for 134 of
+the 141 benchmarks and to within one allocation for five more.
+
+**`benchstat`'s statistics do not rescue it, and this is the part worth understanding.** A
+significance test compares the spread *within* each sample against the distance *between* them. The
+noise on a shared runner is not within-run, it is between-run: a whole pass lands on a busy or a
+thermally-limited core and every benchmark in it comes out slow together. Each file's own spread stays
+small, the gap between the files is large, and Mann-Whitney duly reports p=0.002. That is how
+`IndexRebuild10k` produced a confident +821% with nothing changed. No `-count` fixes it either —
+raising the sample size tightens the within-run interval, which makes the false verdict *more*
+confident, not less.
+
+Two benchmarks whose timings are held against each other are unsound for the same reason, which is
+why `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` fails the build on that shape. The
+regression gate is the same measurement problem with the two samples in different commits.
+
+Timings are still printed: the job writes the full `benchstat` table into the run summary, so a change
+that made something genuinely and hugely slower is visible to a person reading the pull request. It is
+a report, and it is deliberately not a gate, because a gate that cries wolf is worse than no gate —
+the nineteen rows above are what being ignored looks like after a week.
+
+The second experiment is the one that settled it. A real regression was planted in the list view: the
+mouse mark moved back outside the row memo, which is the mistake
+`TestBudget_ScrollingCostsTheSameWithTheMouseOn` was written about. Against the unplanted tree the
+gate reported **exactly two rows**, both on `BenchmarkListSteadyScrollMarked10k` — the one benchmark
+whose path changed — at 1 → 85 `allocs/op` and 8,220 → 17,975 `B/op`, and said nothing about the other
+433 comparisons. A 10% wall-clock gate on the same pair of runs would have failed **fifteen**
+benchmarks, up to +102%, and **not one of them in `internal/ui/list`**: the actual regression would
+have arrived buried in fourteen false alarms from packages the change never touched.
+
+### Where the baseline comes from
+
+**A second checkout of the base commit, benchmarked on the same runner in the same job.** Nothing is
+stored between runs, so nothing can go stale. The three options and their failure modes:
+
+| Baseline | Failure mode |
+|---|---|
+| A committed baseline file | Goes stale silently. The moment a real improvement lands and nobody regenerates the file, the gate permits a regression all the way back to the old number — an honour-system check of exactly the kind this repo keeps closing. |
+| A cached artifact from the last `main` build | Silently absent on a cache miss, and measured on a different runner on a different day, which is the machine-to-machine variation the table above is about. |
+| A second checkout, benchmarked beside the branch | Costs one extra checkout and one extra benchmark pass. Both sides meet the same runner, the same Go build and the same neighbours, minutes apart. |
+
+The cost is the honest objection to the third, and it is what buys the property: there is no stored
+number to age. `-benchtime=100x -count=6` keeps the pass to about 45 seconds a side on an M2 Pro. The
+iteration count is fixed rather than timed so that both sides do identical work; it means the figures
+the gate compares are **not** the figures the guards assert — `BenchmarkListWalk10k` reports 35
+allocations at `100x` against the 42 its ceiling is set from, because a fixed short run amortises a
+benchmark's setup differently. That costs the gate nothing: it never asserts an absolute number, only
+that the two sides agree. `-count` is six because `benchstat` cannot call anything significant at
+α=0.05 below four samples a side (the smallest p a 4-against-4 Mann-Whitney can produce is 0.029) and
+wants six for a confidence interval.
+
+### What fails when the gate stops watching
+
+The gate can be quietly emptied in four ways, and each of them fails a build rather than passing one:
+
+- **The lane is deleted or loosened.** `TestBudget_CIComparesTheBenchmarksAgainstTheBaseBranch` reads
+  `ci.yml` in the ordinary suite and fails if there is no benchmark lane, if it runs under `-race`, if
+  it runs outside the network namespace, or if the workflow stops naming `benchstat`,
+  `scripts/benchgate.py`, `scripts/benchgate_test.py` or `pull_request.base.sha`.
+- **A budgeted benchmark stops reaching the comparison.** The gate reads the guard files itself, so
+  the set it watches is derived and not written down. If a benchmark a guard names produced no row —
+  its package failed to build on one side, or it was renamed — the gate fails and says which.
+- **A package that holds budgets contributes nothing.** A whole package dropping out of the comparison
+  is the shape that would let the job go green having measured nothing there, so it is a failure too.
+- **A guard is written against a closure.** `testing.Benchmark(func(b *testing.B){ ... })` has no name
+  for `-bench` to select, so the gate cannot see that path. Two guards did this — the filter picker's
+  and the sprint list's scroll — and both now read named benchmarks. The gate reports how many of the
+  guards' benchmarks it matched, so the number falling is visible.
+
+A benchmark new on the branch has no baseline and is reported as such rather than failing. If a change
+deliberately alters what a benchmark measures, the comparison against the base is meaningless and the
+pull request has to say so — that is the one case where the gate is wrong and a human overrules it.
 
 ## Where the time actually goes
 
@@ -249,9 +383,15 @@ func BenchmarkRowRender(b *testing.B)    { ... }
 func TestBudget_BoardScrollCostsTheFrameAndNothingElse(t *testing.T) { ... }
 ```
 
-`make bench` runs the benchmarks; the `budgets` job runs the guards. P9.2 wires `benchstat` into CI
-to fail a PR that regresses a budgeted path by more than 10%, which is the piece that turns a
-slow slide into a failure rather than only a step change past a ceiling.
+`make bench` runs the benchmarks; the `budgets` job runs the guards; the `regressions` job compares
+both against the base commit. The last of the three is what turns a slow slide into a failure rather
+than only a step change past a ceiling — but only for a benchmark a guard reads **by name**. A guard
+that drives a helper through a closure gives `-bench` nothing to select, so name the pair:
+
+```go
+func BenchmarkSprintsScroll(b *testing.B)   { scrollOver(b, 2000) }
+func BenchmarkSprintsScroll20(b *testing.B) { scrollOver(b, 20) }
+```
 
 ### What the local index costs today
 
@@ -315,3 +455,18 @@ hyperfine './saral --bench-first-paint'
 
 Profile before optimising. The budgets above exist so that "it feels fine on my machine" is never the
 standard.
+
+To run the regression gate the way CI does, before pushing — one pass on `main`, one on the branch,
+compared:
+
+```sh
+go install golang.org/x/perf/cmd/benchstat@latest
+mkdir -p .bench
+bench() { go test -run '^$' -bench . -benchmem -benchtime=100x -count=6 ./... > ".bench/$1"; }
+git stash && bench base.txt && git stash pop && bench head.txt
+benchstat -format csv .bench/base.txt .bench/head.txt > .bench/cmp.csv
+python3 scripts/benchgate.py --csv .bench/cmp.csv --root .
+```
+
+Both passes have to be on the same machine with the same things running on it. Read the `ns/op` column
+for interest and never for a verdict.

@@ -19,13 +19,30 @@ import (
 // allocations divided by its own iteration count.
 
 // The picker is virtualized, so a vocabulary of two thousand costs what one of
-// twenty costs per frame.
+// twenty costs per frame. The absolute ceiling is the half that matters: a
+// comparison on its own passes just as happily at nine hundred allocations a
+// frame.
+//
+// Both runs are named benchmarks rather than closures, so that the regression
+// gate can select them by name and watch this path between releases as well as
+// against the ceiling.
+//
+// 3 at either length, every run: the frame string, the needle line and the count
+// under it, all of which the keystroke this measures rebuilds.
 func TestBudget_PickerScrollingCostsTheSameOnTwoThousandRowsAsOnTwenty(t *testing.T) {
-	big := testing.Benchmark(func(b *testing.B) { scrollOver(b, 2000) })
-	small := testing.Benchmark(func(b *testing.B) { scrollOver(b, 20) })
-	if big.AllocsPerOp() > small.AllocsPerOp() {
+	big := testing.Benchmark(BenchmarkPickerScroll)
+	small := testing.Benchmark(BenchmarkPickerScroll20)
+
+	bigAllocs, smallAllocs := big.AllocsPerOp(), small.AllocsPerOp()
+	t.Logf("a steady frame: %d allocations over two thousand values, %d over twenty, ceiling 4", bigAllocs, smallAllocs)
+	if bigAllocs > smallAllocs {
 		t.Errorf("a 2000-row picker allocates %d per frame against %d for a 20-row one; the render is not virtualized",
-			big.AllocsPerOp(), small.AllocsPerOp())
+			bigAllocs, smallAllocs)
+	}
+	if bigAllocs > 4 {
+		t.Errorf("a steady-state frame allocates %d times, over the ceiling of 4; it measured 3 when the "+
+			"ceiling was set, and a window drawn over the whole vocabulary would be three orders of "+
+			"magnitude more", bigAllocs)
 	}
 }
 

@@ -62,22 +62,10 @@ func BenchmarkPickerKeystroke(b *testing.B) {
 }
 
 // BenchmarkPickerScroll is the steady state: the window moves and every row it
-// lands on is already rendered.
-func BenchmarkPickerScroll(b *testing.B) {
-	m := stocked(b, 2000, 120, 40)
-	var down, up tea.Msg = keyPress("down"), keyPress("up")
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := range b.N {
-		key := down
-		if i%2 == 1 {
-			key = up
-		}
-		next, _ := m.Update(key)
-		m, _ = next.(*Model)
-		_ = m.View()
-	}
-}
+// lands on is already rendered. The twenty-row twin is what it is held against.
+func BenchmarkPickerScroll(b *testing.B) { scrollOver(b, 2000) }
+
+func BenchmarkPickerScroll20(b *testing.B) { scrollOver(b, 20) }
 
 func BenchmarkPickerRedraw200x60(b *testing.B) {
 	m := stocked(b, 2000, 200, 60)

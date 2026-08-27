@@ -131,27 +131,3 @@ func BenchmarkFormTypingIntoAField(b *testing.B) {
 		_ = m.View()
 	}
 }
-
-func TestScrolling_CostsTheSameOnTwoHundredFieldsAsOnEight(t *testing.T) {
-	t.Parallel()
-
-	big := testing.Benchmark(BenchmarkFormSteadyScroll200)
-	small := testing.Benchmark(BenchmarkFormSteadyScroll8)
-
-	if big.AllocsPerOp() > small.AllocsPerOp() {
-		t.Errorf("a 200-field form allocates %d per frame against %d for an 8-field one; the render is not virtualized",
-			big.AllocsPerOp(), small.AllocsPerOp())
-	}
-	// The one allocation left is the frame string itself, which View has to
-	// return; everything behind it is memoized.
-	if big.AllocsPerOp() > 1 {
-		t.Errorf("a steady-state frame allocates %d times, want the memo to carry all but the frame itself", big.AllocsPerOp())
-	}
-}
-
-func TestFieldRendering_CostsNothingOnceMemoized(t *testing.T) {
-	m := built(t, 200, 120, 40)
-	if got := testing.AllocsPerRun(200, func() { _ = m.row(0) }); got != 0 {
-		t.Errorf("a memoized row allocates %.1f times, want none", got)
-	}
-}
