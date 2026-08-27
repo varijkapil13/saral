@@ -858,6 +858,23 @@ are guesses.
   Target project and issue type, status remap, mandatory-field resolution, a confirm screen showing
   the full mapping, submit, then poll the task. Hidden with a reason when `BULK_CHANGE` is absent.
   Polls `/bulk/queue/{taskId}`, not `/task/{taskId}` — different shapes, both fixtured by PC.5.
+  **The adapter half has landed:** `BulkMove` and `Task` on `pkg/jira/cloud/bulkmove.go`, both
+  progress registries, the `{retain, type, value}` mandatory-field wrapper, and a both-adapters
+  conformance table. `internal/ui/move/**` remains, and with it the two things the adapter cannot
+  do for it: resolving the target's mandatory field set from createmeta before submitting — any
+  value in `MoveRequest.Fields` opts the whole group out of retaining the rest from source — and a
+  confirm screen that says subtasks travel and are retyped. The checkbox stays unticked until that
+  half lands.
+
+  **Four gates in `pkg/jira/cloud` fail on purpose**, each on a defect outside this packet's owned
+  paths. `pkg/jira/jiratest/fake.go`: `Task` looks a task up by `ref.ID` and never reads `ref.URL`,
+  so a view that keeps the id and drops the endpoint is green against the fake for its whole life;
+  `TaskStatus.Failed` is filled with issue **keys** while the queue body keys its failures by numeric
+  issue **id**, so one list renders as `EX-1` and the other as `10002`, and `pkg/jira/types.go:1055`
+  documents the wrong one of the two; and an empty `TargetIssueTypeID` is a `NotFoundError` with an
+  empty ID rather than a `ValidationError`. `pkg/jira/cloud/client.go`: `parseErrorBody` reads three
+  refusal envelopes and `/bulk/**` answers a fourth, so a documented 400 from either bulk endpoint
+  reaches the user in this client's words instead of the site's.
 
 ## Batch 8 — Timeline and plans · parallel ×3
 
