@@ -133,3 +133,12 @@ happens to measure, so the budget is guarded at its worst case — sits at 88% o
 - **The binaries are unsigned.** The cask's `postflight` clears the quarantine attribute, which is why
   a `brew install`ed binary runs on macOS. Signing and notarizing needs an Apple Developer account
   and is not set up.
+- **`repository.token` takes only the bare `{{ .Env.VAR_NAME }}` form.** `homebrew_casks[].repository`
+  is a `repository` block, and GoReleaser refuses any other templating on its `token` — `{{ index .Env
+  "HOMEBREW_TAP_TOKEN" }}` fails at publish time with "expected `{{ .Env.VAR_NAME }}` only", which
+  `goreleaser check` and a `--skip=publish` dry run both pass, because neither resolves `token` at all.
+  `v0.2.0` shipped its four archives and no cask over exactly this: the release step has already
+  published by the time this error surfaces, and GoReleaser does not rewind it — see "The thing to
+  understand first" above. `skip_upload` is a different field with no such restriction and keeps its
+  `index .Env` form, which is there on purpose so an absent variable reads as empty rather than as a
+  template error.
