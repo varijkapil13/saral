@@ -162,3 +162,72 @@ func TestFields_AWideSummaryDoesNotShiftTheColumns(t *testing.T) {
 		t.Errorf("the identity line carries a replacement rune, so a cluster was cut: %q", head)
 	}
 }
+
+// sprintPane is the pane showing an issue whose sprint field arrived as the
+// array of sprint objects Jira Cloud answers with. Its schema says `array` of
+// `json`, which the adapter has no slot for, so the value reaches the pane as
+// the bytes it was read as.
+func sprintPane(t *testing.T, value string, w, h int) *driver {
+	t.Helper()
+
+	sprint := jira.Field{
+		ID: "customfield_13402", Key: "customfield_13402", Name: "Sprint", Custom: true,
+		Schema: jira.FieldSchema{Type: "array", Items: "json", Custom: "com.pyxis.greenhopper.jira:gh-sprint"},
+	}
+	labels := app.NewFieldLabels([]jira.Field{sprint}, []string{sprint.ID})
+	iss := jira.Issue{
+		ID: "30002", Key: "PROJ-3", Summary: "an issue in a sprint",
+		Project: jira.ProjectRef{Key: "PROJ", Name: "Spaltenbreite"},
+		Type:    jira.IssueType{Name: "Story"},
+		Status:  jira.Status{Name: "Building", Category: jira.CategoryInProgress},
+		Fields: jira.NewFieldSet(map[string]jira.FieldValue{
+			sprint.ID: {Kind: jira.KindUnknown, Text: value},
+		}),
+		Requested: jira.NewFieldMask([]string{"summary", "status", "issuetype", "project", sprint.ID}),
+	}
+	dr := newDriver(t, testDeps(newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
+	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
+	return dr
+}
+
+// The sidebar used to draw the sprint field's JSON. Clipped to the column it
+// says nothing at all, and the name is the only part of it anybody reads.
+func TestFields_ASprintReadsAsItsNameAndNotAsItsJSON(t *testing.T) {
+	t.Parallel()
+
+	dr := sprintPane(t, `[{"id":42,"name":"DA Sprint 14","state":"active","boardId":7,`+
+		`"goal":"ship the thing","startDate":"2026-09-01T09:00:00.000Z"}]`, 80, 26)
+	dr.key("tab", "G")
+
+	got := dr.view()
+	mustContain(t, got, "Sprint", "DA Sprint 14")
+	mustNotContain(t, got, `{"id"`, `"state"`, "boardId", "startDate")
+}
+
+// An issue that has been through two sprints names both, in the order the site
+// sent them, which is the order they happened in.
+func TestFields_AnIssueInTwoSprintsNamesBoth(t *testing.T) {
+	t.Parallel()
+
+	dr := sprintPane(t, `[{"id":41,"name":"DA Sprint 13","state":"closed"},`+
+		`{"id":42,"name":"DA Sprint 14","state":"active"}]`, 80, 26)
+	dr.key("tab", "G")
+
+	got := dr.view()
+	mustContain(t, got, "DA Sprint 13, DA Sprint 14")
+}
+
+// A shape carrying no label at all is counted rather than drawn. The value is
+// on the issue whether or not this client can read it, so a row that disappears
+// says it is not there — and its bytes are still what an edit writes back.
+func TestFields_AnUnlabellableValueIsCountedRatherThanDrawn(t *testing.T) {
+	t.Parallel()
+
+	dr := sprintPane(t, `[{"self":"https://example.atlassian.net/1","id":10},`+
+		`{"self":"https://example.atlassian.net/2","id":11}]`, 80, 26)
+	dr.key("tab", "G")
+
+	got := dr.view()
+	mustContain(t, got, "Sprint", "2 "+unreadableMany)
+	mustNotContain(t, got, "example.atlassian.net", `"self"`)
+}

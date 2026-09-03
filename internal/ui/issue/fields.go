@@ -240,8 +240,10 @@ func (m *Model) fieldText(ref jira.FieldRef, room int) string {
 		return ""
 	}
 	switch v.Kind {
-	case jira.KindText, jira.KindUnknown:
+	case jira.KindText:
 		return strings.TrimSpace(v.Text)
+	case jira.KindUnknown:
+		return unmodelledText(v)
 	case jira.KindNumber:
 		return strconv.FormatFloat(v.Number, 'f', -1, 64)
 	case jira.KindBool:
@@ -265,6 +267,37 @@ func (m *Model) fieldText(ref jira.FieldRef, room int) string {
 		return ""
 	}
 }
+
+// unmodelledText draws a value whose shape this client has no slot for. The
+// sprint field is the one everybody meets: its schema says `array` of `json`,
+// the adapter keeps the bytes rather than guessing at them, and drawing those
+// bytes put `[{"id":42,"name":"Sprint 14","state":"active",…` in a column forty
+// cells wide.
+//
+// A shape with nothing to label is counted rather than drawn, because the value
+// is on the issue whether or not this client can read it and a row that
+// disappears says it is not there.
+func unmodelledText(v jira.FieldValue) string {
+	if names := v.Names(); len(names) > 0 {
+		return strings.Join(names, ", ")
+	}
+	switch n := v.Count(); n {
+	case 0:
+		return ""
+	case 1:
+		return unreadableOne
+	default:
+		return strconv.Itoa(n) + " " + unreadableMany
+	}
+}
+
+// What a value this client cannot read says in the space its value would have
+// had. It names the shape as the reason rather than the field, because the
+// field is fine and it is the shape that has no slot.
+const (
+	unreadableOne  = "a value this client cannot read"
+	unreadableMany = "values this client cannot read"
+)
 
 // refGroups is the related issues, gathered under what relates them and in the
 // order the site sent them.

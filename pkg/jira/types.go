@@ -445,7 +445,7 @@ const (
 	KindOptions
 	KindUser
 	KindUsers
-	KindUnknown // a schema type this client does not model; Text holds a display form
+	KindUnknown // a schema type this client does not model; Text holds the bytes verbatim, and Names reads them
 )
 
 // FieldValue is one field's value. It is a tagged union rather than an any so
