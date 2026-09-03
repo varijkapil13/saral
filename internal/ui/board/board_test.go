@@ -492,7 +492,7 @@ func TestBoard_TogglingAQuickFilterNarrowsTheCardsAndTogglingItAgainRestoresThem
 	}
 
 	name := dr.m.quickFilters[0].Name
-	dr.key("f", "1")
+	dr.key("F", "1")
 	if got := len(dr.m.issues); got == 0 || got >= before {
 		t.Fatalf("toggling %q on left %d cards, want fewer than the %d before", name, got, before)
 	}
@@ -503,7 +503,7 @@ func TestBoard_TogglingAQuickFilterNarrowsTheCardsAndTogglingItAgainRestoresThem
 		t.Errorf("the title reads %q and does not name the active filter %q", title, name)
 	}
 
-	dr.key("f", "1")
+	dr.key("F", "1")
 	if got := len(dr.m.issues); got != before {
 		t.Errorf("toggling %q back off left %d cards, want the original %d", name, got, before)
 	}
@@ -512,9 +512,9 @@ func TestBoard_TogglingAQuickFilterNarrowsTheCardsAndTogglingItAgainRestoresThem
 	}
 }
 
-// f says so rather than latching a digit that would answer nothing, on a board
-// this fake reports none for.
-func TestBoard_PressingFWithNoQuickFiltersSaysSoRatherThanLatching(t *testing.T) {
+// Capital F says so rather than latching a digit that would answer nothing,
+// on a board this fake reports none for.
+func TestBoard_PressingCapitalFWithNoQuickFiltersSaysSoRatherThanLatching(t *testing.T) {
 	t.Parallel()
 	fake := jiratest.New(jiratest.WithProject("PROJ", jiratest.Kanban), jiratest.WithIssues(jiratest.Gen(4)))
 	dr := newDriver(t, testDeps(fake), 120, 20)
@@ -522,12 +522,12 @@ func TestBoard_PressingFWithNoQuickFiltersSaysSoRatherThanLatching(t *testing.T)
 		t.Fatalf("a Kanban board here reports %d quick filters, want none for this case", len(dr.m.quickFilters))
 	}
 
-	dr.key("f")
+	dr.key("F")
 	if dr.m.pendingFilter {
-		t.Error("f latched waiting for a digit on a board with nothing for one to bind to")
+		t.Error("F latched waiting for a digit on a board with nothing for one to bind to")
 	}
 	if got := dr.lastStatus().Text; !strings.Contains(got, "no quick filters") {
-		t.Errorf("pressing f said %q, want it to say this board has none", got)
+		t.Errorf("pressing F said %q, want it to say this board has none", got)
 	}
 }
 
@@ -541,28 +541,28 @@ func TestBoard_ADigitWithNoQuickFilterBoundToItSaysSoAndChangesNothing(t *testin
 	}
 	before := len(dr.m.issues)
 
-	dr.key("f", "9")
+	dr.key("F", "9")
 	if got := dr.lastStatus().Text; !strings.Contains(got, "no quick filter is bound to 9") {
-		t.Errorf("pressing f 9 said %q, want it to name the digit", got)
+		t.Errorf("pressing F 9 said %q, want it to name the digit", got)
 	}
 	if got := len(dr.m.issues); got != before {
 		t.Errorf("a digit bound to nothing still changed the cards: %d, want %d", got, before)
 	}
 }
 
-// f on its own answers nothing until a digit completes it, the same gap K7
-// closed for g itself — so it has to say what the digit will do before either
-// key is pressed, not only after.
-func TestBoard_PressingFListsTheQuickFiltersAndTheirDigitsBeforeAnyIsChosen(t *testing.T) {
+// Capital F on its own answers nothing until a digit completes it, the same
+// gap K7 closed for g itself — so it has to say what the digit will do before
+// either key is pressed, not only after.
+func TestBoard_PressingCapitalFListsTheQuickFiltersAndTheirDigitsBeforeAnyIsChosen(t *testing.T) {
 	t.Parallel()
 	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
 	if len(dr.m.quickFilters) == 0 {
 		t.Fatal("this case needs a board with quick filters and got none")
 	}
 
-	dr.key("f")
+	dr.key("F")
 	if !dr.m.pendingFilter {
-		t.Fatal("f did not latch waiting for a digit")
+		t.Fatal("F did not latch waiting for a digit")
 	}
 	view := dr.view()
 	for i, qf := range dr.m.quickFilters {
@@ -582,10 +582,10 @@ func TestBoard_PressingFListsTheQuickFiltersAndTheirDigitsBeforeAnyIsChosen(t *t
 		t.Errorf("the title does not name %q once it is toggled on:\n%s", dr.m.quickFilters[0].Name, dr.view())
 	}
 
-	// f again shows the same list with filter 1 now marked on.
-	dr.key("f")
+	// F again shows the same list with filter 1 now marked on.
+	dr.key("F")
 	if !strings.Contains(dr.view(), "[x] "+dr.m.quickFilters[0].Name) {
-		t.Errorf("the prompt does not mark %q as on the second time f is pressed:\n%s", dr.m.quickFilters[0].Name, dr.view())
+		t.Errorf("the prompt does not mark %q as on the second time F is pressed:\n%s", dr.m.quickFilters[0].Name, dr.view())
 	}
 }
 
@@ -597,14 +597,14 @@ func boardShown(dr *driver) int {
 	return total
 }
 
-// Capital F is a different key from lowercase f's quick filters, and opens the
-// same person/status/label picker the issue list uses.
-func TestBoard_CapitalFOpensThePersonStatusLabelPicker(t *testing.T) {
+// f is a different key from capital F's quick filters, and opens the same
+// person/status/label picker the issue list uses.
+func TestBoard_FOpensThePersonStatusLabelPicker(t *testing.T) {
 	t.Parallel()
 	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
-	dr.key("F")
+	dr.key("f")
 	if got := dr.pushes; len(got) != 1 || got[0].ID != filter.ViewID {
-		t.Fatalf("F pushed %+v, want one push of %q", got, filter.ViewID)
+		t.Fatalf("f pushed %+v, want one push of %q", got, filter.ViewID)
 	}
 }
 

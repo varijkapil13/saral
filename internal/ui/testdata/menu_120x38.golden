@@ -13,12 +13,14 @@ backlog
 └─────────────────────────────────────────────────────┘
 
 board
-┌──────────────────────────────────────────┐
-│ What can be done here                    │
-│ enter  open                              │
-│ m      move this issue to another column │
-│ b      another board of this project     │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│ What can be done here                        │
+│ enter  open                                  │
+│ m      move this issue to another column     │
+│ b      another board of this project         │
+│ f      filter by a person, a status, a label │
+│ F 1-9  quick filters                         │
+└──────────────────────────────────────────────┘
 
 comment
 ┌───────────────────────┐

@@ -26,12 +26,12 @@ type keyMap struct {
 	Board  kernel.Binding
 	// Filters buffers, the way Go does: the digit it takes next is the
 	// 1-indexed position of one of this board's own quick filters, toggling it
-	// on or off and re-reading the board with the result.
+	// on or off and re-reading the board with the result. Capitalised because
+	// lowercase f is the picker below, the more-used of the two.
 	Filters kernel.Binding
 	// FilterBy opens the same picker the issue list uses — a person, a status, a
 	// type, a priority or a label — applied locally against what is already
-	// loaded rather than sent to the site; see terms.go. Capitalised because
-	// lowercase f is already the board's own quick filters.
+	// loaded rather than sent to the site; see terms.go.
 	FilterBy kernel.Binding
 }
 
@@ -51,8 +51,8 @@ func defaultKeys() keyMap {
 		Drop:     kernel.Bind([]string{"enter"}, "enter", "move it to this column"),
 		Cancel:   kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "put it back"),
 		Board:    kernel.Bind([]string{"b"}, "b", "another board of this project"),
-		Filters:  kernel.Bind([]string{"f"}, "f 1-9", "quick filters"),
-		FilterBy: kernel.Bind([]string{"F"}, "F", "filter by a person, a status, a label"),
+		Filters:  kernel.Bind([]string{"F"}, "F 1-9", "quick filters"),
+		FilterBy: kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),
 	}
 }
 
@@ -77,11 +77,14 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	k := defaultKeys()
 	var sets [keyStates]kernel.KeySet
 	sets[keysBrowsing] = kernel.KeySet{
-		Acts: []kernel.Binding{k.Open, kernel.Terse(k.Pick, "move"), kernel.Terse(k.Board, "board")},
+		Acts: []kernel.Binding{
+			k.Open, kernel.Terse(k.Pick, "move"), kernel.Terse(k.Board, "board"),
+			kernel.Terse(k.FilterBy, "filter by"), kernel.Terse(k.Filters, "quick filters"),
+		},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.Left, k.Right},
 			{k.PageDown, k.PageUp, k.Top, k.Bottom},
-			{k.Open, k.Pick, k.Board, k.Filters, k.FilterBy},
+			{k.Open, k.Pick, k.Board, k.FilterBy, k.Filters},
 		},
 	}
 	// A card in hand can only be aimed and landed, so the whole inventory is the
