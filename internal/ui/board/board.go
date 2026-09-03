@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -73,13 +74,20 @@ type Model struct {
 	qfOn          map[int64]bool
 	pendingFilter bool
 
+	// terms is this program's own narrowing — a person, a status, a type, a
+	// priority or a label — applied locally against what is already loaded; see
+	// terms.go for why this is never sent to the site the way a quick filter is.
+	terms filter.Terms
+
 	issues []jira.Issue
 	// cols holds, per column, the indexes into issues that landed in it. An
 	// issue whose status the board does not map lands in none of them and is
-	// counted in unmapped instead, because a board does not show it either.
-	cols     [][]int
-	unmapped int
-	more     bool
+	// counted in unmapped instead, because a board does not show it either. One
+	// mapped to a column but left out by terms is counted in filteredOut.
+	cols        [][]int
+	unmapped    int
+	filteredOut int
+	more        bool
 	// dataGen counts the rebuilds of cols, because a slice cannot be part of the
 	// comparable key the chrome is memoized on.
 	dataGen int
@@ -194,6 +202,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case quickFiltersMsg:
 		m.tookQuickFilters(msg)
+
+	case filter.ChosenMsg:
+		cmd = m.applyFilterTerm(msg.Term)
 
 	case issuesMsg:
 		cmd = m.tookIssues(msg)
@@ -438,7 +449,7 @@ func (m *Model) nextBoard() tea.Cmd {
 // board's own configuration mapped into each column.
 func (m *Model) place() {
 	m.dataGen++
-	m.unmapped = 0
+	m.unmapped, m.filteredOut = 0, 0
 	if !m.ready {
 		m.cols = nil
 		return
@@ -453,6 +464,10 @@ func (m *Model) place() {
 		at, mapped := m.plan.columnOf(m.issues[i].Status.ID)
 		if !mapped {
 			m.unmapped++
+			continue
+		}
+		if !matchesTerms(&m.issues[i], m.terms) {
+			m.filteredOut++
 			continue
 		}
 		m.cols[at] = append(m.cols[at], i)
@@ -776,6 +791,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			return kernel.Warn("this board has no quick filters")
 		}
 		m.pendingFilter = true
+	case actFilterBy:
+		return m.openFilterPicker()
 	case actNone, actDrop, actCancel:
 	}
 	return nil

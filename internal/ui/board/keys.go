@@ -28,6 +28,11 @@ type keyMap struct {
 	// 1-indexed position of one of this board's own quick filters, toggling it
 	// on or off and re-reading the board with the result.
 	Filters kernel.Binding
+	// FilterBy opens the same picker the issue list uses — a person, a status, a
+	// type, a priority or a label — applied locally against what is already
+	// loaded rather than sent to the site; see terms.go. Capitalised because
+	// lowercase f is already the board's own quick filters.
+	FilterBy kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -47,6 +52,7 @@ func defaultKeys() keyMap {
 		Cancel:   kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "put it back"),
 		Board:    kernel.Bind([]string{"b"}, "b", "another board of this project"),
 		Filters:  kernel.Bind([]string{"f"}, "f 1-9", "quick filters"),
+		FilterBy: kernel.Bind([]string{"F"}, "F", "filter by a person, a status, a label"),
 	}
 }
 
@@ -75,7 +81,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.Left, k.Right},
 			{k.PageDown, k.PageUp, k.Top, k.Bottom},
-			{k.Open, k.Pick, k.Board, k.Filters},
+			{k.Open, k.Pick, k.Board, k.Filters, k.FilterBy},
 		},
 	}
 	// A card in hand can only be aimed and landed, so the whole inventory is the
@@ -127,6 +133,7 @@ const (
 	actCancel
 	actBoard
 	actFilter
+	actFilterBy
 )
 
 // tables turn the bindings into a keystroke lookup, built once per board. The
@@ -140,7 +147,7 @@ func (k keyMap) tables() (browsing, holding map[string]action) {
 		binding{k.PageUp, actPageUp}, binding{k.PageDown, actPageDown},
 		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
 		binding{k.Open, actOpen}, binding{k.Pick, actPick}, binding{k.Board, actBoard},
-		binding{k.Filters, actFilter},
+		binding{k.Filters, actFilter}, binding{k.FilterBy, actFilterBy},
 	)
 	// A card in hand answers only the keys the holding state advertises: the two
 	// that aim it and the two that end the gesture. A motion that moved the

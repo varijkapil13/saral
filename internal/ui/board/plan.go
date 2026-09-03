@@ -83,15 +83,18 @@ func (p plan) columnOf(statusID string) (int, bool) {
 	return at, ok
 }
 
-// projection is what a card needs: a list row's fields, plus the estimation
-// field when the board has one. The id comes from the board configuration, so
-// no customfield is written down and a board that does not estimate asks for
+// projection is what a card needs: a list row's fields, the two more the
+// filter picker's own facets need beyond that (reporter and labels — the
+// other four are already in ListProjection), plus the estimation field when
+// the board has one. The id comes from the board configuration, so no
+// customfield is written down and a board that does not estimate asks for
 // nothing extra.
 func (p plan) projection() app.Projection {
+	proj := app.ListProjection().With("reporter", "labels")
 	if !p.estimates {
-		return app.ListProjection()
+		return proj
 	}
-	return app.ListProjection().With(p.estimate.ID)
+	return proj.With(p.estimate.ID)
 }
 
 // orderWords says how the board decides the order in a column, which is a

@@ -1045,12 +1045,13 @@ are guesses.
   reorder when the board exposes a rank field. Takes the footer slot PC.2 assigns it; the kernel
   rejects a duplicate at startup, so this cannot be settled by guessing.
 
-- [x] **P6.4 — Board quick filters** · [#136](https://github.com/varijkapil13/saral/issues/136) ·
+- [x] **P6.4 — Board quick filters, and the person/status/label picker on the board too** ·
+  [#136](https://github.com/varijkapil13/saral/issues/136) ·
   **owns** `pkg/jira/{port,types,roles}.go` (the `QuickFilters` amendment), `pkg/jira/cloud/quickfilter.go`
   and its tests, the `boardJQL` composition and its tests in `pkg/jira/cloud/board.go`,
   `pkg/jira/jiratest/{fake,boardissues_test}.go` (the `QuickFilters` half), `pkg/jira/jiratest/fixtures/board_quickfilters*.json`,
-  `internal/ui/board/{quickfilter,keys}.go` and the `Filters`/`quickFilters` wiring in `board.go` and
-  `render.go`, `docs/{API-NOTES,ROADMAP}.md`
+  `internal/ui/board/{quickfilter,terms,keys}.go` and the wiring in `board.go`, `render.go` and `plan.go`,
+  `docs/{API-NOTES,ROADMAP}.md`
   A board's own quick filters — "Only My Issues", "Recently Updated" — were unread: `GET
   /rest/agile/1.0/board/{id}/quickfilter` is a **separate** endpoint from `/configuration`, paged the
   way `/board` and `/board/{id}/sprint` are, and nothing on the port named it.
@@ -1073,8 +1074,21 @@ are guesses.
   answer without inventing an option nothing else needs yet — and applies them through the same small
   JQL subset `Search` already reads with, so `assignee = currentUser()` and `assignee is empty` are
   real narrowing and not just echoed back.
+  **`F` opens the same person/status/label picker the issue list uses**, over the board too — reported
+  directly after the packet above shipped: quick filters and this picker are different features on
+  purpose, so `f` stayed quick filters and the picker took the capital. Unlike a quick filter, a term
+  chosen here is never sent to the site: `BoardQuery`'s "no further narrowing" rule is about narrowing
+  nothing can compare against the board on screen, and a person/status/type/priority/label pick is
+  exactly that — this program's own idea of a subset, not a state the site's board draws too. So it is
+  applied locally, against the cards already loaded, the way the type doc already says a caller in
+  that position should. `plan.projection()` widened to ask for `reporter` and `labels` as well, the
+  two of the picker's six facets `ListProjection` did not already carry, so all six actually narrow
+  rather than four of them matching against fields that were never asked for. A board with more cards
+  than are loaded says so when a term is chosen, since the filter can only see what is on screen — the
+  same limit the picker never has on the issue list, which re-runs its search instead of narrowing
+  locally, for exactly this reason.
   **What this does not cover:** the backlog view (`internal/ui/backlog`) draws on the same board and
-  could offer the same toggles; that is a separate packet.
+  could offer the same quick filters and the same picker; that is a separate packet.
 
 ## Batch 7 — Cross-project move · parallel ×1
 

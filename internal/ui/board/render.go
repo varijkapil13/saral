@@ -422,28 +422,29 @@ func (m *Model) estimateOf(col int) float64 {
 // summaryKey is everything the top line is built from, so that the line is
 // rebuilt when one of them moves and never otherwise.
 type summaryKey struct {
-	board      string
-	width, gen int
-	columns    int
-	cards      int
-	unmapped   int
-	shown      int
-	boards     int
-	more       bool
-	loading    bool
-	loaded     bool
-	failed     bool
-	ordering   jira.Ordering
-	estimates  bool
-	checked    int64
-	filters    string
+	board       string
+	width, gen  int
+	columns     int
+	cards       int
+	unmapped    int
+	filteredOut int
+	shown       int
+	boards      int
+	more        bool
+	loading     bool
+	loaded      bool
+	failed      bool
+	ordering    jira.Ordering
+	estimates   bool
+	checked     int64
+	filters     string
 }
 
 func (m *Model) summaryKey() summaryKey {
 	return summaryKey{
 		board: m.boardName(), width: m.width, gen: m.styles.gen,
 		columns: len(m.plan.columns), cards: len(m.issues), unmapped: m.unmapped,
-		shown: m.lay.cols, boards: len(m.all), more: m.more,
+		filteredOut: m.filteredOut, shown: m.lay.cols, boards: len(m.all), more: m.more,
 		loading: m.loading, loaded: m.loaded, failed: m.failure != nil,
 		ordering: m.plan.ordering, estimates: m.plan.estimates,
 		checked: m.checked.UnixNano(), filters: m.quickFilterLine(),
@@ -514,6 +515,9 @@ func (m *Model) counts() string {
 	}
 	if m.unmapped > 0 {
 		parts = append(parts, strconv.Itoa(m.unmapped)+" in no column")
+	}
+	if m.filteredOut > 0 {
+		parts = append(parts, strconv.Itoa(m.filteredOut)+" hidden by filter")
 	}
 	parts = append(parts, m.plan.orderWords())
 	if !m.checked.IsZero() {

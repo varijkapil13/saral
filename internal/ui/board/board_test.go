@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -585,5 +586,94 @@ func TestBoard_PressingFListsTheQuickFiltersAndTheirDigitsBeforeAnyIsChosen(t *t
 	dr.key("f")
 	if !strings.Contains(dr.view(), "[x] "+dr.m.quickFilters[0].Name) {
 		t.Errorf("the prompt does not mark %q as on the second time f is pressed:\n%s", dr.m.quickFilters[0].Name, dr.view())
+	}
+}
+
+func boardShown(dr *driver) int {
+	total := 0
+	for i := range dr.m.cols {
+		total += dr.m.columnLen(i)
+	}
+	return total
+}
+
+// Capital F is a different key from lowercase f's quick filters, and opens the
+// same person/status/label picker the issue list uses.
+func TestBoard_CapitalFOpensThePersonStatusLabelPicker(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
+	dr.key("F")
+	if got := dr.pushes; len(got) != 1 || got[0].ID != filter.ViewID {
+		t.Fatalf("F pushed %+v, want one push of %q", got, filter.ViewID)
+	}
+}
+
+// The whole reason this exists: choosing a term narrows what the board shows,
+// without asking the site again, and choosing the same term again restores it.
+func TestBoard_ChoosingATermNarrowsTheBoardLocallyAndChoosingItAgainRestoresIt(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(16)), 120, 20)
+	before := boardShown(dr)
+	if before == 0 {
+		t.Fatal("the board answered with no cards before any term was chosen")
+	}
+	var term filter.Term
+	found := false
+	for i := range dr.m.issues {
+		if a := dr.m.issues[i].Assignee; a != nil && a.AccountID != "" {
+			term = filter.Term{Facet: filter.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("no generated issue carries an assignee, so this case proves nothing")
+	}
+
+	dr.send(filter.ChosenMsg{Term: term})
+	if got := boardShown(dr); got == 0 || got >= before {
+		t.Fatalf("choosing %s narrowed to %d cards, want fewer than the %d before", term.Label, got, before)
+	}
+	if dr.m.filteredOut == 0 {
+		t.Error("filteredOut is 0 after a term hid at least one card")
+	}
+	for i := range dr.m.cols {
+		for row := range dr.m.columnLen(i) {
+			iss := dr.m.issueAt(i, row)
+			if iss.Assignee == nil || iss.Assignee.AccountID != term.ID {
+				t.Errorf("%s is on the board and is not assigned to %s", iss.Key, term.Label)
+			}
+		}
+	}
+
+	dr.send(filter.ChosenMsg{Term: term})
+	if got := boardShown(dr); got != before {
+		t.Errorf("choosing %s again left %d cards, want the original %d", term.Label, got, before)
+	}
+	if dr.m.filteredOut != 0 {
+		t.Errorf("filteredOut is %d after the only term was toggled back off", dr.m.filteredOut)
+	}
+}
+
+// A board with more cards than are loaded says so when a term is chosen,
+// because the filter can only see what is already on screen.
+func TestBoard_ChoosingATermWhileMoreIsLoadedWarnsThatTheFilterCannotSeeThem(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
+	dr.m.more = true
+	var term filter.Term
+	for i := range dr.m.issues {
+		if a := dr.m.issues[i].Assignee; a != nil && a.AccountID != "" {
+			term = filter.Term{Facet: filter.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}
+			break
+		}
+	}
+	if term.ID == "" {
+		t.Fatal("no generated issue carries an assignee, so this case proves nothing")
+	}
+
+	dr.send(filter.ChosenMsg{Term: term})
+	if got := dr.lastStatus().Text; !strings.Contains(got, "more cards than are loaded") {
+		t.Errorf("choosing a term with more loaded said %q, want it to warn about unseen cards", got)
 	}
 }

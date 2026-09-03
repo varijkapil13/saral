@@ -2,7 +2,7 @@ looking at the board
   acts   enter open · m move · b board
   full   [↓/j down, ↑/k up, ←/h previous column, →/l next column]
   full   [pgdn page down, pgup page up, g g first card in this column, G / g e last card in this column]
-  full   [enter open, m move this issue to another column, b another board of this project, f 1-9 quick filters]
+  full   [enter open, m move this issue to another column, b another board of this project, f 1-9 quick filters, F filter by a person, a status, a label]
 a card in hand
   acts   enter move it here · ctrl+g put it back
   full   [←/h previous column, →/l next column]
