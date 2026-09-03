@@ -53,7 +53,7 @@ homebrew_casks:
     repository:
       owner: varijkapil13
       name: homebrew-tap
-      token: '{{ index .Env "HOMEBREW_TAP_TOKEN" }}'
+      token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
     # Without a tap to push to, publishing the release still has to succeed.
     skip_upload: '{{ if index .Env "HOMEBREW_TAP_TOKEN" }}false{{ else }}true{{ end }}'
     homepage: https://github.com/varijkapil13/saral
