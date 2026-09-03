@@ -1,6 +1,6 @@
  saral | Commands                                                                          PROJ | example.atlassian.net 
 > what do you want to do?                                                                                               
------------------------------------------------------------------------------------------------------------- 27 commands
+------------------------------------------------------------------------------------------------------------ 28 commands
 > Follow the terminal's own colours             Appearance                                                              
   Turn colour off                               Appearance                                                              
   Use the dark theme                            Appearance                                                              
@@ -9,6 +9,7 @@
   Edit the comment you are on                   Comments                                                               e
   Write a comment                               Comments                                                               a
   Issues                                        Go to                                                                 g1
+  Switch view                                   Go to                                                              g 1-9
   Change this issue's status                    Issue                                                                  t
   Comment on this issue                         Issue                                                                  C
   Edit this issue                               Issue                                                                  e
@@ -26,5 +27,4 @@
   Issues I reported                             Search                                                                  
   My issues                                     Search                                                                  
   Save this query to a number key               Search                                                                 s
-  Unassigned issues                             Search                                                                  
  Issues  enter run it  esc close                                                                                  ctrl+k

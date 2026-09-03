@@ -46,7 +46,7 @@ func defaultKeys() keyMap {
 		PanRight: kernel.Bind([]string{"l", "right"}, "→/l", "pan right"),
 		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
 		Top:      kernel.Bind([]string{"home"}, "g g", "oldest"),
-		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "newest"),
+		Bottom:   kernel.Bind([]string{"G", "end"}, "G / g e", "newest"),
 		Write:    kernel.Bind([]string{"a", "c"}, "a", "write a comment"),
 		Edit:     kernel.Bind([]string{"e"}, "e", "edit this one"),
 		Delete:   kernel.Bind([]string{"d"}, "d", "delete this one"),

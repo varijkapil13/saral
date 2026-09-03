@@ -32,6 +32,12 @@ func TestBudget_AFrameCostsWhatTheChromeCosts(t *testing.T) {
 		{"a frame whose header names a project", BenchmarkFrameScopedToAProject, 297, 330},
 		{"a keystroke and the frame it produces", BenchmarkKeyToFrame, 310, 345},
 		{"a frame with the mouse on", BenchmarkFrameMouseOn, 324, 360},
+		// None of the three overlays is a steady state — nothing repaints one until
+		// the next key — but each is a frame, and each has a benchmark, so the
+		// figures docs/PERFORMANCE.md quotes are ones this table checks.
+		{"a frame with the help overlay up", BenchmarkFrameWithTheHelpOverlayUp, 629, 700},
+		{"a frame with the right-click menu open", BenchmarkFrameWithTheMenuOpen, 800, 880},
+		{"a frame with the destinations up", BenchmarkFrameWithTheDestinationsUp, 1120, 1240},
 	} {
 		got := testing.Benchmark(tc.bench).AllocsPerOp()
 		t.Logf("%s: %d allocations, ceiling %d", tc.what, got, tc.ceiling)

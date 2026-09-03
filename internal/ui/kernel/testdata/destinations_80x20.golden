@@ -1,0 +1,20 @@
+ saral | Issues                                           example.atlassian.net 
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Where g goes                                                                 │
+│ > g1   Issues     on screen                                                  │
+│   g2   Board                                                                 │
+│   g3   Backlog                                                               │
+│   g7   Plans      Plans need Administer Jira, which this token does not have │
+│                                                                              │
+│ In this view                                                                 │
+│   g g  first row                                                             │
+│   g e  last row                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+ Issues  1-9 switch view  up/down choose  enter go there  esc cancel

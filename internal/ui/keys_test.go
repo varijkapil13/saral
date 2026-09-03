@@ -24,6 +24,11 @@ import (
 // A command that reaches a view by its footer slot names the view; its key is
 // the gesture that slot is reached by.
 var keyOwners = map[string]string{
+	// The destination overlay is the kernel's own chrome rather than a view, so
+	// the gesture it teaches is in the global keymap and no view's footer shows
+	// it. GlobalScope names that keymap.
+	"views.switch": kernel.GlobalScope,
+
 	"comments.write":          comment.ViewID,
 	"comments.edit":           comment.ViewID,
 	"comments.delete":         comment.ViewID,
@@ -106,6 +111,13 @@ func TestCommands_TeachTheKeyTheirViewActuallyShows(t *testing.T) {
 func checkKey(t *testing.T, id, owner, k string) {
 	t.Helper()
 
+	if owner == kernel.GlobalScope {
+		if global, _ := labelsOf(kernel.DefaultGlobalKeys().KeySet()); !slices.Contains(global, k) {
+			t.Errorf("command %q teaches %q, and the global keymap shows %v; a key the kernel does not "+
+				"draw anywhere is one nobody can be told to press", id, k, global)
+		}
+		return
+	}
 	shown, matched := labelsOf(kernel.KeysFor(owner))
 	if slices.Contains(shown, k) {
 		return

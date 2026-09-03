@@ -1,0 +1,20 @@
+ saral | Issues                                    PROJ | example.atlassian.net 
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Where g goes                                                                 │
+│ > g1   Issues     on screen                                                  │
+│   g2   Board      Boards need a Jira Software project, and this token can... │
+│   g3   Backlog    Boards need a Jira Software project, and this token can... │
+│   g4   Sprints    Boards need a Jira Software project, and this token can... │
+│   g5   Releases                                                              │
+│   g6   Timeline                                                              │
+│   g7   Plans                                                                 │
+│                                                                              │
+│ In this view                                                                 │
+│   g g  first row                                                             │
+│   g e  last row                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+ Issues  1-9 switch view  up/down choose  enter go there  esc cancel

@@ -1,7 +1,8 @@
 attach
 1-9   saved query           ctrl+k commands
-g 1-9 switch view           ?      help
-esc   back                  q      quit
+g     where to go           ?      help
+g 1-9 switch view           q      quit
+esc   back
 r     refresh
 R     refetch everything
 
@@ -12,109 +13,115 @@ m     move these issues to a sprint or the backlog    pgdn page down    g g    f
                                                       pgup page up      G      last row
 
 board
-enter open                                 ↓/j down               pgdn page down                 ...
-m     move this issue to another column    ↑/k up                 pgup page up
-b     another board of this project        ←/h previous column    g g  first card in this column
-                                           →/l next column        G    last card in this column
+enter open                                 ↓/j down               pgdn    page down                 ...
+m     move this issue to another column    ↑/k up                 pgup    page up
+b     another board of this project        ←/h previous column    g g     first card in this column
+                                           →/l next column        G / g e last card in this column
 
 comment
-a write a comment    ↓/j  down         ctrl+d half page down    1-9   saved query           ctrl+k commands
-e edit this one      ↑/k  up           ctrl+u half page up      g 1-9 switch view           ?      help
-d delete this one    pgdn page down    g g    oldest            esc   back                  q      quit
-                     pgup page up      G      newest            r     refresh
-                                       ←/h    pan left          R     refetch everything
-                                       →/l    pan right
+a write a comment    ↓/j  down         ctrl+d  half page down    1-9   saved query           ctrl+k commands
+e edit this one      ↑/k  up           ctrl+u  half page up      g     where to go           ?      help
+d delete this one    pgdn page down    g g     oldest            g 1-9 switch view           q      quit
+                     pgup page up      G / g e newest            esc   back
+                                       ←/h     pan left          r     refresh
+                                       →/l     pan right         R     refetch everything
 
 filter
 enter choose what to filter by    ↓/j  down         1-9   saved query           ctrl+k commands
-                                  ↑/k  up           g 1-9 switch view           ?      help
-                                  pgdn page down    esc   back                  q      quit
-                                  pgup page up      r     refresh
-                                  home first row    R     refetch everything
-                                  end  last row
+                                  ↑/k  up           g     where to go           ?      help
+                                  pgdn page down    g 1-9 switch view           q      quit
+                                  pgup page up      esc   back
+                                  home first row    r     refresh
+                                  end  last row     R     refetch everything
 
 form
 enter use this issue type    ↓/j  down         1-9   saved query           ctrl+k commands
-                             ↑/k  up           g 1-9 switch view           ?      help
-                             home first row    esc   back                  q      quit
-                             end  last row     r     refresh
+                             ↑/k  up           g     where to go           ?      help
+                             home first row    g 1-9 switch view           q      quit
+                             end  last row     esc   back
+                                               r     refresh
                                                R     refetch everything
 
 issue
 tab next pane        ↓/j    down         d/ctrl+d  half page down        1-9   saved query           ctrl+k commands
-e   edit fields      ↑/k    up           u/ctrl+u  half page up          g 1-9 switch view           ?      help
-t   change status    f/pgdn page down    g g       top                   esc   back                  q      quit
-C   comment          b/pgup page up      G         bottom                r     refresh
-                     →/l    pan right    shift+tab previous pane         R     refetch everything
-                     ←/h    pan left     z         expand or collapse
+e   edit fields      ↑/k    up           u/ctrl+u  half page up          g     where to go           ?      help
+t   change status    f/pgdn page down    g g       top                   g 1-9 switch view           q      quit
+C   comment          b/pgup page up      G / g e   bottom                esc   back
+                     →/l    pan right    shift+tab previous pane         r     refresh
+                     ←/h    pan left     z         expand or collapse    R     refetch everything
                                          <         wider sidebar
                                          >         wider description
                                          =         reset the split
 
 issue.edit
 enter  change this field    ↓/j down    ←/h previous value    1-9   saved query           ctrl+k commands
-del    empty this field     ↑/k up      →/l next value        g 1-9 switch view           ?      help
-ctrl+s save                                                   esc   back                  q      quit
-X      discard changes                                        r     refresh
+del    empty this field     ↑/k up      →/l next value        g     where to go           ?      help
+ctrl+s save                                                   g 1-9 switch view           q      quit
+X      discard changes                                        esc   back
+                                                              r     refresh
                                                               R     refetch everything
 
 issue.move
 enter choose    ↓/j down    1-9   saved query           ctrl+k commands
-                ↑/k up      g 1-9 switch view           ?      help
-                            esc   back                  q      quit
+                ↑/k up      g     where to go           ?      help
+                            g 1-9 switch view           q      quit
+                            esc   back
                             r     refresh
                             R     refetch everything
 
 list
-enter open                                     ↓/j  down         ctrl+d half page down    1-9   saved query        ...
-f     filter by a person, a status, a label    ↑/k  up           ctrl+u half page up      g 1-9 switch view
-/     filter                                   pgdn page down    g g    first row         esc   back
-a     all issues                               pgup page up      G      last row          r     refresh
-e     edit this search                                                                    R     refetch everything
-s     save this query to a key
+enter open                                     ↓/j  down         ctrl+d  half page down    1-9   saved query        ...
+f     filter by a person, a status, a label    ↑/k  up           ctrl+u  half page up      g     where to go
+/     filter                                   pgdn page down    g g     first row         g 1-9 switch view
+a     all issues                               pgup page up      G / g e last row          esc   back
+e     edit this search                                                                     r     refresh
+s     save this query to a key                                                             R     refetch everything
 
 move
 enter use the project under the cursor    ↓/j  down         1-9   saved query           ctrl+k commands
-i     type a project key                  ↑/k  up           g 1-9 switch view           ?      help
-                                          pgdn page down    esc   back                  q      quit
-                                          pgup page up      r     refresh
-                                          home first row    R     refetch everything
-                                          end  last row
+i     type a project key                  ↑/k  up           g     where to go           ?      help
+                                          pgdn page down    g 1-9 switch view           q      quit
+                                          pgup page up      esc   back
+                                          home first row    r     refresh
+                                          end  last row     R     refetch everything
 
 plans
 enter show what this plan is made of    ↓/j  down          1-9   saved query           ctrl+k commands
-                                        ↑/k  up            g 1-9 switch view           ?      help
-                                        pgdn page down     esc   back                  q      quit
-                                        pgup page up       r     refresh
-                                        home first plan    R     refetch everything
-                                        end  last plan
+                                        ↑/k  up            g     where to go           ?      help
+                                        pgdn page down     g 1-9 switch view           q      quit
+                                        pgup page up       esc   back
+                                        home first plan    r     refresh
+                                        end  last plan     R     refetch everything
 
 release.flow
 enter choose what happens to the open issues    ↓/j down    1-9   saved query           ctrl+k commands
-                                                ↑/k up      g 1-9 switch view           ?      help
-                                                            esc   back                  q      quit
+                                                ↑/k up      g     where to go           ?      help
+                                                            g 1-9 switch view           q      quit
+                                                            esc   back
                                                             r     refresh
                                                             R     refetch everything
 
 releases
 enter release this version       ↓/j  down             1-9   saved query           ctrl+k commands
-n     new version                ↑/k  up               g 1-9 switch view           ?      help
-e     edit this version          pgdn page down        esc   back                  q      quit
-A     archive or unarchive it    pgup page up          r     refresh
-                                 g g  first version    R     refetch everything
-                                 G    last version
+n     new version                ↑/k  up               g     where to go           ?      help
+e     edit this version          pgdn page down        g 1-9 switch view           q      quit
+A     archive or unarchive it    pgup page up          esc   back
+                                 g g  first version    r     refresh
+                                 G    last version     R     refetch everything
 
 sprints
 o show or hide closed sprints    1-9   saved query           ctrl+k commands
-                                 g 1-9 switch view           ?      help
-                                 esc   back                  q      quit
+                                 g     where to go           ?      help
+                                 g 1-9 switch view           q      quit
+                                 esc   back
                                  r     refresh
                                  R     refetch everything
 
 timeline
 n where these dates came from    1-9   saved query           ctrl+k commands
-                                 g 1-9 switch view           ?      help
-                                 esc   back                  q      quit
+                                 g     where to go           ?      help
+                                 g 1-9 switch view           q      quit
+                                 esc   back
                                  r     refresh
                                  R     refetch everything
 

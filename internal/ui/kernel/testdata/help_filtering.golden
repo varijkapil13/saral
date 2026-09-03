@@ -1,10 +1,10 @@
  saral | Board                                                                                    example.atlassian.net 
 enter keep filter     1-9   saved query           ctrl+k commands                                                       
-esc   clear filter    g 1-9 switch view           ?      help                                                           
-                      esc   back                  q      quit                                                           
+esc   clear filter    g     where to go           ?      help                                                           
+                      g 1-9 switch view           q      quit                                                           
+                      esc   back                                                                                        
                       r     refresh                                                                                     
                       R     refetch everything                                                                          
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         
