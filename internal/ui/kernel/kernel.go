@@ -36,6 +36,12 @@ const PaletteViewID = "palette"
 // the package keeps the composition root free of any view.
 const SetupViewID = "onboarding"
 
+// SettingsViewID is the view the settings screen registers itself as.
+// GlobalKeys.Settings opens it from anywhere, and the kernel already handles
+// an OpenMsg naming a view nothing has registered, so this name works before
+// anything answers to it.
+const SettingsViewID = "settings"
+
 // KeyCapturer is the optional interface a view implements while it is taking
 // typing — a filter, a form field, the command palette. While it says yes, every
 // key except ctrl+c goes to it untouched, because a view that cannot receive the
@@ -516,6 +522,9 @@ func (m Model) route(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ThemeMsg:
 		return m.retheme(msg.Theme)
 
+	case SetMouseMsg:
+		return m.setMouse(msg.Enabled)
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 
@@ -618,6 +627,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case Matches(msg, m.keys.Palette):
 		return m.openPalette()
+
+	// Only the bare chord is checked here, not the whole of m.keys.Settings:
+	// its other stroke is "s", already spent by list.Save and sprint.Start when
+	// nothing has latched g first, and Matches would treat either stroke as
+	// this one. The prefixed half is resolvePrefix's, once g has already been
+	// spent and "s" cannot mean anything else.
+	case len(m.keys.Settings.Keys()) > 0 && msg.String() == m.keys.Settings.Keys()[0]:
+		return m.open(SettingsViewID)
 
 	case Matches(msg, m.keys.Saved):
 		// A pushed view keeps its own digits: a saved query belongs to the root,
@@ -803,6 +820,8 @@ func (m Model) resolvePrefix(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case Matches(msg, m.keys.Jump):
 		return m.openPalette()
+	case Matches(msg, m.keys.Settings):
+		return m.open(SettingsViewID)
 	}
 	first, cmd := m.forwardTop(buffered)
 	model, ok := first.(Model)
@@ -1032,6 +1051,16 @@ func (m Model) pop() (tea.Model, tea.Cmd) {
 	discard(dropped)
 	m.status = ""
 	return m, tea.Batch(blurred, m.focus(), m.resizeAll())
+}
+
+// setMouse turns mouse reporting on or off for the rest of this run. The zone
+// manager is re-enabled or disabled in the same step, because a frame drawn
+// with the wrong answer to that either writes zones nothing will scan or
+// stops writing the ones a click still needs.
+func (m Model) setMouse(enabled bool) (tea.Model, tea.Cmd) {
+	m.mouse = enabled
+	m.deps.Zones.SetEnabled(m.mouse)
+	return m, nil
 }
 
 func (m Model) retheme(t *Theme) (tea.Model, tea.Cmd) {
@@ -1807,7 +1836,12 @@ func (m Model) liveGlobals() KeySet {
 	} else {
 		set.Short = append(set.Short, g.Quit)
 	}
-	set.Full = [][]Binding{{g.Saved, g.Go, g.Slot, g.Jump, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}}
+	col := []Binding{g.Saved, g.Go, g.Slot}
+	if _, ok := LookupView(SettingsViewID); ok {
+		col = append(col, g.Settings)
+	}
+	col = append(col, g.Jump, g.Back, g.Refresh, g.Purge)
+	set.Full = [][]Binding{col, {g.Palette, g.Help, g.Quit}}
 	if len(bound) > 0 {
 		set.Full = append([][]Binding{bound}, set.Full...)
 	}

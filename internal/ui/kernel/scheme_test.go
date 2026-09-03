@@ -63,31 +63,45 @@ func TestNewTheme_SchemesDiffer(t *testing.T) {
 	}
 }
 
-func TestSchemeCommands_AreInThePaletteOnePerScheme(t *testing.T) {
+// TestSchemeIsASettingNotACommand is what replaced the five scheme.* commands:
+// appearance.scheme is a Setting offering every scheme, drawn in its own
+// colours through Option.Style, and nothing named scheme.* is a command any
+// more.
+func TestSchemeIsASettingNotACommand(t *testing.T) {
 	resetRegistry()
 	t.Cleanup(resetRegistry)
-	registerSchemeCommands()
+	RegisterSetting(schemeSetting())
 
+	for _, cmd := range Commands() {
+		if strings.HasPrefix(cmd.ID, "scheme.") {
+			t.Errorf("%s is still a command; schemes moved to the appearance.scheme setting", cmd.ID)
+		}
+	}
+
+	s, ok := lookupSetting(t, "appearance.scheme")
+	if !ok {
+		t.Fatal("appearance.scheme is not registered")
+	}
 	want := make(map[string]bool, len(Schemes))
 	for _, sc := range Schemes {
-		want["scheme."+sc.id] = false
+		want[sc.id] = false
 	}
-	for _, cmd := range Commands() {
-		if _, ours := want[cmd.ID]; !ours {
+	for _, opt := range s.Options(Deps{}) {
+		if _, ours := want[opt.ID]; !ours {
+			t.Errorf("appearance.scheme offers an option nothing names: %q", opt.ID)
 			continue
 		}
-		want[cmd.ID] = true
-		if cmd.Title == "" || cmd.Run == nil {
-			t.Errorf("%s is registered with nothing to show or nothing to run", cmd.ID)
+		want[opt.ID] = true
+		if opt.Label == "" {
+			t.Errorf("option %q has no label", opt.ID)
 		}
-		if len(cmd.Keys) != 0 {
-			t.Errorf("%s teaches keys %v; no view shows a key for the scheme, so the palette must not claim one",
-				cmd.ID, cmd.Keys)
+		if opt.Style == nil {
+			t.Errorf("option %q has no preview style", opt.ID)
 		}
 	}
 	for id, found := range want {
 		if !found {
-			t.Errorf("%s is not registered, so the palette cannot reach it", id)
+			t.Errorf("appearance.scheme does not offer %q", id)
 		}
 	}
 }

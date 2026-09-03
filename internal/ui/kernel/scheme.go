@@ -115,19 +115,70 @@ func ParseScheme(s string) (Scheme, error) {
 	return DefaultScheme, fmt.Errorf("kernel: unknown colour scheme %q, want one of %s", s, strings.Join(names, ", "))
 }
 
-// The scheme is switchable while the program runs, registered as commands for
-// the same reason the theme's modes are — there is no letter left that would
-// not also be a letter somebody types into a field.
-func init() { registerSchemeCommands() }
+// The scheme is switchable while the program runs, registered as a setting:
+// state that is, and stays that way until changed, rather than a verb the
+// palette runs once. docs/SETTINGS.md is the design; appearance.theme sits
+// beside it in theme.go.
+func init() { RegisterSetting(schemeSetting()) }
 
-func registerSchemeCommands() {
-	for i := range Schemes {
-		RegisterCommand(Command{
-			ID:    "scheme." + Schemes[i].id,
-			Title: Schemes[i].title,
-			Group: "Appearance",
-			Run:   func(d Deps) tea.Cmd { return SwitchScheme(d, Schemes[i]) },
-		})
+// schemeInertNote is what appearance.scheme answers with when colour is off:
+// NewTheme ignores the scheme entirely under ThemeNoColor, so the row says so
+// rather than accepting a choice that would change nothing on screen.
+const schemeInertNote = "colour is off, so a scheme would change nothing you can see"
+
+func schemeSetting() Setting {
+	return Setting{
+		ID:      "appearance.scheme",
+		Section: appearanceSection,
+		Order:   1,
+		Title:   "Colour scheme",
+		Summary: "which colours mean accent, danger and the rest",
+		Kind:    KindChoice,
+		Scope:   ScopeProfile,
+		Options: func(Deps) []SettingOption {
+			out := make([]SettingOption, len(Schemes))
+			for i, sc := range Schemes {
+				out[i] = SettingOption{ID: sc.id, Label: sc.title, Style: schemeStyle(sc)}
+			}
+			return out
+		},
+		Value: func(d Deps) string {
+			if d.Theme == nil {
+				return DefaultScheme.id
+			}
+			return d.Theme.Scheme.id
+		},
+		// Colour off short-circuits before SwitchScheme, and so before the write:
+		// NewTheme builds the same plain styles whichever scheme the file names,
+		// so nothing here may write a scheme the screen will not show.
+		Set: func(d Deps, id string) tea.Cmd {
+			if d.Theme != nil && !d.Theme.Color {
+				return Warn(schemeInertNote)
+			}
+			sc, err := ParseScheme(id)
+			if err != nil {
+				return nil
+			}
+			return SwitchScheme(d, sc)
+		},
+		Unavailable: func(d Deps) string {
+			if d.Theme != nil && !d.Theme.Color {
+				return schemeInertNote
+			}
+			return ""
+		},
+	}
+}
+
+// schemeStyle previews a scheme's own accent colour, the theme's own dark flag
+// deciding which half of the scheme to read from.
+func schemeStyle(sc Scheme) func(*Theme) lipgloss.Style {
+	return func(t *Theme) lipgloss.Style {
+		dark := true
+		if t != nil {
+			dark = t.Dark
+		}
+		return lipgloss.NewStyle().Foreground(sc.colors(dark).accent)
 	}
 }
 

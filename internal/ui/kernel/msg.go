@@ -91,6 +91,11 @@ type RefreshMsg struct{ Purge bool }
 // colour or the user switched themes.
 type ThemeMsg struct{ Theme *Theme }
 
+// SetMouseMsg turns mouse reporting on or off. The kernel is the only place
+// that holds whether the mouse is on, so this is where appearance.mouse's
+// choice lands.
+type SetMouseMsg struct{ Enabled bool }
+
 // CapabilitiesMsg carries a fresh probe result.
 type CapabilitiesMsg struct{ Caps jira.Capabilities }
 
@@ -162,6 +167,9 @@ func Pop() tea.Cmd { return func() tea.Msg { return PopMsg{} } }
 
 // Open returns a command that switches to a registered root view.
 func Open(id string) tea.Cmd { return func() tea.Msg { return OpenMsg{ID: id} } }
+
+// SetMouse returns a command that turns mouse reporting on or off.
+func SetMouse(enabled bool) tea.Cmd { return func() tea.Msg { return SetMouseMsg{Enabled: enabled} } }
 
 // RunCommand returns a command that runs a registered command by ID.
 func RunCommand(id string) tea.Cmd {

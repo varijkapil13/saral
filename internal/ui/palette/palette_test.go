@@ -380,9 +380,10 @@ func TestPalette_ClickingARowSelectsItAndClickingItAgainRunsIt(t *testing.T) {
 	}
 }
 
-// New is what the kernel calls, and it has to be built from the registry rather
-// than from anything of the palette's own: the theme commands live in the kernel
-// and reach a user through here or not at all.
+// New is what the kernel calls, and it has to be built from the registry
+// rather than from anything of the palette's own: views.switch is registered
+// by the kernel package itself, in every build, and reaches a user through
+// here or not at all.
 func TestNew_OffersWhatIsRegistered(t *testing.T) {
 	t.Parallel()
 
@@ -394,8 +395,8 @@ func TestNew_OffersWhatIsRegistered(t *testing.T) {
 	for i := range view.rows {
 		titles = append(titles, view.rows[i].cmd.Title)
 	}
-	if !slices.Contains(titles, "Use the dark theme") {
-		t.Errorf("the palette offers %v, and none of it is the kernel's own theme commands", titles)
+	if !slices.Contains(titles, "Switch view") {
+		t.Errorf("the palette offers %v, and none of it is the kernel's own commands", titles)
 	}
 }
 

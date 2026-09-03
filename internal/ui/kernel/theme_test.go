@@ -161,30 +161,53 @@ jql  = "resolution = EMPTY ORDER BY updated DESC"
 key  = 2
 `
 
-func TestThemeCommands_AreInThePaletteOnePerMode(t *testing.T) {
+// TestThemeIsASettingNotACommand is what replaced the four theme.* commands:
+// docs/SETTINGS.md moves state out of the palette, so appearance.theme is a
+// Setting offering all four modes and nothing named theme.* is a command any
+// more.
+func TestThemeIsASettingNotACommand(t *testing.T) {
 	resetRegistry()
 	t.Cleanup(resetRegistry)
-	registerThemeCommands()
+	RegisterSetting(themeSetting())
 
-	want := map[string]bool{"theme.auto": false, "theme.dark": false, "theme.light": false, "theme.no-color": false}
 	for _, cmd := range Commands() {
-		if _, ours := want[cmd.ID]; !ours {
+		if strings.HasPrefix(cmd.ID, "theme.") {
+			t.Errorf("%s is still a command; theme modes moved to the appearance.theme setting", cmd.ID)
+		}
+	}
+
+	s, ok := lookupSetting(t, "appearance.theme")
+	if !ok {
+		t.Fatal("appearance.theme is not registered")
+	}
+	want := map[string]bool{"auto": false, "dark": false, "light": false, "no-color": false}
+	for _, opt := range s.Options(Deps{}) {
+		if _, ours := want[opt.ID]; !ours {
+			t.Errorf("appearance.theme offers an option nothing names: %q", opt.ID)
 			continue
 		}
-		want[cmd.ID] = true
-		if cmd.Title == "" || cmd.Run == nil {
-			t.Errorf("%s is registered with nothing to show or nothing to run", cmd.ID)
-		}
-		if len(cmd.Keys) != 0 {
-			t.Errorf("%s teaches keys %v; no view shows a key for the theme, so the palette must not claim one",
-				cmd.ID, cmd.Keys)
+		want[opt.ID] = true
+		if opt.Label == "" {
+			t.Errorf("option %q has no label", opt.ID)
 		}
 	}
 	for id, found := range want {
 		if !found {
-			t.Errorf("%s is not registered, so the palette cannot reach it", id)
+			t.Errorf("appearance.theme does not offer %q", id)
 		}
 	}
+}
+
+// lookupSetting finds one registered setting by ID, the way LookupView and
+// LookupCommand already do for their own registries.
+func lookupSetting(t *testing.T, id string) (Setting, bool) {
+	t.Helper()
+	for _, s := range Settings() {
+		if s.ID == id {
+			return s, true
+		}
+	}
+	return Setting{}, false
 }
 
 func TestSwitchTheme_RebuildsTheStylesAndKeepsTheGlyphSet(t *testing.T) {
@@ -315,12 +338,11 @@ func TestSaveTheme_SaysSoWhenThereIsNoProfileToSaveTo(t *testing.T) {
 	}
 }
 
-func TestRunCommand_ThemeSwitchReachesTheFrameAndTheProfile(t *testing.T) {
+func TestThemeSetting_SetReachesTheFrameAndTheProfile(t *testing.T) {
 	colourfulEnv(t)
 	path := writeConfig(t, profileWithEverything)
 	resetRegistry()
 	t.Cleanup(resetRegistry)
-	registerThemeCommands()
 	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
 
 	d := testDeps()
@@ -330,13 +352,12 @@ func TestRunCommand_ThemeSwitchReachesTheFrameAndTheProfile(t *testing.T) {
 		t.Fatal("the test session did not start colourless, so this proves nothing")
 	}
 
-	next, cmd := m.Update(RunCommandMsg{ID: "theme.dark"})
-	m = next.(Model)
+	cmd := themeSetting().Set(m.deps, "dark")
 	theme, ok := firstOfType[ThemeMsg](collect(cmd))
 	if !ok {
-		t.Fatal("running the command produced no theme")
+		t.Fatal("Set produced no theme")
 	}
-	next, _ = m.Update(theme)
+	next, _ := m.Update(theme)
 	m = next.(Model)
 
 	if m.deps.Theme.Mode != ThemeDark {

@@ -99,8 +99,10 @@ const (
 	ScopeSession                     // this run only
 )
 
-// Option is one value a KindChoice setting can take.
-type Option struct {
+// SettingOption is one value a KindChoice setting can take. Not Option:
+// kernel.Option already names kernel.New's own functional option, and the
+// two would collide in the same package.
+type SettingOption struct {
 	ID    string
 	Label string
 	// Note is the half-line under or beside the label: what the value means, or
@@ -133,7 +135,7 @@ type Setting struct {
 	// Options are what a KindChoice or KindToggle offers. It is a function
 	// because the answer can come from the site: the projects are read, not
 	// registered.
-	Options func(Deps) []Option
+	Options func(Deps) []SettingOption
 	// Value is which option is in force right now, read from the live session
 	// rather than from anything this registry stored. That is the whole point:
 	// a mark that is computed from Deps.Theme cannot drift from what is on
@@ -236,7 +238,7 @@ change is about removing.
 **The picker behind a `▸` is the picker that already exists.** `palette.projectModel` is a filtered,
 frecency-ranked list with a `current` marker and its own click zones; the project row opens exactly
 that. The scheme row opens one built the same way, and each scheme's row is drawn in that scheme's
-own colours through `Option.Style` — a colour picker that previews is the obvious thing the palette
+own colours through `SettingOption.Style` — a colour picker that previews is the obvious thing the palette
 structurally could not do.
 
 ### Keys

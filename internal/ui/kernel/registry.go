@@ -14,11 +14,16 @@ var reg = struct {
 	views    map[string]ViewSpec
 	commands map[string]Command
 	keys     map[string]KeySet
-	errs     []error
+	settings map[string]Setting
+	// settingSections is the order sections were first registered in, which is
+	// what Settings and SettingSections show them in — not alphabetical.
+	settingSections []string
+	errs            []error
 }{
 	views:    make(map[string]ViewSpec),
 	commands: make(map[string]Command),
 	keys:     make(map[string]KeySet),
+	settings: make(map[string]Setting),
 }
 
 // RegisterView adds a view to the registry. It is called from an init() in the
@@ -194,5 +199,7 @@ func resetRegistry() {
 	reg.views = make(map[string]ViewSpec)
 	reg.commands = make(map[string]Command)
 	reg.keys = make(map[string]KeySet)
+	reg.settings = make(map[string]Setting)
+	reg.settingSections = nil
 	reg.errs = nil
 }

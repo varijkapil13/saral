@@ -1240,7 +1240,7 @@ The design, the control vocabulary and the consumer sweep are in [`docs/SETTINGS
 S1 lands the registry and the kernel's own settings, S2 the screen, S3 the palette's own ordering.
 S2 depends on S1; S3 depends on neither and can run beside them.
 
-- [ ] **S1 — The setting registry, and the kernel's own state** ·
+- [x] **S1 — The setting registry, and the kernel's own state** ·
   **owns** `internal/ui/kernel/{setting.go,setting_test.go,theme.go,theme_test.go,scheme.go,scheme_test.go,keys.go,kernel.go,msg.go}`,
   `internal/config/{config.go,config_test.go}`, `docs/{SETTINGS,UX,ROADMAP}.md`
   `kernel.Setting` and `RegisterSetting` beside the three registries that exist, with `Value` a
