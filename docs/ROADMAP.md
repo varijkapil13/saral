@@ -901,6 +901,31 @@ eight views are built against it and it is closed.
   Also #62's other half: the palette's *switch view* opens the same overlay, so the gesture has the
   three routes `docs/UX.md` principle 3 asks for.
 
+- [x] **K8 — The in-session half of jumping to an issue** ·
+  [#62](https://github.com/varijkapil13/saral/issues/62) ·
+  **owns** `internal/ui/kernel/keys.go` (the `Jump` binding), the `Jump` case in
+  `internal/ui/kernel/kernel.go`'s prefix resolution and `liveGlobals`, the `Jump` row in
+  `internal/ui/kernel/destinations.go`'s `destFooterActs`, `internal/ui/palette/{jump,jump_test}.go`,
+  the `search` function in `internal/ui/palette/issues.go`, `docs/{UX,ROADMAP}.md`
+  K5 built the CLI half: `app.ParseKey` and `app.ParseIssueURL` read a key or a pasted browse, board
+  or backlog URL, and `saral PROJ-142` opens it with a fetch. What it deliberately left was the
+  in-session gesture, because `g` had just become the view-slot prefix and nothing had decided what
+  completes it for a key.
+  **`g` then `i` opens the palette**, exactly as `ctrl+k` does — a third route to the place #85 already
+  built rather than a fourth place that reads a key on its own. Not `k` or `j`: K7 landed in the same
+  batch and had already spent both, and `up`/`down`, on moving the destinations overlay's own cursor,
+  so `i` is what completes the prefix for a key without shadowing them. The palette's own filter is
+  where the reading happens: `jumpHit` runs the same two parsers against what was typed, on every
+  keystroke, alongside the fuzzy index #85 wired up. A key already cached is still found by the index
+  as before and is never offered twice; a key or a URL that parses but is not cached is offered
+  anyway, seeded with nothing but its key — the same seed the CLI argument opens with — so selecting
+  it fetches fresh rather than requiring a prior read to have cached it. A URL for another site is
+  named as the mistake it is, in the same words the CLI argument answers with, and offers nothing
+  rather than opening against this one.
+  **Ordinary filter text is never mistaken for a key**: `app.ParseKey` and `app.ParseIssueURL` both
+  refuse anything that is not their shape, so typing a few words of a title still only reaches the
+  fuzzy index.
+
 ## W1 · the seam Batches 4 to 8 code against
 
 Three batches reach for the same three things — attachments, versions, sprints — and eight packets

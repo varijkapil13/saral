@@ -2,10 +2,10 @@
 enter open the row under the cursor    ↓/j down    1-9   saved query           ctrl+k commands                          
 /     filter these rows                ↑/k up      g     where to go           ?      help                              
                                                    g 1-9 switch view           q      quit                              
+                                                   g i   jump to an issue                                               
                                                    esc   back                                                           
                                                    r     refresh                                                        
                                                    R     refetch everything                                             
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

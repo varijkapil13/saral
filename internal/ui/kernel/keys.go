@@ -54,6 +54,13 @@ type GlobalKeys struct {
 	// Saved runs the query bound to a number key. Same nine digits, pressed
 	// alone, and only in a root view.
 	Saved Binding
+	// Jump completes the g prefix the way Slot completes it for a digit: it
+	// opens the palette already armed with what gets typed next, so a key or a
+	// pasted URL is a third route to the same place ctrl+k and the CLI
+	// argument reach, per docs/UX.md principle 3. Its key is i rather than the
+	// more obvious k or j: the destinations overlay this prefix now opens
+	// already spends both, and up/down, on moving its own cursor.
+	Jump Binding
 }
 
 // DefaultGlobalKeys is the keymap from docs/UX.md. Vim keys and arrows are both
@@ -69,6 +76,7 @@ func DefaultGlobalKeys() GlobalKeys {
 		Go:      Bind([]string{"g"}, "g", "where to go"),
 		Slot:    Bind(digits, "g 1-9", "switch view"),
 		Saved:   Bind(digits, "1-9", "saved query"),
+		Jump:    Bind([]string{"i"}, "g i", "jump to an issue"),
 	}
 }
 
@@ -78,7 +86,7 @@ var digits = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
 func (g GlobalKeys) KeySet() KeySet {
 	return KeySet{
 		Short: []Binding{g.Help, g.Palette, g.Quit},
-		Full:  [][]Binding{{g.Saved, g.Go, g.Slot, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}},
+		Full:  [][]Binding{{g.Saved, g.Go, g.Slot, g.Jump, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}},
 	}
 }
 

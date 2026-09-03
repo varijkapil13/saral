@@ -359,15 +359,20 @@ reasons that directory already holds them: a pane width belongs to the terminal 
 account, so two profiles on one machine want one answer and a `config.toml` handed to somebody else
 should not carry your proportions.
 
-Jumping to an issue by key is half built. **From the command line it works**: `saral PROJ-142` opens
-that issue over whichever root would have opened, and so does a pasted browse, board or backlog URL —
-a URL for another site is named as a mistake rather than read against this one, because the same key
-usually exists on both. **Inside a running session there is still no gesture**, because `g` is now the
-prefix the view slots sit behind and what completes it for a key has not been decided:
-[#62](https://github.com/varijkapil13/saral/issues/62) holds that half, and `app.ParseKey` and
-`app.ParseIssueURL` are what it will read with. The parse is a **shape** and never a claim the issue
-exists — the project key charset is per-instance — so what is not there comes back from the site,
-in the site's words.
+Jumping to an issue by key has all three of principle 3's routes now. **From the command line**:
+`saral PROJ-142` opens that issue over whichever root would have opened, and so does a pasted browse,
+board or backlog URL — a URL for another site is named as a mistake rather than read against this
+one, because the same key usually exists on both. **`g` then `i`, from anywhere in a running
+session**, opens the palette already armed to read what gets typed next as a key or a URL, the same
+way `ctrl+k` does — `g` is the prefix the view slots sit behind, and `i` is what completes it for a
+key. Not `k` or `j`: the destinations overlay this same prefix opens already spends both, and
+`up`/`down`, moving its own cursor. **From the palette itself**, typing or pasting either is read the
+same way as it is typed, whether or not the issue has ever been cached: a key already on disk is
+found by the fuzzy index as before, and a key or a URL that parses but is not cached is offered
+anyway, seeded with nothing but its key, so opening it fetches it fresh the way the CLI argument
+does. `app.ParseKey` and `app.ParseIssueURL` are what all three routes read with, and the parse is a
+**shape** and never a claim the issue exists — the project key charset is per-instance — so what is
+not there comes back from the site, in the site's words.
 
 ## Mouse
 

@@ -32,6 +32,22 @@ func TestPalette_CtrlKPushesOverTheViewYouWereInRatherThanReplacingIt(t *testing
 	}
 }
 
+func TestGoPrefix_IOpensThePaletteJustLikeCtrlK(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
+	RegisterView(spec(PaletteViewID, 0, "", &stubView{id: PaletteViewID}))
+
+	m := newAt(t, testDeps(), 120, 30)
+	m, _ = press(m, "g", "i")
+	if got := ansi.Strip(m.Frame()); !strings.Contains(got, "palette body") {
+		t.Fatalf("g i did not open the palette:\n%s", got)
+	}
+	if len(m.stack) != 2 {
+		t.Errorf("the stack is %d deep after g i, want 2", len(m.stack))
+	}
+}
+
 func TestPalette_IsBuiltFreshOnEveryCtrlK(t *testing.T) {
 	resetRegistry()
 	t.Cleanup(resetRegistry)

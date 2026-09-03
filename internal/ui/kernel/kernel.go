@@ -801,6 +801,8 @@ func (m Model) resolvePrefix(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if slot, err := strconv.Atoi(msg.String()); err == nil {
 			return m.openSlot(slot)
 		}
+	case Matches(msg, m.keys.Jump):
+		return m.openPalette()
 	}
 	first, cmd := m.forwardTop(buffered)
 	model, ok := first.(Model)
@@ -1805,7 +1807,7 @@ func (m Model) liveGlobals() KeySet {
 	} else {
 		set.Short = append(set.Short, g.Quit)
 	}
-	set.Full = [][]Binding{{g.Saved, g.Go, g.Slot, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}}
+	set.Full = [][]Binding{{g.Saved, g.Go, g.Slot, g.Jump, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}}
 	if len(bound) > 0 {
 		set.Full = append([][]Binding{bound}, set.Full...)
 	}
