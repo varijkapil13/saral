@@ -548,3 +548,42 @@ func TestBoard_ADigitWithNoQuickFilterBoundToItSaysSoAndChangesNothing(t *testin
 		t.Errorf("a digit bound to nothing still changed the cards: %d, want %d", got, before)
 	}
 }
+
+// f on its own answers nothing until a digit completes it, the same gap K7
+// closed for g itself — so it has to say what the digit will do before either
+// key is pressed, not only after.
+func TestBoard_PressingFListsTheQuickFiltersAndTheirDigitsBeforeAnyIsChosen(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
+	if len(dr.m.quickFilters) == 0 {
+		t.Fatal("this case needs a board with quick filters and got none")
+	}
+
+	dr.key("f")
+	if !dr.m.pendingFilter {
+		t.Fatal("f did not latch waiting for a digit")
+	}
+	view := dr.view()
+	for i, qf := range dr.m.quickFilters {
+		if !strings.Contains(view, strconv.Itoa(i+1)) || !strings.Contains(view, qf.Name) {
+			t.Errorf("the prompt does not show %q against its digit %d:\n%s", qf.Name, i+1, view)
+		}
+	}
+
+	dr.key("1")
+	if dr.m.pendingFilter {
+		t.Error("the prompt is still latched after a digit was pressed")
+	}
+	if line := dr.m.quickFilterLine(); !strings.Contains(line, dr.m.quickFilters[0].Name) {
+		t.Errorf("quickFilterLine() = %q after toggling filter 1 on, want it to name it", line)
+	}
+	if !strings.Contains(dr.view(), dr.m.quickFilters[0].Name) {
+		t.Errorf("the title does not name %q once it is toggled on:\n%s", dr.m.quickFilters[0].Name, dr.view())
+	}
+
+	// f again shows the same list with filter 1 now marked on.
+	dr.key("f")
+	if !strings.Contains(dr.view(), "[x] "+dr.m.quickFilters[0].Name) {
+		t.Errorf("the prompt does not mark %q as on the second time f is pressed:\n%s", dr.m.quickFilters[0].Name, dr.view())
+	}
+}

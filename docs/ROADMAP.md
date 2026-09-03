@@ -1064,6 +1064,10 @@ are guesses.
   1-indexed position `QuickFilters` answered in. A board with none says so rather than latching a
   digit that would answer nothing, and a digit past the count says so and changes nothing. Toggling
   re-reads the board with the result; the title names whichever are on.
+  **`f` on its own answers nothing until the digit that completes it — the same gap K7 found and fixed
+  for `g` itself.** So it does not stop at buffering: the row under the grid lists every quick filter
+  against the digit that picks it and marks whichever are already on, the way K7's own overlay lists a
+  view against the digit that switches to it, before either key is pressed rather than only after.
   `jiratest.Fake` mints two quick filters on a Scrum board and none on a Kanban one — not a feature
   detection real Jira makes, but the split gives a test both a populated and a well-formed empty
   answer without inventing an option nothing else needs yet — and applies them through the same small

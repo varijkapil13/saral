@@ -70,7 +70,7 @@ func planLayout(width, rows, columns int) layout {
 // the prompt a gesture in progress puts under them.
 func (m *Model) rowsHeight() int {
 	h := m.height - chromeLines
-	if m.card != nil || m.moving {
+	if m.card != nil || m.moving || m.pendingFilter {
 		h--
 	}
 	return max(h, 1)
@@ -227,7 +227,7 @@ func (m *Model) View() string {
 		}
 	}
 	lines = append(lines, rule)
-	if m.card != nil || m.moving {
+	if m.card != nil || m.moving || m.pendingFilter {
 		lines = append(lines, m.prompt())
 	}
 	m.lines = lines
@@ -528,27 +528,49 @@ func (m *Model) counts() string {
 }
 
 // prompt is the line a gesture in progress puts under the grid: which issue is
-// in hand, where it is going and what the two keys do. It is the named
-// confirmation a move gets — the words say what will change before either
-// gesture commits it.
+// in hand, where it is going and what the two keys do, or which quick filters
+// f is waiting for a digit to pick one of. It is the named confirmation a
+// gesture gets — the words say what will change before it commits.
 func (m *Model) prompt() string {
 	ell := m.deps.Theme.Glyphs.Ellipsis
-	if m.card == nil {
-		if !m.moving {
-			return strings.Repeat(" ", m.width)
+	switch {
+	case m.pendingFilter:
+		return m.quickFilterPrompt()
+	case m.card != nil:
+		said := "move " + m.card.key + " from " + m.card.status + " to " +
+			m.plan.columns[m.card.target].name
+		hint := dropHint
+		if m.moving {
+			hint = m.deps.Theme.Glyphs.Stale + " asking the site"
 		}
+		if ansi.StringWidth(hint) > m.width/2 {
+			hint = defaultKeys().Drop.Help().Key
+		}
+		return m.twoCells(said, hint+"  ", m.styles.aimed, m.styles.muted)
+	case m.moving:
 		return padCells(m.styles.muted.Render("  asking the site for the move"+ell), m.width, ell)
+	default:
+		return strings.Repeat(" ", m.width)
 	}
-	said := "move " + m.card.key + " from " + m.card.status + " to " +
-		m.plan.columns[m.card.target].name
-	hint := dropHint
-	if m.moving {
-		hint = m.deps.Theme.Glyphs.Stale + " asking the site"
+}
+
+// quickFilterPrompt lists the board's own quick filters while f waits for the
+// digit that picks one, each numbered the way toggleQuickFilter reads them and
+// marked for whether it is already on. Without this the gesture is exactly the
+// one K7 found for g itself: a key that answers nothing until the digit after
+// it, with no way to learn what the digit does first.
+func (m *Model) quickFilterPrompt() string {
+	ell := m.deps.Theme.Glyphs.Ellipsis
+	parts := make([]string, 0, len(m.quickFilters))
+	for i, qf := range m.quickFilters {
+		mark := " "
+		if m.qfOn[qf.ID] {
+			mark = "x"
+		}
+		parts = append(parts, strconv.Itoa(i+1)+" ["+mark+"] "+qf.Name)
 	}
-	if ansi.StringWidth(hint) > m.width/2 {
-		hint = defaultKeys().Drop.Help().Key
-	}
-	return m.twoCells(said, hint+"  ", m.styles.aimed, m.styles.muted)
+	said := "quick filters — " + strings.Join(parts, "  ")
+	return padCells(m.styles.aimed.Render(ansi.Truncate("  "+said, m.width, ell)), m.width, ell)
 }
 
 // appendEmpty says which kind of empty this is, and keeps saying it. Six are
