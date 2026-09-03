@@ -131,9 +131,10 @@ func (c *Client) BoardConfig(ctx context.Context, boardID int64) (jira.BoardConf
 // What the endpoint does not apply is the board's own sub-query — a board whose
 // sub-query hid resolved work on released versions answered eighteen issues
 // against the sixteen on screen — so BoardQuery.SubQuery goes out as the
-// endpoint's jql parameter. It is bracketed: the site ANDs the parameter onto
-// the board's filter, and a sub-query with an OR at the top of it would widen
-// the board rather than narrow it.
+// endpoint's jql parameter, alongside any of the board's own quick filters the
+// caller has toggled on. Each term is bracketed: the site ANDs the parameter
+// onto the board's filter, and a term with an OR at the top of it would widen
+// the board rather than narrow it. See boardJQL.
 //
 // The answer carries no schema block, so a custom field arrives typed by the
 // shape of its value.
@@ -159,8 +160,8 @@ func (c *Client) boardIssuePages(ctx context.Context, path string, boardID int64
 	}
 	mask := jira.NewFieldMask(fields)
 	query := url.Values{"fields": []string{strings.Join(fields, ",")}}
-	if sub := strings.TrimSpace(q.SubQuery); sub != "" {
-		query.Set("jql", "("+sub+")")
+	if jql := boardJQL(q); jql != "" {
+		query.Set("jql", jql)
 	}
 	size := boardIssuePageSize
 	if q.MaxResults > 0 {
@@ -191,6 +192,24 @@ func (c *Client) boardIssuePages(ctx context.Context, path string, boardID int64
 		}
 		return out, total, isLast, nil
 	})
+}
+
+// boardJQL is the endpoint's jql parameter: the sub-query and every toggled
+// quick filter, each bracketed and ANDed, in that order. Bracketing each term
+// separately is what SubQuery already relies on — an OR at the top of one term
+// would otherwise widen the board rather than narrow it — and a quick filter's
+// JQL is no safer to trust unbracketed than the sub-query is.
+func boardJQL(q jira.BoardQuery) string {
+	terms := make([]string, 0, 1+len(q.QuickFilters))
+	if sub := strings.TrimSpace(q.SubQuery); sub != "" {
+		terms = append(terms, "("+sub+")")
+	}
+	for _, qf := range q.QuickFilters {
+		if qf = strings.TrimSpace(qf); qf != "" {
+			terms = append(terms, "("+qf+")")
+		}
+	}
+	return strings.Join(terms, " AND ")
 }
 
 func errBoardIssuesNeedFields() error {

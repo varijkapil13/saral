@@ -698,6 +698,52 @@ func (f *Fake) BoardConfig(ctx context.Context, boardID int64) (jira.BoardConfig
 	return cfg, nil
 }
 
+// QuickFilters lists a board's own quick filters. This fake mints the same two
+// on every Scrum board, "Only My Issues" and "Unassigned", because both are
+// expressible in the JQL subset fakeParseJQL understands and so can actually be
+// applied rather than only echoed back. A Kanban board here reports none, which
+// is a board's ordinary answer and not a narrower one of this fake's — a real
+// board's quick filters are configured independently of its type, and nothing
+// about QuickFilters itself is feature-detected on it; the split only gives a
+// test both a populated and a well-formed empty answer without inventing an
+// option nothing else needs yet.
+func (f *Fake) QuickFilters(ctx context.Context, boardID int64) ([]jira.QuickFilter, error) {
+	if err := f.fakeBegin(ctx, "QuickFilters"); err != nil {
+		return nil, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.caps.Require(jira.CapBoards); err != nil {
+		return nil, err
+	}
+	board, ok := f.boards[boardID]
+	if !ok {
+		return nil, fakeNotFound("board", strconv.FormatInt(boardID, 10))
+	}
+	if board.Type != jira.BoardScrum {
+		return nil, nil
+	}
+	return fakeQuickFiltersOf(boardID), nil
+}
+
+// fakeQuickFiltersOf is the fixed pair of quick filters a Scrum board here
+// reports, with ids derived from the board's own so that two boards never
+// collide on one.
+func fakeQuickFiltersOf(boardID int64) []jira.QuickFilter {
+	return []jira.QuickFilter{
+		{
+			ID: boardID*10 + 1, Name: "Only My Issues", Position: 0,
+			JQL:         "assignee = currentUser()",
+			Description: "Issues assigned to you",
+		},
+		{
+			ID: boardID*10 + 2, Name: "Unassigned", Position: 1,
+			JQL:         "assignee is empty",
+			Description: "Issues nobody is assigned",
+		},
+	}
+}
+
 // BoardIssues lists what a board is showing: the issues in the board's project
 // whose status one of its columns maps, narrowed by the board's sub-query when
 // one is passed, ordered by rank where the board has a rank field and by the
@@ -746,7 +792,7 @@ func (f *Fake) fakeBoardIssues(ctx context.Context, name string, boardID int64, 
 		if !ok {
 			return nil, -1, false, fakeNotFound("board", strconv.FormatInt(boardID, 10))
 		}
-		matched, err := f.fakeBoardSet(board, q.SubQuery, backlog)
+		matched, err := f.fakeBoardSet(board, q.SubQuery, q.QuickFilters, backlog)
 		if err != nil {
 			return nil, -1, false, err
 		}
@@ -771,8 +817,12 @@ func (f *Fake) fakeBoardIssues(ctx context.Context, name string, boardID int64, 
 
 // fakeBoardSet is the issues one of the two reads answers with, in the order it
 // answers them in.
-func (f *Fake) fakeBoardSet(board *jira.Board, subQuery string, backlog bool) ([]*jira.Issue, error) {
+func (f *Fake) fakeBoardSet(board *jira.Board, subQuery string, quickFilters []string, backlog bool) ([]*jira.Issue, error) {
 	keep, err := f.fakeSubQuery(board, subQuery)
+	if err != nil {
+		return nil, err
+	}
+	quick, err := f.fakeQuickFilterMatch(quickFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -784,6 +834,7 @@ func (f *Fake) fakeBoardSet(board *jira.Board, subQuery string, backlog bool) ([
 		case iss.Project.Key != board.ProjectKey:
 		case !mapped[iss.Status.ID]:
 		case !keep(iss):
+		case !quick(iss):
 		case backlog && !f.fakeUnscheduled(iss):
 		default:
 			out = append(out, iss)
@@ -793,6 +844,33 @@ func (f *Fake) fakeBoardSet(board *jira.Board, subQuery string, backlog bool) ([
 		slices.SortStableFunc(out, func(a, b *jira.Issue) int { return fakeCompareRank(a, b, ref) })
 	}
 	return out, nil
+}
+
+// fakeQuickFilterMatch is every toggled quick filter's JQL, ANDed together.
+// Each fragment is read with the same JQL subset the search endpoint reads
+// with, because a quick filter's JQL is board-native and this fake's own
+// QuickFilters mints only fragments that subset actually understands — see
+// fakeQuickFiltersOf.
+func (f *Fake) fakeQuickFilterMatch(quickFilters []string) (func(*jira.Issue) bool, error) {
+	if len(quickFilters) == 0 {
+		return func(*jira.Issue) bool { return true }, nil
+	}
+	groups := make([]fakeGroup, 0, len(quickFilters))
+	for _, jql := range quickFilters {
+		plan, err := fakeParseJQL(jql)
+		if err != nil {
+			return nil, fakeInvalid("quickFilters", err.Error())
+		}
+		groups = append(groups, plan.groups...)
+	}
+	return func(iss *jira.Issue) bool {
+		for _, g := range groups {
+			if !f.fakeMatchGroup(iss, g) {
+				return false
+			}
+		}
+		return true
+	}, nil
 }
 
 // fakeUnscheduled is what the backlog endpoint means by an issue being in one.

@@ -4,6 +4,7 @@ package board
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,6 +65,14 @@ type Model struct {
 	plan  plan
 	ready bool
 
+	// quickFilters is the board's own, read alongside the cards; a board with
+	// none, or a read that failed, both leave it empty rather than blocking the
+	// cards on it — see quickFilter.go.
+	quickFilters []jira.QuickFilter
+	// qfOn is which of quickFilters are toggled on, keyed by QuickFilter.ID.
+	qfOn          map[int64]bool
+	pendingFilter bool
+
 	issues []jira.Issue
 	// cols holds, per column, the indexes into issues that landed in it. An
 	// issue whose status the board does not map lands in none of them and is
@@ -103,9 +112,10 @@ type Model struct {
 	missing  []string
 	checked  time.Time
 
-	gen    int
-	cancel context.CancelFunc
-	addr   kernel.Addr
+	gen      int
+	cancel   context.CancelFunc
+	qfCancel context.CancelFunc
+	addr     kernel.Addr
 
 	zones   widget.Zoner
 	clicks  *widget.Clicks
@@ -182,6 +192,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case configMsg:
 		cmd = m.tookConfig(msg)
 
+	case quickFiltersMsg:
+		m.tookQuickFilters(msg)
+
 	case issuesMsg:
 		cmd = m.tookIssues(msg)
 
@@ -218,7 +231,10 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 // Close lets go of whichever of the three reads is in flight, and of a move
 // still out with the site. A board that has been thrown away has nothing to
 // draw.
-func (m *Model) Close() { m.stop() }
+func (m *Model) Close() {
+	m.stop()
+	m.stopQuickFilters()
+}
 
 // --- fetching ---------------------------------------------------------------
 
@@ -242,6 +258,18 @@ func (m *Model) stop() {
 	}
 	m.loading, m.moving = false, false
 	m.step = stepIdle
+}
+
+// stopQuickFilters cancels only the quick-filter read in flight, if there is
+// one. It is not folded into stop, which begin calls before each of the other
+// three reads: those run far more often than a board's quick filters change,
+// and tying the two together would cancel a filter list still loading every
+// time a card is picked up.
+func (m *Model) stopQuickFilters() {
+	if m.qfCancel != nil {
+		m.qfCancel()
+		m.qfCancel = nil
+	}
 }
 
 // reply puts this board's address on a command, so what it asked for comes back
@@ -276,7 +304,21 @@ func (m *Model) loadCards() tea.Cmd {
 		return nil
 	}
 	ctx, gen := m.begin(stepIssues)
-	return m.reply(cards(ctx, m.deps.Jira, m.search, m.plan, gen))
+	return m.reply(cards(ctx, m.deps.Jira, m.search, m.plan, m.activeQuickFilterJQL(), gen))
+}
+
+// loadQuickFilters reads the board's own quick filters, alongside cards and
+// under the same generation, but with its own context: it is not one of the
+// three questions begin cancels the others over, because it can fail or run
+// long without the cards it draws beside being any less answered.
+func (m *Model) loadQuickFilters() tea.Cmd {
+	m.stopQuickFilters()
+	if m.deps.Jira == nil || m.at < 0 || m.at >= len(m.all) {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.qfCancel = cancel
+	return kernel.Reply(withCancel(cancel, quickFiltersCmd(ctx, m.deps.Jira, m.all[m.at].ID, m.gen)), m.addr)
 }
 
 // refresh re-reads what is on screen. Purging re-reads the board's shape as
@@ -328,10 +370,14 @@ func (m *Model) tookConfig(msg configMsg) tea.Cmd {
 	}
 	m.loading, m.step = false, stepIdle
 	m.plan, m.ready = newPlan(msg.cfg), true
+	m.quickFilters, m.qfOn = nil, nil
 	m.card = nil
 	m.place()
 	m.forget()
-	return m.loadCards()
+	// loadCards first: it is what bumps the generation loadQuickFilters reads,
+	// so a quick filter answer for the board being left cannot be read as one
+	// for the board just opened.
+	return tea.Batch(m.loadCards(), m.loadQuickFilters())
 }
 
 func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
@@ -378,6 +424,7 @@ func (m *Model) nextBoard() tea.Cmd {
 	}
 	m.at = (m.at + 1) % len(m.all)
 	m.ready, m.issues, m.cols, m.unmapped = false, nil, nil, 0
+	m.quickFilters, m.qfOn = nil, nil
 	m.curCol, m.curRow, m.colTop, m.rowTop = 0, 0, 0, 0
 	m.card = nil
 	m.forget()
@@ -690,6 +737,15 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 	}
+	if m.pendingFilter {
+		m.pendingFilter = false
+		if n, err := strconv.Atoi(stroke); err == nil {
+			if !m.toggleQuickFilter(n) {
+				return kernel.Warn("no quick filter is bound to " + strconv.Itoa(n))
+			}
+			return m.loadCards()
+		}
+	}
 	switch m.browsing[stroke] {
 	case actUp:
 		m.moveTo(m.curCol, m.curRow-1)
@@ -715,6 +771,11 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.pickUp()
 	case actBoard:
 		return m.nextBoard()
+	case actFilter:
+		if len(m.quickFilters) == 0 {
+			return kernel.Warn("this board has no quick filters")
+		}
+		m.pendingFilter = true
 	case actNone, actDrop, actCancel:
 	}
 	return nil

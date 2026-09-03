@@ -377,3 +377,148 @@ func TestBoardIssues_RefuseAReadThatNamesNoFieldAndABoardNobodyHas(t *testing.T)
 		t.Errorf("the 404 names %s %s, want a board", missing.Kind, missing.ID)
 	}
 }
+
+// A Scrum board here reports the two quick filters this fake can actually
+// evaluate; a Kanban board reports none, which is a board's ordinary answer
+// and not a refusal — see Fake.QuickFilters.
+func TestQuickFilters_AScrumBoardHasThemAndAKanbanBoardHasNone(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 4)
+	scrum := fakeBoard(t, c)
+	got, err := c.QuickFilters(t.Context(), scrum.ID)
+	if err != nil {
+		t.Fatalf("QuickFilters: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("a Scrum board reports %d quick filters, want 2: %+v", len(got), got)
+	}
+	for i, qf := range got {
+		if qf.Name == "" || qf.JQL == "" {
+			t.Errorf("quick filter %d is %+v, missing a name or JQL", i, qf)
+		}
+		if qf.Position != i {
+			t.Errorf("quick filter %d is %+v, want position %d", i, qf, i)
+		}
+	}
+
+	kanban := jiratest.New(jiratest.WithProject("OTHER", jiratest.Kanban), jiratest.WithIssues(jiratest.GenFor("OTHER", 4)))
+	boards, err := kanban.Boards(t.Context(), "OTHER")
+	if err != nil || len(boards) != 1 {
+		t.Fatalf("Boards on OTHER: %v, %+v", err, boards)
+	}
+	none, err := kanban.QuickFilters(t.Context(), boards[0].ID)
+	if err != nil {
+		t.Fatalf("QuickFilters on a Kanban board: %v", err)
+	}
+	if len(none) != 0 {
+		t.Errorf("a Kanban board reports %+v, want none", none)
+	}
+}
+
+func TestQuickFilters_ABoardNobodyHasIsA404(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 4)
+	board := fakeBoard(t, c)
+	_, err := c.QuickFilters(t.Context(), board.ID+9000)
+	var missing *jira.NotFoundError
+	if !errors.As(err, &missing) {
+		t.Fatalf("got %T (%v), want a *jira.NotFoundError", err, err)
+	}
+}
+
+// The whole reason QuickFilters exists: what it reads back has to actually
+// narrow a board read when passed back through BoardQuery.QuickFilters.
+func TestBoardIssues_ApplyTheQuickFiltersTheCallerToggledOn(t *testing.T) {
+	t.Parallel()
+	me := jira.User{AccountID: "acct-quickfilter-me", DisplayName: "Quick Filter Tester", Kind: jira.AccountPerson}
+	base := jiratest.Gen(6)
+	mine := base[0]
+	mine.ID, mine.Key, mine.Assignee = "29901", "PROJ-901", &me
+	unassigned := base[1]
+	unassigned.ID, unassigned.Key, unassigned.Assignee = "29902", "PROJ-902", nil
+	c := fakeNewWithIssues(t, 0,
+		jiratest.WithMe(me),
+		jiratest.WithIssues(append(base, mine, unassigned)),
+	)
+	board := fakeBoard(t, c)
+	qfs, err := c.QuickFilters(t.Context(), board.ID)
+	if err != nil {
+		t.Fatalf("QuickFilters: %v", err)
+	}
+	mineQF, unassignedQF := fakeQuickFilterNamed(t, qfs, "Only My Issues"), fakeQuickFilterNamed(t, qfs, "Unassigned")
+
+	page, err := c.BoardIssues(t.Context(), board.ID, jira.BoardQuery{Fields: fakeNarrow, QuickFilters: []string{mineQF.JQL}})
+	if err != nil {
+		t.Fatalf("reading the board with Only My Issues toggled on: %v", err)
+	}
+	got, err := jira.Collect(t.Context(), page, 0)
+	if err != nil {
+		t.Fatalf("walking the board: %v", err)
+	}
+	if len(got) != 1 || got[0].Key != "PROJ-901" {
+		t.Fatalf("Only My Issues answered %v, want just PROJ-901", fakeKeysOf(got))
+	}
+
+	page, err = c.BoardIssues(t.Context(), board.ID, jira.BoardQuery{Fields: fakeNarrow, QuickFilters: []string{unassignedQF.JQL}})
+	if err != nil {
+		t.Fatalf("reading the board with Unassigned toggled on: %v", err)
+	}
+	got, err = jira.Collect(t.Context(), page, 0)
+	if err != nil {
+		t.Fatalf("walking the board: %v", err)
+	}
+	if !slices.Contains(fakeKeysOf(got), "PROJ-902") {
+		t.Errorf("Unassigned answered %v, want it to include PROJ-902", fakeKeysOf(got))
+	}
+	for i := range got {
+		if got[i].Assignee != nil {
+			t.Errorf("%s has an assignee, and Unassigned is supposed to mean nobody does", got[i].Key)
+		}
+	}
+
+	// Both together is an AND, not an OR: nobody is both PROJ-901's assignee and
+	// unassigned, so toggling both on together leaves nothing.
+	page, err = c.BoardIssues(t.Context(), board.ID, jira.BoardQuery{
+		Fields: fakeNarrow, QuickFilters: []string{mineQF.JQL, unassignedQF.JQL},
+	})
+	if err != nil {
+		t.Fatalf("reading the board with both toggled on: %v", err)
+	}
+	got, err = jira.Collect(t.Context(), page, 0)
+	if err != nil {
+		t.Fatalf("walking the board: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("Only My Issues AND Unassigned together answered %v, want none", fakeKeysOf(got))
+	}
+}
+
+// A quick filter's JQL is opaque and board-native; passing something this
+// fake's JQL subset cannot read is refused rather than silently ignored, the
+// same way an unrecognised sub-query is.
+func TestBoardIssues_RefuseAQuickFilterThisFakeCannotEvaluate(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 4)
+	board := fakeBoard(t, c)
+	_, err := c.BoardIssues(t.Context(), board.ID, jira.BoardQuery{
+		Fields: fakeNarrow, QuickFilters: []string{"text ~ \"urgent\""},
+	})
+	var invalid *jira.ValidationError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("got %T (%v), want a *jira.ValidationError", err, err)
+	}
+	if _, named := invalid.For("quickFilters"); !named {
+		t.Errorf("the refusal says %v and does not name quickFilters", invalid.Fields)
+	}
+}
+
+func fakeQuickFilterNamed(t *testing.T, qfs []jira.QuickFilter, name string) jira.QuickFilter {
+	t.Helper()
+	for _, qf := range qfs {
+		if qf.Name == name {
+			return qf
+		}
+	}
+	t.Fatalf("no quick filter named %q among %+v", name, qfs)
+	return jira.QuickFilter{}
+}

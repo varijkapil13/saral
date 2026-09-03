@@ -1045,6 +1045,33 @@ are guesses.
   reorder when the board exposes a rank field. Takes the footer slot PC.2 assigns it; the kernel
   rejects a duplicate at startup, so this cannot be settled by guessing.
 
+- [x] **P6.4 — Board quick filters** · [#136](https://github.com/varijkapil13/saral/issues/136) ·
+  **owns** `pkg/jira/{port,types,roles}.go` (the `QuickFilters` amendment), `pkg/jira/cloud/quickfilter.go`
+  and its tests, the `boardJQL` composition and its tests in `pkg/jira/cloud/board.go`,
+  `pkg/jira/jiratest/{fake,boardissues_test}.go` (the `QuickFilters` half), `pkg/jira/jiratest/fixtures/board_quickfilters*.json`,
+  `internal/ui/board/{quickfilter,keys}.go` and the `Filters`/`quickFilters` wiring in `board.go` and
+  `render.go`, `docs/{API-NOTES,ROADMAP}.md`
+  A board's own quick filters — "Only My Issues", "Recently Updated" — were unread: `GET
+  /rest/agile/1.0/board/{id}/quickfilter` is a **separate** endpoint from `/configuration`, paged the
+  way `/board` and `/board/{id}/sprint` are, and nothing on the port named it.
+  `BoardQuery` gained `QuickFilters []string`, ANDed onto `SubQuery` into the one `jql` parameter the
+  endpoint takes — bracketed the same way `SubQuery` already is, so a filter with an OR at the top of
+  it cannot widen the board rather than narrow it. The type doc's existing "no further narrowing" rule
+  stands: every entry has to be JQL a caller read back from `QuickFilters`, never one it composed, so
+  what it narrows to is a state the site's own board draws too.
+  **The gesture is `f` then a digit**, not `1`-`9` alone: the kernel already claims the bare digits for
+  a root view's saved queries, so a board's own prefix buffers the way `g` does, and the digit is the
+  1-indexed position `QuickFilters` answered in. A board with none says so rather than latching a
+  digit that would answer nothing, and a digit past the count says so and changes nothing. Toggling
+  re-reads the board with the result; the title names whichever are on.
+  `jiratest.Fake` mints two quick filters on a Scrum board and none on a Kanban one — not a feature
+  detection real Jira makes, but the split gives a test both a populated and a well-formed empty
+  answer without inventing an option nothing else needs yet — and applies them through the same small
+  JQL subset `Search` already reads with, so `assignee = currentUser()` and `assignee is empty` are
+  real narrowing and not just echoed back.
+  **What this does not cover:** the backlog view (`internal/ui/backlog`) draws on the same board and
+  could offer the same toggles; that is a separate packet.
+
 ## Batch 7 — Cross-project move · parallel ×1
 
 - [x] **P7.1 — Move wizard** · [#25](https://github.com/varijkapil13/saral/issues/25) · **owns** `pkg/jira/cloud/bulkmove.go`, `internal/ui/move/**`

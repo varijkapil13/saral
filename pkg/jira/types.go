@@ -981,16 +981,43 @@ func (c BoardConfig) Estimates() bool {
 // draws, and the difference is silent. Anything other than that board's own
 // sub-query narrows the board to a set no board shows.
 //
-// There is deliberately no further narrowing. What a board holds is the board's
-// to define, and a caller that wants a subset of it filters the rows it was
-// given rather than asking the site a question whose answer nothing can compare
-// against the board on screen.
+// There is deliberately no further narrowing invented here. QuickFilters is not
+// an exception to that: each entry is JQL a caller read from QuickFilters(ctx,
+// boardID) rather than composed itself, so what it narrows to is a board state
+// the site's own board draws too — toggling the same quick filter there. A
+// caller that wants a subset of the board this port cannot name filters the
+// rows it was given instead.
 type BoardQuery struct {
 	Fields   []string
 	SubQuery string
+	// QuickFilters are the JQL of whichever of the board's own quick filters are
+	// toggled on, each one ANDed onto SubQuery the way the board's own UI ANDs
+	// them. Every entry has to be a JQL string this call's QuickFilters read
+	// back, never one composed by the caller — see the type doc.
+	QuickFilters []string
 	// MaxResults is how many issues one page asks for. Zero leaves the length
 	// to the adapter.
 	MaxResults int
+}
+
+// QuickFilter is one of a board's own quick filters: a JQL fragment the site
+// offers to AND onto what the board already shows, toggled rather than
+// replacing it — "Only My Issues", say, or "Recently Updated". It is read
+// through QuickFilters(ctx, boardID) and passed back through
+// BoardQuery.QuickFilters; nothing here is a claim it still exists, since a
+// board's quick filters are edited independently of everything else about it.
+type QuickFilter struct {
+	ID   int64
+	Name string
+	// JQL is the fragment this quick filter ANDs onto a board read. It is
+	// opaque: there is no engine in this package that could evaluate it, which
+	// is why it goes back to the site rather than being matched locally.
+	JQL string
+	// Description is the site's own text for what the filter narrows to, and is
+	// empty when nobody wrote one.
+	Description string
+	// Position is the order the board draws its quick filters in.
+	Position int
 }
 
 // SprintState is where a sprint is in its lifecycle. The only legal moves are

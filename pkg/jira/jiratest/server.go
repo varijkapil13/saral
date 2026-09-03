@@ -261,6 +261,7 @@ var srvDefaultRoutes = []srvRoute{
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/issue", srvFixtureHandler(http.StatusOK, "board_issues.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/backlog", srvFixtureHandler(http.StatusOK, "board_issues.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/epic", srvFixtureHandler(http.StatusOK, "board_epics.json")},
+	{http.MethodGet, "/rest/agile/1.0/board/{id}/quickfilter", srvFixtureHandler(http.StatusOK, "board_quickfilters.json")},
 	// 403 is the normal answer — the Plans API needs Administer Jira — so it is
 	// the default. A test that wants the reachable case overrides the route:
 	//   WithFixture(http.MethodGet, "/rest/api/3/plans/plan", "plans_ok.json")

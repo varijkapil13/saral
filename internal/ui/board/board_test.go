@@ -462,3 +462,89 @@ func TestBoard_SaysWhichOfItsThreeQuestionsIsOutstanding(t *testing.T) {
 		})
 	}
 }
+
+// The whole reason a board reads its own quick filters: toggling one on
+// actually narrows the cards, toggling it back off restores them, and the
+// title says which are on.
+func TestBoard_TogglingAQuickFilterNarrowsTheCardsAndTogglingItAgainRestoresThem(t *testing.T) {
+	t.Parallel()
+	me := jira.User{AccountID: "acct-board-qf", DisplayName: "Board QF Tester", Kind: jira.AccountPerson}
+	base := jiratest.Gen(6)
+	mine := base[0]
+	mine.ID, mine.Key, mine.Assignee = "39001", "PROJ-9001", &me
+	fake := jiratest.New(
+		jiratest.WithProject("PROJ", jiratest.Scrum),
+		jiratest.WithMe(me),
+		jiratest.WithIssues(append(base, mine)),
+	)
+	dr := newDriver(t, testDeps(fake), 120, 20)
+
+	if len(dr.m.quickFilters) != 2 {
+		t.Fatalf("the board loaded %d quick filters, want the two this fake mints on a Scrum board", len(dr.m.quickFilters))
+	}
+	if line := dr.m.quickFilterLine(); line != "" {
+		t.Fatalf("quickFilterLine() = %q before anything was toggled on", line)
+	}
+	before := len(dr.m.issues)
+	if before == 0 {
+		t.Fatal("the board answered with no cards before any filter was toggled, so narrowing proves nothing")
+	}
+
+	name := dr.m.quickFilters[0].Name
+	dr.key("f", "1")
+	if got := len(dr.m.issues); got == 0 || got >= before {
+		t.Fatalf("toggling %q on left %d cards, want fewer than the %d before", name, got, before)
+	}
+	if line := dr.m.quickFilterLine(); !strings.Contains(line, name) {
+		t.Errorf("quickFilterLine() = %q, want it to name %q", line, name)
+	}
+	if title := dr.m.boardTitle(); !strings.Contains(title, name) {
+		t.Errorf("the title reads %q and does not name the active filter %q", title, name)
+	}
+
+	dr.key("f", "1")
+	if got := len(dr.m.issues); got != before {
+		t.Errorf("toggling %q back off left %d cards, want the original %d", name, got, before)
+	}
+	if line := dr.m.quickFilterLine(); line != "" {
+		t.Errorf("quickFilterLine() = %q after toggling the only active filter back off", line)
+	}
+}
+
+// f says so rather than latching a digit that would answer nothing, on a board
+// this fake reports none for.
+func TestBoard_PressingFWithNoQuickFiltersSaysSoRatherThanLatching(t *testing.T) {
+	t.Parallel()
+	fake := jiratest.New(jiratest.WithProject("PROJ", jiratest.Kanban), jiratest.WithIssues(jiratest.Gen(4)))
+	dr := newDriver(t, testDeps(fake), 120, 20)
+	if len(dr.m.quickFilters) != 0 {
+		t.Fatalf("a Kanban board here reports %d quick filters, want none for this case", len(dr.m.quickFilters))
+	}
+
+	dr.key("f")
+	if dr.m.pendingFilter {
+		t.Error("f latched waiting for a digit on a board with nothing for one to bind to")
+	}
+	if got := dr.lastStatus().Text; !strings.Contains(got, "no quick filters") {
+		t.Errorf("pressing f said %q, want it to say this board has none", got)
+	}
+}
+
+// A digit with no quick filter bound to it says so and changes nothing, the
+// same way a footer slot with nothing bound to it does.
+func TestBoard_ADigitWithNoQuickFilterBoundToItSaysSoAndChangesNothing(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
+	if len(dr.m.quickFilters) == 0 {
+		t.Fatal("this case needs a board with quick filters and got none")
+	}
+	before := len(dr.m.issues)
+
+	dr.key("f", "9")
+	if got := dr.lastStatus().Text; !strings.Contains(got, "no quick filter is bound to 9") {
+		t.Errorf("pressing f 9 said %q, want it to name the digit", got)
+	}
+	if got := len(dr.m.issues); got != before {
+		t.Errorf("a digit bound to nothing still changed the cards: %d, want %d", got, before)
+	}
+}

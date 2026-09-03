@@ -108,6 +108,10 @@ type Client interface {
 	// board holds sprints a session never listed, an issue carries every sprint
 	// it has ever been in, and neither is visible from a page of issues.
 	BoardBacklog(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
+	// QuickFilters lists a board's own quick filters, in the order the board
+	// draws them. Each is JQL meant for BoardQuery.QuickFilters and nothing
+	// else — see that field's doc for why a caller may not compose its own.
+	QuickFilters(ctx context.Context, boardID int64) ([]QuickFilter, error)
 	// Sprints lists a board's sprints, narrowed to the states named. Passing no
 	// state lists them all, which on a board with years of history is a walk
 	// nothing on a first-paint path should be doing.

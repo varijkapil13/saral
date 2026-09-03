@@ -637,6 +637,14 @@ func boardCalls() []boardCall {
 				return err
 			},
 		},
+		{
+			name:  "reading a board's quick filters",
+			route: quickFilterRoute,
+			run: func(ctx context.Context, c *Client) error {
+				_, err := c.QuickFilters(ctx, boardTestID)
+				return err
+			},
+		},
 	}
 }
 

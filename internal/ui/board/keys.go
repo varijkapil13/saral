@@ -24,6 +24,10 @@ type keyMap struct {
 	// stroke that never arrives.
 	Cancel kernel.Binding
 	Board  kernel.Binding
+	// Filters buffers, the way Go does: the digit it takes next is the
+	// 1-indexed position of one of this board's own quick filters, toggling it
+	// on or off and re-reading the board with the result.
+	Filters kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -42,6 +46,7 @@ func defaultKeys() keyMap {
 		Drop:     kernel.Bind([]string{"enter"}, "enter", "move it to this column"),
 		Cancel:   kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "put it back"),
 		Board:    kernel.Bind([]string{"b"}, "b", "another board of this project"),
+		Filters:  kernel.Bind([]string{"f"}, "f 1-9", "quick filters"),
 	}
 }
 
@@ -70,7 +75,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.Left, k.Right},
 			{k.PageDown, k.PageUp, k.Top, k.Bottom},
-			{k.Open, k.Pick, k.Board},
+			{k.Open, k.Pick, k.Board, k.Filters},
 		},
 	}
 	// A card in hand can only be aimed and landed, so the whole inventory is the
@@ -121,6 +126,7 @@ const (
 	actDrop
 	actCancel
 	actBoard
+	actFilter
 )
 
 // tables turn the bindings into a keystroke lookup, built once per board. The
@@ -134,6 +140,7 @@ func (k keyMap) tables() (browsing, holding map[string]action) {
 		binding{k.PageUp, actPageUp}, binding{k.PageDown, actPageDown},
 		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
 		binding{k.Open, actOpen}, binding{k.Pick, actPick}, binding{k.Board, actBoard},
+		binding{k.Filters, actFilter},
 	)
 	// A card in hand answers only the keys the holding state advertises: the two
 	// that aim it and the two that end the gesture. A motion that moved the

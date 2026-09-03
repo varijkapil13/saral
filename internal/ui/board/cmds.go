@@ -101,18 +101,20 @@ func config(ctx context.Context, reader jira.BoardReader, boardID int64, gen int
 // its statuses is a different board.
 //
 // It asks for the narrow field set a card draws plus the board's own estimation
-// field, never for a wildcard, and it carries the board's sub-query, which is
-// the one part of a board the endpoint leaves to the caller.
-func cards(ctx context.Context, reader jira.BoardReader, search *app.Search, p plan, gen int) tea.Cmd {
+// field, never for a wildcard, and it carries the board's sub-query and
+// whichever of the board's own quick filters are toggled on, which are the two
+// parts of a board the endpoint leaves to the caller.
+func cards(ctx context.Context, reader jira.BoardReader, search *app.Search, p plan, quickFilters []string, gen int) tea.Cmd {
 	return func() tea.Msg {
 		wanted, err := search.Resolve(ctx, p.projection())
 		if err != nil {
 			return failedMsg{gen: gen, step: stepIssues, err: err}
 		}
 		page, err := reader.BoardIssues(ctx, p.boardID, jira.BoardQuery{
-			Fields:     wanted.IDs,
-			SubQuery:   p.subQuery,
-			MaxResults: pageSize,
+			Fields:       wanted.IDs,
+			SubQuery:     p.subQuery,
+			QuickFilters: quickFilters,
+			MaxResults:   pageSize,
 		})
 		if err != nil {
 			return failedMsg{gen: gen, step: stepIssues, err: err}

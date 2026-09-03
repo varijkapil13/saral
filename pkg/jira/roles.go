@@ -174,12 +174,14 @@ type Releaser interface {
 // estimates, whether it ranks and which issues it holds are all answers, and
 // none of them can be worked out from the others — the filter behind a board is
 // JQL only the site can run, so BoardIssues and BoardBacklog are the only route
-// to a board's contents.
+// to a board's contents. QuickFilters is the same kind of answer for the extra
+// JQL a board itself offers to narrow that route with.
 type BoardReader interface {
 	Boards(ctx context.Context, projectKey string) ([]Board, error)
 	BoardConfig(ctx context.Context, boardID int64) (BoardConfig, error)
 	BoardIssues(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
 	BoardBacklog(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
+	QuickFilters(ctx context.Context, boardID int64) ([]QuickFilter, error)
 }
 
 // SprintReader lists a board's sprints. A backlog view holds only this: it

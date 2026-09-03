@@ -436,6 +436,7 @@ type summaryKey struct {
 	ordering   jira.Ordering
 	estimates  bool
 	checked    int64
+	filters    string
 }
 
 func (m *Model) summaryKey() summaryKey {
@@ -445,7 +446,7 @@ func (m *Model) summaryKey() summaryKey {
 		shown: m.lay.cols, boards: len(m.all), more: m.more,
 		loading: m.loading, loaded: m.loaded, failed: m.failure != nil,
 		ordering: m.plan.ordering, estimates: m.plan.estimates,
-		checked: m.checked.UnixNano(),
+		checked: m.checked.UnixNano(), filters: m.quickFilterLine(),
 	}
 }
 
@@ -483,10 +484,12 @@ func (m *Model) twoCells(left, right string, ls, rs lipgloss.Style) string {
 func (m *Model) boardTitle() string {
 	name := m.boardName()
 	if name == "" {
-		return "Board"
+		name = "Board"
+	} else if len(m.all) > 1 {
+		name += " (" + strconv.Itoa(m.at+1) + " of " + strconv.Itoa(len(m.all)) + ")"
 	}
-	if len(m.all) > 1 {
-		return name + " (" + strconv.Itoa(m.at+1) + " of " + strconv.Itoa(len(m.all)) + ")"
+	if line := m.quickFilterLine(); line != "" {
+		name += " · " + line
 	}
 	return name
 }
