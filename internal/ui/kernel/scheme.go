@@ -20,7 +20,7 @@ import (
 // palette everywhere else here, and a second meaning for it would be read as
 // the first one.
 type Scheme struct {
-	id, title   string
+	id, name    string
 	light, dark schemeColors
 }
 
@@ -44,8 +44,11 @@ func (s Scheme) colors(dark bool) schemeColors {
 // scheme by.
 func (s Scheme) ID() string { return s.id }
 
-// Title is the sentence the command palette offers this scheme with.
-func (s Scheme) Title() string { return s.title }
+// Name is what a settings row shows this scheme as. It is a noun and not an
+// instruction: the row already says it is the colour scheme, and "Colour
+// scheme: use the Nord colour scheme" reads as a command left over from the
+// palette this moved out of.
+func (s Scheme) Name() string { return s.name }
 
 // hexColors builds a schemeColors from nine hex strings in field order, so a
 // scheme's table reads as the colours it names rather than as nine calls to
@@ -63,31 +66,31 @@ func hexColors(fg, muted, accent, danger, warning, success, surface, selected, o
 // scheme is additive, not a replacement of what colour meant before it
 // existed.
 var DefaultScheme = Scheme{
-	id: "default", title: "Use the default colours",
+	id: "default", name: "Default",
 	light: hexColors("#1f2328", "#6e7781", "#0550ae", "#cf222e", "#9a6700", "#1a7f37", "#eaeef2", "#ddf4ff", "#0a3069"),
 	dark:  hexColors("#e6edf3", "#8b949e", "#79c0ff", "#ff7b72", "#d29922", "#3fb950", "#161b22", "#1f6feb", "#f0f6fc"),
 }
 
 var nordScheme = Scheme{
-	id: "nord", title: "Use the Nord colour scheme",
+	id: "nord", name: "Nord",
 	dark:  hexColors("#eceff4", "#4c566a", "#88c0d0", "#bf616a", "#ebcb8b", "#a3be8c", "#3b4252", "#5e81ac", "#eceff4"),
 	light: hexColors("#2e3440", "#4c566a", "#5e81ac", "#bf616a", "#b48111", "#4c7a3d", "#e5e9f0", "#88c0d0", "#2e3440"),
 }
 
 var draculaScheme = Scheme{
-	id: "dracula", title: "Use the Dracula colour scheme",
+	id: "dracula", name: "Dracula",
 	dark:  hexColors("#f8f8f2", "#6272a4", "#bd93f9", "#ff5555", "#f1fa8c", "#50fa7b", "#44475a", "#6272a4", "#282a36"),
 	light: hexColors("#282a36", "#6272a4", "#6b46c1", "#d63031", "#b8860b", "#2e7d32", "#f4f4f8", "#e0d4f7", "#282a36"),
 }
 
 var solarizedScheme = Scheme{
-	id: "solarized", title: "Use the Solarized colour scheme",
+	id: "solarized", name: "Solarized",
 	dark:  hexColors("#839496", "#586e75", "#268bd2", "#dc322f", "#b58900", "#859900", "#073642", "#268bd2", "#fdf6e3"),
 	light: hexColors("#657b83", "#93a1a1", "#268bd2", "#dc322f", "#b58900", "#859900", "#eee8d5", "#268bd2", "#fdf6e3"),
 }
 
 var gruvboxScheme = Scheme{
-	id: "gruvbox", title: "Use the Gruvbox colour scheme",
+	id: "gruvbox", name: "Gruvbox",
 	dark:  hexColors("#ebdbb2", "#928374", "#83a598", "#fb4934", "#fabd2f", "#b8bb26", "#3c3836", "#458588", "#282828"),
 	light: hexColors("#3c3836", "#928374", "#458588", "#cc241d", "#d79921", "#98971a", "#ebdbb2", "#83a598", "#fbf1c7"),
 }
@@ -138,7 +141,7 @@ func schemeSetting() Setting {
 		Options: func(Deps) []SettingOption {
 			out := make([]SettingOption, len(Schemes))
 			for i, sc := range Schemes {
-				out[i] = SettingOption{ID: sc.id, Label: sc.title, Style: schemeStyle(sc)}
+				out[i] = SettingOption{ID: sc.id, Label: sc.name, Style: schemeStyle(sc)}
 			}
 			return out
 		},

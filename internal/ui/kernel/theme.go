@@ -337,7 +337,7 @@ func themeSetting() Setting {
 		Options: func(Deps) []SettingOption {
 			out := make([]SettingOption, len(themeModes))
 			for i, mode := range themeModes {
-				out[i] = SettingOption{ID: mode.String(), Label: mode.title()}
+				out[i] = SettingOption{ID: mode.String(), Label: mode.label()}
 			}
 			return out
 		},
@@ -391,17 +391,19 @@ func glyphsSetting() Setting {
 	}
 }
 
-// title is how the palette offers the mode.
-func (m ThemeMode) title() string {
+// label is the mode as a settings row names it, which is a value and not an
+// instruction: the row already says it is the theme, and "Theme: use the dark
+// theme" reads as a command left over from the palette this moved out of.
+func (m ThemeMode) label() string {
 	switch m {
 	case ThemeDark:
-		return "Use the dark theme"
+		return "dark"
 	case ThemeLight:
-		return "Use the light theme"
+		return "light"
 	case ThemeNoColor:
-		return "Turn colour off"
+		return "no colour"
 	default:
-		return "Follow the terminal's own colours"
+		return "auto"
 	}
 }
 
