@@ -105,6 +105,12 @@ releases
 │ A      archive or unarchive it │
 └────────────────────────────────┘
 
+settings
+┌───────────────────────────┐
+│ What can be done here     │
+│ enter  apply, open or run │
+└───────────────────────────┘
+
 sprints
 ┌────────────────────────────────┐
 │ What can be done here          │

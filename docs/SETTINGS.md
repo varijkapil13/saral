@@ -181,6 +181,12 @@ looking straight at the thing they want to change and needs to be told why it wi
 `saveTheme` has three outcomes — written, no profile so session-only, write failed — and says which
 in a status line that is gone by the time you have read the next row.
 
+A section whose settings do not all agree — `appearance.mouse` is `ScopeFile` beside three
+`ScopeProfile` neighbours, and `Session` splits down the middle between `session.project`
+(`ScopeSession`: nothing here is written back yet, so a switch lasts one run) and `session.profile`
+(`ScopeFile`) — carries the scope most of its settings share in the header, and the row that disagrees
+carries its own note instead of a header that would be wrong for it.
+
 ## The screen
 
 `internal/ui/settings` — a new package, a new directory, nobody else's files. It registers a
@@ -200,15 +206,15 @@ in a status line that is gone by the time you have read the next row.
     Glyphs                    (•) unicode  ( ) ascii
       box drawing, or plain ASCII for a font you cannot trust
 
-    Mouse                     [✓] on                       this machine
-      clicking, dragging the split, the right-click menu
+    Mouse                     [✓] on
+      clicking, dragging the split, the right-click menu  (saved to config.toml)
 
-  Session                                        saved to profile "work"
+  Session
 
-    Project                   DA · Data Analytics                        ▸
-      what a search means by "this project", and what the probe ran against
+    Project                   DA                                         ▸
+      what a search means by "this project", and what the probe ran against  (this session only)
 
-    Profile                   work · example.atlassian.net               ▸
+    Profile                   work · example.atlassian.net · me@example.com · token from …  ▸
       site, account and where the token comes from. changing it needs a restart
 
     Set up a profile again                                               →
@@ -227,7 +233,7 @@ Five row shapes, and no sixth without a reason written down.
 | **Radios**, inline | `KindChoice`, options fit the row (roughly ≤4 short labels) | `←`/`→` moves through them and applies at once, `enter` applies the one under the cursor |
 | **Value + `▸`** | `KindChoice`, options do not fit, or come from the site | `enter` or `→` opens a picker over the screen; it comes back with the value applied |
 | **Toggle** `[✓]` | `KindToggle` | `enter`, `space` or `←`/`→` flips it |
-| **Value, dimmed** | `KindInfo` | nothing; `enter` says why in the status line |
+| **Value, dimmed** | `KindInfo` | nothing when `Run` is nil, `enter` says why in the status line; a `▸` and `enter`/`→` open something when `Run` is not — `session.profile`'s picker on a multi-profile config |
 | **Label + `→`** | `KindAction` | `enter` runs it |
 
 Radios apply immediately. There is no *Save* button and no *Apply*: every one of these settings is

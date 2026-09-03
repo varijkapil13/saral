@@ -1263,7 +1263,7 @@ S2 depends on S1; S3 depends on neither and can run beside them.
   `q ctrl+c esc ? ctrl+k r R g` and the digits, `alt+k` is kill-line, and the kernel buffers `g` so
   no view loses a gesture.
 
-- [ ] **S2 — The settings screen** · depends on S1 ·
+- [x] **S2 — The settings screen** · depends on S1 ·
   **owns** `internal/ui/settings/**`, `internal/ui/views.go` (one blank import),
   `internal/ui/palette/{project.go,project_view.go}` (the picker gains a second door),
   `docs/{SETTINGS,UX,ROADMAP}.md`

@@ -30,6 +30,8 @@ release.flow
  Issues  enter choose                                                                                       ? ctrl+k esc
 releases
  Issues  enter release  n new  e edit  A archive                                                            ? ctrl+k esc
+settings
+ Issues  enter apply, open or run                                                                           ? ctrl+k esc
 sprints
  Issues  o closed                                                                                           ? ctrl+k esc
 timeline

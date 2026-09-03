@@ -20,6 +20,7 @@ import (
 	_ "github.com/varijkapil13/saral/internal/ui/palette"
 	_ "github.com/varijkapil13/saral/internal/ui/plan"
 	_ "github.com/varijkapil13/saral/internal/ui/release"
+	_ "github.com/varijkapil13/saral/internal/ui/settings"
 	_ "github.com/varijkapil13/saral/internal/ui/sprint"
 	_ "github.com/varijkapil13/saral/internal/ui/timeline"
 )

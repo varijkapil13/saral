@@ -20,6 +20,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/onboarding"
 	"github.com/varijkapil13/saral/internal/ui/plan"
 	"github.com/varijkapil13/saral/internal/ui/release"
+	"github.com/varijkapil13/saral/internal/ui/settings"
 	"github.com/varijkapil13/saral/internal/ui/sprint"
 	"github.com/varijkapil13/saral/internal/ui/timeline"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -73,6 +74,10 @@ var staticKeys = map[string]struct {
 	issue.ViewID: {
 		build: func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
 		why:   "the detail pane scrolls a document and every one of its keys works whatever it is showing",
+	},
+	kernel.SettingsViewID: {
+		build: settings.New,
+		why:   "every row shape answers to the same four directions and enter; nothing about the screen's own state removes one",
 	},
 }
 
@@ -274,6 +279,10 @@ var parked = map[string]struct {
 		build: timeline.New,
 		why:   "the timeline holds a footer slot and nothing pushes it, so it is only ever a root",
 	},
+	kernel.SettingsViewID: {
+		build: settings.New,
+		why:   "settings holds no footer slot, but ctrl+, and g s open it by name rather than push it, so it is only ever a root",
+	},
 }
 
 func TestClose_EveryViewADiscardCanReachStopsItsWork(t *testing.T) {
@@ -362,7 +371,12 @@ var answerable = map[string]func(kernel.Deps) kernel.View{
 var synchronous = map[string]struct {
 	build func(kernel.Deps) kernel.View
 	why   string
-}{}
+}{
+	kernel.SettingsViewID: {
+		build: settings.New,
+		why:   "every setting answers from Deps or a local config read; nothing here waits on the site",
+	},
+}
 
 func TestAddressed_EveryViewThatAsksTheSiteForSomethingCanBeAnsweredWhereItIs(t *testing.T) {
 	sweepEnv(t)
