@@ -1060,12 +1060,12 @@ are guesses.
   it cannot widen the board rather than narrow it. The type doc's existing "no further narrowing" rule
   stands: every entry has to be JQL a caller read back from `QuickFilters`, never one it composed, so
   what it narrows to is a state the site's own board draws too.
-  **The gesture is `f` then a digit**, not `1`-`9` alone: the kernel already claims the bare digits for
-  a root view's saved queries, so a board's own prefix buffers the way `g` does, and the digit is the
-  1-indexed position `QuickFilters` answered in. A board with none says so rather than latching a
-  digit that would answer nothing, and a digit past the count says so and changes nothing. Toggling
-  re-reads the board with the result; the title names whichever are on.
-  **`f` on its own answers nothing until the digit that completes it — the same gap K7 found and fixed
+  **The gesture is `F` (capital) then a digit**, not `1`-`9` alone: the kernel already claims the bare
+  digits for a root view's saved queries, so a board's own prefix buffers the way `g` does, and the
+  digit is the 1-indexed position `QuickFilters` answered in. A board with none says so rather than
+  latching a digit that would answer nothing, and a digit past the count says so and changes nothing.
+  Toggling re-reads the board with the result; the title names whichever are on.
+  **`F` on its own answers nothing until the digit that completes it — the same gap K7 found and fixed
   for `g` itself.** So it does not stop at buffering: the row under the grid lists every quick filter
   against the digit that picks it and marks whichever are already on, the way K7's own overlay lists a
   view against the digit that switches to it, before either key is pressed rather than only after.
@@ -1074,9 +1074,12 @@ are guesses.
   answer without inventing an option nothing else needs yet — and applies them through the same small
   JQL subset `Search` already reads with, so `assignee = currentUser()` and `assignee is empty` are
   real narrowing and not just echoed back.
-  **`F` opens the same person/status/label picker the issue list uses**, over the board too — reported
+  **`f` opens the same person/status/label picker the issue list uses**, over the board too — reported
   directly after the packet above shipped: quick filters and this picker are different features on
-  purpose, so `f` stayed quick filters and the picker took the capital. Unlike a quick filter, a term
+  purpose. The first cut gave quick filters the lowercase key; changed on request so `f` is the picker
+  and `F` is quick filters, and both were also added to the footer's action row, where neither had
+  been at all — only the `?` overlay and the right-click menu had named them, which is why pressing
+  either looked like nothing had happened. Unlike a quick filter, a term
   chosen here is never sent to the site: `BoardQuery`'s "no further narrowing" rule is about narrowing
   nothing can compare against the board on screen, and a person/status/type/priority/label pick is
   exactly that — this program's own idea of a subset, not a state the site's board draws too. So it is
