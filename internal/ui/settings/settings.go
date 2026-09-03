@@ -29,6 +29,7 @@ func init() {
 		ID:    "settings.open",
 		Title: "Settings",
 		Group: "Session",
+		Kind:  kernel.KindSession,
 		Keys:  []string{keys.Settings.Help().Key},
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(kernel.SettingsViewID) },
 	})

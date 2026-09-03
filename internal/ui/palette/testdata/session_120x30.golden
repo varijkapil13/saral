@@ -17,6 +17,8 @@
   My issues                                     Search                                                                  
   Save this query to a number key               Search                                                                 s
   Unassigned issues                             Search                                                                  
+  Session                                                                                                               
+  Switch project                                Session                                                                 
   Comments                                                                                                              
   Delete the comment you are on                 Comments                                                               d
   Edit the comment you are on                   Comments                                                               e
@@ -25,6 +27,4 @@
   Change this issue's status                    Issue                                                                  t
   Comment on this issue                         Issue                                                                  C
   Edit this issue                               Issue                                                                  e
-  Put the split back where the width chooses    Issue                                                                  =
-  Widen the description                         Issue                                                                  >
  Issues  enter run it  esc close                                                                                  ctrl+k

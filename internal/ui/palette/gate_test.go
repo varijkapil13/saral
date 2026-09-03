@@ -28,15 +28,47 @@ func TestGate_UnfilteredFirstScreenHoldsADestination(t *testing.T) {
 	m, _ = next.(*Model)
 	frame := m.View()
 
-	found := false
-	for _, at := range m.shown[:min(m.rowsHeight(), len(m.shown))] {
-		if at.selectable() && !at.issue && m.rows[at.at].cmd.Kind == kernel.KindGoTo {
-			found = true
+	// A destination merely being on the screen is not what this packet did:
+	// deleting the nine appearance commands already put one there, and the test
+	// stayed green with Commands() sorting by group name. What the Kind rank
+	// decides is that every destination comes before every verb, so that is what
+	// is asserted — the whole of Go to above the first thing you can do to a row.
+	seenVerb := ""
+	first := ""
+	for _, at := range m.shown {
+		if !at.selectable() || at.issue {
+			continue
+		}
+		cmd := m.rows[at.at].cmd
+		if first == "" {
+			first = cmd.ID
+		}
+		switch {
+		case cmd.Kind != kernel.KindGoTo:
+			if seenVerb == "" {
+				seenVerb = cmd.ID
+			}
+		case seenVerb != "":
+			t.Errorf("the destination %q is listed below %q, so the unfiltered order is not ranked by Kind:\n%s",
+				cmd.ID, seenVerb, frame)
 		}
 	}
-	if !found {
-		t.Errorf("no KindGoTo row is on the unfiltered 80x24 screen:\n%s", frame)
+	if first == "" {
+		t.Fatal("the unfiltered list holds no command at all, so this test proved nothing")
 	}
+	if kind := commandKind(m, first); kind != kernel.KindGoTo {
+		t.Errorf("the unfiltered list opens on %q, which is kind %d and not a destination:\n%s",
+			first, kind, frame)
+	}
+}
+
+func commandKind(m *Model, id string) kernel.CommandKind {
+	for i := range m.rows {
+		if m.rows[i].cmd.ID == id {
+			return m.rows[i].cmd.Kind
+		}
+	}
+	return kernel.KindVerb
 }
 
 func TestGate_NoThemeOrSchemeCommandIsRegistered(t *testing.T) {
