@@ -185,17 +185,24 @@ func TestSettings_MouseClickOnARadioOptionAppliesThatExactValue(t *testing.T) {
 	}
 }
 
-func TestSettings_TheProjectRowOpensPaletteSOwnPicker(t *testing.T) {
+// A choice setting that sets OpenPicker opens that picker instead of the
+// generic one built from Options, Value and Set — the mechanism
+// session.project uses to open palette's own view without this package
+// learning its ID.
+func TestSettings_AChoiceSettingWithOpenPickerOpensItInsteadOfTheGenericOne(t *testing.T) {
 	t.Parallel()
 	all := []kernel.Setting{
 		{
-			ID: "session.project", Section: "Session", Order: 0, Title: "Project",
+			ID: "demo.choice", Section: "Session", Order: 0, Title: "Demo",
 			Kind: kernel.KindChoice, Scope: kernel.ScopeSession,
 			Options: func(d kernel.Deps) []kernel.SettingOption {
 				return []kernel.SettingOption{{ID: d.Project, Label: "PROJ"}}
 			},
 			Value: func(d kernel.Deps) string { return d.Project },
 			Set:   func(_ kernel.Deps, id string) tea.Cmd { return kernel.SetProject(id) },
+			OpenPicker: func(d kernel.Deps) tea.Cmd {
+				return kernel.Push("owning-package.picker", "Demo", nil)
+			},
 		},
 	}
 	d := settingsDeps(defaultTheme())
@@ -203,7 +210,42 @@ func TestSettings_TheProjectRowOpensPaletteSOwnPicker(t *testing.T) {
 	p := fly(t, d, all, []string{"Session"}, 100, 30)
 	p.press("enter")
 	pushed := p.pushed()
-	if len(pushed) != 1 || !strings.HasPrefix(pushed[0], "palette.project:") {
-		t.Fatalf("session.project did not open palette's own picker: %v", pushed)
+	if len(pushed) != 1 || !strings.HasPrefix(pushed[0], "owning-package.picker:") {
+		t.Fatalf("OpenPicker was not called on enter: %v", pushed)
+	}
+}
+
+// A redrawn frame is a cache hit for every row whose value has not moved, and
+// a cache hit must not re-derive what the cached strings were already
+// classified from: shapeOf and, for a radio row, Options itself. Both used to
+// run again on every call to markRow regardless of the memo, which is exactly
+// the hidden allocation the memoization guarantee exists to rule out.
+func TestSettings_ARedrawnRadioRowDoesNotCallOptionsAgain(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	all := []kernel.Setting{
+		{
+			ID: "demo.choice", Section: "Session", Order: 0, Title: "Demo",
+			Kind: kernel.KindChoice, Scope: kernel.ScopeSession,
+			Options: func(kernel.Deps) []kernel.SettingOption {
+				calls++
+				return []kernel.SettingOption{{ID: "a", Label: "a"}, {ID: "b", Label: "b"}}
+			},
+			Value: func(kernel.Deps) string { return "a" },
+			Set:   func(_ kernel.Deps, id string) tea.Cmd { return nil },
+		},
+	}
+	p := fly(t, settingsDeps(defaultTheme()), all, []string{"Session"}, 100, 30)
+	_ = p.frame()
+	after := calls
+	if after == 0 {
+		t.Fatal("Options was never called even once, so this test proves nothing")
+	}
+	for range 5 {
+		_ = p.frame()
+	}
+	if calls != after {
+		t.Errorf("Options was called %d times over five redraws with nothing changed, want %d: "+
+			"a cache hit is re-deriving the row's shape or its options", calls, after)
 	}
 }

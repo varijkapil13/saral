@@ -11,24 +11,11 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
-	"github.com/varijkapil13/saral/internal/ui/palette"
 )
 
 var (
 	_ kernel.View = (*Model)(nil)
 )
-
-// customPickers names the settings whose real option list cannot be answered
-// synchronously by Setting.Options — session.project's comes from the site,
-// read inside the picker project.switch already opens, which is the second
-// door this screen uses rather than a copy of it. Every other KindChoice
-// setting that does not fit inline opens the generic picker built from its
-// own Options, Value and Set.
-var customPickers = map[string]func(kernel.Deps) tea.Cmd{
-	"session.project": func(d kernel.Deps) tea.Cmd {
-		return kernel.Push(palette.ProjectViewID, "Project", palette.NewProjectPicker(d))
-	},
-}
 
 func init() {
 	kernel.RegisterView(kernel.ViewSpec{
@@ -293,8 +280,8 @@ func (m *Model) explain(s kernel.Setting) tea.Cmd {
 }
 
 func (m *Model) openPicker(s kernel.Setting) tea.Cmd {
-	if open := customPickers[s.ID]; open != nil {
-		return open(m.deps)
+	if s.OpenPicker != nil {
+		return s.OpenPicker(m.deps)
 	}
 	return openOptionsPicker(m.deps, s.Title, s.Options(m.deps), s.Value(m.deps), s.Set)
 }
@@ -469,7 +456,10 @@ func (m *Model) renderRow(i int, s kernel.Setting) (ctrl, detail string) {
 			text += "  (" + note + ")"
 		}
 		detailLine := renderDetail(text, warn, sel, m.lay.width, m.deps.Theme.Glyphs.Ellipsis, m.styles)
-		r = renderedRow{ctrl: ctrlLine, detail: detailLine}
+		r = renderedRow{ctrl: ctrlLine, detail: detailLine, shape: sp}
+		if sp == shapeRadios {
+			r.radioOpts = s.Options(m.deps)
+		}
 		m.memo.put(key, r)
 	}
 	return m.markRow(s, r)
@@ -479,14 +469,16 @@ func (m *Model) renderRow(i int, s kernel.Setting) (ctrl, detail string) {
 // are reapplied on every call rather than baked into the cached string: Mark
 // is idempotent under the same id and this keeps the cache oblivious to the
 // zone manager entirely, the same separation renderControl already keeps from
-// Deps.Zones by never being handed it.
+// Deps.Zones by never being handed it. The shape and, for a radio row, the
+// options it marks zones over both come from the cache entry rather than a
+// fresh shapeOf/Options call, so a cache hit costs nothing to reclassify.
 func (m *Model) markRow(s kernel.Setting, r renderedRow) (ctrl, detail string) {
 	if m.deps.Zones == nil {
 		return r.ctrl, r.detail
 	}
 	ctrl = r.ctrl
-	if shapeOf(s, m.deps) == shapeRadios {
-		ctrl = markRadioZones(ctrl, s, m.deps, m.zonePrefix)
+	if r.shape == shapeRadios {
+		ctrl = markRadioZones(ctrl, s, m.deps, r.radioOpts, m.zonePrefix)
 	}
 	ctrl = m.deps.Zones.Mark(m.rowZone(s.ID), ctrl)
 	return ctrl, r.detail
@@ -498,12 +490,12 @@ func (m *Model) markRow(s kernel.Setting, r renderedRow) (ctrl, detail string) {
 // escape width libraries already skip — is never itself a candidate for
 // truncation; an option pushed out of a narrow column is simply not found and
 // draws with no zone of its own, same as it would with no mouse at all.
-func markRadioZones(line string, s kernel.Setting, d kernel.Deps, prefix string) string {
+func markRadioZones(line string, s kernel.Setting, d kernel.Deps, opts []kernel.SettingOption, prefix string) string {
 	value := ""
 	if s.Value != nil {
 		value = s.Value(d)
 	}
-	for _, o := range s.Options(d) {
+	for _, o := range opts {
 		span := "( ) " + o.Label
 		if o.ID == value {
 			span = "(" + d.Theme.Glyphs.Bullet + ") " + o.Label

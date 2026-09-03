@@ -41,7 +41,7 @@ func shapeOf(s kernel.Setting, d kernel.Deps) shape {
 	case kernel.KindAction:
 		return shapeAction
 	case kernel.KindChoice:
-		if customPickers[s.ID] != nil {
+		if s.OpenPicker != nil {
 			return shapePicker
 		}
 		if fitsInline(s.Options(d)) {
@@ -131,7 +131,15 @@ type rowKey struct {
 	width       int
 }
 
-type renderedRow struct{ ctrl, detail string }
+// shape and radioOpts are set once on a cache miss, alongside the strings
+// they were classified from, so a cache hit never re-derives them: shapeOf
+// and, for a radio row, Options itself are each a call the render already
+// paid for.
+type renderedRow struct {
+	ctrl, detail string
+	shape        shape
+	radioOpts    []kernel.SettingOption
+}
 
 // rowCache is a bounded memo of rendered rows, the same shape
 // palette.rowCache is: past its limit it is emptied rather than evicted one

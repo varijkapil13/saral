@@ -86,6 +86,13 @@ type Setting struct {
 	// Set changes it. It returns the command that both applies and persists,
 	// which is what SwitchTheme and SwitchScheme already are.
 	Set func(d Deps, optionID string) tea.Cmd
+	// OpenPicker opens a picker of this setting's own rather than the generic
+	// one the settings view builds from Options, Value and Set. A KindChoice
+	// setting sets this when its real option list cannot be answered
+	// synchronously — session.project's comes from the site, read inside the
+	// picker project.switch already opens — so the owning package supplies
+	// the picker itself instead of the settings view learning its ID.
+	OpenPicker func(Deps) tea.Cmd
 
 	// Unavailable is why this setting cannot be changed here, and "" when it
 	// can. It is not the same question as Requires: NO_COLOR being exported is

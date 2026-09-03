@@ -20,11 +20,6 @@ import (
 // moment it opens, so kernel.KeyReporter answers for every state it has.
 const projectViewID = "palette.project"
 
-// ProjectViewID is projectViewID, exported so a second door onto this same
-// picker — the settings screen's session.project row — can push it under the
-// ID it already answers to.
-const ProjectViewID = projectViewID
-
 const switchCommandID = "project.switch"
 
 // sessionSection is the settings section session.project registers into. It is
@@ -61,15 +56,11 @@ func projectSetting() kernel.Setting {
 		},
 		Value: func(d kernel.Deps) string { return d.Project },
 		Set:   func(_ kernel.Deps, id string) tea.Cmd { return kernel.SetProject(id) },
+		OpenPicker: func(d kernel.Deps) tea.Cmd {
+			return kernel.Push(projectViewID, "Project", newProject(d))
+		},
 	}
 }
-
-// NewProjectPicker builds the project-switching picker for a caller outside
-// this package. It is the exact view project.switch already opens — a filtered,
-// frecency-ranked list with a current marker and its own click zones — and the
-// settings screen's session.project row is its second door onto it rather than
-// a copy of it.
-func NewProjectPicker(d kernel.Deps) kernel.View { return newProject(d) }
 
 // lookTimeout bounds the one read the picker makes. Somebody is waiting on this
 // one, so it is shorter than a setup step's.
