@@ -117,7 +117,8 @@ func LookupView(id string) (ViewSpec, bool) {
 	return spec, ok
 }
 
-// Commands returns every registered command, ordered by group and then title.
+// Commands returns every registered command, ordered by Kind, then group,
+// then title.
 func Commands() []Command {
 	reg.mu.RLock()
 	defer reg.mu.RUnlock()
@@ -126,6 +127,9 @@ func Commands() []Command {
 		out = append(out, cmd)
 	}
 	sort.Slice(out, func(i, j int) bool {
+		if ri, rj := out[i].Kind.rank(), out[j].Kind.rank(); ri != rj {
+			return ri < rj
+		}
 		if out[i].Group != out[j].Group {
 			return out[i].Group < out[j].Group
 		}

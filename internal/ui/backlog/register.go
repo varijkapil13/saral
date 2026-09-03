@@ -30,6 +30,7 @@ func init() {
 		ID:    "backlog.open",
 		Title: "Backlog",
 		Group: "Go to",
+		Kind:  kernel.KindGoTo,
 		Keys:  []string{kernel.SlotGesture(slot)},
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
 	})

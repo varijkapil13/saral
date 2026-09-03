@@ -37,6 +37,7 @@ func registerDestinationCommand() {
 		ID:    "views.switch",
 		Title: "Switch view",
 		Group: "Go to",
+		Kind:  KindGoTo,
 		Keys:  []string{DefaultGlobalKeys().Slot.Help().Key},
 		Run:   func(Deps) tea.Cmd { return func() tea.Msg { return latchPrefixMsg{} } },
 	})

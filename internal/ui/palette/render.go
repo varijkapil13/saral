@@ -122,6 +122,7 @@ type rowKey struct {
 	id       string
 	text     string
 	age      string
+	heading  string
 	lay      layout
 	selected bool
 	gen      int
@@ -233,6 +234,12 @@ func renderHit(h *hit, lay layout, sel bool, st *styles, t *kernel.Theme) string
 	return b.String()
 }
 
+// renderHeading draws a group name on its own line. No marker, no click zone.
+func renderHeading(group string, lay layout, st *styles, t *kernel.Theme) string {
+	ell := t.Glyphs.Ellipsis
+	return strings.Repeat(" ", marker) + st.group.Render(padTruncate(group, max(lay.width-marker, 0), ell))
+}
+
 func writeMarker(b *strings.Builder, sel bool, t *kernel.Theme) {
 	if !sel {
 		b.WriteString(strings.Repeat(" ", marker))
@@ -243,6 +250,15 @@ func writeMarker(b *strings.Builder, sel bool, t *kernel.Theme) {
 }
 
 func (m *Model) row(at int) string {
+	if row := m.shown[at]; !row.selectable() {
+		k := rowKey{heading: row.heading, lay: m.lay, gen: m.styles.gen}
+		if s, ok := m.memo.get(k); ok {
+			return s
+		}
+		s := renderHeading(row.heading, m.lay, m.styles, m.deps.Theme)
+		m.memo.put(k, s)
+		return s
+	}
 	sel := at == m.cursor
 	if row := m.shown[at]; row.issue {
 		h := &m.hits[row.at]
@@ -289,7 +305,7 @@ type headKey struct {
 func (m *Model) rule() string {
 	key := headKey{
 		width: m.width, gen: m.styles.gen,
-		shown: len(m.shown) - len(m.hits), hits: len(m.hits),
+		shown: m.shownCmds, hits: len(m.hits),
 		registered: len(m.rows), total: m.offered(), filtered: m.query != "",
 	}
 	if m.head != "" && key == m.headAt {

@@ -1284,20 +1284,25 @@ S2 depends on S1; S3 depends on neither and can run beside them.
   `enter` on a multi-profile config writes `active = "…"` and says it takes effect next run. A hot
   swap that half worked would be worse than a restart that is admitted to.
 
-- [ ] **S3 — The palette orders itself** ·
+- [x] **S3 — The palette orders itself** ·
   **owns** `internal/ui/kernel/{view.go,registry.go,registry_test.go,destinations.go}`,
   `internal/ui/palette/{palette.go,render.go,*_test.go}`, the `Kind` line of
   `internal/ui/{board,backlog,list,plan,release,sprint,timeline}/register.go`,
   `docs/{SETTINGS,UX,ROADMAP}.md`
-  `Command.Kind` — `KindAction`, `KindGoTo`, `KindSearch`, `KindSession` — defaulting to zero, so
-  every command that does not care needs no edit. `Commands()` orders by `Kind`, then `Group`, then
-  `Title`. A rank on the command and **not** a table of group names in the palette, because a table is
-  a central switch every new group has to be added to.
+  `Command.Kind` — `KindVerb`, `KindGoTo`, `KindSearch`, `KindSession` — defaulting to zero, so
+  every command that does not care needs no edit. Not `KindAction`: `kernel.SettingKind` already
+  claims that identifier in this package, which docs/SETTINGS.md's own draft had not caught.
+  `Commands()` orders by `Kind`, then `Group`, then `Title`, with `KindVerb` sorting after every named
+  `Kind` rather than by its zero value. A rank on the command and **not** a table of group names in the
+  palette, because a table is a central switch every new group has to be added to.
   With nothing typed the palette draws group headings in `Kind` order and frecency still reorders
   *within* a group, so a habit is still rewarded. The moment anything is typed the headings go and it
   is one flat ranked list: when you are filtering, rank beats grouping and a heading is a row that
   cannot be chosen. The gate is a test that the unfiltered first screen of an 80×24 palette holds at
-  least one destination.
+  least one destination, over the registry the running program actually links rather than a fixture.
+  `project.switch` and `settings.open` are `KindSession` by design but sit in files S3 does not own
+  (`internal/ui/palette/register.go`, `internal/ui/settings/settings.go`); they still carry the
+  default until whoever owns those sets it, which the gate does not require.
 
 ## Later, deliberately not now
 

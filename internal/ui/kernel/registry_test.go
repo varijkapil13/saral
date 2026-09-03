@@ -179,6 +179,25 @@ func TestCommands_OrderedByGroupThenTitle(t *testing.T) {
 	}
 }
 
+func TestCommands_KindOutranksGroupAndTitle(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	run := func(Deps) tea.Cmd { return nil }
+	RegisterCommand(Command{ID: "verb", Group: "Aardvark", Title: "Aardvark", Run: run})
+	RegisterCommand(Command{ID: "session", Group: "Session", Title: "Zulu", Kind: KindSession, Run: run})
+	RegisterCommand(Command{ID: "search", Group: "Search", Title: "Zulu", Kind: KindSearch, Run: run})
+	RegisterCommand(Command{ID: "goto", Group: "Zulu", Title: "Zulu", Kind: KindGoTo, Run: run})
+
+	cmds := Commands()
+	got := make([]string, 0, len(cmds))
+	for _, c := range cmds {
+		got = append(got, c.ID)
+	}
+	if want := "goto,search,session,verb"; strings.Join(got, ",") != want {
+		t.Errorf("got %v, want %s: a Kind orders ahead of a Group an alphabetical sort would put first", got, want)
+	}
+}
+
 func TestKeysFor_ReturnsAnEmptySetForAnUnknownView(t *testing.T) {
 	resetRegistry()
 	t.Cleanup(resetRegistry)

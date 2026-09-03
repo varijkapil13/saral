@@ -171,7 +171,7 @@ func (p *pilot) frame() string { return ansi.Strip(p.m.View()) }
 func (p *pilot) titles() []string {
 	out := make([]string, 0, len(p.m.shown))
 	for _, at := range p.m.shown {
-		if !at.issue {
+		if at.selectable() && !at.issue {
 			out = append(out, p.m.rows[at.at].cmd.Title)
 		}
 	}

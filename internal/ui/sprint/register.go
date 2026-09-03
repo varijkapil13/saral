@@ -29,6 +29,7 @@ func init() {
 		ID:       "sprints.open",
 		Title:    "Sprints",
 		Group:    "Go to",
+		Kind:     kernel.KindGoTo,
 		Requires: jira.CapBoards,
 		Keys:     []string{kernel.SlotGesture(slot)},
 		Run:      func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },

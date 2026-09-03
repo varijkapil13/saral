@@ -325,21 +325,33 @@ Two changes, both small, neither about settings.
 type CommandKind int
 
 const (
-	KindAction CommandKind = iota // what you can do here — the default
-	KindGoTo                      // a destination
-	KindSearch                    // a search to run
-	KindSession                   // scope: the project, the settings screen
+	KindVerb    CommandKind = iota // what you can do here — the default
+	KindGoTo                       // a destination
+	KindSearch                     // a search to run
+	KindSession                    // scope: the project, the settings screen
 )
 ```
 
-`Commands()` orders by `Kind`, then `Group`, then `Title`. A rank on the command rather than a table
-of group names in the palette, because a table would be a central switch every new group has to be
-added to — the thing `AGENTS.md` forbids — and this way a package that registers a destination says
-so in its own file.
+Not `KindAction`: `kernel.SettingKind` already claims that identifier in this package (S1's `KindAction`
+is a settings *button*, a different thing), so the palette's own zero value is named `KindVerb` instead
+— checked against the landed tree rather than assumed, per `AGENTS.md`'s "the tree is the specification
+now."
 
-Nine commands set it: the seven `*.open` rows and `views.switch` take `KindGoTo`, `project.switch`
-and the new `settings.open` take `KindSession`, the `issues.*` searches take `KindSearch`. Everything
-else keeps the default and needs no edit.
+`Commands()` orders by `Kind`, then `Group`, then `Title` — but `KindVerb` sorts *last*, not by its
+literal zero value: it is what most commands are, and the whole point is that a destination beats it.
+`CommandKind.rank()` is the one place that says so, which is a rank on the command rather than a table
+of group names in the palette — a table would be a central switch every new group has to be added to,
+the thing `AGENTS.md` forbids, and this way a package that registers a destination says so in its own
+file.
+
+The seven `*.open` rows and `views.switch` take `KindGoTo`. Every `Group: "Search"` command in
+`internal/ui/list` — the four canonical searches, the three query-management rows and the four
+row-facet filters alike — takes `KindSearch`, so the section draws under one heading rather than
+splitting into two runs of the same name around whatever sorts between them. `project.switch` and
+`settings.open` are `KindSession` by this design, but land in `internal/ui/palette/register.go` and
+`internal/ui/settings/settings.go` — neither owned by the S3 packet — so they still carry the default
+until whoever owns those files sets it; nothing in the S3 gate requires it of them. Everything else
+keeps the default and needs no edit.
 
 **Group headers in the unfiltered list.** With nothing typed the palette draws its groups with
 headings, in `Kind` order; frecency still reorders *within* a group so a habit is still rewarded.
