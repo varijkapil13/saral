@@ -140,6 +140,11 @@ type Theme struct {
 	Dark   bool
 	Color  bool
 	Glyphs Glyphs
+	// Scheme is which set of colours Base through Overlay below were built
+	// from. It travels with the theme so that switching mode (SwitchTheme)
+	// without being told a scheme keeps the one already in force, the same way
+	// switching scheme keeps the mode.
+	Scheme Scheme
 
 	Base       lipgloss.Style
 	Muted      lipgloss.Style
@@ -172,15 +177,36 @@ type Theme struct {
 
 var themeGen atomic.Int64
 
+// ThemeOption configures NewTheme beyond mode, dark and glyphs. It exists so
+// that the scheme is optional at every one of NewTheme's existing call
+// sites — a caller that never heard of one still gets DefaultScheme, which is
+// the colours this program always drew.
+type ThemeOption func(*themeConfig)
+
+type themeConfig struct {
+	scheme Scheme
+}
+
+// WithScheme sets which named set of colours the theme is built from. Not
+// given, a theme is built from DefaultScheme.
+func WithScheme(s Scheme) ThemeOption {
+	return func(c *themeConfig) { c.scheme = s }
+}
+
 // NewTheme builds the styles for a mode. dark is only consulted when the mode
 // is Auto; it comes from the terminal's reported background colour.
-func NewTheme(mode ThemeMode, dark bool, glyphs Glyphs) *Theme {
+func NewTheme(mode ThemeMode, dark bool, glyphs Glyphs, opts ...ThemeOption) *Theme {
+	cfg := themeConfig{scheme: DefaultScheme}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	t := &Theme{
 		Gen:    int(themeGen.Add(1)),
 		Mode:   mode,
 		Dark:   dark,
 		Color:  mode != ThemeNoColor,
 		Glyphs: glyphs,
+		Scheme: cfg.scheme,
 	}
 	switch mode {
 	case ThemeDark:
@@ -190,7 +216,7 @@ func NewTheme(mode ThemeMode, dark bool, glyphs Glyphs) *Theme {
 	case ThemeAuto, ThemeNoColor:
 	}
 	if t.Color {
-		t.colored()
+		t.colored(cfg.scheme.colors(t.Dark))
 	} else {
 		t.plain()
 	}
@@ -238,19 +264,13 @@ func (t *Theme) plain() {
 	}
 }
 
-func (t *Theme) colored() {
-	pick := lipgloss.LightDark(t.Dark)
-	var (
-		fg       = pick(lipgloss.Color("#1f2328"), lipgloss.Color("#e6edf3"))
-		muted    = pick(lipgloss.Color("#6e7781"), lipgloss.Color("#8b949e"))
-		accent   = pick(lipgloss.Color("#0550ae"), lipgloss.Color("#79c0ff"))
-		danger   = pick(lipgloss.Color("#cf222e"), lipgloss.Color("#ff7b72"))
-		warning  = pick(lipgloss.Color("#9a6700"), lipgloss.Color("#d29922"))
-		success  = pick(lipgloss.Color("#1a7f37"), lipgloss.Color("#3fb950"))
-		surface  = pick(lipgloss.Color("#eaeef2"), lipgloss.Color("#161b22"))
-		selected = pick(lipgloss.Color("#ddf4ff"), lipgloss.Color("#1f6feb"))
-		onAccent = pick(lipgloss.Color("#0a3069"), lipgloss.Color("#f0f6fc"))
-	)
+// colored builds the styles from one scheme's nine roles, already resolved
+// for this theme's mode by the caller — colored itself never asks whether it
+// is drawing light or dark, so a scheme with the two reversed cannot make it
+// draw the wrong one.
+func (t *Theme) colored(c schemeColors) {
+	fg, muted, accent, danger, warning, success, surface, selected, onAccent :=
+		c.fg, c.muted, c.accent, c.danger, c.warning, c.success, c.surface, c.selected, c.onAccent
 	base := lipgloss.NewStyle().Foreground(fg)
 	t.Base = base
 	t.Muted = lipgloss.NewStyle().Foreground(muted)

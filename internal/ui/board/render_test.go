@@ -210,3 +210,37 @@ func TestBoardRender_ABoardThatDoesNotEstimateDrawsNoNumbers(t *testing.T) {
 	mustNotContain(t, plain.view(), "8")
 	mustContain(t, counted.view(), "8")
 }
+
+// A resting card's key carries its status category's colour — a column
+// already says which status something is in, so this is which kind of
+// status — and selecting or holding the card, which inverts the whole thing,
+// does not layer a second colour on top of that.
+func TestRenderCard_TheKeyCarriesItsStatusCategorysColourWhileResting(t *testing.T) {
+	t.Parallel()
+	th := kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs())
+	st := newStyles(th)
+	p := plan{}
+
+	// Same key and summary, only the category differs, so any difference in
+	// what renderCard answers with is the category's colour and nothing else.
+	toDo := &jira.Issue{Key: "PROJ-1", Summary: "one", Status: jira.Status{Category: jira.CategoryToDo}}
+	done := &jira.Issue{Key: "PROJ-1", Summary: "one", Status: jira.Status{Category: jira.CategoryDone}}
+
+	restingToDo := renderCard(toDo, 30, false, false, st, th, p)
+	if restingToDo == ansi.Strip(restingToDo) {
+		t.Fatal("a resting card built from a colour theme carries no colour at all, so this test proves nothing")
+	}
+	if restingDone := renderCard(done, 30, false, false, st, th, p); restingDone == restingToDo {
+		t.Error("two resting cards in different categories rendered identically")
+	}
+	if sameAgain := renderCard(toDo, 30, false, false, st, th, p); sameAgain != restingToDo {
+		t.Errorf("the same card rendered twice differs: %q vs %q", sameAgain, restingToDo)
+	}
+
+	if selected := renderCard(toDo, 30, true, false, st, th, p); selected != renderCard(done, 30, true, false, st, th, p) {
+		t.Error("two selected cards still differ by category, so a second colour is fighting the selection style")
+	}
+	if held := renderCard(toDo, 30, false, true, st, th, p); held != renderCard(done, 30, false, true, st, th, p) {
+		t.Error("two held cards still differ by category, so a second colour is fighting the held style")
+	}
+}

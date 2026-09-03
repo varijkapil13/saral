@@ -316,8 +316,19 @@ func renderCard(iss *jira.Issue, cell int, selected, inHand bool, st *styles, t 
 	if left := room - ansi.StringWidth(estimate); left < minSummary {
 		estimate = ""
 	}
-	body := iss.Key
-	if left := room - ansi.StringWidth(estimate) - ansi.StringWidth(body) - 1; left > 0 {
+	key := iss.Key
+	// The key carries the status category's colour while the card is resting:
+	// a column already says which status something is in, so this is which
+	// kind of status. Selected and held both invert the whole card, which a
+	// second colour on the key would only fight, so neither applies it — and
+	// it goes on before truncation, never after, so a narrow cell cutting the
+	// key cannot separate the colour from what it was coloring.
+	renderedKey := key
+	if !selected && !inHand {
+		renderedKey = st.categories[categoryIndex(iss.Status.Category)].Render(key)
+	}
+	body := renderedKey
+	if left := room - ansi.StringWidth(estimate) - ansi.StringWidth(key) - 1; left > 0 {
 		body += " " + ansi.Truncate(iss.Summary, left, ell)
 	}
 	out := mark + padTruncate(body, max(room-ansi.StringWidth(estimate), 0), ell) + estimate
@@ -712,3 +723,13 @@ func padTruncate(s string, width int, ellipsis string) string {
 // board measuring in points holds 3 far more often than 3.5, and "3.0" in every
 // cell of a narrow column is a column of noise.
 func trimNumber(n float64) string { return strconv.FormatFloat(n, 'f', -1, 64) }
+
+// categoryIndex is the position a status's category indexes styles.categories
+// at, with anything outside the four the site can answer read as unknown
+// rather than indexed out of bounds.
+func categoryIndex(c jira.StatusCategory) int {
+	if c < jira.CategoryUnknown || c > jira.CategoryDone {
+		return int(jira.CategoryUnknown)
+	}
+	return int(c)
+}

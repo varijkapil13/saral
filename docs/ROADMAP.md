@@ -1093,6 +1093,38 @@ are guesses.
   **What this does not cover:** the backlog view (`internal/ui/backlog`) draws on the same board and
   could offer the same quick filters and the same picker; that is a separate packet.
 
+- [x] **P6.5 — Configurable colour schemes, and the category colour two views already computed and
+  never drew** · [#139](https://github.com/varijkapil13/saral/issues/139) ·
+  **owns** `internal/ui/kernel/scheme*.go`, the `Theme.Scheme`/`WithScheme` addition in
+  `internal/ui/kernel/theme.go`, the `Scheme` field and its validation in `internal/config/config.go`,
+  the `-scheme` flag in `cmd/saral/main.go`, the category-colour wiring in `internal/ui/board/render.go`
+  and `internal/ui/issue/render.go`
+  Requested directly, not picked off the roadmap in advance — recorded here after the fact, the way
+  #136 was. `kernel.Scheme` is nine semantic roles (`fg, muted, accent, danger, warning, success,
+  surface, selected, onAccent`), each resolved separately for light and dark, never a `lipgloss.Color`
+  hardcoded at a call site; five named presets ship (default, Nord, Dracula, Solarized, Gruvbox).
+  `NewTheme` took a variadic `...ThemeOption` rather than a new required parameter, so none of its
+  roughly seventy existing call sites had to change. `internal/config` cannot import
+  `internal/ui/kernel` — the kernel already imports `config` for save/load, and the reverse would
+  cycle — so its `schemes` validation list is a hand-kept mirror of `kernel.Schemes`, the same
+  precedent `themes` already set for `kernel.ThemeMode`. Switchable at runtime from the command
+  palette (one command per scheme, in an "Appearance" group), via `-scheme`, or via a profile's
+  `scheme = "..."` key, independent of `-theme`: light/dark and which colours stays two separate axes.
+  **The rest of the packet is two colour gaps that were already half-built and never wired up**, not
+  new colour: the board's own `categories [4]lipgloss.Style` was computed every theme generation and
+  never rendered anywhere, so a resting card's key now carries its status category's colour the way
+  its column caption already implies it. The issue detail pane coloured a *related* issue's status by
+  category already; its own header did not, for no reason the diff could find, so it does now — each
+  fact in the header line renders with its own style now rather than the whole line once, since
+  nesting a coloured substring inside one outer `Render()` call risks the outer style's reset code
+  cutting the inner colour off partway through rather than closing cleanly at the fact's own end.
+  **What this does not cover:** priority and issue-type colouring. Both are per-instance configurable
+  on a real Jira site — names, and for priority the severity order too — so colouring by name match
+  would be exactly the instance-specific hardcoding this file's own working agreement calls out as the
+  most common way a PR gets rejected here. The instance-safe version, deriving relative severity from
+  the site's own priority order via `Priorities(ctx)`, needs a session-level priority-order cache
+  nothing in the codebase keeps yet; left for a follow-up rather than folded in here.
+
 ## Batch 7 — Cross-project move · parallel ×1
 
 - [x] **P7.1 — Move wizard** · [#25](https://github.com/varijkapil13/saral/issues/25) · **owns** `pkg/jira/cloud/bulkmove.go`, `internal/ui/move/**`

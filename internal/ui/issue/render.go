@@ -121,21 +121,25 @@ func (m *Model) header() string {
 	room := max(m.width-ansi.StringWidth(m.issue.Key)-2, 1)
 	title := m.styles.title.Render(ansi.Truncate(m.issue.Summary, room, ell))
 
+	// Each fact is styled on its own rather than the joined line being styled
+	// once: the status carries its category's colour, the way a related
+	// issue's already does, and nesting that inside one outer muted.Render
+	// would have the outer reset code cut the colour off partway through
+	// rather than stopping cleanly at the status.
 	facts := make([]string, 0, 5)
-	for _, s := range [...]string{
-		m.issue.Type.Name,
-		statusLabel(m.issue.Status),
-		priorityName(m.issue),
-		assigneeName(m.issue, "unassigned"),
-	} {
+	addFact := func(s string, style lipgloss.Style) {
 		if s != "" {
-			facts = append(facts, s)
+			facts = append(facts, style.Render(s))
 		}
 	}
+	addFact(m.issue.Type.Name, m.styles.muted)
+	addFact(statusLabel(m.issue.Status), m.styles.category(m.issue.Status.Category))
+	addFact(priorityName(m.issue), m.styles.muted)
+	addFact(assigneeName(m.issue, "unassigned"), m.styles.muted)
 	if when := formatWhen(m.issue.Updated, m.location()); when != "" {
-		facts = append(facts, "updated "+when)
+		addFact("updated "+when, m.styles.muted)
 	}
-	meta := m.styles.muted.Render(ansi.Truncate(strings.Join(facts, sep), m.width, ell))
+	meta := ansi.Truncate(strings.Join(facts, m.styles.muted.Render(sep)), m.width, ell)
 
 	return key + "  " + title + "\n" + meta + "\n" +
 		m.styles.rule.Render(strings.Repeat(t.Glyphs.HLine, max(m.width, 1)))

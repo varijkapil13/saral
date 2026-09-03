@@ -1,9 +1,14 @@
  saral | Commands                                                                          PROJ | example.atlassian.net 
 > what do you want to do?                                                                                               
------------------------------------------------------------------------------------------------------------- 28 commands
+------------------------------------------------------------------------------------------------------------ 33 commands
 > Follow the terminal's own colours             Appearance                                                              
   Turn colour off                               Appearance                                                              
+  Use the Dracula colour scheme                 Appearance                                                              
+  Use the Gruvbox colour scheme                 Appearance                                                              
+  Use the Nord colour scheme                    Appearance                                                              
+  Use the Solarized colour scheme               Appearance                                                              
   Use the dark theme                            Appearance                                                              
+  Use the default colours                       Appearance                                                              
   Use the light theme                           Appearance                                                              
   Delete the comment you are on                 Comments                                                               d
   Edit the comment you are on                   Comments                                                               e
@@ -22,9 +27,4 @@
   Every issue in this project                   Search                                                                 a
   Filter by this row's assignee                 Search                                                                  
   Filter by this row's status                   Search                                                                  
-  Filter by this row's type                     Search                                                                  
-  Filter these issues by a person, a status...  Search                                                                 f
-  Issues I reported                             Search                                                                  
-  My issues                                     Search                                                                  
-  Save this query to a number key               Search                                                                 s
  Issues  enter run it  esc close                                                                                  ctrl+k

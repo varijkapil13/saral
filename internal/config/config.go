@@ -56,7 +56,11 @@ type Profile struct {
 	Token    TokenSource
 	Timeline Timeline
 	Theme    string
-	Glyphs   string
+	// Scheme is which named set of colours the theme draws from — Theme is
+	// light or dark, Scheme is which colours mean accent, danger and the rest.
+	// The two are independent: any scheme works in either mode.
+	Scheme string
+	Glyphs string
 	// Queries are the searches this profile keeps, each optionally bound to a
 	// number key. They are app's own type, validated by app's own rules, so that
 	// a file and a keypress cannot disagree about what a saved query is; the
@@ -79,7 +83,12 @@ type Timeline struct {
 }
 
 var (
-	themes    = []string{"", "dark", "light", "no-color"}
+	themes = []string{"", "dark", "light", "no-color"}
+	// schemes mirrors kernel.Schemes by name. It cannot read that list directly
+	// — kernel already imports this package for where a theme choice is saved,
+	// so the reverse import would cycle — the same reason themes above is its
+	// own hand-kept list rather than reading ThemeMode's.
+	schemes   = []string{"", "default", "nord", "dracula", "solarized", "gruvbox"}
 	glyphSets = []string{"", "unicode", "ascii"}
 
 	secretKeys = []string{"token", "value", "secret", "password", "api_token", "api-token", "apitoken"}
@@ -160,6 +169,7 @@ type fileProfile struct {
 	Token    toml.Primitive `toml:"token"`
 	Timeline Timeline       `toml:"timeline"`
 	Theme    string         `toml:"theme"`
+	Scheme   string         `toml:"scheme"`
 	Glyphs   string         `toml:"glyphs"`
 	Queries  []fileQuery    `toml:"queries"`
 }
@@ -247,6 +257,7 @@ func decodeProfile(md *toml.MetaData, name string, fp fileProfile) (Profile, err
 		Token:    token,
 		Timeline: fp.Timeline,
 		Theme:    strings.TrimSpace(fp.Theme),
+		Scheme:   strings.TrimSpace(fp.Scheme),
 		Glyphs:   strings.TrimSpace(fp.Glyphs),
 		Queries:  decodeQueries(fp.Queries),
 	}
@@ -413,6 +424,9 @@ func (p Profile) Validate() error {
 	}
 	if !slices.Contains(themes, p.Theme) {
 		return fmt.Errorf("profile %q: theme %q is not one of %s", p.Name, p.Theme, strings.Join(themes[1:], ", "))
+	}
+	if !slices.Contains(schemes, p.Scheme) {
+		return fmt.Errorf("profile %q: scheme %q is not one of %s", p.Name, p.Scheme, strings.Join(schemes[1:], ", "))
 	}
 	if !slices.Contains(glyphSets, p.Glyphs) {
 		return fmt.Errorf("profile %q: glyphs %q is not one of %s", p.Name, p.Glyphs, strings.Join(glyphSets[1:], ", "))
@@ -586,6 +600,9 @@ func (c Config) encode() ([]byte, error) {
 		}
 		if p.Theme != "" {
 			pairs = append(pairs, [2]string{"theme", quote(p.Theme)})
+		}
+		if p.Scheme != "" {
+			pairs = append(pairs, [2]string{"scheme", quote(p.Scheme)})
 		}
 		if p.Glyphs != "" {
 			pairs = append(pairs, [2]string{"glyphs", quote(p.Glyphs)})
