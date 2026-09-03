@@ -1226,6 +1226,79 @@ of them found becomes the milestone under rule 6 when none does. `app.Provenance
 itself against this table, so a row added here is a row the code already counts on — the rollup is 7
 and an unresolved issue is 0.
 
+## Settings · state out of the palette
+
+The palette had become the place everything went that had nowhere else to go: nine of its rows are a
+theme mode or a colour scheme, drawn as nine unrelated peers with nothing saying they are two sets and
+nothing saying which value of each is in force. And because `kernel.Commands` sorts by group name and
+the empty pattern scores every candidate alike, `Appearance` sorts first — **the first twenty rows of
+an empty `ctrl+k` on an 80×24 terminal are appearance, attachments, backlog, board and comments, and
+you cannot see a single destination or *Create an issue* without typing.**
+
+The rule the three packets apply is one sentence: **the palette is for verbs, settings are for state.**
+The design, the control vocabulary and the consumer sweep are in [`docs/SETTINGS.md`](SETTINGS.md).
+S1 lands the registry and the kernel's own settings, S2 the screen, S3 the palette's own ordering.
+S2 depends on S1; S3 depends on neither and can run beside them.
+
+- [ ] **S1 — The setting registry, and the kernel's own state** ·
+  **owns** `internal/ui/kernel/{setting.go,setting_test.go,theme.go,theme_test.go,scheme.go,scheme_test.go,keys.go,kernel.go,msg.go}`,
+  `internal/config/{config.go,config_test.go}`, `docs/{SETTINGS,UX,ROADMAP}.md`
+  `kernel.Setting` and `RegisterSetting` beside the three registries that exist, with `Value` a
+  function of `Deps` rather than a stored string — the theme is on `Deps.Theme` and the project is
+  `Deps.Project`, so a mark computed from the live session cannot drift from what is on screen and
+  one cached at `init()` is the value as of program start. `Unavailable` is a second question from
+  `Requires` and is drawn rather than hidden: `kernel.noColorForced` already computes one of these
+  and throws it into a status line.
+  Registers `appearance.theme` and `appearance.scheme` and **deletes `registerThemeCommands` and
+  `registerSchemeCommands`** — nine commands out, two settings in; `SwitchTheme` and `SwitchScheme`
+  stay as they are and become the settings' `Set`. Adds `appearance.glyphs` (a `SwitchGlyphs` beside
+  `SwitchTheme`) and `appearance.mouse`, neither of which the running program could change at all
+  before: `Config.Mouse` and `Profile.Glyphs` were hand-edited TOML.
+  **Two bugs are fixed here and each gets a regression test named for it.** `SwitchTheme` builds
+  `NewTheme(mode, dark, glyphs)` with no `WithScheme`, so *use the dark theme* silently reverts a Nord
+  session to the default colours while `writeTheme` leaves `scheme = "nord"` in the file — so the next
+  run comes back Nord and nothing ever said what happened. And `NewTheme` ignores the scheme entirely
+  under `ThemeNoColor`, so picking one with colour off does nothing and still writes the profile.
+  `GlobalKeys` gains `Settings`, bound to `ctrl+,` and to `g s`. Both are free: the globals are
+  `q ctrl+c esc ? ctrl+k r R g` and the digits, `alt+k` is kill-line, and the kernel buffers `g` so
+  no view loses a gesture.
+
+- [ ] **S2 — The settings screen** · depends on S1 ·
+  **owns** `internal/ui/settings/**`, `internal/ui/views.go` (one blank import),
+  `internal/ui/palette/{project.go,project_view.go}` (the picker gains a second door),
+  `docs/{SETTINGS,UX,ROADMAP}.md`
+  A new package and a `ViewSpec` with `Slot: 0` — the digits stay with the views a session lives in.
+  Five row shapes and no sixth without a reason written down: inline radios where the options fit the
+  row, a value with a picker behind it where they do not, a toggle, a dimmed `KindInfo` value and a
+  `KindAction` button. **No save button**: every one of these is already a live switch, and a screen
+  with an apply step would be a second model of the same state, which is the thing this change
+  removes.
+  **The picker behind a `▸` is the one that already exists.** `palette.projectModel` is a filtered,
+  frecency-ranked list with a `current` marker — commented *"so that switching to it is visibly a
+  no-op rather than a mystery"*, which is exactly the mark the schemes never got — and the project row
+  opens that very picker. The scheme row opens one built the same way, each row drawn in its own
+  scheme's colours through `Option.Style`, which is the preview the palette structurally could not do.
+  **Profile is `KindInfo` and the reason is in the tree**: `run()` builds the token, the client, the
+  cache and the theme before `kernel.New`, so a live profile swap means rebuilding all four and
+  re-probing. The row names the profile, its site, its account and where its token comes from, and
+  `enter` on a multi-profile config writes `active = "…"` and says it takes effect next run. A hot
+  swap that half worked would be worse than a restart that is admitted to.
+
+- [ ] **S3 — The palette orders itself** ·
+  **owns** `internal/ui/kernel/{view.go,registry.go,registry_test.go,destinations.go}`,
+  `internal/ui/palette/{palette.go,render.go,*_test.go}`, the `Kind` line of
+  `internal/ui/{board,backlog,list,plan,release,sprint,timeline}/register.go`,
+  `docs/{SETTINGS,UX,ROADMAP}.md`
+  `Command.Kind` — `KindAction`, `KindGoTo`, `KindSearch`, `KindSession` — defaulting to zero, so
+  every command that does not care needs no edit. `Commands()` orders by `Kind`, then `Group`, then
+  `Title`. A rank on the command and **not** a table of group names in the palette, because a table is
+  a central switch every new group has to be added to.
+  With nothing typed the palette draws group headings in `Kind` order and frecency still reorders
+  *within* a group, so a habit is still rewarded. The moment anything is typed the headings go and it
+  is one flat ranked list: when you are filtering, rank beats grouping and a heading is a row that
+  cannot be chosen. The gate is a test that the unfiltered first screen of an 80×24 palette holds at
+  least one destination.
+
 ## Later, deliberately not now
 
 - **Confluence.** Arrives as `pkg/confluence` behind its own port. Note that Confluence storage
