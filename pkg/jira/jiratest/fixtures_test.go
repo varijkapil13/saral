@@ -190,6 +190,8 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"board_config_no_estimation.json",
 		"board_epics.json",
 		"board_issues.json",
+		"bulk_400.json",
+		"bulk_403.json",
 		"bulkmove_submit.json",
 		"bulkmove_task_complete.json",
 		"bulkmove_task_enqueued.json",

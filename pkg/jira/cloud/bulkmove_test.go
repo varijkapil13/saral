@@ -585,13 +585,11 @@ func TestBulkMove_SaysWhereARefusedFieldValueBelongs(t *testing.T) {
 
 // TestBulkMove_ReadsARefusalInTheBulkEndpointsOwnEnvelope covers the 403 a bulk
 // route answers in its own shape rather than the platform one plans_403.json
-// carries. The body is inline because no fixture holds this shape and
-// pkg/jira/jiratest owns the fixtures; a bulk one belongs there.
+// carries.
 func TestBulkMove_ReadsARefusalInTheBulkEndpointsOwnEnvelope(t *testing.T) {
 	t.Parallel()
 
 	const says = "You do not have the Bulk Change global permission."
-	const body = `{"errors":[{"message":"` + says + `","errorType":"PERMISSION"}]}`
 
 	for _, call := range moveCalls() {
 		if !call.capability {
@@ -600,8 +598,7 @@ func TestBulkMove_ReadsARefusalInTheBulkEndpointsOwnEnvelope(t *testing.T) {
 		t.Run(call.name, func(t *testing.T) {
 			t.Parallel()
 
-			c, s := moveClient(t, jiratest.WithHandler(call.method, call.route,
-				jsonHandler(http.StatusForbidden, body)))
+			c, s := moveClient(t, jiratest.WithStatus(call.method, call.route, http.StatusForbidden, "bulk_403.json"))
 
 			err := call.run(t.Context(), c, s.URL())
 
@@ -1050,32 +1047,30 @@ type moveCall struct {
 	// is what request.target() falls back to.
 	kind string
 	id   string
-	// rejection is the body this endpoint answers a 400 in, and says is the
-	// sentence inside it. The envelope differs per endpoint and only the
-	// endpoint says which one is coming.
-	rejection string
-	says      string
-	run       func(ctx context.Context, c *Client, site string) error
+	// rejectionFixture is the fixture this endpoint answers a 400 with, and
+	// says is the sentence inside it. The envelope differs per endpoint and
+	// only the endpoint says which one is coming.
+	rejectionFixture string
+	says             string
+	run              func(ctx context.Context, c *Client, site string) error
 }
 
 // The two envelopes a 400 arrives in here, both read off the published schema.
 //
 // /bulk/** declares BulkOperationErrorResponse for its 400 and its 401: an array
 // of objects under errors, where every other endpoint puts either sentences
-// under errorMessages or an object keyed by field. Neither shape is held as a
-// fixture for a bulk endpoint, and pkg/jira/jiratest owns the fixtures.
+// under errorMessages or an object keyed by field. bulk_400.json holds that
+// shape; the task registry's own 400 is the platform one and stays inline,
+// since it is not a /bulk/** endpoint.
 const (
-	bulkRejection     = `{"errors":[{"message":"The target project has no issue type with that id.","errorType":"VALIDATION"}]}`
 	bulkRejectionSays = "The target project has no issue type with that id."
 	taskRejection     = `{"errorMessages":["That task id is not a number."],"errors":{}}`
 	taskRejectionSays = "That task id is not a number."
 )
 
-// forbiddenFixtureSays is the sentence plans_403.json carries. It is the only
-// 403 fixture in the tree and its wording is about the Plans API, so a
-// /bulk/** one belongs in pkg/jira/jiratest/fixtures, which this packet does not
-// own. What it proves here is that a 403's reason is the site's and not this
-// client's fallback.
+// forbiddenFixtureSays is the sentence plans_403.json carries. It is the
+// platform envelope, used here to prove that a 403's reason is the site's own
+// and not this client's fallback, wherever that shape is what a site answers.
 const forbiddenFixtureSays = "The Plans API requires the Administer Jira global permission"
 
 func moveCalls() []moveCall {
@@ -1083,7 +1078,7 @@ func moveCalls() []moveCall {
 		{
 			name: "BulkMove", capability: true, method: http.MethodPost, route: movePattern,
 			kind: "the bulk move endpoint", id: bulkMovePath,
-			rejection: bulkRejection, says: bulkRejectionSays,
+			rejectionFixture: "bulk_400.json", says: bulkRejectionSays,
 			run: func(ctx context.Context, c *Client, _ string) error {
 				_, err := c.BulkMove(ctx, aMove())
 				return err
@@ -1092,7 +1087,7 @@ func moveCalls() []moveCall {
 		{
 			name: "Task on the bulk queue", capability: true, method: http.MethodGet, route: bulkQueuePattern,
 			kind: "task", id: movedTaskID,
-			rejection: bulkRejection, says: bulkRejectionSays,
+			rejectionFixture: "bulk_400.json", says: bulkRejectionSays,
 			run: func(ctx context.Context, c *Client, site string) error {
 				_, err := c.Task(ctx, jira.TaskRef{ID: movedTaskID, URL: site + movedTaskPath})
 				return err
@@ -1101,7 +1096,7 @@ func moveCalls() []moveCall {
 		{
 			name: "Task on the task registry", method: http.MethodGet, route: taskPattern,
 			kind: "task", id: "11072",
-			rejection: taskRejection, says: taskRejectionSays,
+			says: taskRejectionSays,
 			run: func(ctx context.Context, c *Client, site string) error {
 				_, err := c.Task(ctx, jira.TaskRef{ID: "11072", URL: site + genericTaskPath})
 				return err
@@ -1144,8 +1139,13 @@ func TestBulkMove_ReportsARefusalRateLimitAndTransportFailureAsThemselves(t *tes
 		t.Run(call.name+"/a request the site will not take", func(t *testing.T) {
 			t.Parallel()
 
-			c, s := moveClient(t, jiratest.WithHandler(call.method, call.route,
-				jsonHandler(http.StatusBadRequest, call.rejection)))
+			var opt jiratest.ServerOption
+			if call.rejectionFixture != "" {
+				opt = jiratest.WithStatus(call.method, call.route, http.StatusBadRequest, call.rejectionFixture)
+			} else {
+				opt = jiratest.WithHandler(call.method, call.route, jsonHandler(http.StatusBadRequest, taskRejection))
+			}
+			c, s := moveClient(t, opt)
 
 			err := call.run(t.Context(), c, s.URL())
 
