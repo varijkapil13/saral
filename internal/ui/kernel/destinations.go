@@ -177,6 +177,7 @@ func (m Model) destMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 func (m Model) destFooterActs() []Binding {
 	return []Binding{
 		Bind(m.keys.Slot.Keys(), "1-9", "switch view"),
+		Bind(m.keys.Jump.Keys(), m.keys.Jump.Keys()[0], m.keys.Jump.Help().Desc),
 		destDown,
 		destChoose,
 		Bind(m.keys.Back.Keys(), "esc", "cancel"),

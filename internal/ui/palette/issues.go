@@ -49,17 +49,25 @@ func (m *Model) search(text string, now time.Time) tea.Cmd {
 	for i := range found {
 		m.hits = append(m.hits, newHit(found[i], now))
 	}
+	jump, warn := m.jumpHit(text)
+	if jump != nil && !m.alreadyFound(jump.key) {
+		m.hits = append([]hit{*jump}, m.hits...)
+	}
 	for i := range m.hits {
 		m.shown = append(m.shown, entry{issue: true, at: i})
 	}
+	var cmds []tea.Cmd
+	if warn != nil {
+		cmds = append(cmds, warn)
+	}
 	if err != nil {
-		return kernel.Warn("the cache on this machine could not be walked: " + err.Error())
+		cmds = append(cmds, kernel.Warn("the cache on this machine could not be walked: "+err.Error()))
 	}
 	if n := m.index.Dropped(); n > 0 && n != m.said {
 		m.said = n
-		return kernel.Warn(dropped(n))
+		cmds = append(cmds, kernel.Warn(dropped(n)))
 	}
-	return nil
+	return tea.Batch(cmds...)
 }
 
 // dropped says how much of the cache went unread, because a palette that offers

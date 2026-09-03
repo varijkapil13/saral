@@ -2,6 +2,7 @@ attach
 1-9   saved query           ctrl+k commands
 g     where to go           ?      help
 g 1-9 switch view           q      quit
+g i   jump to an issue
 esc   back
 r     refresh
 R     refetch everything
@@ -22,23 +23,26 @@ comment
 a write a comment    ↓/j  down         ctrl+d  half page down    1-9   saved query           ctrl+k commands
 e edit this one      ↑/k  up           ctrl+u  half page up      g     where to go           ?      help
 d delete this one    pgdn page down    g g     oldest            g 1-9 switch view           q      quit
-                     pgup page up      G / g e newest            esc   back
-                                       ←/h     pan left          r     refresh
-                                       →/l     pan right         R     refetch everything
+                     pgup page up      G / g e newest            g i   jump to an issue
+                                       ←/h     pan left          esc   back
+                                       →/l     pan right         r     refresh
+                                                                 R     refetch everything
 
 filter
 enter choose what to filter by    ↓/j  down         1-9   saved query           ctrl+k commands
                                   ↑/k  up           g     where to go           ?      help
                                   pgdn page down    g 1-9 switch view           q      quit
-                                  pgup page up      esc   back
-                                  home first row    r     refresh
-                                  end  last row     R     refetch everything
+                                  pgup page up      g i   jump to an issue
+                                  home first row    esc   back
+                                  end  last row     r     refresh
+                                                    R     refetch everything
 
 form
 enter use this issue type    ↓/j  down         1-9   saved query           ctrl+k commands
                              ↑/k  up           g     where to go           ?      help
                              home first row    g 1-9 switch view           q      quit
-                             end  last row     esc   back
+                             end  last row     g i   jump to an issue
+                                               esc   back
                                                r     refresh
                                                R     refetch everything
 
@@ -46,10 +50,10 @@ issue
 tab next pane        ↓/j    down         d/ctrl+d  half page down        1-9   saved query           ctrl+k commands
 e   edit fields      ↑/k    up           u/ctrl+u  half page up          g     where to go           ?      help
 t   change status    f/pgdn page down    g g       top                   g 1-9 switch view           q      quit
-C   comment          b/pgup page up      G / g e   bottom                esc   back
-                     →/l    pan right    shift+tab previous pane         r     refresh
-                     ←/h    pan left     z         expand or collapse    R     refetch everything
-                                         <         wider sidebar
+C   comment          b/pgup page up      G / g e   bottom                g i   jump to an issue
+                     →/l    pan right    shift+tab previous pane         esc   back
+                     ←/h    pan left     z         expand or collapse    r     refresh
+                                         <         wider sidebar         R     refetch everything
                                          >         wider description
                                          =         reset the split
 
@@ -57,7 +61,8 @@ issue.edit
 enter  change this field    ↓/j down    ←/h previous value    1-9   saved query           ctrl+k commands
 del    empty this field     ↑/k up      →/l next value        g     where to go           ?      help
 ctrl+s save                                                   g 1-9 switch view           q      quit
-X      discard changes                                        esc   back
+X      discard changes                                        g i   jump to an issue
+                                                              esc   back
                                                               r     refresh
                                                               R     refetch everything
 
@@ -65,6 +70,7 @@ issue.move
 enter choose    ↓/j down    1-9   saved query           ctrl+k commands
                 ↑/k up      g     where to go           ?      help
                             g 1-9 switch view           q      quit
+                            g i   jump to an issue
                             esc   back
                             r     refresh
                             R     refetch everything
@@ -73,30 +79,34 @@ list
 enter open                                     ↓/j  down         ctrl+d  half page down    1-9   saved query        ...
 f     filter by a person, a status, a label    ↑/k  up           ctrl+u  half page up      g     where to go
 /     filter                                   pgdn page down    g g     first row         g 1-9 switch view
-a     all issues                               pgup page up      G / g e last row          esc   back
-e     edit this search                                                                     r     refresh
-s     save this query to a key                                                             R     refetch everything
+a     all issues                               pgup page up      G / g e last row          g i   jump to an issue
+e     edit this search                                                                     esc   back
+s     save this query to a key                                                             r     refresh
+                                                                                           R     refetch everything
 
 move
 enter use the project under the cursor    ↓/j  down         1-9   saved query           ctrl+k commands
 i     type a project key                  ↑/k  up           g     where to go           ?      help
                                           pgdn page down    g 1-9 switch view           q      quit
-                                          pgup page up      esc   back
-                                          home first row    r     refresh
-                                          end  last row     R     refetch everything
+                                          pgup page up      g i   jump to an issue
+                                          home first row    esc   back
+                                          end  last row     r     refresh
+                                                            R     refetch everything
 
 plans
 enter show what this plan is made of    ↓/j  down          1-9   saved query           ctrl+k commands
                                         ↑/k  up            g     where to go           ?      help
                                         pgdn page down     g 1-9 switch view           q      quit
-                                        pgup page up       esc   back
-                                        home first plan    r     refresh
-                                        end  last plan     R     refetch everything
+                                        pgup page up       g i   jump to an issue
+                                        home first plan    esc   back
+                                        end  last plan     r     refresh
+                                                           R     refetch everything
 
 release.flow
 enter choose what happens to the open issues    ↓/j down    1-9   saved query           ctrl+k commands
                                                 ↑/k up      g     where to go           ?      help
                                                             g 1-9 switch view           q      quit
+                                                            g i   jump to an issue
                                                             esc   back
                                                             r     refresh
                                                             R     refetch everything
@@ -105,14 +115,16 @@ releases
 enter release this version       ↓/j  down             1-9   saved query           ctrl+k commands
 n     new version                ↑/k  up               g     where to go           ?      help
 e     edit this version          pgdn page down        g 1-9 switch view           q      quit
-A     archive or unarchive it    pgup page up          esc   back
-                                 g g  first version    r     refresh
-                                 G    last version     R     refetch everything
+A     archive or unarchive it    pgup page up          g i   jump to an issue
+                                 g g  first version    esc   back
+                                 G    last version     r     refresh
+                                                       R     refetch everything
 
 sprints
 o show or hide closed sprints    1-9   saved query           ctrl+k commands
                                  g     where to go           ?      help
                                  g 1-9 switch view           q      quit
+                                 g i   jump to an issue
                                  esc   back
                                  r     refresh
                                  R     refetch everything
@@ -121,6 +133,7 @@ timeline
 n where these dates came from    1-9   saved query           ctrl+k commands
                                  g     where to go           ?      help
                                  g 1-9 switch view           q      quit
+                                 g i   jump to an issue
                                  esc   back
                                  r     refresh
                                  R     refetch everything
