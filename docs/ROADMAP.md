@@ -1304,6 +1304,57 @@ S2 depends on S1; S3 depends on neither and can run beside them.
   (`internal/ui/palette/register.go`, `internal/ui/settings/settings.go`); they still carry the
   default until whoever owns those sets it, which the gate does not require.
 
+## Filtering, sorting and the glyph tier
+
+Six things asked for after a week of using the program, and read together they are one absence
+repeated: **filtering and sorting were built per view, and only two views built them.** The board
+holds a `filter.Terms` and renders none of it, so a filter you applied leaves nothing on screen
+saying what is in force; `filter.Terms` has documented multi-value support that the picker cannot
+reach, because `chooseValue` pops on the first pick; and four views cannot filter at all, which is
+what "issue type in every filter" actually asks for — `FacetType` has existed since the picker did.
+Nothing anywhere sorts. The design, the decisions and the consumer sweep are in
+[`docs/FILTERS.md`](FILTERS.md). F2 blocks F3; F1 and F4 are independent of both.
+
+- [ ] **F1 — The glyph tier, and an icon for what an issue is** ·
+  **owns** `internal/ui/kernel/{theme.go,theme_test.go}`, `internal/config/{config.go,config_test.go}`,
+  the type/priority/status cells of `internal/ui/{list,board,backlog,issue}/render.go`,
+  `docs/{FILTERS,UX,SETTINGS,ROADMAP}.md`
+  A third tier beside `UnicodeGlyphs` and `ASCIIGlyphs`, `nerd` the default, all three switchable from
+  the settings screen's existing Glyphs row. **This reverses the rule `kernel/theme.go` states in as
+  many words** — *"Nothing here may assume a Nerd Font"* — deliberately and on request; the tier below
+  is kept whole rather than deleted, which is what the setting is for.
+  **The icon is resolved from the site's own type and never from its name.** A name is localised and
+  a team-managed project mints its own, so the hierarchy level and the subtask flag decide, and a type
+  nothing can resolve falls back to its first letter. A hardcoded `"Bug"` is the way a change gets
+  rejected here most often. `config.Profile.Glyphs` gains a third legal value and `cmd/saral` its flag.
+
+- [ ] **F2 — One filter bar, and a picker that takes more than one value** ·
+  **owns** `internal/ui/widget/filterbar/**`, `internal/ui/filter/**`,
+  `internal/ui/list/{terms.go,list.go,keys.go}`, `docs/{FILTERS,UX,ROADMAP}.md`
+  The chip line lifted out of `internal/ui/list/terms.go` into a widget every list-shaped view draws:
+  one chip per facet listing its values, `×` to drop a facet, a click on a value to drop that value,
+  `ctrl+g` to clear, every chip a mouse zone. One chip per facet and not per value, because the
+  grouping is what `filter.Terms` already promises.
+  `filter.Model` stops sending `kernel.Pop()` with its answer: `enter` toggles and the list stays up
+  with what is chosen marked, `esc` closes, and the rows behind it narrow as each toggle lands rather
+  than at the end. `ChosenMsg` keeps its shape — one term per toggle is what lets the rows follow.
+
+- [ ] **F3 — Every list-shaped view filters** · depends on F2 ·
+  **owns** `internal/ui/{board,backlog,timeline}/**`, `docs/{FILTERS,UX,ROADMAP}.md`
+  The board draws the bar it has needed since it grew terms; the backlog and the timeline gain `f`,
+  the bar, and the narrowing applied to what they already hold. The gate is a test that walks the view
+  registry rather than naming views, so a fifth cannot be added without drawing what is in force.
+
+- [ ] **F4 — Sort, where there is an order to change** ·
+  **owns** `internal/ui/list/{search.go,sort.go,keys.go}`, `internal/ui/backlog/**`,
+  `internal/config/uistate.go`, `docs/{FILTERS,UX,ROADMAP}.md`
+  Issues and the backlog only. A board is ordered by column and by rank inside it and a timeline by
+  date; sorting either discards the order that makes it that view, and that is the reason rather than
+  an omission. A sort is part of the search — the site orders the page — so choosing one re-runs the
+  query rather than reordering the screenful, which is what keeps a list with more pages behind it
+  honest. `s` sorts and the issue list's save-this-query moves to `S`. The choice is kept per view in
+  `ui.toml`, beside the pane split, for the reason `config.UIState` already gives.
+
 ## Later, deliberately not now
 
 - **Confluence.** Arrives as `pkg/confluence` behind its own port. Note that Confluence storage
