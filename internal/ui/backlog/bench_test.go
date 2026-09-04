@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -102,6 +103,20 @@ func scroll(b *testing.B, m *Model) {
 func BenchmarkBacklogSteadyScroll10k(b *testing.B) { scroll(b, stocked(b, 10000, 120, 40)) }
 
 func BenchmarkBacklogSteadyScroll20(b *testing.B) { scroll(b, stocked(b, 20, 120, 40)) }
+
+// BenchmarkBacklogSteadyScrollTermed10k is the same scroll with a term in
+// force that still leaves rows on screen, which draws the bar under them.
+func BenchmarkBacklogSteadyScrollTermed10k(b *testing.B) {
+	m := stocked(b, 10000, 120, 40)
+	m.terms = filter.Terms{{Facet: filter.FacetType, ID: "10301", Label: "Story"}}
+	m.termsGen++
+	m.regroup()
+	if len(m.rows) == 0 {
+		b.Fatal("the term left no rows to scroll through, so this benchmark proves nothing")
+	}
+	_ = m.View()
+	scroll(b, m)
+}
 
 // BenchmarkBacklogWalk10k walks a fresh row into view on every frame, which is
 // the worst case: every frame misses the memo by construction.

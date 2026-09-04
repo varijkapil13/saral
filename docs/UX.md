@@ -492,30 +492,50 @@ The owner, after a week against a real site: *"From all views there is no easy w
 filter by person. I do not want to write JQL queries — this should also belong to the speed and ease
 of use."*
 
-`f` in the issue list opens a picker in two states: **choose a facet, then toggle any number of its
-values.** `enter` puts a value in force or takes it off again without closing the picker, so a second
-assignee costs another `enter` rather than a fresh trip through the facet menu; `esc` goes value →
-facet → closed. The facets are assignee, reporter, status, type, priority and label. `ctrl+k` reaches
-it from anywhere, including the issue pane, where `f` belongs to the viewport and is not taken away
-from it.
+`f` opens a picker in two states: **choose a facet, then toggle any number of its values.** `enter`
+puts a value in force or takes it off again without closing the picker, so a second assignee costs
+another `enter` rather than a fresh trip through the facet menu; `esc` goes value → facet → closed.
+The facets are assignee, reporter, status, type, priority and label. `ctrl+k` reaches it from
+anywhere, including the issue pane, where `f` belongs to the viewport and is not taken away from it.
+
+**Every list-shaped view answers `f`**: the issue list, the board, the backlog and the timeline. The
+issue list sends a chosen value to the site as JQL, which is the next paragraph; the other three
+narrow what they already hold, in memory, the way `board.terms` did since the board first grew
+filtering — a board, a backlog and a timeline are already a whole read's worth of issues on screen,
+and asking the site the same question again would be a second answer to compare against the one
+already drawn. `ctrl+g` clears every term at once in all four, and the bar under what each view draws
+is the same widget (`internal/ui/widget/filterbar`) reading the same `filter.Terms`, so the chips, the
+key and the picker never disagree about what a term means.
 
 **Version, component and sprint are not offered.** Not an oversight: none of the three can be read
 through the port role a session holds, so a row for one would be a facet with nowhere to get its
 values from. When the port grows a way to read them, they join the list.
 
-**A value is a query, not a pass over the rows in hand.** A chosen value composes into the JQL and
-the search runs again, so it reaches an issue this session never fetched — which a local narrow
-cannot — and it matches on the id the site gave the value rather than on a display name, which is
-localised, is not unique on one site, and which one account answered to two of within a minute.
+**In the issue list, a value is a query, not a pass over the rows in hand.** A chosen value composes
+into the JQL and the search runs again, so it reaches an issue this session never fetched, and it
+matches on the id the site gave the value rather than on a display name, which is localised, is not
+unique on one site, and which one account answered to two of within a minute. The board, the backlog
+and the timeline match the same id against the issues already loaded instead, which is the local
+narrow the issue list's own query cannot be — see *Every list-shaped view answers `f`* above for why
+that split is the right one rather than a shortcut: a board's own read is already whole, and the three
+views cannot see an issue the read never brought back, which is what the quick-filter warning on the
+board says when more is loaded than is on screen.
 
 **Terms compose, and the screen says what is in force.** Two facets narrow together; two values of
 one facet widen it — a person *and* a status, either of two people. The bar under the rows draws one
 chip per facet, its values comma-joined rather than one chip per value — a facet with three assignees
 on it is one narrowing, not three — with `×` to drop the whole facet and a click on a value's name to
-drop just that one. `a` — every issue in this project — is the no-terms state, so dropping the last
-term lands exactly on it; `ctrl+g` clears every term at once, the same key that clears a typed filter.
-A project switch takes the terms with it and says so: a status and an issue type are minted per
-project, so the ids in force name values the new project has never heard of.
+drop just that one. In the issue list, `a` — every issue in this project — is the no-terms state, so
+dropping the last term lands exactly on it, and a project switch takes the terms with it and says so:
+a status and an issue type are minted per project, so the ids in force name values the new project has
+never heard of. `ctrl+g` clears every term at once in every view that filters, the same key that
+clears a typed filter in the issue list.
+**Checked against the tree**: the board, the backlog and the timeline do not drop a term on a project
+switch the way the issue list does — a term stays in force naming a status or a type id the new
+project may not use, silently narrowing to nothing rather than saying so. Filed as
+[#141](https://github.com/varijkapil13/saral/issues/141) rather than widened into here, because the
+fix is one shared behaviour across three views the issue list's own `reproject` does not have to
+answer for — F3 only added the picker and the bar to all three.
 
 **Where the values come from decides whether it feels fast.** Statuses and types come from the
 project's workflows, priorities and labels from the site. All four are read once when the facet is

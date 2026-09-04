@@ -35,6 +35,21 @@ func TestBudget_BacklogScrollingCostsTheSameOnTenThousandRowsAsOnTwenty(t *testi
 	}
 }
 
+// The bar under the rows is on every frame it is on, so it is memoized the
+// way a section head is: a term in force costs no more than a steady-state
+// frame without one.
+func TestBudget_BacklogScrollingCostsTheSameUnderATermInForce(t *testing.T) {
+	termed := testing.Benchmark(BenchmarkBacklogSteadyScrollTermed10k).AllocsPerOp()
+	plain := testing.Benchmark(BenchmarkBacklogSteadyScroll10k).AllocsPerOp()
+	if termed > plain {
+		t.Errorf("a steady-state frame under a term allocates %d times against %d with nothing in force; "+
+			"the bar under the rows is being rebuilt per frame", termed, plain)
+	}
+	if termed > 1 {
+		t.Errorf("a steady-state frame under a term allocates %d times, want the frame string and nothing else", termed)
+	}
+}
+
 // Walking a fresh row into view on every frame misses the memo by construction,
 // which is what says the miss itself is bounded: one row is rendered and the
 // window around it is not.

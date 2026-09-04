@@ -1,11 +1,19 @@
 reading the chart
-  acts   enter open · + zoom in · - zoom out · T today · n notes
+  acts   enter open · + zoom in · - zoom out · T today · n notes · f filter by
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, G last row]
   full   [→/l later, ←/h earlier]
-  full   [enter open this issue, + zoom in to a shorter period, - zoom out to a longer period, T centre the chart on today, n where these dates came from]
+  full   [enter open this issue, + zoom in to a shorter period, - zoom out to a longer period, T centre the chart on today, n where these dates came from, f filter by a person, a status, a label]
+narrowed by a term
+  acts   enter open · + zoom in · - zoom out · T today · n notes · f filter by · ctrl+g clear
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first row, G last row]
+  full   [→/l later, ←/h earlier]
+  full   [enter open this issue, + zoom in to a shorter period, - zoom out to a longer period, T centre the chart on today, n where these dates came from, f filter by a person, a status, a label, ctrl+g clear filter]
 nothing to chart
   acts   n notes
   full   [n where these dates came from]
+nothing to chart and narrowed by a term
+  acts   n notes · ctrl+g clear
+  full   [n where these dates came from, ctrl+g clear filter]
 the notes pane
   acts   n hide notes
   full   [↓/j down, ↑/k up]

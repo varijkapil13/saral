@@ -30,6 +30,12 @@ type keyMap struct {
 	Choose  kernel.Binding
 	Back    kernel.Binding
 	Confirm kernel.Binding
+	// FilterBy opens the same picker the issue list uses — a person, a status, a
+	// type, a priority or a label — applied locally against what is already
+	// loaded rather than sent to the site; see terms.go.
+	FilterBy kernel.Binding
+	// Unfilter drops every term FilterBy put in force.
+	Unfilter kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -52,22 +58,31 @@ func defaultKeys() keyMap {
 		Choose:   kernel.Bind([]string{"enter"}, "enter", "move them here"),
 		Back:     kernel.Bind([]string{"esc"}, "esc", "leave them where they are"),
 		Confirm:  kernel.Bind([]string{"y"}, "y", "go ahead"),
+		FilterBy: kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),
+		Unfilter: kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter"),
 	}
 }
 
 // keySet is the resting state: rows on screen with nothing picked yet.
-func (k keyMap) keySet() kernel.KeySet { return k.browsing(false) }
+func (k keyMap) keySet() kernel.KeySet { return k.browsing(false, false) }
 
-// browsing is the resting state, with and without a selection. The selection is
-// what x is for, so the key that drops one is offered only where there is one.
-func (k keyMap) browsing(picked bool) kernel.KeySet {
+// browsing is the resting state, with and without a selection and with and
+// without a term in force. The selection is what x is for and the term is
+// what ctrl+g is for, so each key is offered only where there is something for
+// it to act on.
+func (k keyMap) browsing(picked, narrowed bool) kernel.KeySet {
 	pick, all := kernel.Terse(k.Pick, "pick"), kernel.Terse(k.PickAll, "pick all")
 	move := kernel.Terse(k.Move, "move")
-	acts := []kernel.Binding{pick, all, move}
-	actions := []kernel.Binding{k.Pick, k.PickAll, k.Move}
+	by := kernel.Terse(k.FilterBy, "filter by")
+	acts := []kernel.Binding{pick, all, move, by}
+	actions := []kernel.Binding{k.Pick, k.PickAll, k.Move, k.FilterBy}
 	if picked {
 		acts = append(acts, kernel.Terse(k.Unpick, "unpick all"))
 		actions = append(actions, k.Unpick)
+	}
+	if narrowed {
+		acts = append(acts, kernel.Terse(k.Unfilter, "clear"))
+		actions = append(actions, k.Unfilter)
 	}
 	return kernel.KeySet{
 		Acts: acts,
@@ -87,6 +102,8 @@ type keyState int
 const (
 	keysBrowsing keyState = iota
 	keysPicked
+	keysNarrowed
+	keysPickedNarrowed
 	keysChoosing
 	keysConfirming
 	keysMoving
@@ -98,8 +115,10 @@ const (
 var liveSets = func() [keyStates]kernel.KeySet {
 	k := defaultKeys()
 	var sets [keyStates]kernel.KeySet
-	sets[keysBrowsing] = k.browsing(false)
-	sets[keysPicked] = k.browsing(true)
+	sets[keysBrowsing] = k.browsing(false, false)
+	sets[keysPicked] = k.browsing(true, false)
+	sets[keysNarrowed] = k.browsing(false, true)
+	sets[keysPickedNarrowed] = k.browsing(true, true)
 	sets[keysChoosing] = kernel.KeySet{
 		Acts: []kernel.Binding{
 			kernel.Terse(k.Next, "choose"), kernel.Terse(k.Choose, "move here"),
@@ -119,8 +138,9 @@ var liveSets = func() [keyStates]kernel.KeySet {
 }()
 
 // LiveKeys reports the keys that work in the state the backlog is actually in.
-// A selection offers the key that schedules it, the sprint list and the confirm
-// answer two strokes each, and a move in flight answers nothing.
+// A selection offers the key that schedules it, a term in force offers the key
+// that clears it, the sprint list and the confirm answer two strokes each, and
+// a move in flight answers nothing.
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	state := keysBrowsing
 	switch {
@@ -130,8 +150,12 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysConfirming
 	case m.mode == movingIssues:
 		state = keysMoving
+	case len(m.picked) > 0 && len(m.terms) > 0:
+		state = keysPickedNarrowed
 	case len(m.picked) > 0:
 		state = keysPicked
+	case len(m.terms) > 0:
+		state = keysNarrowed
 	}
 	return liveSets[state], int(state)
 }
@@ -156,6 +180,8 @@ const (
 	actChoose
 	actBack
 	actConfirm
+	actFilterBy
+	actClearFilter
 )
 
 // tables turn the bindings into a keystroke lookup, built once. The bindings
@@ -170,6 +196,7 @@ func (k keyMap) tables() (browse, chooser, confirm map[string]action) {
 		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
 		binding{k.Pick, actPick}, binding{k.PickAll, actPickGroup},
 		binding{k.Unpick, actClear}, binding{k.Move, actMove},
+		binding{k.FilterBy, actFilterBy}, binding{k.Unfilter, actClearFilter},
 	)
 	chooser = table(
 		binding{k.Next, actDown}, binding{k.Prev, actUp},

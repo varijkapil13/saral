@@ -169,15 +169,16 @@ func (c *rowCache) reset() { clear(c.rows) }
 // headKey is everything the head line is built from, so that it is rebuilt when
 // one of them moves and never otherwise.
 type headKey struct {
-	board   string
-	boards  int
-	width   int
-	gen     int
-	issues  int
-	shown   int
-	sprints int
-	more    bool
-	loading bool
+	board       string
+	boards      int
+	width       int
+	gen         int
+	issues      int
+	shown       int
+	filteredOut int
+	sprints     int
+	more        bool
+	loading     bool
 }
 
 // View draws the head line and the window of rows under it. Only the visible
@@ -208,6 +209,9 @@ func (m *Model) View() string {
 	if len(m.picked) > 0 {
 		lines = append(lines, m.picks.render(count(len(m.picked), "issue")+" picked",
 			m.width, m.styles.gen, m.styles.accent, m.deps.Theme.Glyphs.Ellipsis))
+	}
+	if len(m.terms) > 0 {
+		lines = append(lines, m.filterBar())
 	}
 	if m.said != "" {
 		lines = append(lines, m.outcome.render(m.said, m.width, m.styles.gen, m.styles.warn, m.deps.Theme.Glyphs.Ellipsis))
@@ -360,11 +364,15 @@ func (m *Model) headLine() string {
 	}
 	tail := " " + t.Glyphs.Separator + " "
 	if len(m.issues) > shown {
-		// The difference is the finished work, which is neither in a sprint
-		// anybody is planning nor waiting to be scheduled.
+		// The difference is the finished work and whatever a term left out,
+		// neither of which is in a sprint anybody is planning or waiting to be
+		// scheduled.
 		tail += strconv.Itoa(shown) + " of " + count(len(m.issues), "issue")
 	} else {
 		tail += count(shown, "issue")
+	}
+	if m.filteredOut > 0 {
+		tail += " " + t.Glyphs.Separator + " " + strconv.Itoa(m.filteredOut) + " hidden by filter"
 	}
 	if m.page.HasMore() {
 		tail += "+"
@@ -384,7 +392,7 @@ func (m *Model) headKey() headKey {
 	}
 	return headKey{
 		board: m.board().Name, boards: len(m.boards), width: m.width, gen: m.styles.gen,
-		issues: len(m.issues), shown: shown, sprints: len(m.sprints),
+		issues: len(m.issues), shown: shown, filteredOut: m.filteredOut, sprints: len(m.sprints),
 		more: m.page.HasMore(), loading: m.loading,
 	}
 }

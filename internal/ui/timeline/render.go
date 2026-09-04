@@ -191,13 +191,14 @@ type chrome struct {
 	versions bool
 	sprints  bool
 	detail   bool
+	bar      bool
 	note     bool
 	rows     int
 }
 
 func (c chrome) lines() int {
 	n := 0
-	for _, on := range [...]bool{c.heading, c.ruler, c.versions, c.sprints, c.detail, c.note} {
+	for _, on := range [...]bool{c.heading, c.ruler, c.versions, c.sprints, c.detail, c.bar, c.note} {
 		if on {
 			n++
 		}
@@ -210,7 +211,7 @@ func (m *Model) chrome() chrome {
 	c := chrome{
 		heading: true, ruler: true,
 		versions: hasVersions, sprints: hasSprints,
-		detail: m.selected() != nil, note: m.hasNoteCount(),
+		detail: m.selected() != nil, bar: len(m.terms) > 0, note: m.hasNoteCount(),
 	}
 	spare := max(m.height-1, 0)
 	for spare-c.lines() < 1 {
@@ -223,6 +224,8 @@ func (m *Model) chrome() chrome {
 			c.versions = false
 		case c.detail:
 			c.detail = false
+		case c.bar:
+			c.bar = false
 		case c.ruler:
 			c.ruler = false
 		case c.heading:
@@ -278,12 +281,24 @@ func (m *Model) View() string {
 	if c.detail {
 		lines = append(lines, m.detailLine())
 	}
+	if c.bar {
+		lines = append(lines, m.filterBar())
+	}
 	if c.note {
 		lines = append(lines, m.noteCountLine())
 	}
 	m.lines = lines
 	return strings.Join(lines, "\n")
 }
+
+// filterBar draws the chip line naming the terms in force.
+func (m *Model) filterBar() string {
+	return m.bar.Render(m.terms, m.width, m.deps.Theme, clearFilterKey, m.termsGen)
+}
+
+// clearFilterKey is built once rather than read off a fresh defaultKeys() on
+// every frame.
+var clearFilterKey = defaultKeys().Unfilter.Help().Key
 
 // warm renders the overscan into the memo so the next scroll step is a hit
 // rather than a row build. It draws nothing.
@@ -665,7 +680,7 @@ func (m *Model) summaryKey() summaryKey {
 	from, to := m.window()
 	return summaryKey{
 		title: m.title, width: m.width, gen: m.styles.gen,
-		rows: len(m.rows), resolved: m.res.Resolved(), zoom: m.zoom,
+		rows: len(m.rows), resolved: m.resolvedShown, zoom: m.zoom,
 		from: from, to: to,
 		loading: m.loading, loaded: m.loaded, failed: m.failure != nil,
 		badge: m.badge, checked: m.checked.UnixNano(),
@@ -720,10 +735,15 @@ func (m *Model) countLabel() string {
 	case m.failure != nil:
 		b.WriteString("no answer")
 	default:
-		b.WriteString(strconv.Itoa(m.res.Resolved()))
+		b.WriteString(strconv.Itoa(m.resolvedShown))
 		b.WriteString(" of ")
 		b.WriteString(strconv.Itoa(len(m.rows)))
 		b.WriteString(" dated")
+		if m.filteredOut > 0 {
+			b.WriteString(", ")
+			b.WriteString(strconv.Itoa(m.filteredOut))
+			b.WriteString(" hidden by filter")
+		}
 	}
 	if from, to := m.window(); !from.IsZero() && m.width >= wideSummary {
 		b.WriteString("  ")
@@ -819,7 +839,7 @@ type noteCountKey struct {
 func (m *Model) noteCountLine() string {
 	key := noteCountKey{
 		width: m.width, gen: m.styles.gen, rows: len(m.rows),
-		resolved: m.res.Resolved(), notes: len(m.noteLines), loaded: m.loaded,
+		resolved: m.resolvedShown, notes: len(m.noteLines), loaded: m.loaded,
 	}
 	if m.noteCountSet && key == m.noteCountAt {
 		return m.noteCount
@@ -827,7 +847,7 @@ func (m *Model) noteCountLine() string {
 	m.noteCountAt, m.noteCountSet = key, true
 	ell := m.deps.Theme.Glyphs.Ellipsis
 	switch {
-	case m.loaded && len(m.rows) > 0 && m.res.Resolved() == 0:
+	case m.loaded && len(m.rows) > 0 && m.resolvedShown == 0:
 		m.noteCount = m.styles.danger.Render(ansi.Truncate("none of these "+strconv.Itoa(len(m.rows))+
 			" issues carries a date this site could be read from — "+notesHint, m.width, ell))
 	case len(m.noteLines) == 1:

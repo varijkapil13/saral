@@ -54,8 +54,9 @@ var keyOwners = map[string]string{
 	"attachments.upload": attach.ViewID,
 	"attachments.delete": attach.ViewID,
 
-	"backlog.move": backlog.ViewID,
-	"backlog.open": backlog.ViewID,
+	"backlog.move":      backlog.ViewID,
+	"backlog.open":      backlog.ViewID,
+	"backlog.filter-by": backlog.ViewID,
 
 	"board.move-issue": board.ViewID,
 	"board.next":       board.ViewID,
@@ -77,11 +78,12 @@ var keyOwners = map[string]string{
 	"sprints.open":     sprint.ViewID,
 	"sprints.start":    sprint.ViewID,
 
-	"timeline.notes":    timeline.ViewID,
-	"timeline.open":     timeline.ViewID,
-	"timeline.today":    timeline.ViewID,
-	"timeline.zoom-in":  timeline.ViewID,
-	"timeline.zoom-out": timeline.ViewID,
+	"timeline.notes":     timeline.ViewID,
+	"timeline.open":      timeline.ViewID,
+	"timeline.today":     timeline.ViewID,
+	"timeline.zoom-in":   timeline.ViewID,
+	"timeline.zoom-out":  timeline.ViewID,
+	"timeline.filter-by": timeline.ViewID,
 }
 
 func TestCommands_TeachTheKeyTheirViewActuallyShows(t *testing.T) {

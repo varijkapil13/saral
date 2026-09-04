@@ -147,6 +147,19 @@ list that has more pages behind it stays correct.
 | `GlyphsFor` gains `"nerd"` | `config.Profile.Glyphs` validation, the settings screen's Glyphs row, `cmd/saral` |
 | `s` moves to `S` in `list` | `list/keys.go`, its key golden, `docs/UX.md` |
 
+**A local matcher needs the field it matches on to actually be in the read.** Checked against the
+tree while landing the backlog's and the timeline's own `f`: both asked for `app.ListProjection()`
+(or its own narrower equivalent) with nothing added, which carries assignee, status, priority and
+type but never reporter or labels — and the timeline's own projection carried none of the four. A
+`FacetReporter` or `FacetLabel` term against either would have matched every row as "no reporter" or
+"no labels" rather than the ones actually chosen, silently, because the field the picker offers real
+values for was never asked of the site in the first place. The board's own earlier packet had already
+found this for itself (`plan.projection` widens `ListProjection` with `"reporter", "labels"`); the
+backlog's and the timeline's reads now do the same, and the timeline's needed all four widened rather
+than two. Anything that narrows locally against `filter.Terms` — a fifth view, or a widened facet list
+on one of these four — has to ask this same question of its own projection before trusting a local
+match.
+
 ## Definition of done, beyond `docs/PARALLEL.md`
 
 - The filter bar has a golden at 80 and 120 columns, with one facet in force and with three, in both

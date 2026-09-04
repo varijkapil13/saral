@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -428,6 +429,11 @@ func TestBacklog_FitsTheBoxItIsGiven(t *testing.T) {
 		for _, stage := range []func(){
 			func() {},
 			func() { dr.key("space") },
+			func() {
+				if term, ok := firstAssignee(dr); ok {
+					dr.send(filter.ChosenMsg{Term: term})
+				}
+			},
 			func() { dr.key("m") },
 			func() { dr.key("enter") },
 		} {

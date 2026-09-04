@@ -1,7 +1,7 @@
 attach
  Issues                                                                                 ? ctrl+k esc
 backlog
- Issues  space pick  v pick all  m move                                                 ? ctrl+k esc
+ Issues  space pick  v pick all  m move  f filter by                                    ? ctrl+k esc
 board
  Issues  enter open  m move  b board  f filter by  F 1-9 quick filters                  ? ctrl+k esc
 comment

@@ -36,6 +36,21 @@ func TestBudget_BoardScrollCostsTheFrameAndNothingElse(t *testing.T) {
 	}
 }
 
+// The bar under the grid is on every frame it is on, so it is memoized the way
+// the summary line is: a term in force costs no more than a steady-state frame
+// without one.
+func TestBudget_BoardScrollingCostsTheSameUnderATermInForce(t *testing.T) {
+	termed := testing.Benchmark(BenchmarkBoardView10kTermed).AllocsPerOp()
+	plain := testing.Benchmark(BenchmarkBoardView10k).AllocsPerOp()
+	if termed > plain {
+		t.Errorf("a steady-state frame under a term allocates %d times against %d with nothing in force; "+
+			"the bar under the grid is being rebuilt per frame", termed, plain)
+	}
+	if termed > 1 {
+		t.Errorf("a steady-state frame under a term allocates %d times, want the frame string and nothing else", termed)
+	}
+}
+
 // The columns are virtualized as well as the rows, which is the axis a list view
 // does not have: a board of fifty columns draws the handful that fit.
 func TestBudget_BoardColumnsAreVirtualizedAsWellAsItsRows(t *testing.T) {

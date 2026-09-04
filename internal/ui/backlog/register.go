@@ -23,6 +23,7 @@ func init() {
 		Title:    "Backlog",
 		Slot:     slot,
 		Requires: jira.CapBoards,
+		Filters:  true,
 		New:      New,
 	})
 	kernel.RegisterKeys(ViewID, keys.keySet())
@@ -51,6 +52,29 @@ func init() {
 		Requires: jira.CapBoards,
 		Run: func(kernel.Deps) tea.Cmd {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(NextBoardMsg{}))
+		},
+	})
+	kernel.RegisterCommand(kernel.Command{
+		ID:       "backlog.filter-by",
+		Title:    "Filter this backlog by a person, a status or a label",
+		Group:    "Search",
+		Kind:     kernel.KindSearch,
+		Requires: jira.CapBoards,
+		Keys:     []string{keys.FilterBy.Help().Key},
+		Run: func(kernel.Deps) tea.Cmd {
+			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(OpenFilterMsg{}))
+		},
+	})
+	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that
+	// clears a filter is shown only by the state that has one to clear.
+	kernel.RegisterCommand(kernel.Command{
+		ID:       "backlog.clear-filter",
+		Title:    "Clear the filter on this backlog",
+		Group:    "Search",
+		Kind:     kernel.KindSearch,
+		Requires: jira.CapBoards,
+		Run: func(kernel.Deps) tea.Cmd {
+			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(ClearFilterMsg{}))
 		},
 	})
 }

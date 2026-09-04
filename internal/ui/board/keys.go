@@ -33,6 +33,9 @@ type keyMap struct {
 	// type, a priority or a label — applied locally against what is already
 	// loaded rather than sent to the site; see terms.go.
 	FilterBy kernel.Binding
+	// Unfilter drops every term FilterBy put in force. It is offered only while
+	// one is, the way list.Unfilter is.
+	Unfilter kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -53,11 +56,34 @@ func defaultKeys() keyMap {
 		Board:    kernel.Bind([]string{"b"}, "b", "another board of this project"),
 		Filters:  kernel.Bind([]string{"F"}, "F 1-9", "quick filters"),
 		FilterBy: kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),
+		Unfilter: kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter"),
 	}
 }
 
 // keySet is the resting state: a board nobody is moving a card on.
 func (k keyMap) keySet() kernel.KeySet { return liveSets[keysBrowsing] }
+
+// browsing is the resting state, with and without a term in force. The
+// narrowed one offers the key that clears them, the way list.browsing does.
+func (k keyMap) browsing(narrowed bool) kernel.KeySet {
+	acts := []kernel.Binding{
+		k.Open, kernel.Terse(k.Pick, "move"), kernel.Terse(k.Board, "board"),
+		kernel.Terse(k.FilterBy, "filter by"), kernel.Terse(k.Filters, "quick filters"),
+	}
+	actions := []kernel.Binding{k.Open, k.Pick, k.Board, k.FilterBy, k.Filters}
+	if narrowed {
+		acts = append(acts, kernel.Terse(k.Unfilter, "clear"))
+		actions = append(actions, k.Unfilter)
+	}
+	return kernel.KeySet{
+		Acts: acts,
+		Full: [][]kernel.Binding{
+			{k.Down, k.Up, k.Left, k.Right},
+			{k.PageDown, k.PageUp, k.Top, k.Bottom},
+			actions,
+		},
+	}
+}
 
 // keyState is which of the board's states the keys belong to. It doubles as the
 // generation the memoized chrome repaints on, so a state that is added has to be
@@ -66,6 +92,7 @@ type keyState int
 
 const (
 	keysBrowsing keyState = iota
+	keysNarrowed
 	keysHolding
 	keysMoving
 	keysPickingFilter
@@ -77,17 +104,8 @@ const (
 var liveSets = func() [keyStates]kernel.KeySet {
 	k := defaultKeys()
 	var sets [keyStates]kernel.KeySet
-	sets[keysBrowsing] = kernel.KeySet{
-		Acts: []kernel.Binding{
-			k.Open, kernel.Terse(k.Pick, "move"), kernel.Terse(k.Board, "board"),
-			kernel.Terse(k.FilterBy, "filter by"), kernel.Terse(k.Filters, "quick filters"),
-		},
-		Full: [][]kernel.Binding{
-			{k.Down, k.Up, k.Left, k.Right},
-			{k.PageDown, k.PageUp, k.Top, k.Bottom},
-			{k.Open, k.Pick, k.Board, k.FilterBy, k.Filters},
-		},
-	}
+	sets[keysBrowsing] = k.browsing(false)
+	sets[keysNarrowed] = k.browsing(true)
 	// A card in hand can only be aimed and landed, so the whole inventory is the
 	// two answers and the two ways of aiming. enter means something else here
 	// than it does above, which is the reason a state reports for itself.
@@ -116,7 +134,8 @@ var liveSets = func() [keyStates]kernel.KeySet {
 
 // LiveKeys reports the keys that work in the state the board is actually in. A
 // card in hand answers enter and ctrl+g for two things the resting state does
-// not, and a move in flight answers nothing at all.
+// not, a move in flight answers nothing at all, and a board narrowed by a term
+// offers the key that clears them.
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	state := keysBrowsing
 	switch {
@@ -126,6 +145,8 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysHolding
 	case m.pendingFilter:
 		state = keysPickingFilter
+	case len(m.terms) > 0:
+		state = keysNarrowed
 	}
 	return liveSets[state], int(state)
 }
@@ -155,6 +176,7 @@ const (
 	actBoard
 	actFilter
 	actFilterBy
+	actUnfilter
 )
 
 // tables turn the bindings into a keystroke lookup, built once per board. The
@@ -169,6 +191,7 @@ func (k keyMap) tables() (browsing, holding map[string]action) {
 		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
 		binding{k.Open, actOpen}, binding{k.Pick, actPick}, binding{k.Board, actBoard},
 		binding{k.Filters, actFilter}, binding{k.FilterBy, actFilterBy},
+		binding{k.Unfilter, actUnfilter},
 	)
 	// A card in hand answers only the keys the holding state advertises: the two
 	// that aim it and the two that end the gesture. A motion that moved the

@@ -116,8 +116,11 @@ func read(ctx context.Context, s site, search *app.Search, project string, at, g
 		}
 		out.field = field.Ref()
 		// The rank field is named by the board configuration, by id, so it is
-		// added to the projection rather than looked up by a name.
-		projection := app.ListProjection().With(out.field.ID)
+		// added to the projection rather than looked up by a name. Reporter and
+		// labels join it for the same reason board.plan.projection widens it:
+		// filter.FacetReporter and FacetLabel match against this read's own
+		// issues, and ListProjection alone leaves both fields unread.
+		projection := app.ListProjection().With(out.field.ID, "reporter", "labels")
 		if config.RankFieldID != "" {
 			projection = projection.With(config.RankFieldID)
 		}

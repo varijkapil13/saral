@@ -39,6 +39,12 @@ type ViewSpec struct {
 	// to it and hands it a RunQueryMsg, which is as much as the kernel knows
 	// about what a search is.
 	RunsQueries bool
+	// Filters marks a view whose Update handles filter.ChosenMsg and draws
+	// internal/ui/widget/filterbar's bar under whatever it shows whenever a
+	// term is in force. The kernel may not import either package to check this
+	// itself, so the view says so — the same self-registration RunsQueries
+	// already is — and a sweep in internal/ui holds every one of them to it.
+	Filters bool
 	// Requires names the capability this view needs. An empty key means the
 	// view is always available; an absent capability hides it and its reason is
 	// what the user sees instead.

@@ -17,6 +17,11 @@ type MoveIssueMsg struct{}
 // NextBoardMsg asks the board to draw the next of the boards this project has.
 type NextBoardMsg struct{}
 
+// ClearFilterMsg drops every term the filter picker put in force. It is
+// exported so the palette reaches the gesture ctrl+g does rather than a second
+// implementation of it.
+type ClearFilterMsg struct{}
+
 // The board takes the footer slot docs/UX.md allocates it, and declares the
 // capability it cannot exist without: a token that may not read boards gets the
 // probe's own sentence instead of a view that fails on every read.
@@ -28,6 +33,7 @@ func init() {
 		Title:    "Board",
 		Slot:     slot,
 		Requires: jira.CapBoards,
+		Filters:  true,
 		New:      New,
 	})
 	kernel.RegisterKeys(ViewID, keys.keySet())
@@ -57,6 +63,18 @@ func init() {
 		Keys:     []string{keys.Board.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(NextBoardMsg{}))
+		},
+	})
+	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that
+	// clears a filter is shown only by the state that has one to clear.
+	kernel.RegisterCommand(kernel.Command{
+		ID:       "board.clear-filter",
+		Title:    "Clear the filter on this board",
+		Group:    "Search",
+		Kind:     kernel.KindSearch,
+		Requires: jira.CapBoards,
+		Run: func(kernel.Deps) tea.Cmd {
+			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(ClearFilterMsg{}))
 		},
 	})
 }

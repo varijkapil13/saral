@@ -7,7 +7,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -39,6 +41,85 @@ func TestBoardRender_Golden(t *testing.T) {
 			dr.key(tc.keys...)
 			golden(t, tc.golden, dr.view())
 		})
+	}
+}
+
+// The board holds a filter.Terms since it grew them, and the bar under the
+// grid is the only thing that ever said so. One golden with one facet in
+// force, one with two, at the widths docs/FILTERS.md asks for.
+func TestBoardRender_FilterBarGolden(t *testing.T) {
+	t.Parallel()
+	waiting := filter.Term{Facet: filter.FacetStatus, ID: "10201", Label: "Triage"}
+	bug := filter.Term{Facet: filter.FacetType, ID: "3", Label: "Bug"}
+	for name, tc := range map[string]struct {
+		width, height int
+		terms         []filter.Term
+		golden        string
+	}{
+		"one facet at 80": {
+			width: 80, height: 20, terms: []filter.Term{waiting}, golden: "board_term_80x20.golden",
+		},
+		"one facet at 120": {
+			width: 120, height: 20, terms: []filter.Term{waiting}, golden: "board_term_120x20.golden",
+		},
+		"two facets at 120": {
+			width: 120, height: 20, terms: []filter.Term{waiting, bug}, golden: "board_two_terms_120x20.golden",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			dr := newDriver(t, testDeps(newFake(16)), tc.width, tc.height)
+			for _, term := range tc.terms {
+				dr.send(filter.ChosenMsg{Term: term})
+			}
+			golden(t, tc.golden, dr.view())
+		})
+	}
+}
+
+// A term in force clears with ctrl+g, the same key that puts a picked-up card
+// back — the two never overlap, because ctrl+g only clears while nothing is
+// in hand.
+func TestBoard_CtrlGClearsATermInForce(t *testing.T) {
+	t.Parallel()
+	waiting := filter.Term{Facet: filter.FacetStatus, ID: "10201", Label: "Triage"}
+	dr := newDriver(t, testDeps(newFake(16)), 120, 20)
+	before := boardShown(dr)
+	dr.send(filter.ChosenMsg{Term: waiting})
+	if got := boardShown(dr); got >= before {
+		t.Fatalf("choosing a term left %d cards, want fewer than the %d before", got, before)
+	}
+	dr.key("ctrl+g")
+	if len(dr.m.terms) != 0 {
+		t.Errorf("ctrl+g left %v in force", dr.m.terms)
+	}
+	if got := boardShown(dr); got != before {
+		t.Errorf("ctrl+g left %d cards, want the original %d back", got, before)
+	}
+	if strings.Contains(dr.view(), "clears everything") {
+		t.Error("the bar is still drawn after ctrl+g cleared the only term")
+	}
+}
+
+// Clicking a chip's × drops the whole facet, and clicking a value inside one
+// drops just that value — both through the same widget the issue list uses.
+func TestBoard_ClickingTheBarDropsAFacetOrAValue(t *testing.T) {
+	t.Parallel()
+	waiting := filter.Term{Facet: filter.FacetStatus, ID: "10201", Label: "Triage"}
+	bug := filter.Term{Facet: filter.FacetType, ID: "3", Label: "Bug"}
+	d := testDeps(newFake(16))
+	dr := newDriver(t, d, 120, 20)
+	dr.send(filter.ChosenMsg{Term: waiting})
+	dr.send(filter.ChosenMsg{Term: bug})
+
+	pressOn(t, d, dr, filterbar.FacetZone(filter.FacetType))
+	if got := dr.m.terms; len(got) != 1 || got[0].Facet != filter.FacetStatus {
+		t.Fatalf("clicking the type chip's x left %v, want only the status term", got)
+	}
+
+	pressOn(t, d, dr, filterbar.ValueZone(waiting))
+	if len(dr.m.terms) != 0 {
+		t.Errorf("clicking the status value left %v, want none", dr.m.terms)
 	}
 }
 

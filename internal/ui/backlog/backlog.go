@@ -11,8 +11,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -140,6 +142,20 @@ type Model struct {
 	rows   []row
 	picked map[string]bool
 
+	// terms is this program's own narrowing — a person, a status, a type, a
+	// priority or a label — applied locally against what is already loaded, the
+	// way board.terms is and for the same reason: a backlog's own read is
+	// already whole in memory.
+	terms filter.Terms
+	// termsGen counts the changes to them, because a slice cannot be part of the
+	// comparable key the bar is memoized on.
+	termsGen int
+	// bar draws the chip line naming the terms in force.
+	bar *filterbar.Bar
+	// filteredOut counts an issue regroup placed in no section because a term
+	// left it out, as distinct from one the done category excluded.
+	filteredOut int
+
 	cursor    int
 	top       int
 	pendingGo bool
@@ -187,6 +203,7 @@ func New(d kernel.Deps) kernel.View {
 	m.memo = newRowCache(rowCacheLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
+	m.bar = filterbar.New(m.zones)
 	m.acts, m.inChooser, m.inConfirm = defaultKeys().tables()
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
@@ -258,6 +275,15 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case MoveMsg:
 		cmd = m.startMove()
+
+	case filter.ChosenMsg:
+		cmd = m.applyFilterTerm(msg.Term)
+
+	case OpenFilterMsg:
+		cmd = m.openFilterPicker()
+
+	case ClearFilterMsg:
+		cmd = m.clearFilter()
 
 	case loadedMsg:
 		cmd = m.took(msg)
@@ -340,6 +366,9 @@ func (m *Model) rowsHeight() int {
 		h--
 	}
 	if len(m.picked) > 0 {
+		h--
+	}
+	if len(m.terms) > 0 {
 		h--
 	}
 	if m.said != "" {
@@ -548,6 +577,7 @@ func (m *Model) reindex() {
 func (m *Model) regroup() {
 	under := m.under()
 	m.groups = m.groups[:0]
+	m.filteredOut = 0
 	open := make(map[int64]int, len(m.sprints))
 	for i := range m.sprints {
 		open[m.sprints[i].ID] = i
@@ -559,6 +589,10 @@ func (m *Model) regroup() {
 	last := len(m.groups) - 1
 	for i := range m.issues {
 		if m.issues[i].Status.Category == jira.CategoryDone {
+			continue
+		}
+		if !matchesTerms(&m.issues[i], m.terms) {
+			m.filteredOut++
 			continue
 		}
 		at := last
@@ -900,6 +934,15 @@ func (m *Model) applyMoved(keys []string) {
 	m.regroup()
 }
 
+// filterBar draws the chip line naming the terms in force.
+func (m *Model) filterBar() string {
+	return m.bar.Render(m.terms, m.width, m.deps.Theme, clearFilterKey, m.termsGen)
+}
+
+// clearFilterKey is built once rather than read off a fresh defaultKeys() on
+// every frame.
+var clearFilterKey = defaultKeys().Unfilter.Help().Key
+
 func count(n int, what string) string {
 	if n == 1 {
 		return "1 " + what
@@ -985,6 +1028,10 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case actMove:
 		return m.startMove()
+	case actFilterBy:
+		return m.openFilterPicker()
+	case actClearFilter:
+		return m.clearFilter()
 	case actNone, actChoose, actBack, actConfirm:
 	}
 	return nil
@@ -1046,6 +1093,9 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	case movingIssues:
 		return nil
 	case browsing:
+	}
+	if cmd, dropped := m.clickTerm(msg); dropped {
+		return cmd
 	}
 	if m.zones.Hit(zoneBoard, msg) {
 		return m.nextBoard()

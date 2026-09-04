@@ -133,12 +133,14 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/backlog` | `TestBudget_BacklogRegroupingAfterAMoveIsOnTheKeystrokeBudget` |
 | `internal/ui/backlog` | `TestBudget_BacklogRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/backlog` | `TestBudget_BacklogScrollingCostsTheSameOnTenThousandRowsAsOnTwenty` |
+| `internal/ui/backlog` | `TestBudget_BacklogScrollingCostsTheSameUnderATermInForce` |
 | `internal/ui/board` | `TestBudget_ABoardMemoMissCostsTwoLinesAndNotAScreen` |
 | `internal/ui/board` | `TestBudget_BoardCardsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/board` | `TestBudget_BoardColumnsAreVirtualizedAsWellAsItsRows` |
 | `internal/ui/board` | `TestBudget_BoardFullRedrawAt200x60` |
 | `internal/ui/board` | `TestBudget_BoardKeystrokeToFrame` |
 | `internal/ui/board` | `TestBudget_BoardScrollCostsTheFrameAndNothingElse` |
+| `internal/ui/board` | `TestBudget_BoardScrollingCostsTheSameUnderATermInForce` |
 | `internal/ui/comment` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/comment` | `TestBudget_KeystrokeToFrameOnATenThousandCommentThread` |
 | `internal/ui/comment` | `TestBudget_ScrollingCostsTheSameOnTenThousandCommentsAsOnTwenty` |
@@ -212,6 +214,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/timeline` | `TestBudget_TimelinePanningCostsTheSameOverAThousandYearsAsOverTen` |
 | `internal/ui/timeline` | `TestBudget_TimelineRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/timeline` | `TestBudget_TimelineScrollingCostsTheSameOnTenThousandBarsAsOnTwenty` |
+| `internal/ui/timeline` | `TestBudget_TimelineScrollingCostsTheSameUnderATermInForce` |
 
 <!-- /budget-guards -->
 

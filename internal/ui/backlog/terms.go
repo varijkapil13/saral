@@ -1,4 +1,4 @@
-package board
+package backlog
 
 import (
 	"slices"
@@ -10,22 +10,33 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// applyFilterTerm puts a value in force or takes it off again, and re-places
-// the cards from what is already loaded rather than asking the site again.
-//
-// BoardQuery's own doc says why: what a board holds is the board's to define,
-// and a caller that wants a subset of it filters the rows it was given rather
-// than asking the site a question whose answer nothing can compare against the
-// board on screen. A person, a status, a type, a priority or a label is
-// exactly that kind of subset — this program's own idea of a narrower board,
-// not one the site's board draws too — so it is applied here and never sent.
+// OpenFilterMsg opens the picker over the backlog on screen. It is exported so
+// the palette reaches the same gesture f does.
+type OpenFilterMsg struct{}
+
+// ClearFilterMsg drops every term the filter picker put in force. It is
+// exported so the palette reaches the gesture ctrl+g does rather than a second
+// implementation of it.
+type ClearFilterMsg struct{}
+
+// openFilterPicker pushes the same picker the issue list uses, over this
+// backlog, armed with whatever is already in force.
+func (m *Model) openFilterPicker() tea.Cmd {
+	keys := defaultKeys()
+	return kernel.Push(filter.ViewID, "Filter",
+		filter.New(m.deps, filter.WithTerms(m.terms), filter.WithEditKey(keys.FilterBy.Help().Key)))
+}
+
+// applyFilterTerm puts a value in force or takes it off again, and regroups
+// from what is already loaded rather than asking the site again: a backlog's
+// own read is already whole in memory, the way a board's is.
 func (m *Model) applyFilterTerm(term filter.Term) tea.Cmd {
 	return m.setTerms(m.terms.Toggle(term))
 }
 
-// clearFilter drops every term FilterBy put in force. Named separately from
-// setTerms(nil) because it is the one ctrl+g reaches, and a no-op on an
-// already-empty board is not worth a place().
+// clearFilter drops every term in force. Named separately from setTerms(nil)
+// because it is the one ctrl+g reaches, and a no-op on an already-empty
+// backlog is not worth a regroup.
 func (m *Model) clearFilter() tea.Cmd {
 	if len(m.terms) == 0 {
 		return nil
@@ -34,10 +45,10 @@ func (m *Model) clearFilter() tea.Cmd {
 }
 
 func (m *Model) setTerms(next filter.Terms) tea.Cmd {
-	m.terms = next
-	m.place()
-	if m.more && len(m.terms) > 0 {
-		return kernel.Warn("this board has more cards than are loaded, so the filter only sees the ones on screen")
+	m.terms, m.termsGen = next, m.termsGen+1
+	m.regroup()
+	if m.page.HasMore() && len(m.terms) > 0 {
+		return kernel.Warn("this backlog has more issues than are loaded, so the filter only sees the ones on screen")
 	}
 	return nil
 }
@@ -59,19 +70,10 @@ func (m *Model) clickTerm(msg tea.MouseClickMsg) (tea.Cmd, bool) {
 	return m.setTerms(m.terms.Toggle(value)), true
 }
 
-// openFilterPicker pushes the same picker the issue list uses, over this
-// board, armed with whatever is already in force.
-func (m *Model) openFilterPicker() tea.Cmd {
-	keys := defaultKeys()
-	return kernel.Push(filter.ViewID, "Filter",
-		filter.New(m.deps, filter.WithTerms(m.terms), filter.WithEditKey(keys.FilterBy.Help().Key)))
-}
-
 // matchesTerms reports whether an issue passes every facet currently in
-// force: AND across facets, OR within one facet's own values, the same
-// semantics Terms.Clause() compiles to JQL for a search. Evaluated here
-// instead of sent, because a board's own contents are already whole in
-// memory — see applyFilterTerm.
+// force: AND across facets, OR within one facet's own values — the same
+// semantics board.matchesTerms evaluates locally for the same reason: what is
+// held is already whole in memory.
 func matchesTerms(iss *jira.Issue, terms filter.Terms) bool {
 	if len(terms) == 0 {
 		return true

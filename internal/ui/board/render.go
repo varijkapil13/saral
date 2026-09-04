@@ -66,10 +66,14 @@ func planLayout(width, rows, columns int) layout {
 	return layout{width: width, cols: cols, cell: cell, rows: rows}
 }
 
-// rowsHeight is how many grid rows fit: the box, less the three chrome lines and
-// the prompt a gesture in progress puts under them.
+// rowsHeight is how many grid rows fit: the box, less the three chrome lines,
+// the bar naming a term in force and the prompt a gesture in progress puts
+// under them.
 func (m *Model) rowsHeight() int {
 	h := m.height - chromeLines
+	if len(m.terms) > 0 {
+		h--
+	}
 	if m.card != nil || m.moving || m.pendingFilter {
 		h--
 	}
@@ -207,8 +211,16 @@ func (m *Model) View() string {
 	m.relayout()
 	lines := m.lines[:0]
 	lines = append(lines, m.summaryLine())
+	barred := len(m.terms) > 0
 	if !m.drawable() {
-		lines = m.appendEmpty(lines, m.height-1)
+		h := m.height - 1
+		if barred {
+			h--
+		}
+		lines = m.appendEmpty(lines, max(h, 0))
+		if barred {
+			lines = append(lines, m.filterBar())
+		}
 		m.lines = lines
 		return strings.Join(lines, "\n")
 	}
@@ -227,12 +239,28 @@ func (m *Model) View() string {
 		}
 	}
 	lines = append(lines, rule)
+	if barred {
+		lines = append(lines, m.filterBar())
+	}
 	if m.card != nil || m.moving || m.pendingFilter {
 		lines = append(lines, m.prompt())
 	}
 	m.lines = lines
 	return strings.Join(lines, "\n")
 }
+
+// filterBar draws the chip line naming the terms in force. dataGen stands in
+// for the caller's own generation counter over term changes: place bumps it on
+// every rebuild the terms could have caused, so a scroll that changes nothing
+// about them costs a cache hit.
+func (m *Model) filterBar() string {
+	return m.bar.Render(m.terms, m.width, m.deps.Theme, clearFilterKey, m.dataGen)
+}
+
+// clearFilterKey is built once rather than read off a fresh defaultKeys() on
+// every frame, which is what a steady-state frame under a term costs nothing
+// beyond the frame string for.
+var clearFilterKey = defaultKeys().Unfilter.Help().Key
 
 // drawable reports whether there are columns to draw. Everything else — no
 // connection, no board, a read in flight, a refusal — is a sentence rather than
@@ -614,6 +642,8 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 	case !m.ready || len(m.plan.columns) == 0:
 		lines = append(lines, m.say("  "+m.boardName()+" has no columns mapped."),
 			m.say("  A board with no status in any column has nothing to draw."))
+	case m.filteredOut > 0:
+		lines = append(lines, m.say("  Every card this board maps a column to is hidden by the filter in force."))
 	default:
 		lines = append(lines, m.say("  No issue in "+m.deps.Project+" is in a status this board maps."))
 	}

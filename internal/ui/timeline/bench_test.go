@@ -10,6 +10,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -132,6 +133,28 @@ func steadyScroll(b *testing.B, rows, span int) {
 func BenchmarkTimelineSteadyScroll10k(b *testing.B) { steadyScroll(b, 10000, 3650) }
 
 func BenchmarkTimelineSteadyScroll20(b *testing.B) { steadyScroll(b, 20, 3650) }
+
+// BenchmarkTimelineSteadyScrollTermed10k is the same scroll with a term in
+// force that still matches every row, which draws the bar under the chart.
+func BenchmarkTimelineSteadyScrollTermed10k(b *testing.B) {
+	m := stocked(b, 10000, 3650, 120, 40)
+	m.terms = filter.Terms{{Facet: filter.FacetType, ID: "10301", Label: "Story"}}
+	m.termsGen++
+	m.take(m.res, m.issues, false)
+	if len(m.rows) == 0 {
+		b.Fatal("the term left no rows to scroll through, so this benchmark proves nothing")
+	}
+	_ = m.View()
+	var down, up tea.Msg = tea.MouseWheelMsg{Button: tea.MouseWheelDown}, tea.MouseWheelMsg{Button: tea.MouseWheelUp}
+	msgs := [2]tea.Msg{down, up}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		next, _ := m.Update(msgs[i%2])
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
 
 // steadyPan pans in one direction, wrapping back to the start of the calendar
 // when it runs off the end. Oscillating between two windows would land in the

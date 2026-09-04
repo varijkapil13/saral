@@ -35,6 +35,21 @@ func TestBudget_TimelineScrollingCostsTheSameOnTenThousandBarsAsOnTwenty(t *test
 	}
 }
 
+// The bar under the chart is on every frame it is on, so it is memoized the
+// way a row is: a term in force costs no more than a steady-state frame
+// without one.
+func TestBudget_TimelineScrollingCostsTheSameUnderATermInForce(t *testing.T) {
+	termed := testing.Benchmark(BenchmarkTimelineSteadyScrollTermed10k).AllocsPerOp()
+	plain := testing.Benchmark(BenchmarkTimelineSteadyScroll10k).AllocsPerOp()
+	if termed > plain {
+		t.Errorf("a steady-state frame under a term allocates %d times against %d with nothing in force; "+
+			"the bar under the chart is being rebuilt per frame", termed, plain)
+	}
+	if termed > 1 {
+		t.Errorf("a steady-state frame under a term allocates %d times, want the frame string and nothing else", termed)
+	}
+}
+
 // And horizontally, which is the half only this view has. A pan moves every bar,
 // so it repaints the window whatever happens; what must not grow with it is the
 // calendar behind the window.

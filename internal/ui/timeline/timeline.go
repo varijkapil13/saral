@@ -13,9 +13,11 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -90,6 +92,25 @@ type Model struct {
 	res    app.Resolution
 	issues []jira.Issue
 	rows   []barRow
+
+	// terms is this program's own narrowing — a person, a status, a type, a
+	// priority or a label — applied locally against what is already loaded, the
+	// way board.terms and backlog.terms are and for the same reason: a chart's
+	// own read is already whole in memory.
+	terms filter.Terms
+	// termsGen counts the changes to them, because a slice cannot be part of the
+	// comparable key the bar is memoized on.
+	termsGen int
+	// bar draws the chip line naming the terms in force.
+	bar *filterbar.Bar
+	// filteredOut counts an issue take left off the chart because a term did,
+	// as distinct from one no rule could date.
+	filteredOut int
+	// resolvedShown is how many of the rows actually drawn carry a date, as
+	// opposed to Resolution.Resolved, which counts the whole read before a term
+	// took any of it off screen — "3 of 3000 dated" would be what a term left
+	// the summary saying otherwise.
+	resolvedShown int
 
 	versionMarks []versionMark
 	sprintMarks  []sprintMark
@@ -179,6 +200,7 @@ func New(d kernel.Deps) kernel.View {
 	}
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
+	m.bar = filterbar.New(m.zones)
 	m.inChart, m.inNotes = defaultKeys().tables()
 	m.cfgStart, m.cfgEnd = configuredFields(d.Site)
 	m.jql, m.title = defaultQuery(d.Project)
@@ -236,7 +258,7 @@ func (m *Model) fromCache() {
 func (m *Model) take(res app.Resolution, issues []jira.Issue, recentre bool) {
 	under := m.selectedKey()
 	m.res, m.issues = res, issues
-	m.rows = m.rows[:0]
+	m.rows, m.filteredOut, m.resolvedShown = m.rows[:0], 0, 0
 	seen := make(map[string]bool, len(issues))
 	for i := range issues {
 		key := issues[i].Key
@@ -244,7 +266,14 @@ func (m *Model) take(res app.Resolution, issues []jira.Issue, recentre bool) {
 			continue
 		}
 		seen[key] = true
+		if !matchesTerms(&issues[i], m.terms) {
+			m.filteredOut++
+			continue
+		}
 		rng, _ := res.Range(key)
+		if rng.OK() {
+			m.resolvedShown++
+		}
 		m.rows = append(m.rows, barRow{key: key, summary: issues[i].Summary, rng: rng, at: i})
 	}
 	slices.SortFunc(m.rows, byStartThenKey)
@@ -344,6 +373,15 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case NotesMsg:
 		m.toggleNotes()
 
+	case filter.ChosenMsg:
+		cmd = m.applyFilterTerm(msg.Term)
+
+	case OpenFilterMsg:
+		cmd = m.openFilterPicker()
+
+	case ClearFilterMsg:
+		cmd = m.clearFilter()
+
 	case loadedMsg:
 		cmd = m.landed(msg)
 
@@ -401,7 +439,7 @@ func (m *Model) widestKey() int {
 func (m *Model) rowsHeight() int { return m.chrome().rows }
 
 func (m *Model) hasNoteCount() bool {
-	return (m.loaded && len(m.rows) > 0 && m.res.Resolved() == 0) || len(m.noteLines) > 0
+	return (m.loaded && len(m.rows) > 0 && m.resolvedShown == 0) || len(m.noteLines) > 0
 }
 
 // --- fetching ---------------------------------------------------------------
@@ -751,6 +789,10 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.centreOn(m.today())
 	case actNotes:
 		m.toggleNotes()
+	case actFilterBy:
+		return m.openFilterPicker()
+	case actUnfilter:
+		return m.clearFilter()
 	case actNone:
 	}
 	return nil
@@ -797,6 +839,9 @@ func (m *Model) open() tea.Cmd {
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if msg.Button != tea.MouseLeft || m.notes {
 		return nil
+	}
+	if cmd, dropped := m.clickTerm(msg); dropped {
+		return cmd
 	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.rows)); i++ {
 		if !m.zones.Hit(rowZone(m.rows[i].key), msg) {

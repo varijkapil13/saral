@@ -47,8 +47,16 @@ type failedMsg struct {
 	err error
 }
 
+// projection is the date cascade's own fields plus what a bar draws and what
+// this program's own local filter matches by. Assignee, reporter, priority
+// and labels join it for the same reason board.plan.projection and backlog's
+// own read carry reporter and labels: filter.Terms matches against this
+// read's own issues, and none of the four is otherwise asked for.
 func projection(fields app.DateFields) app.Projection {
-	return fields.Projection().With("summary", "issuetype", "status", "parent", "subtasks")
+	return fields.Projection().With(
+		"summary", "issuetype", "status", "parent", "subtasks",
+		"assignee", "reporter", "priority", "labels",
+	)
 }
 
 func load(ctx context.Context, search *app.Search, sprints app.SprintDates, cache app.Cache,

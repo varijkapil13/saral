@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -83,6 +84,24 @@ func BenchmarkBoardView10k(b *testing.B) {
 // for both.
 func BenchmarkBoardView20(b *testing.B) {
 	m := marked(b, 4, 20, 120, 40)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = m.View()
+	}
+}
+
+// BenchmarkBoardView10kTermed is the same steady-state frame with a term in
+// force that still leaves a column's worth of cards on screen, which draws
+// the bar under the grid and keeps the grid itself worth scrolling.
+func BenchmarkBoardView10kTermed(b *testing.B) {
+	m := marked(b, 4, 10000, 120, 40)
+	m.terms = filter.Terms{{Facet: filter.FacetStatus, ID: "9000", Label: "Column 0"}}
+	m.place()
+	if m.gridRows() == 0 {
+		b.Fatal("the term left no cards to scroll through, so this benchmark proves nothing")
+	}
+	_ = m.View()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {

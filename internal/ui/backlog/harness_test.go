@@ -74,6 +74,7 @@ type driver struct {
 	t          *testing.T
 	m          *Model
 	statuses   []kernel.StatusMsg
+	pushes     []kernel.PushMsg
 	broadcasts []tea.Msg
 }
 
@@ -131,6 +132,8 @@ func (d *driver) run(cmd tea.Cmd) {
 		switch msg := msg.(type) {
 		case kernel.StatusMsg:
 			d.statuses = append(d.statuses, msg)
+		case kernel.PushMsg:
+			d.pushes = append(d.pushes, msg)
 		case kernel.BroadcastMsg:
 			d.broadcasts = append(d.broadcasts, msg.Msg)
 		default:

@@ -1378,11 +1378,69 @@ Nothing anywhere sorts. The design, the decisions and the consumer sweep are in
   untouched. `ChosenMsg` keeps its shape — one term per toggle is what lets the rows follow — and now
   travels once per toggle rather than once per picker.
 
-- [ ] **F3 — Every list-shaped view filters** · depends on F2 ·
-  **owns** `internal/ui/{board,backlog,timeline}/**`, `docs/{FILTERS,UX,ROADMAP}.md`
-  The board draws the bar it has needed since it grew terms; the backlog and the timeline gain `f`,
-  the bar, and the narrowing applied to what they already hold. The gate is a test that walks the view
-  registry rather than naming views, so a fifth cannot be added without drawing what is in force.
+- [x] **F3 — Every list-shaped view filters** · depends on F2 ·
+  **owns** `internal/ui/{board,backlog,timeline}/**`, `docs/{FILTERS,UX,ROADMAP}.md`. Grew to include
+  `internal/ui/kernel/view.go` (one field), `internal/ui/list/register.go` (one line), a new
+  `internal/ui/filterbar_test.go`, `internal/ui/keys_test.go` and five of `internal/ui/testdata/**`'s
+  goldens, and `docs/PERFORMANCE.md` — each explained below.
+  The board now draws the bar it has needed since it grew `filter.Terms`: `internal/ui/board/render.go`
+  reserves a line for it in `rowsHeight` and in the not-drawable branch alike, so the chip line answers
+  "what is in force" whether or not the board has finished loading, the way `list`'s already did.
+  `ctrl+g` clears every term (new `Unfilter` binding, a new `keysNarrowed` footer state, a
+  `board.clear-filter` palette command with no key of its own — the same shape `issues.clear-filter`
+  already has), and a click on the bar's `×` or a value name routes through the same `Terms.Toggle`/
+  `Terms.Without` the keyboard uses. Found and fixed in the same pass: the empty-grid message never
+  said a filter, rather than a missing column mapping, was why nothing was on screen — it now does,
+  for the state a term filtering out every card actually reaches.
+  Backlog and timeline gain `f`, `ctrl+g`, the bar and local narrowing from nothing, following board's
+  own shape rather than inventing a second one: a new `terms.go` per package with the same
+  `matchesTerms`/`matchesFacet` board already had (duplicated per `AGENTS.md`'s "duplicating a helper
+  is better than editing across ownership lines" — neither package may reach into `board`'s), a
+  `filterbar.Bar` field, and the same `setTerms`/`clearFilter`/`clickTerm` shape. `f` and `ctrl+g` were
+  free in both keymaps. Backlog's bar sits under the rows unconditionally; the timeline's chart already
+  gives up chrome under a short box (`chrome.lines()`), so the bar joins that cascade as one more line
+  dropped before the ruler and the heading, and a new test walks every height from 1 to 24 with a term
+  in force to prove it never overflows the box, alongside the existing untermed one.
+  **A local matcher needs the field it matches on to actually be in the read**, found while wiring
+  `FacetLabel`/`FacetReporter` into the backlog's and the timeline's own goldens: both asked for
+  `app.ListProjection()` (or the timeline's own narrower equivalent) unwidened, which carries neither
+  reporter nor labels, and the timeline's carried none of the four facets other than type at all — a
+  chosen reporter or label term would have matched nothing, silently, because the field the picker
+  offers real values for was never asked of the site. Board's own earlier packet had already found this
+  for itself (`plan.projection` widens `ListProjection` with `"reporter", "labels"`); the backlog's and
+  the timeline's reads now do the same, the timeline's needing all four. Written down in
+  `docs/FILTERS.md`'s Consumers section so a fifth local matcher checks its own projection first.
+  The timeline also needed its own summary line corrected once filtering could remove rows a
+  cascade-wide `Resolution.Resolved()` still counted: "X of Y dated" would have read `Y` as the
+  filtered row count and `X` as the count over everything the site sent, which a term could put on
+  either side of nonsense. A new `resolvedShown` counter, kept alongside `filteredOut` in `take`, is
+  what the summary and the empty-state note now read instead.
+  **The gate**: `internal/ui/filterbar_test.go`'s `TestFilterBar_EveryViewThatFiltersDrawsIt` walks
+  `kernel.Views()` rather than naming views. It lives in `internal/ui` rather than in any one view's own
+  package because that is the only package every view is registered into — a view package may not
+  import `internal/ui` without a cycle, the same reason `TestDestinations_NameEveryViewThatClaimedADigit`
+  and `TestLiveKeys_EveryViewWhoseKeysMoveReportsThem` already live there — so this grew the owns line
+  by that one new file. Which views are filtering is answered by a new `kernel.ViewSpec.Filters bool`,
+  the same self-declaration `RunsQueries` already is: the kernel may not import `internal/ui/filter` or
+  the widget to check for itself, and behavioural detection (build a view, apply a term, diff the
+  frame before and after) was tried first and rejected: in the harness this test uses (no site, no
+  `Init`), forcing `board`'s bar-drawing off left its empty-state frame byte-identical before and after
+  the term, which a diff-based sweep cannot tell apart from "this view does not filter" — it still
+  passed with `board` silently unreached. Rebuilt on the `Filters` flag, the same sabotage fails the
+  build naming `board` directly. `list/register.go` gained the same
+  flag as the fourth consumer, one line, since a gate that only three of the four views could be found
+  by is not the gate `docs/FILTERS.md` asked for. `docs/PERFORMANCE.md` gained the three new
+  `TestBudget_*ScrollingCostsTheSameUnderATermInForce` rows `internal/app`'s own guard-table
+  completeness test requires for every budget test in the tree.
+  `internal/ui/keys_test.go`'s `keyOwners` table and five golden files in `internal/ui/testdata/**`
+  (footer at three widths, the `?` overlay, the right-click menu) needed the two new commands' entries
+  and the new `f` binding's frame, the same unavoidable per-consumer adoption F2's report described for
+  `list`'s own test files.
+  **Not built here:** a project switch does not drop a term on the board, the backlog or the timeline
+  the way the issue list's own `reproject` does — a status or type id can survive naming something the
+  new project never minted. Filed as
+  [#141](https://github.com/varijkapil13/saral/issues/141), because the fix is one shared behaviour
+  across three views' `reproject`/equivalent rather than three one-line diffs inside this packet's own.
 
 - [ ] **F4 — Sort, where there is an order to change** ·
   **owns** `internal/ui/list/{search.go,sort.go,keys.go}`, `internal/ui/backlog/**`,

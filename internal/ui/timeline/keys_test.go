@@ -18,7 +18,9 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		state keyState
 	}{
 		{"reading the chart", keysBrowsing},
+		{"narrowed by a term", keysNarrowed},
 		{"nothing to chart", keysNothing},
+		{"nothing to chart and narrowed by a term", keysNothingNarrowed},
 		{"the notes pane", keysNotes},
 	}
 	if len(named) != int(keyStates) {

@@ -19,6 +19,8 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 	}{
 		{"browsing with nothing picked", keysBrowsing},
 		{"something picked", keysPicked},
+		{"narrowed by a term", keysNarrowed},
+		{"something picked and narrowed by a term", keysPickedNarrowed},
 		{"choosing where they go", keysChoosing},
 		{"confirming the move", keysConfirming},
 		{"a move in flight", keysMoving},

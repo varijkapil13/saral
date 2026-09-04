@@ -15,6 +15,7 @@ func init() {
 		Title:       "Issues",
 		Slot:        slot,
 		RunsQueries: true,
+		Filters:     true,
 		New:         New,
 	})
 	kernel.RegisterKeys(ViewID, keys.keySet())

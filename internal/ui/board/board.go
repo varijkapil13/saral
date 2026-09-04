@@ -15,6 +15,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -80,6 +81,9 @@ type Model struct {
 	// priority or a label — applied locally against what is already loaded; see
 	// terms.go for why this is never sent to the site the way a quick filter is.
 	terms filter.Terms
+	// bar draws the chip line naming the terms in force, the same widget list and
+	// backlog draw one through.
+	bar *filterbar.Bar
 
 	issues []jira.Issue
 	// cols holds, per column, the indexes into issues that landed in it. An
@@ -156,6 +160,7 @@ func New(d kernel.Deps) kernel.View {
 	m.browsing, m.holding = defaultKeys().tables()
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
+	m.bar = filterbar.New(m.zones)
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
@@ -216,6 +221,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case filter.ChosenMsg:
 		cmd = m.applyFilterTerm(msg.Term)
+
+	case ClearFilterMsg:
+		cmd = m.clearFilter()
 
 	case issuesMsg:
 		cmd = m.tookIssues(msg)
@@ -804,6 +812,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.pendingFilter = true
 	case actFilterBy:
 		return m.openFilterPicker()
+	case actUnfilter:
+		return m.clearFilter()
 	case actNone, actDrop, actCancel:
 	}
 	return nil
@@ -833,6 +843,10 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	m.drag.Cancel()
+	if cmd, dropped := m.clickTerm(msg); dropped {
+		m.clicks.Forget()
+		return cmd
+	}
 	if col, row, on := m.cardUnder(msg); on {
 		m.moveTo(col, row)
 		zone := cardZone(m.selectedKey())

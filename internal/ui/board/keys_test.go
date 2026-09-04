@@ -19,6 +19,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		state keyState
 	}{
 		{"looking at the board", keysBrowsing},
+		{"a board narrowed by a term", keysNarrowed},
 		{"a card in hand", keysHolding},
 		{"a move out with the site", keysMoving},
 		{"F waiting for its digit", keysPickingFilter},
@@ -77,8 +78,9 @@ func TestKeys_EveryAdvertisedActionIsOneTheStateAnswers(t *testing.T) {
 		set   kernel.KeySet
 		table map[string]action
 	}{
-		"looking at the board": {set: liveSets[keysBrowsing], table: browsing},
-		"a card in hand":       {set: liveSets[keysHolding], table: holding},
+		"looking at the board":       {set: liveSets[keysBrowsing], table: browsing},
+		"a board narrowed by a term": {set: liveSets[keysNarrowed], table: browsing},
+		"a card in hand":             {set: liveSets[keysHolding], table: holding},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

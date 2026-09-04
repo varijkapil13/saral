@@ -12,7 +12,7 @@ backlog
 space pick or unpick this issue                       ↓/j  down         ctrl+d half page down ...
 v     pick every issue in this section                ↑/k  up           ctrl+u half page up
 m     move these issues to a sprint or the backlog    pgdn page down    g g    first row
-                                                      pgup page up      G      last row
+f     filter by a person, a status, a label           pgup page up      G      last row
 
 board
 enter open                                     ↓/j down               pgdn    page down                 ...
