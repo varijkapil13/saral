@@ -191,6 +191,7 @@ filter picker lives on, and almost none of it is shaped like the rest.
 | live | Which statuses a project's issue types can reach | `GET /rest/api/3/project/{key}/statuses`, per issue type, by **id** |
 | live | The site's priorities and its labels | `GET /rest/api/3/priority/search` and `GET /rest/api/3/label`. Both are site-wide; the label endpoint cannot be narrowed |
 | live | Which projects exist, and which this token can see | `GET /rest/api/3/project/search` — paginated, and the only endpoint that answers it. The port has no method for it, so onboarding derives keys from a `/search/jql` page instead, which answers a shorter question: what the account has touched, not what it could reach. And that page cannot be unbounded, so it cannot even ask for everything |
+| assumed | Which custom field type keys are a Jira Software project's own bookkeeping — rank, epic colour, epic status — rather than a field somebody put there | `GET /rest/api/3/field`, `schema.custom`. `internal/ui/issue/fields.go`'s `bookkeepingFields` table matches on this key and never on a name or an id; only `gh-lexo-rank` is confirmed, by `pkg/jira/jiratest/gen.go`'s own fixture, and the rest await a capture nobody has taken |
 
 ## Permissions, which is what the capability probe reads
 

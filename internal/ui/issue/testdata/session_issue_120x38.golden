@@ -7,14 +7,14 @@ Story | Triage (to do) | Urgent | Ada Lovelace | updated 03 Mar 2025 04:00
 |- Filed against PROJ-9.                                                        |  Reporter     Grace Hopper            
 |- Small change, but it touches the shared client.                              |  Created      02 Mar 2025 18:00       
 |                                                                               |  Time         5h estimated, 2h30m r...
-|                                                                               |Fields                                 
-|                                                                               |  Rank         0|i00009:               
 |                                                                               |  5 more, all empty                    
+|                                                                               |  1 more, hidden as Jira's own bookk...
 |                                                                               |PROJ-9 | 1 comment  write  edit  delete
 |                                                                               |---------------------------------------
 |                                                                               |> Sam Tester | 02 Mar 2026 09:00       
 |                                                                               |    A comment worth a line or two, and 
 |                                                                               |    a second sentence to wrap.         
+|                                                                               |                                       
 |                                                                               |                                       
 |                                                                               |                                       
 |                                                                               |                                       

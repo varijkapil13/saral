@@ -1,12 +1,14 @@
 package issue
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -230,4 +232,120 @@ func TestFields_AnUnlabellableValueIsCountedRatherThanDrawn(t *testing.T) {
 	got := dr.view()
 	mustContain(t, got, "Sprint", "2 "+unreadableMany)
 	mustNotContain(t, got, "example.atlassian.net", `"self"`)
+}
+
+// bookkeepingPane is a real fake-generated issue read the way a detail read
+// hands it over: jiratest.Gen mints Rank on every issue it produces, so this
+// is the fake's own bookkeeping value rather than one built by hand for the
+// test.
+func bookkeepingPane(t *testing.T, w, h int) *driver {
+	t.Helper()
+
+	f := newFake(1)
+	iss := readIssue(t, f, "PROJ-1")
+	catalogue, err := f.Fields(t.Context())
+	if err != nil {
+		t.Fatalf("Fields: %v", err)
+	}
+	ids := make([]string, len(catalogue))
+	for i := range catalogue {
+		ids[i] = catalogue[i].ID
+	}
+	labels := app.NewFieldLabels(catalogue, ids)
+
+	dr := newDriver(t, testDeps(f), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
+	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
+	return dr
+}
+
+// The plugin's own Rank is what every one of the fake's issues carries, so
+// hiding it by default is the case that matters most: a value discarded
+// without being counted is exactly the failure unmodelledText already avoids
+// for a value this client cannot label.
+func TestFields_ThePluginsOwnRankIsHiddenAndCountedByDefault(t *testing.T) {
+	t.Parallel()
+
+	dr := bookkeepingPane(t, 90, 28)
+	dr.key("tab", "G")
+
+	got := dr.view()
+	mustContain(t, got, "1 more, hidden")
+	mustNotContain(t, got, "Rank", "0|i0")
+}
+
+// A custom field whose plugin key is not on the table is data somebody put on
+// the issue, and has to survive sitting beside a field that is: the ordinary
+// field Aufwandsschätzung and the confirmed bookkeeping key are on the one
+// fixture in pkg/jira/jiratest's own catalogue.
+func TestFields_AFieldWithAnUnknownPluginKeyIsNeverHidden(t *testing.T) {
+	t.Parallel()
+
+	dr := fieldsPane(t, 80, 26)
+	values, hidden, _ := dr.m.customFields(60)
+	if hidden != 0 {
+		t.Fatalf("got %d hidden fields, want 0: this fixture carries no bookkeeping key", hidden)
+	}
+	if !slices.ContainsFunc(values, func(v named) bool { return v.label == "Aufwandsschätzung" }) {
+		t.Error("a field with an ordinary plugin key was hidden or dropped")
+	}
+}
+
+// A field id is still per-site and a bare name collides with translation, so
+// every entry has to read as the plugin key it is rather than either.
+func TestFields_BookkeepingKeysAreAllPluginKeysNotFieldIDs(t *testing.T) {
+	t.Parallel()
+
+	if len(bookkeepingFields) == 0 {
+		t.Fatal("bookkeepingFields is empty, so this guard would pass by scanning nothing")
+	}
+	for _, f := range bookkeepingFields {
+		if !strings.Contains(f.Key, ":") {
+			t.Errorf("%q has no colon, so it does not read as a plugin field type", f.Key)
+		}
+		if strings.HasPrefix(f.Key, "customfield_") {
+			t.Errorf("%q looks like a field id rather than a plugin key", f.Key)
+		}
+	}
+}
+
+// The setting is what turns bookkeeping back on for somebody who does want to
+// see the rank. This test is not parallel: it flips process-wide state and
+// puts it back before returning, which only holds if nothing else reads that
+// state at the same time — every other test in this file assumes it stays
+// off.
+func TestFields_ThePluginFieldsSettingBringsRankBack(t *testing.T) {
+	var setting kernel.Setting
+	found := false
+	for _, s := range kernel.Settings() {
+		if s.ID == "issue.bookkeeping" {
+			setting, found = s, true
+		}
+	}
+	if !found {
+		t.Fatal("issue.bookkeeping is not registered")
+	}
+	t.Cleanup(func() { showBookkeeping.Store(false) })
+
+	if got := setting.Value(kernel.Deps{}); got != "off" {
+		t.Fatalf("got %q, want off by default", got)
+	}
+	before := bookkeepingPane(t, 90, 28)
+	before.key("tab", "G")
+	mustNotContain(t, before.view(), "0|i00001:")
+
+	setting.Set(kernel.Deps{}, "on")
+	if got := setting.Value(kernel.Deps{}); got != "on" {
+		t.Fatalf("got %q after Set(\"on\"), want on", got)
+	}
+
+	dr := bookkeepingPane(t, 90, 28)
+	dr.key("tab", "G")
+	got := dr.view()
+	mustContain(t, got, "Rank", "0|i00001:")
+	mustNotContain(t, got, "hidden as Jira")
+
+	setting.Set(kernel.Deps{}, "off")
+	if got := setting.Value(kernel.Deps{}); got != "off" {
+		t.Fatalf("got %q after Set(\"off\"), want off", got)
+	}
 }

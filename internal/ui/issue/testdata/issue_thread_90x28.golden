@@ -7,9 +7,8 @@ Story | Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00
 |- The old ticket for this was closed as cannot        |  Due          2025-03-16         
 |  reproduce.                                          |  Created      02 Mar 2025 21:00  
 |- Waiting on a decision.                              |  Fix versions 2.0                
-|                                                      |Fields                            
-|                                                      |  Rank         0|i00012:          
 |                                                      |  5 more, all empty               
+|                                                      |  1 more, hidden as Jira's own ...
 |                                                      |PROJ-12 | 2 comments              
 |                                                      |----------------------------------
 |                                                      |  Sam Tester | 02 Mar 2026 09:00  
@@ -21,6 +20,7 @@ Story | Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00
 |                                                      |> Sam Tester | 02 Mar 2026 09:00  
 |                                                      |    Agreed. I will pick this up on
 |                                                      |    Monday.                       
+|                                                      |                                  
 |                                                      |                                  
 |                                                      |                                  
 |                                                      |                                  

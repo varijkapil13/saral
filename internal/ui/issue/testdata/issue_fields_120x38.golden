@@ -7,9 +7,8 @@ Story | Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00
 |- The old ticket for this was closed as cannot reproduce.                      |  Due          2025-03-16              
 |- Waiting on a decision.                                                       |  Created      02 Mar 2025 21:00       
 |                                                                               |  Fix versions 2.0                     
-|                                                                               |Fields                                 
-|                                                                               |  Rank         0|i00012:               
 |                                                                               |  5 more, all empty                    
+|                                                                               |  1 more, hidden as Jira's own bookk...
 |                                                                               |PROJ-12 | 2 comments                   
 |                                                                               |---------------------------------------
 |                                                                               |  Sam Tester | 02 Mar 2026 09:00       
@@ -20,6 +19,7 @@ Story | Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00
 |                                                                               |> Sam Tester | 02 Mar 2026 09:00       
 |                                                                               |    Agreed. I will pick this up on     
 |                                                                               |    Monday.                            
+|                                                                               |                                       
 |                                                                               |                                       
 |                                                                               |                                       
 |                                                                               |                                       

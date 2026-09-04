@@ -4,10 +4,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/richtext"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -16,6 +19,12 @@ import (
 // same answer as a field the site had nothing to send, which is what
 // Issue.Requested exists to tell apart.
 const absent = "not asked for"
+
+// bookkeepingNote is what a count of hidden fields is drawn with, the way
+// empty fields are drawn with "all empty": it names what happened to the
+// value rather than the field, since the field is not wrong — this program is
+// choosing not to draw it.
+const bookkeepingNote = "more, hidden as Jira's own bookkeeping"
 
 // detail names one platform field the sidebar lists, beside the field ID it
 // arrives under so that a read which did not ask for it can say so.
@@ -64,6 +73,98 @@ var platformIDs = func() []string {
 	slices.Sort(out)
 	return out
 }()
+
+// bookkeepingField is one plugin field type a Jira Cloud site mints for its own
+// UI — never written by a person — that the sidebar hides by default. The
+// match is Key against jira.FieldSchema.Custom, the plugin's own field type
+// URI: the same string on every Jira Cloud site, unlike a field id or a field
+// name, which are both per-site (see docs/API-NOTES.md). Matching on Name
+// instead would be matching on the one thing here that differs per site and is
+// translated besides.
+//
+// Seen marks a key this repository's own fixtures already carry —
+// gh-lexo-rank is minted by pkg/jira/jiratest/gen.go. An unseen key is this
+// program's best knowledge of Jira's plugin field types, entered here (and in
+// docs/FIELDS.md's own table) to be checked against a real site's
+// GET /rest/api/3/field the first time somebody can run scripts/capture.sh,
+// which has not happened yet. A wrong key is inert: it matches nothing on any
+// site, so it hides nothing that should have been drawn, which is the
+// direction a mistake in this table is safe to fall in.
+type bookkeepingField struct {
+	Key  string
+	Name string // documents the row; never compared against
+	Seen bool
+}
+
+// bookkeepingFields is the denylist. Add a row to extend it.
+var bookkeepingFields = []bookkeepingField{
+	{Key: "com.pyxis.greenhopper.jira:gh-lexo-rank", Name: "Rank", Seen: true},
+	{Key: "com.pyxis.greenhopper.jira:gh-epic-color", Name: "Epic Colour", Seen: false},
+	{Key: "com.pyxis.greenhopper.jira:jsw-issue-color", Name: "Issue colour", Seen: false},
+	{Key: "com.pyxis.greenhopper.jira:gh-epic-status", Name: "Epic Status", Seen: false},
+	{Key: "com.atlassian.jira.ext.charting:timeinstatus", Name: "Time in Status", Seen: false},
+	{
+		Key:  "com.atlassian.jira.plugins.jira-development-integration-plugin:devsummarycf",
+		Name: "Development", Seen: false,
+	},
+	{Key: "com.atlassian.servicedesk:vp-origin", Name: "(internal, Service Management)", Seen: false},
+}
+
+// isBookkeeping reports whether a plugin key names one of bookkeepingFields. A
+// system field and a custom field this site's catalogue never named both carry
+// "", which matches nothing: no entry above is empty.
+func isBookkeeping(pluginKey string) bool {
+	if pluginKey == "" {
+		return false
+	}
+	for _, f := range bookkeepingFields {
+		if f.Key == pluginKey {
+			return true
+		}
+	}
+	return false
+}
+
+// showBookkeeping is whether the sidebar draws the fields bookkeepingFields
+// names instead of hiding and counting them. It is kernel.ScopeSession: this
+// packet owns no file that outlives a restart (config.toml and the cache
+// directory's ui.toml both belong to other packets), so the setting's state
+// lives here rather than on disk.
+//
+// Flipping it does not by itself repaint a pane already on screen:
+// detailContent's caller memoizes on a contentKey (internal/ui/issue/issue.go,
+// outside this file) that this flag is not part of, so an open pane catches up
+// on its next real change — a resize, a theme switch, the issue reloading —
+// rather than the frame the setting changes on.
+var showBookkeeping atomic.Bool
+
+func init() { kernel.RegisterSetting(bookkeepingSetting()) }
+
+// bookkeepingSetting turns showBookkeeping on, so it draws every field
+// bookkeepingFields would otherwise hide and count.
+func bookkeepingSetting() kernel.Setting {
+	return kernel.Setting{
+		ID:      "issue.bookkeeping",
+		Section: "Issue",
+		Title:   "Plugin fields",
+		Summary: "rank, epic colour and the rest of what a Jira Software project mints for its own board and epic UI",
+		Kind:    kernel.KindToggle,
+		Scope:   kernel.ScopeSession,
+		Options: func(kernel.Deps) []kernel.SettingOption {
+			return []kernel.SettingOption{{ID: "on", Label: "on"}, {ID: "off", Label: "off"}}
+		},
+		Value: func(kernel.Deps) string {
+			if showBookkeeping.Load() {
+				return "on"
+			}
+			return "off"
+		},
+		Set: func(_ kernel.Deps, id string) tea.Cmd {
+			showBookkeeping.Store(id == "on")
+			return kernel.Status("plugin fields are now " + id + ", for this session")
+		},
+	}
+}
 
 // refGroup is a heading and the issues under it: "Subtasks", or the phrasing a
 // link arrived with.
@@ -172,11 +273,12 @@ func (r *rows) ref(ref *jira.IssueRef, keyW, statusW int) {
 	r.line(line + ref.Summary)
 }
 
-// custom lists the site's own fields, sorted by the name this site displays, and
-// then says how many more came back with nothing in them — which is the answer
-// to "what else is on this issue" that an empty row cannot give.
+// custom lists the site's own fields, sorted by the name this site displays,
+// then says how many more came back with nothing in them and how many carry a
+// value this program is choosing not to draw — two different answers to "what
+// else is on this issue" that a row disappearing without a count cannot give.
 func (r *rows) custom() {
-	values, empty := r.m.customFields(r.valueRoom())
+	values, hidden, empty := r.m.customFields(r.valueRoom())
 	if len(values) > 0 {
 		r.heading("Fields")
 	}
@@ -185,6 +287,9 @@ func (r *rows) custom() {
 	}
 	if empty > 0 {
 		r.note(strconv.Itoa(empty) + " more, all empty")
+	}
+	if hidden > 0 {
+		r.note(strconv.Itoa(hidden) + " " + bookkeepingNote)
 	}
 }
 
@@ -195,14 +300,15 @@ func (r *rows) valueRoom() int { return max(r.width-labelWidth-2, 8) }
 type named struct{ label, text string }
 
 // customFields is every field this site defines that the issue carries a value
-// for, named the way the site spells it, plus how many of the ones the read
+// for, named the way the site spells it, minus the ones bookkeepingFields
+// hides, plus how many of those were hidden and how many of the ones the read
 // asked for came back empty.
 //
 // The name comes from the answer the values arrived with. A custom field's ID
 // differs on every site and its name is translated, so neither can be written
 // down here; an ID the catalogue could not name shows as the ID, because a value
 // nobody can label is still a value somebody put there.
-func (m *Model) customFields(room int) (values []named, empty int) {
+func (m *Model) customFields(room int) (values []named, hidden, empty int) {
 	ids := m.issue.Fields.IDs()
 	values = make([]named, 0, len(ids))
 	for _, id := range ids {
@@ -213,9 +319,15 @@ func (m *Model) customFields(room int) (values []named, empty int) {
 		if !known {
 			ref = jira.FieldRef{ID: id}
 		}
-		if text := m.fieldText(ref, room); text != "" {
-			values = append(values, named{label: firstNonEmpty(ref.Name, id), text: text})
+		text := m.fieldText(ref, room)
+		if text == "" {
+			continue
 		}
+		if !showBookkeeping.Load() && isBookkeeping(ref.Schema.Custom) {
+			hidden++
+			continue
+		}
+		values = append(values, named{label: firstNonEmpty(ref.Name, id), text: text})
 	}
 	slices.SortFunc(values, func(a, b named) int { return strings.Compare(a.label, b.label) })
 	for _, id := range m.labels.IDs() {
@@ -228,7 +340,7 @@ func (m *Model) customFields(room int) (values []named, empty int) {
 			empty++
 		}
 	}
-	return values, empty
+	return values, hidden, empty
 }
 
 // fieldText renders one field value as a line of text. The kind decides what to

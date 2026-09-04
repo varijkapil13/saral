@@ -1506,7 +1506,7 @@ they crowd out the fields somebody put there on purpose. The design is in
 [`docs/FIELDS.md`](FIELDS.md), including why the pinned fields Jira's own issue view offers cannot be
 read: there is no public API for them, only an internal route that nothing here may build on.
 
-- [ ] **P5 — Leave out the plugin's own bookkeeping** ·
+- [x] **P5 — Leave out the plugin's own bookkeeping** ·
   **owns** `internal/ui/issue/{fields.go,fields_test.go}`, `internal/ui/kernel/setting.go`,
   `pkg/jira/jiratest/{gen.go,fixtures/field.json}`, `docs/{FIELDS,API-NOTES,ROADMAP}.md`
   The discriminator is `jira.FieldSchema.Custom`, the plugin key a custom field declares. **A plugin
