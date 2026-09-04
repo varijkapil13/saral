@@ -243,3 +243,74 @@ func firstLine(s string) string {
 	}
 	return s
 }
+
+// A backlog longer than one page is the case that matters: this view reads
+// fifty at a time and asks for more as the cursor nears the end, so an order
+// applied to what happened to be in hand is an order over the wrong issues —
+// and the page that lands next would drop its rows above whatever somebody was
+// reading, which is the one thing docs/UX.md asks a background read never to do.
+func TestSort_ReadsTheRestOfTheBacklogBeforeOrderingIt(t *testing.T) {
+	ownSortCache(t)
+
+	fake := newFake(130)
+	dr := newDriver(t, testDeps(fake), 120, 24)
+
+	held := len(dr.m.issues)
+	if !dr.m.page.HasMore() {
+		t.Fatalf("the fixture loaded all %d issues in one page, so this test proves nothing", held)
+	}
+	if held == 0 {
+		t.Fatal("the backlog holds nothing, so this test proves nothing")
+	}
+
+	dr.key("s", "l", "enter") // key -> summary
+
+	if dr.m.page.HasMore() {
+		t.Error("the order was applied with pages still unread")
+	}
+	if dr.m.reading {
+		t.Error("the walk never finished")
+	}
+	after := len(dr.m.issues)
+	if after <= held {
+		t.Fatalf("choosing an order left %d issues in hand, the same %d it started with: "+
+			"the rest of the backlog was never read", after, held)
+	}
+
+	f, ok := sortFieldByID("summary")
+	if !ok {
+		t.Fatal("summary is not a field this view knows")
+	}
+	isOrderedBy(t, dr, f, false)
+
+	// The order has to be over everything, not over the first page. The row that
+	// leads a section must beat every issue in it, including one that only
+	// arrived because the sort asked for the rest.
+	for g := range dr.m.groups {
+		issues := dr.m.groups[g].issues
+		if len(issues) < 2 {
+			continue
+		}
+		lead := &dr.m.issues[issues[0]]
+		for _, at := range issues[1:] {
+			if f.compare(lead, &dr.m.issues[at]) > 0 {
+				t.Fatalf("section %d leads with %s, which sorts after %s", g, lead.Key, dr.m.issues[at].Key)
+			}
+		}
+	}
+}
+
+// And the pages that arrive on their own, before any order is chosen, must not
+// start a walk of their own: paging ahead as the cursor moves is what this view
+// has always done and is not what a sort asks for.
+func TestSort_APageArrivingWithNoOrderChosenDoesNotWalkTheRest(t *testing.T) {
+	ownSortCache(t)
+
+	dr := newDriver(t, testDeps(newFake(130)), 120, 24)
+	if dr.m.reading {
+		t.Error("the backlog began walking its pages with no order chosen")
+	}
+	if !dr.m.page.HasMore() {
+		t.Fatal("the fixture loaded everything in one page, so this test proves nothing")
+	}
+}

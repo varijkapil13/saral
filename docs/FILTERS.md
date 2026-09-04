@@ -146,7 +146,16 @@ ordering. The issue list's own sort re-runs the query exactly as designed, ORDER
 backlog's reorders the issues a section already holds, locally, the same way its own rank order and
 `filter.Terms` narrowing already work against what one read brought back rather than against the site.
 The two are visibly the same gesture — `s`, a field, a direction, `sort: field ↓` in the header — and
-differ only in what answers a page. `pkg/jira/jiratest/fake.go`'s `ORDER BY` subset gained `issuetype`
+differ only in what answers a page.
+
+**A local sort over a paged list is a sort of the wrong issues, and that had to be fixed on top.**
+The backlog reads fifty at a time and asks for the next page as the cursor nears the end. Ordering
+what it happened to hold meant the order covered a part of the backlog, and the page landing next
+dropped its rows into place *above* whatever somebody was reading — a wrong answer and the one thing
+docs/UX.md principle 5 asks a background read never to do. So choosing an order the view cannot ask
+the site for reads the rest of the backlog first, says so on the status line while it does, and puts
+the order in force once, rather than letting it settle over several pages. Nothing changes for a
+backlog that fits in one page, which is most of them. `pkg/jira/jiratest/fake.go`'s `ORDER BY` subset gained `issuetype`
 and `duedate`, both real JQL fields the fake had never been asked for before this packet's own tests
 needed them.
 

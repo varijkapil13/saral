@@ -164,6 +164,11 @@ type Model struct {
 	sort           sortChoice
 	sortCursor     int
 	sortSaveFailed bool
+	// pendingSort is the order chosen while the rest of the backlog was still
+	// being read, and reading marks that walk. A sort has to have every issue
+	// before it means anything — see applySortChoice.
+	pendingSort sortChoice
+	reading     bool
 
 	cursor    int
 	top       int
@@ -552,7 +557,26 @@ func (m *Model) tookPage(msg pagedMsg) tea.Cmd {
 	m.reindex()
 	m.relayout()
 	m.regroup()
+	if m.reading {
+		return m.readRest()
+	}
 	return m.pageAheadIfNeeded()
+}
+
+// readRest walks what is left of the backlog for a sort that has been chosen
+// over it, and puts the order in force once there is nothing left to read. It
+// asks for the next page whatever the cursor is near, which is what separates
+// it from pageAheadIfNeeded.
+func (m *Model) readRest() tea.Cmd {
+	if m.page.HasMore() {
+		if m.busy() || m.loading || m.search == nil {
+			return nil
+		}
+		ctx, gen := m.begin()
+		return m.reply(nextPage(ctx, m.page, gen))
+	}
+	m.reading = false
+	return m.setSort(m.pendingSort)
 }
 
 func (m *Model) failed(msg failedMsg) tea.Cmd {

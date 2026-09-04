@@ -265,15 +265,34 @@ func (m *Model) chooseSort() tea.Cmd {
 	return m.applySortChoice(next)
 }
 
-// applySortChoice puts a new order in force. It re-sorts the issues already in
-// hand rather than reading the board again — see sortField's own doc comment
-// for why nothing here can ask the site for another order — keeping the
-// cursor on whatever it was over and every term still narrowing the rows.
+// sortNeedsTheRest is what the status line says while the pages a chosen order
+// has not seen yet are being read.
+const sortNeedsTheRest = "reading the rest of the backlog, because an order over part of it is an order over the wrong issues"
+
+// applySortChoice puts a new order in force.
+//
+// It cannot ask the site to read in another order — see sortField's own doc
+// comment — so it orders the issues it holds. That is only the same thing as
+// ordering the backlog once it holds all of them: this view reads fifty at a
+// time and pages as the cursor nears the end, so ordering a part would put a
+// later page's issue above the row somebody is reading the moment that page
+// lands, which is both a wrong answer and the one thing docs/UX.md asks a
+// background read never to do. So the rest is read first and the order changes
+// once, rather than settling over several pages.
 func (m *Model) applySortChoice(next sortChoice) tea.Cmd {
 	if next == m.sort {
 		m.keepVisible()
 		return nil
 	}
+	if _, orders := sortFieldByID(next.field); orders && m.page.HasMore() {
+		m.pendingSort, m.reading = next, true
+		return tea.Batch(kernel.Status(sortNeedsTheRest), m.readRest())
+	}
+	return m.setSort(next)
+}
+
+// setSort is the order taking effect over everything in hand.
+func (m *Model) setSort(next sortChoice) tea.Cmd {
 	m.sort = next
 	under := m.under()
 	m.orderIssues()
