@@ -5,8 +5,15 @@ import "github.com/varijkapil13/saral/internal/ui/kernel"
 var _ kernel.KeyReporter = (*Model)(nil)
 
 type keyMap struct {
-	Up       kernel.Binding
-	Down     kernel.Binding
+	Up   kernel.Binding
+	Down kernel.Binding
+	// Prev and Next step through the destinations while a move is being aimed.
+	// The row of them is drawn across the line, so the arrows that move along it
+	// are the left and right ones; up and down stay bound because a list is what
+	// every other state here is, and a hand already on j/k should not have to
+	// notice that this one row is not one.
+	Prev     kernel.Binding
+	Next     kernel.Binding
 	PageUp   kernel.Binding
 	PageDown kernel.Binding
 	HalfUp   kernel.Binding
@@ -29,6 +36,8 @@ func defaultKeys() keyMap {
 	return keyMap{
 		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
 		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
+		Prev:     kernel.Bind([]string{"left", "h", "up", "k"}, "←/h", "previous"),
+		Next:     kernel.Bind([]string{"right", "l", "down", "j"}, "→/l", "next"),
 		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
 		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
 		HalfUp:   kernel.Bind([]string{"ctrl+u"}, "ctrl+u", "half page up"),
@@ -92,8 +101,11 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	sets[keysBrowsing] = k.browsing(false)
 	sets[keysPicked] = k.browsing(true)
 	sets[keysChoosing] = kernel.KeySet{
-		Acts: []kernel.Binding{kernel.Terse(k.Choose, "move here"), kernel.Terse(k.Back, "cancel")},
-		Full: [][]kernel.Binding{{k.Down, k.Up}, {k.Choose, k.Back}},
+		Acts: []kernel.Binding{
+			kernel.Terse(k.Next, "choose"), kernel.Terse(k.Choose, "move here"),
+			kernel.Terse(k.Back, "cancel"),
+		},
+		Full: [][]kernel.Binding{{k.Next, k.Prev}, {k.Choose, k.Back}},
 	}
 	sets[keysConfirming] = kernel.KeySet{
 		Acts: []kernel.Binding{kernel.Terse(k.Confirm, "go ahead"), kernel.Terse(k.Back, "cancel")},
@@ -160,7 +172,7 @@ func (k keyMap) tables() (browse, chooser, confirm map[string]action) {
 		binding{k.Unpick, actClear}, binding{k.Move, actMove},
 	)
 	chooser = table(
-		binding{k.Down, actDown}, binding{k.Up, actUp},
+		binding{k.Next, actDown}, binding{k.Prev, actUp},
 		binding{k.Choose, actChoose}, binding{k.Back, actBack},
 	)
 	confirm = table(binding{k.Confirm, actConfirm}, binding{k.Back, actBack})

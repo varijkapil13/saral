@@ -32,8 +32,10 @@ const cardCacheLimit = 1024
 const lineCacheLimit = 512
 
 var (
-	_ kernel.View      = (*Model)(nil)
-	_ kernel.Addressed = (*Model)(nil)
+	_ kernel.View        = (*Model)(nil)
+	_ kernel.Addressed   = (*Model)(nil)
+	_ kernel.KeyCapturer = (*Model)(nil)
+	_ kernel.KeyReporter = (*Model)(nil)
 )
 
 // held is the card that has been taken off the board and not yet landed. It is
@@ -130,6 +132,15 @@ type Model struct {
 	drag    widget.Drag
 	focused bool
 }
+
+// WantsRawKeys is true while F is waiting for its digit. Without it the kernel
+// spends that digit on the saved query a bare digit runs in a root view, the
+// board never sees it, and the quick filter it was pressed for never happens.
+//
+// It is not claimed for the g prefix: the kernel buffers that one itself and
+// hands the view both strokes in a single dispatch, so there is no keypress in
+// between for anything else to take.
+func (m *Model) WantsRawKeys() bool { return m.pendingFilter }
 
 // New builds the board. It draws nothing of the site in its first frame: which
 // columns a board has is an answer, and the frame before that answer says which

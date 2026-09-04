@@ -1,6 +1,7 @@
 package board
 
 import (
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -676,4 +678,94 @@ func TestBoard_ChoosingATermWhileMoreIsLoadedWarnsThatTheFilterCannotSeeThem(t *
 	if got := dr.lastStatus().Text; !strings.Contains(got, "more cards than are loaded") {
 		t.Errorf("choosing a term with more loaded said %q, want it to warn about unseen cards", got)
 	}
+}
+
+// The board's other quick-filter tests send the digit straight to the model,
+// which is why this bug lived: they prove the board answers a digit, not that
+// one ever reaches it. In a root view the kernel spends a bare digit on the
+// saved query bound to it, and it decides that before the view is asked — so F
+// latched, the digit went to a search, and the quick filter never happened.
+//
+// kernel.KeyCapturer is what claims the stroke. This drives the real kernel
+// with a query bound to 1, which is the only shape that tells the two apart.
+func TestBoard_TheDigitAfterFReachesTheBoardRatherThanRunningASavedQuery(t *testing.T) {
+	me := jira.User{AccountID: "acct-board-raw", DisplayName: "Raw Keys", Kind: jira.AccountPerson}
+	base := jiratest.Gen(6)
+	mine := base[0]
+	mine.ID, mine.Key, mine.Assignee = "39101", "PROJ-9101", &me
+	fake := jiratest.New(
+		jiratest.WithProject("PROJ", jiratest.Scrum),
+		jiratest.WithMe(me),
+		jiratest.WithIssues(append(base, mine)),
+	)
+	saved, err := app.NewSavedQueries(app.SavedQuery{Name: "everything", JQL: "project = PROJ", Slot: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := testDeps(fake)
+	d.Saved = saved
+
+	m, err := kernel.New(d, kernel.WithSize(140, 30), kernel.WithInitialView(ViewID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = settle(t, m, m.Init(), 0)
+	next, cmd := m.Update(tea.WindowSizeMsg{Width: 140, Height: 30})
+	m = settle(t, next.(kernel.Model), cmd, 0)
+
+	before := cardCount(t, ansi.Strip(m.Frame()))
+	next, cmd = m.Update(keyPress("F"))
+	m = settle(t, next.(kernel.Model), cmd, 0)
+	next, cmd = m.Update(keyPress("1"))
+	m = settle(t, next.(kernel.Model), cmd, 0)
+
+	frame := ansi.Strip(m.Frame())
+	// The saved query cannot run in this build — no view here claims RunsQueries
+	// — so the kernel says so, which is the exact tell that the digit went there.
+	if strings.Contains(frame, "run a saved query") {
+		t.Errorf("the digit ran the saved query bound to 1 instead of reaching the board:\n%s", frame)
+	}
+	if after := cardCount(t, frame); after >= before {
+		t.Errorf("the quick filter left %d cards, want fewer than the %d before it was toggled:\n%s",
+			after, before, frame)
+	}
+}
+
+// cardCount reads the board's own count off the frame. The kernel owns the view
+// it built, so what this test can see is what a user sees.
+func cardCount(t *testing.T, frame string) int {
+	t.Helper()
+	at := regexp.MustCompile(`(\d+)\+? cards`).FindStringSubmatch(frame)
+	if at == nil {
+		t.Fatalf("the frame carries no card count, so this test proves nothing:\n%s", frame)
+	}
+	n, err := strconv.Atoi(at[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// settle runs a command tree against the kernel the way the runtime does.
+func settle(t *testing.T, m kernel.Model, cmd tea.Cmd, depth int) kernel.Model {
+	t.Helper()
+	if cmd == nil || depth > 12 {
+		return m
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			m = settle(t, m, c, depth+1)
+		}
+		return m
+	}
+	if msg == nil {
+		return m
+	}
+	next, follow := m.Update(msg)
+	model, ok := next.(kernel.Model)
+	if !ok {
+		return m
+	}
+	return settle(t, model, follow, depth+1)
 }

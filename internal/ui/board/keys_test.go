@@ -21,6 +21,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"looking at the board", keysBrowsing},
 		{"a card in hand", keysHolding},
 		{"a move out with the site", keysMoving},
+		{"F waiting for its digit", keysPickingFilter},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the board has %d key states and this test names %d", keyStates, len(named))

@@ -9,3 +9,6 @@ a card in hand
   full   [enter move it to this column, ctrl+g put it back]
 a move out with the site
   acts   
+F waiting for its digit
+  acts   1-9 quick filter · esc cancel
+  full   [1-9 toggle that quick filter]

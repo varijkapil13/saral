@@ -68,6 +68,7 @@ const (
 	keysBrowsing keyState = iota
 	keysHolding
 	keysMoving
+	keysPickingFilter
 	keyStates
 )
 
@@ -100,6 +101,16 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// A move the site has not answered yet offers nothing: every key is refused
 	// until it does, and naming one would name a stroke being refused.
 	sets[keysMoving] = kernel.KeySet{}
+	// F has been pressed and the digit has not arrived. The board holds the
+	// keyboard for that one stroke, so the row names what the digit does here
+	// rather than the saved query a bare digit runs everywhere else.
+	sets[keysPickingFilter] = kernel.KeySet{
+		Acts: []kernel.Binding{
+			kernel.Bind(digitKeys, "1-9", "quick filter"),
+			kernel.Bind([]string{"esc"}, "esc", "cancel"),
+		},
+		Full: [][]kernel.Binding{{kernel.Bind(digitKeys, "1-9", "toggle that quick filter")}},
+	}
 	return sets
 }()
 
@@ -113,9 +124,16 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysMoving
 	case m.card != nil:
 		state = keysHolding
+	case m.pendingFilter:
+		state = keysPickingFilter
 	}
 	return liveSets[state], int(state)
 }
+
+// digitKeys are the strokes a quick filter is chosen with. They are not a
+// binding on the keymap: they only ever mean anything in the one state below,
+// and the kernel spends a bare digit on a saved query everywhere else.
+var digitKeys = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
 
 type action uint8
 
