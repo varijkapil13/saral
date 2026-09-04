@@ -192,6 +192,12 @@ carries its own note instead of a header that would be wrong for it.
 `internal/ui/settings` — a new package, a new directory, nobody else's files. It registers a
 `ViewSpec` with `Slot: 0`, its own keys, and one command.
 
+**It is pushed, never opened as a root.** `kernel.Open` switches the root and throws the pushed stack
+away, and `esc` only pops — so a screen reached that way has nothing behind it to go back to, and one
+claiming no footer slot has no digit to leave by either. Settings went in opened and was a dead end
+you could enter from an issue and not get out of. The kernel builds it through the registry the way
+`openPalette` does, because it may not import a view package.
+
 ```
  Settings                                                    ctrl+, · saral
 ────────────────────────────────────────────────────────────────────────────

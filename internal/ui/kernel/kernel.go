@@ -634,7 +634,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// this one. The prefixed half is resolvePrefix's, once g has already been
 	// spent and "s" cannot mean anything else.
 	case len(m.keys.Settings.Keys()) > 0 && msg.String() == m.keys.Settings.Keys()[0]:
-		return m.open(SettingsViewID)
+		return m.openSettings()
 
 	case Matches(msg, m.keys.Saved):
 		// A pushed view keeps its own digits: a saved query belongs to the root,
@@ -821,7 +821,7 @@ func (m Model) resolvePrefix(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case Matches(msg, m.keys.Jump):
 		return m.openPalette()
 	case Matches(msg, m.keys.Settings):
-		return m.open(SettingsViewID)
+		return m.openSettings()
 	}
 	first, cmd := m.forwardTop(buffered)
 	model, ok := first.(Model)
@@ -966,6 +966,29 @@ func (m Model) openPalette() (tea.Model, tea.Cmd) {
 	spec, ok := LookupView(PaletteViewID)
 	if !ok {
 		m.status, m.statusLevel = fmt.Sprintf("%s is not available in this build", PaletteViewID), LevelWarn
+		return m, nil
+	}
+	if !m.available(spec) {
+		m.status, m.statusLevel = m.unavailable(spec), LevelWarn
+		return m, nil
+	}
+	return m.push(PushMsg{View: spec.New(m.deps), ID: spec.ID, Title: spec.Title})
+}
+
+// openSettings puts the settings screen over what is on screen rather than
+// switching to it as a root. A root switch throws the pushed stack away and
+// leaves nothing for esc to pop, and the screen claims no footer slot, so a
+// session that reached it had no way back to what it was reading.
+//
+// It is built through the registry for the reason openPalette is: the kernel
+// may not import a view package.
+func (m Model) openSettings() (tea.Model, tea.Cmd) {
+	if len(m.stack) > 0 && m.top().spec.ID == SettingsViewID {
+		return m, nil
+	}
+	spec, ok := LookupView(SettingsViewID)
+	if !ok {
+		m.status, m.statusLevel = fmt.Sprintf("%s is not available in this build", SettingsViewID), LevelWarn
 		return m, nil
 	}
 	if !m.available(spec) {

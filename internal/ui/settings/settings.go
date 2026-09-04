@@ -31,7 +31,9 @@ func init() {
 		Group: "Session",
 		Kind:  kernel.KindSession,
 		Keys:  []string{keys.Settings.Help().Key},
-		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(kernel.SettingsViewID) },
+		Run: func(d kernel.Deps) tea.Cmd {
+			return kernel.Push(kernel.SettingsViewID, "Settings", New(d))
+		},
 	})
 }
 

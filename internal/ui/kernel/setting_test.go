@@ -422,3 +422,59 @@ func TestGlobalKeys_SettingsOpensGracefullyWithNothingRegistered(t *testing.T) {
 		t.Errorf("opening an unregistered settings view did not say so: %q", m.status)
 	}
 }
+
+// Settings goes over what you were reading, so esc brings that back. It used to
+// be opened as a root: a root switch throws the pushed stack away and leaves
+// nothing for esc to pop, and the screen claims no footer slot, so a session
+// that pressed ctrl+, had no way back to the issue it was on.
+func TestGlobalKeys_EscLeavesSettingsForWhatWasUnderIt(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
+	RegisterView(ViewSpec{ID: SettingsViewID, Title: "Settings", New: func(Deps) View { return &stubView{id: SettingsViewID} }})
+
+	for name, keys := range map[string][]string{
+		"the bare chord": {"ctrl+,"},
+		"g then s":       {"g", "s"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newAt(t, testDeps(), 120, 30)
+			m, _ = press(m, keys...)
+			if got := m.Frame(); !strings.Contains(got, "settings body") {
+				t.Fatalf("%v did not open settings:\n%s", keys, got)
+			}
+			m, _ = press(m, "esc")
+			got := m.Frame()
+			if strings.Contains(got, "settings body") {
+				t.Errorf("esc left settings on screen:\n%s", got)
+			}
+			if !strings.Contains(got, "board body") {
+				t.Errorf("esc did not come back to the view settings was opened over:\n%s", got)
+			}
+		})
+	}
+}
+
+// The palette's own row reaches it the same way the key does. A command that
+// switched roots while the key pushed would be two answers to one question.
+func TestSettingsCommand_GoesOverTheViewItWasRunFrom(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
+	RegisterView(ViewSpec{ID: SettingsViewID, Title: "Settings", New: func(Deps) View { return &stubView{id: SettingsViewID} }})
+	RegisterCommand(Command{
+		ID: "settings.open", Title: "Settings", Group: "Session", Kind: KindSession,
+		Run: func(d Deps) tea.Cmd { return Push(SettingsViewID, "Settings", &stubView{id: SettingsViewID}) },
+	})
+
+	m := newAt(t, testDeps(), 120, 30)
+	next, cmd := m.Update(RunCommandMsg{ID: "settings.open"})
+	m = deliver(t, next.(Model), cmd)
+	if got := m.Frame(); !strings.Contains(got, "settings body") {
+		t.Fatalf("the command did not open settings:\n%s", got)
+	}
+	m, _ = press(m, "esc")
+	if got := m.Frame(); !strings.Contains(got, "board body") {
+		t.Errorf("esc after the command did not come back to the board:\n%s", got)
+	}
+}
