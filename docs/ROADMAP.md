@@ -1497,6 +1497,47 @@ Nothing anywhere sorts. The design, the decisions and the consumer sweep are in
   co-existing with it; both persist across a rebuilt `Model` and are read back correctly; `esc` cancels
   without re-running anything; header goldens in the nerd and the ascii tiers for both views.
 
+## The fields on an issue
+
+The sidebar lists every field the site defines that the issue carries a value for, so on a real Jira
+Software project the plugin's own bookkeeping arrives with the rest — `Rank` as `0|i034ri:`, `Epic
+Color` as `ghx-label-5`, `Issue color` as `dark_teal`. None of the three is written for a person, and
+they crowd out the fields somebody put there on purpose. The design is in
+[`docs/FIELDS.md`](FIELDS.md), including why the pinned fields Jira's own issue view offers cannot be
+read: there is no public API for them, only an internal route that nothing here may build on.
+
+- [ ] **P5 — Leave out the plugin's own bookkeeping** ·
+  **owns** `internal/ui/issue/{fields.go,fields_test.go}`, `internal/ui/kernel/setting.go`,
+  `pkg/jira/jiratest/{gen.go,fixtures/field.json}`, `docs/{FIELDS,API-NOTES,ROADMAP}.md`
+  The discriminator is `jira.FieldSchema.Custom`, the plugin key a custom field declares. **A plugin
+  key is not instance data** — it is the same string on every Jira Cloud site, which is what separates
+  it from a field id, a field name or a status name, and `internal/app/dates.go` already matches one
+  to find the sprint field. The keys must be read off `GET /rest/api/3/field` on a real site rather
+  than written from memory. A hidden field is **counted, not dropped**, the way a value this client
+  cannot label already is, and a setting brings the whole lot back.
+
+- [ ] **P6 — Let the site say which fields belong on this issue** · **contract** ·
+  **owns** `pkg/jira/{port.go,roles.go,types.go}`, `pkg/jira/cloud/editmeta.go`,
+  `pkg/jira/jiratest/**`, `internal/ui/issue/**`, `docs/{FIELDS,API-NOTES,ROADMAP}.md`
+  `GET /rest/api/3/issue/{key}/editmeta` answers with the fields on this issue's screen, resolved
+  through the screen scheme, the field configuration and each custom field's context. It answers with
+  **editable** fields, so one that is read-only on the view screen is absent — which makes it an
+  ordering and relevance signal and never the sole rule about what to draw. A field carrying a value
+  that editmeta does not mention is still drawn, below the ones it does. `pkg/jira/port.go` grows a
+  method, so this needs the `contract` label and a fast review per `docs/PARALLEL.md`, and a failed
+  read leaves the sidebar drawing what it drew before.
+
+- [ ] **P7 — Pin your own** · depends on P5 ·
+  **owns** `internal/config/{config.go,config_test.go}`, `internal/ui/settings/**`,
+  `internal/ui/issue/{fields.go,fields_test.go}`, `docs/{FIELDS,SETTINGS,ROADMAP}.md`
+  A list of field ids kept **per profile**, in `config.toml` beside the timeline field names. Per
+  profile and not per machine, because a field id is a site's own — `customfield_13401` means nothing
+  on another site — which is the opposite of the reason `ui.toml` holds the pane split. Pinned fields
+  draw first, in the order they were pinned, under their own heading. Editing the list is a settings
+  row that opens **the multi-select picker F2 landed**, over the site's field catalogue, so the whole
+  of the UI already exists. A pinned id the site no longer has is dropped from the drawing and kept in
+  the file, so a profile that has seen two sites does not lose its list.
+
 ## Later, deliberately not now
 
 - **Confluence.** Arrives as `pkg/confluence` behind its own port. Note that Confluence storage
