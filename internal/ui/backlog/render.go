@@ -179,6 +179,8 @@ type headKey struct {
 	sprints     int
 	more        bool
 	loading     bool
+	sortField   string
+	sortDesc    bool
 }
 
 // View draws the head line and the window of rows under it. Only the visible
@@ -221,6 +223,8 @@ func (m *Model) View() string {
 		lines = append(lines, m.chooserLine())
 	case confirming:
 		lines = append(lines, m.confirmLine())
+	case sorting:
+		lines = append(lines, m.sortPrompt())
 	case movingIssues:
 		lines = append(lines, m.progressLine())
 	case browsing:
@@ -381,6 +385,10 @@ func (m *Model) headLine() string {
 		tail += " " + t.Glyphs.Separator + " reading" + t.Glyphs.Ellipsis
 	}
 	b.WriteString(m.styles.muted.Render(tail))
+	if m.sort.chosen() {
+		b.WriteString(m.styles.muted.Render(" " + t.Glyphs.Separator + " "))
+		b.WriteString(m.zones.Mark(sortZone, m.styles.accent.Render(m.sort.label(t.Glyphs))))
+	}
 	m.head = m.fit(b.String())
 	return m.head
 }
@@ -394,6 +402,7 @@ func (m *Model) headKey() headKey {
 		board: m.board().Name, boards: len(m.boards), width: m.width, gen: m.styles.gen,
 		issues: len(m.issues), shown: shown, filteredOut: m.filteredOut, sprints: len(m.sprints),
 		more: m.page.HasMore(), loading: m.loading,
+		sortField: m.sort.field, sortDesc: m.sort.desc,
 	}
 }
 

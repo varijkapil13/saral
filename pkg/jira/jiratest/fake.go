@@ -2149,7 +2149,10 @@ var fakeJQLFields = []string{
 	"priority", "assignee", "reporter", "labels",
 }
 
-var fakeJQLOrders = []string{"key", "created", "updated", "summary", "status", "priority", "assignee", "project"}
+var fakeJQLOrders = []string{
+	"key", "created", "updated", "summary", "status", "priority", "assignee", "project",
+	"issuetype", "duedate",
+}
 
 func fakeJQLError(format string, args ...any) error {
 	return fakeInvalid("jql", fmt.Sprintf(format, args...))
@@ -2542,8 +2545,23 @@ func fakeCompareIssues(a, b *jira.Issue, order string) int {
 		return strings.Compare(fakePriorityName(a), fakePriorityName(b))
 	case "assignee":
 		return strings.Compare(fakeAssigneeName(a), fakeAssigneeName(b))
+	case "issuetype":
+		return strings.Compare(a.Type.Name, b.Type.Name)
+	case "duedate":
+		return fakeCompareDue(a.Due, b.Due)
 	default:
 		return fakeCompareKeys(a.Key, b.Key)
+	}
+}
+
+func fakeCompareDue(a, b jira.Date) int {
+	switch {
+	case a.Before(b):
+		return -1
+	case b.Before(a):
+		return 1
+	default:
+		return 0
 	}
 }
 

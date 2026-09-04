@@ -24,6 +24,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"choosing where they go", keysChoosing},
 		{"confirming the move", keysConfirming},
 		{"a move in flight", keysMoving},
+		{"choosing the order", keysSorting},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the view has %d key states and this test names %d", keyStates, len(named))

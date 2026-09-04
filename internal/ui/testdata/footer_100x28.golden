@@ -1,7 +1,7 @@
 attach
  Issues                                                                                 ? ctrl+k esc
 backlog
- Issues  space pick  v pick all  m move  f filter by                                    ? ctrl+k esc
+ Issues  space pick  v pick all  m move  f filter by  s sort                            ? ctrl+k esc
 board
  Issues  enter open  m move  b board  f filter by  F 1-9 quick filters                  ? ctrl+k esc
 comment
@@ -17,7 +17,7 @@ issue.edit
 issue.move
  Issues  enter choose                                                                   ? ctrl+k esc
 list
- Issues  enter open  f filter by  / filter  a all  e search  s save                       ? ctrl+k q
+ Issues  enter open  f filter by  / filter  a all  e search  s sort  S save               ? ctrl+k q
 move
  Issues  enter use it  i type a key                                                     ? ctrl+k esc
 onboarding

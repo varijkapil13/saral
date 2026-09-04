@@ -1442,15 +1442,60 @@ Nothing anywhere sorts. The design, the decisions and the consumer sweep are in
   [#141](https://github.com/varijkapil13/saral/issues/141), because the fix is one shared behaviour
   across three views' `reproject`/equivalent rather than three one-line diffs inside this packet's own.
 
-- [ ] **F4 — Sort, where there is an order to change** ·
-  **owns** `internal/ui/list/{search.go,sort.go,keys.go}`, `internal/ui/backlog/**`,
-  `internal/config/uistate.go`, `docs/{FILTERS,UX,ROADMAP}.md`
-  Issues and the backlog only. A board is ordered by column and by rank inside it and a timeline by
-  date; sorting either discards the order that makes it that view, and that is the reason rather than
-  an omission. A sort is part of the search — the site orders the page — so choosing one re-runs the
-  query rather than reordering the screenful, which is what keeps a list with more pages behind it
-  honest. `s` sorts and the issue list's save-this-query moves to `S`. The choice is kept per view in
-  `ui.toml`, beside the pane split, for the reason `config.UIState` already gives.
+- [x] **F4 — Sort, where there is an order to change** · **owns**
+  `internal/ui/list/{search.go,sort.go,keys.go}`, `internal/ui/backlog/**`, `internal/config/uistate.go`,
+  `docs/{FILTERS,UX,ROADMAP}.md`. Grew to include `internal/ui/list/list.go` (the model fields, `Update`
+  and `View` wiring, `setQuery`'s one line applying the choice), `internal/ui/list/register.go` and
+  `internal/ui/backlog/register.go` (one palette command each, the same parity `issues.filter-by` and
+  `backlog.filter-by` already have), `internal/ui/list/{query_test.go,poll_test.go}` and
+  `internal/ui/backlog/keys_test.go` (unavoidable per-consumer adoption of the `s`→`S` move, the same
+  category F2's report described), `internal/ui/keys_test.go`'s `keyOwners` table (two new command
+  ids), five `internal/ui/testdata/*.golden` files and `internal/ui/palette/testdata/session_120x30.golden`
+  (the footer, the `?` overlay, the right-click menu and the palette's own fuzzy list all render the
+  registry this packet changed), and `pkg/jira/jiratest/fake.go` plus its tests (below).
+  Issues and the backlog only, exactly as decided; board and timeline still have no sort control. `s`
+  opens a picker — key, summary, status, type, priority, assignee, created, updated, due, the JQL
+  vocabulary this client can name without guessing a customfield — drawn as one line under the rows,
+  left/right moves the cursor and enter chooses; choosing the field already in force flips its
+  direction instead of doing nothing, which is the one gesture docs/FILTERS.md asks to reach both
+  halves of "ascending and descending". The choice is drawn in the header as `sort: updated ↓`, on an
+  arrow read off `Glyphs.IsASCII()` rather than a new field on `kernel.Glyphs`, which this packet does
+  not own. `S` is where save-this-query moved to, freeing `s` for sort.
+  **"The site orders the page" is true of the issue list and was never true of the backlog, and
+  `docs/FILTERS.md`'s own "## Sort" now says so.** `pkg/jira.BoardQuery` — what backlog reads a board
+  through — carries no order of its own by design ("there is deliberately no further narrowing invented
+  here," its own doc comment) and `BoardIssues` returns rank order, full stop; widening it is a port
+  amendment and out of scope here. So the issue list's sort does exactly what was designed: it replaces
+  the JQL's own `ORDER BY` and re-runs the search, `applySort` stripping any existing clause via one
+  regexp anchored at the query's end and appending the chosen one, folded into `setQuery` itself so
+  every path that sets a query — a named search, a term, an edited one, a project switch — carries
+  whatever sort is active without each caller asking. The backlog's sort instead replaces the local
+  reorder its sections already had: `orderIssues` sorts each section by the chosen field's own compare
+  function when one is chosen, and falls back to the board's rank field (or arrival order, on a board
+  with none) exactly as before when it is not — a chosen field is a decision to stop reading the
+  board's own order, not a second axis alongside it. Both views' pickers, header labels and persistence
+  are the same shape and deliberately two implementations rather than one shared type, `backlog`
+  reaching into nothing of `list`'s per `AGENTS.md`'s "duplicating a helper is better than editing
+  across ownership lines."
+  A field's own natural default direction is what a first choice opens in — the three date fields
+  newest first, everything else ascending — and `backlog`'s own "key" field compares the numeric tail
+  rather than the raw string, since a plain compare would put PROJ-10 before PROJ-2 and nothing about
+  that is what "by key" means to a reader.
+  **`pkg/jira/jiratest/fake.go`'s JQL subset had never been asked to order by `issuetype` or `duedate`**
+  — both real JQL fields, not an invention of this picker's — so a test choosing "type" or "due" against
+  the fake would have failed the search outright. Widened the same way FP.2 widened the subset for its
+  own picker: two fields added to `fakeJQLOrders`, two cases added to `fakeCompareIssues`, one new test
+  proving both work, `pkg/jira/jiratest/fake_test.go`'s own file since it already carries the sibling
+  `TestSearch_OrdersDescendingWhenTheQuerySaysSo`.
+  The choice is kept per view in `ui.toml` — `config.UIState` gains `Sorts map[string]SortSpec` beside
+  `Splits`, `Sort`/`SaveSort` following `Split`/`SaveSplit`'s read-merge-write shape exactly including
+  the shared mutex, and a field this build does not name (a hand-edited file, an older build's ninth
+  field) is read as no choice rather than obeyed, the same rule `Split` already applies to an
+  out-of-range share.
+  Tested: the issue list's JQL changes and survives a filter chosen before or after it; the backlog's
+  local order changes and survives the same, and takes over from a board's own rank rather than
+  co-existing with it; both persist across a rebuilt `Model` and are read back correctly; `esc` cancels
+  without re-running anything; header goldens in the nerd and the ascii tiers for both views.
 
 ## Later, deliberately not now
 

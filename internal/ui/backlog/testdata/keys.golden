@@ -1,23 +1,23 @@
 browsing with nothing picked
-  acts   space pick · v pick all · m move · f filter by
+  acts   space pick · v pick all · m move · f filter by · s sort
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label, s sort]
 something picked
-  acts   space pick · v pick all · m move · f filter by · x unpick all
+  acts   space pick · v pick all · m move · f filter by · s sort · x unpick all
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label, x unpick everything]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label, s sort, x unpick everything]
 narrowed by a term
-  acts   space pick · v pick all · m move · f filter by · ctrl+g clear
+  acts   space pick · v pick all · m move · f filter by · s sort · ctrl+g clear
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label, ctrl+g clear filter]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label, s sort, ctrl+g clear filter]
 something picked and narrowed by a term
-  acts   space pick · v pick all · m move · f filter by · x unpick all · ctrl+g clear
+  acts   space pick · v pick all · m move · f filter by · s sort · x unpick all · ctrl+g clear
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label, x unpick everything, ctrl+g clear filter]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label, s sort, x unpick everything, ctrl+g clear filter]
 choosing where they go
   acts   →/l choose · enter move here · esc cancel
   full   [→/l next, ←/h previous]
@@ -27,3 +27,7 @@ confirming the move
   full   [y go ahead, esc leave them where they are]
 a move in flight
   acts   
+choosing the order
+  acts   ←/h prev · →/l next · enter choose this order · esc leave the order as it is
+  full   [←/h previous field, →/l next field]
+  full   [enter choose this order, esc leave the order as it is]

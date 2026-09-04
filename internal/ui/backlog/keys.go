@@ -36,6 +36,16 @@ type keyMap struct {
 	FilterBy kernel.Binding
 	// Unfilter drops every term FilterBy put in force.
 	Unfilter kernel.Binding
+	// Sort opens the picker that chooses the order this view reads a section's
+	// issues in; see sort.go.
+	Sort kernel.Binding
+	// SortPrev, SortNext, SortChoose and SortCancel answer that picker: left
+	// and right move the cursor over the fields on offer, enter chooses the
+	// one under it and esc leaves the order as it was.
+	SortPrev   kernel.Binding
+	SortNext   kernel.Binding
+	SortChoose kernel.Binding
+	SortCancel kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -60,6 +70,12 @@ func defaultKeys() keyMap {
 		Confirm:  kernel.Bind([]string{"y"}, "y", "go ahead"),
 		FilterBy: kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),
 		Unfilter: kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter"),
+		Sort:     kernel.Bind([]string{"s"}, "s", "sort"),
+
+		SortPrev:   kernel.Bind([]string{"left", "h"}, "←/h", "previous field"),
+		SortNext:   kernel.Bind([]string{"right", "l"}, "→/l", "next field"),
+		SortChoose: kernel.Bind([]string{"enter"}, "enter", "choose this order"),
+		SortCancel: kernel.Bind([]string{"esc"}, "esc", "leave the order as it is"),
 	}
 }
 
@@ -74,8 +90,9 @@ func (k keyMap) browsing(picked, narrowed bool) kernel.KeySet {
 	pick, all := kernel.Terse(k.Pick, "pick"), kernel.Terse(k.PickAll, "pick all")
 	move := kernel.Terse(k.Move, "move")
 	by := kernel.Terse(k.FilterBy, "filter by")
-	acts := []kernel.Binding{pick, all, move, by}
-	actions := []kernel.Binding{k.Pick, k.PickAll, k.Move, k.FilterBy}
+	sort := kernel.Terse(k.Sort, "sort")
+	acts := []kernel.Binding{pick, all, move, by, sort}
+	actions := []kernel.Binding{k.Pick, k.PickAll, k.Move, k.FilterBy, k.Sort}
 	if picked {
 		acts = append(acts, kernel.Terse(k.Unpick, "unpick all"))
 		actions = append(actions, k.Unpick)
@@ -107,6 +124,7 @@ const (
 	keysChoosing
 	keysConfirming
 	keysMoving
+	keysSorting
 	keyStates
 )
 
@@ -134,6 +152,12 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// left are the only thing that ends it, and naming a key here would name one
 	// that is refused.
 	sets[keysMoving] = kernel.KeySet{}
+	sets[keysSorting] = kernel.KeySet{
+		Acts: []kernel.Binding{
+			kernel.Terse(k.SortPrev, "prev"), kernel.Terse(k.SortNext, "next"), k.SortChoose, k.SortCancel,
+		},
+		Full: [][]kernel.Binding{{k.SortPrev, k.SortNext}, {k.SortChoose, k.SortCancel}},
+	}
 	return sets
 }()
 
@@ -148,6 +172,8 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysChoosing
 	case m.mode == confirming:
 		state = keysConfirming
+	case m.mode == sorting:
+		state = keysSorting
 	case m.mode == movingIssues:
 		state = keysMoving
 	case len(m.picked) > 0 && len(m.terms) > 0:
@@ -182,13 +208,18 @@ const (
 	actConfirm
 	actFilterBy
 	actClearFilter
+	actSort
+	actSortPrev
+	actSortNext
+	actSortChoose
+	actSortCancel
 )
 
 // tables turn the bindings into a keystroke lookup, built once. The bindings
 // stay the single source of truth for what a key does and for what the footer
 // says it does, and a keystroke costs one map probe rather than a walk over
 // every binding.
-func (k keyMap) tables() (browse, chooser, confirm map[string]action) {
+func (k keyMap) tables() (browse, chooser, confirm, sorting map[string]action) {
 	browse = table(
 		binding{k.Down, actDown}, binding{k.Up, actUp},
 		binding{k.PageDown, actPageDown}, binding{k.PageUp, actPageUp},
@@ -197,13 +228,18 @@ func (k keyMap) tables() (browse, chooser, confirm map[string]action) {
 		binding{k.Pick, actPick}, binding{k.PickAll, actPickGroup},
 		binding{k.Unpick, actClear}, binding{k.Move, actMove},
 		binding{k.FilterBy, actFilterBy}, binding{k.Unfilter, actClearFilter},
+		binding{k.Sort, actSort},
 	)
 	chooser = table(
 		binding{k.Next, actDown}, binding{k.Prev, actUp},
 		binding{k.Choose, actChoose}, binding{k.Back, actBack},
 	)
 	confirm = table(binding{k.Confirm, actConfirm}, binding{k.Back, actBack})
-	return browse, chooser, confirm
+	sorting = table(
+		binding{k.SortPrev, actSortPrev}, binding{k.SortNext, actSortNext},
+		binding{k.SortChoose, actSortChoose}, binding{k.SortCancel, actSortCancel},
+	)
+	return browse, chooser, confirm, sorting
 }
 
 type binding struct {

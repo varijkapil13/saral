@@ -96,7 +96,7 @@ func TestList_BindsTheQueryOnScreenToANumberKeyAndKeepsIt(t *testing.T) {
 	d, written := savedDeps(t, newFake(20))
 	m := startAll(t, d, 120, 30)
 
-	m = keys(t, m, "s")
+	m = keys(t, m, "S")
 	mustContain(t, frame(m), `bind "All issues" to a key`, "any other key cancels")
 
 	m = keys(t, m, "4")
@@ -119,7 +119,7 @@ func TestList_ConfirmsBeforeTakingAKeyAnotherQueryHolds(t *testing.T) {
 	d, written := savedDeps(t, newFake(20), app.SavedQuery{Name: "Shipped work", JQL: shippedJQL, Slot: 2})
 	m := startAll(t, d, 120, 30)
 
-	m = keys(t, m, "s", "2")
+	m = keys(t, m, "S", "2")
 	got := frame(m)
 	mustContain(t, got, `2 runs "Shipped work"`, "y replaces it", "All issues")
 	if len(*written) != 0 {
@@ -131,7 +131,7 @@ func TestList_ConfirmsBeforeTakingAKeyAnotherQueryHolds(t *testing.T) {
 		t.Errorf("refusing the confirmation still rebound the key: %+v", *written)
 	}
 
-	m = keys(t, m, "s", "2", "y")
+	m = keys(t, m, "S", "2", "y")
 	if len(*written) != 2 {
 		t.Fatalf("the profile was written with %d queries, want 2", len(*written))
 	}
@@ -149,7 +149,7 @@ func TestList_TakesTheDigitItselfWhileItIsPickingAKey(t *testing.T) {
 	d, _ := savedDeps(t, newFake(20), app.SavedQuery{Name: "Shipped work", JQL: shippedJQL, Slot: 2})
 	m := startAll(t, d, 120, 30)
 
-	m = keys(t, m, "s", "2")
+	m = keys(t, m, "S", "2")
 	if got := frame(m); !strings.Contains(got, "All issues") {
 		t.Errorf("the digit that was picking a key ran the query bound to it instead:\n%s", got)
 	}
@@ -176,7 +176,7 @@ func TestList_ARejectedKeyEndsTheGestureRatherThanTrappingTheUser(t *testing.T) 
 	d, written := savedDeps(t, newFake(20))
 	m := startAll(t, d, 120, 30)
 
-	m = keys(t, m, "s", "x")
+	m = keys(t, m, "S", "x")
 	if got := frame(m); strings.Contains(got, "to a key") {
 		t.Errorf("a key that binds nothing left the gesture open:\n%s", got)
 	}
@@ -193,8 +193,8 @@ func TestList_BindPrompt_Golden(t *testing.T) {
 	t.Parallel()
 
 	for name, strokes := range map[string][]string{
-		"pick":    {"s"},
-		"confirm": {"s", "2"},
+		"pick":    {"S"},
+		"confirm": {"S", "2"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

@@ -137,6 +137,19 @@ list that has more pages behind it stays correct.
   machine likes to look at things, not to a Jira account, which is the reason `config.UIState`
   already gives for living where it does.
 
+**"The site orders the page" was checked against `pkg/jira.BoardQuery` while building the backlog's
+own sort and was only ever true of the issue list.** `BoardQuery` reads a board through the Agile
+API's own `/board/{id}/issue`, which orders by the board's rank and carries no field for anything
+else — its own doc comment says so: *"there is deliberately no further narrowing invented here."*
+Widening it needs a port amendment, which is out of scope here and belongs to whoever next needs Agile
+ordering. The issue list's own sort re-runs the query exactly as designed, ORDER BY and all; the
+backlog's reorders the issues a section already holds, locally, the same way its own rank order and
+`filter.Terms` narrowing already work against what one read brought back rather than against the site.
+The two are visibly the same gesture — `s`, a field, a direction, `sort: field ↓` in the header — and
+differ only in what answers a page. `pkg/jira/jiratest/fake.go`'s `ORDER BY` subset gained `issuetype`
+and `duedate`, both real JQL fields the fake had never been asked for before this packet's own tests
+needed them.
+
 ## Consumers
 
 | Changed | Who must adopt it |
@@ -145,7 +158,19 @@ list that has more pages behind it stays correct.
 | multi-select picker | `list` and `board` already handle `ChosenMsg`; both must stop assuming the picker closed |
 | `kernel.Glyphs` gains fields | every view that draws a type, a priority or a status category |
 | `GlyphsFor` gains `"nerd"` | `config.Profile.Glyphs` validation, the settings screen's Glyphs row, `cmd/saral` |
-| `s` moves to `S` in `list` | `list/keys.go`, its key golden, `docs/UX.md` |
+| `s` moves to `S` in `list` | `list/keys.go`, its key golden, `docs/UX.md`, the palette's own command id |
+| `s` sorts in `list` and `backlog` | each view's own `keys.go`, `sort.go` and key golden; `internal/ui`'s footer, `?` overlay, right-click menu and `keyOwners` sweep; `internal/ui/palette`'s session golden |
+| `config.UIState` gains `Sorts` | `internal/config/uistate.go` and its tests only — every reader goes through `Sort`/`SaveSort`, never the map |
+
+**"`s` moves to `S`" turned out to be two views' worth of key-golden fallout, not one.** `list`'s own
+`keys.golden`, `bindPrompt`/`query_test.go`'s bind gesture, `poll_test.go`'s "a number key being
+picked" case, and every top-level golden that renders the issue list's resting footer — three widths
+of `internal/ui/testdata/footer_*.golden`, `overlay_120x38.golden` and `internal/ui/palette`'s own
+`session_120x30.golden`, which fuzzy-ranks the command registry and so redrew once `issues.sort`
+joined it — all carried the old binding. None of it is a second implementation of anything; it is the
+same "the footer, the `?` overlay and the palette are one registry" property `docs/UX.md` states, read
+backwards: change what the registry says and everything that renders it must be told, by regenerating
+the golden rather than editing prose into it.
 
 **A local matcher needs the field it matches on to actually be in the read.** Checked against the
 tree while landing the backlog's and the timeline's own `f`: both asked for `app.ListProjection()`
@@ -170,5 +195,8 @@ match.
   that the rows behind it narrowed after the first without waiting for the close.
 - The glyph table has a test that every tier defines every icon — a missing nerd glyph must not draw
   an empty cell — and that an unknown issue type falls back to its letter rather than to a wrong icon.
-- Sort re-runs the query: a test asserts the JQL changed, not just the on-screen order.
+- Sort re-runs the query where a query is what answers the view: a test asserts the issue list's JQL
+  changed, not just the on-screen order. The backlog has no query to re-run — see the correction under
+  "## Sort" — so its own test asserts the local reorder instead, against the same compare function the
+  view sorted with rather than a hardcoded expectation of the fake's own generated order.
 - No hardcoded issue type, status or priority **name** anywhere in the diff.

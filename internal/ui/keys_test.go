@@ -42,6 +42,7 @@ var keyOwners = map[string]string{
 	"issue.split.description": issue.ViewID,
 	"issue.split.reset":       issue.ViewID,
 	"issues.filter-by":        list.ViewID,
+	"issues.sort":             list.ViewID,
 	"issues.save-query":       list.ViewID,
 	"issues.edit-query":       list.ViewID,
 	"issues.all":              list.ViewID,
@@ -57,6 +58,7 @@ var keyOwners = map[string]string{
 	"backlog.move":      backlog.ViewID,
 	"backlog.open":      backlog.ViewID,
 	"backlog.filter-by": backlog.ViewID,
+	"backlog.sort":      backlog.ViewID,
 
 	"board.move-issue": board.ViewID,
 	"board.next":       board.ViewID,

@@ -443,6 +443,37 @@ func fakeKeysMatching(issues []jira.Issue, match func(iss *jira.Issue) bool) []s
 	return out
 }
 
+// TestSearch_OrdersByIssueTypeAndByDueDate is the fake's own coverage for the
+// two fields internal/ui/list's sort picker names that nothing here asked for
+// before it: issuetype and duedate are both real JQL order-by fields, not an
+// invention of that picker.
+func TestSearch_OrdersByIssueTypeAndByDueDate(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 20, jiratest.WithPageSize(100))
+
+	byType, err := c.Search(t.Context(), jira.Query{JQL: `project = PROJ ORDER BY issuetype`, Fields: fakeNarrow})
+	if err != nil {
+		t.Fatalf("Search ORDER BY issuetype: %v", err)
+	}
+	for i := 1; i < len(byType.Items); i++ {
+		if byType.Items[i-1].Type.Name > byType.Items[i].Type.Name {
+			t.Fatalf("issue %d (%s) sorts after issue %d (%s) by type",
+				i-1, byType.Items[i-1].Type.Name, i, byType.Items[i].Type.Name)
+		}
+	}
+
+	byDue, err := c.Search(t.Context(), jira.Query{JQL: `project = PROJ ORDER BY duedate DESC`, Fields: fakeNarrow})
+	if err != nil {
+		t.Fatalf("Search ORDER BY duedate DESC: %v", err)
+	}
+	for i := 1; i < len(byDue.Items); i++ {
+		if byDue.Items[i-1].Due.Before(byDue.Items[i].Due) {
+			t.Fatalf("issue %d (due %s) sorts before issue %d (due %s) under DESC",
+				i-1, byDue.Items[i-1].Due, i, byDue.Items[i].Due)
+		}
+	}
+}
+
 func TestSearch_OrdersDescendingWhenTheQuerySaysSo(t *testing.T) {
 	t.Parallel()
 	c := fakeNewWithIssues(t, 12, jiratest.WithPageSize(100))

@@ -166,6 +166,97 @@ func TestSaveSplit_SurvivesAProfileBeingRebuiltFromAZeroValue(t *testing.T) {
 	}
 }
 
+func TestSaveSort_ComesBackAsTheChoiceItWasGiven(t *testing.T) {
+	ownCache(t)
+
+	if _, kept := LoadUIState().Sort("issues"); kept {
+		t.Fatal("a machine that has never chosen an order remembers one")
+	}
+	if err := SaveSort("issues", SortSpec{Field: "updated", Desc: true}); err != nil {
+		t.Fatalf("SaveSort: %v", err)
+	}
+	spec, kept := LoadUIState().Sort("issues")
+	if !kept || spec != (SortSpec{Field: "updated", Desc: true}) {
+		t.Errorf("the order came back as %+v, kept=%v, want {updated true}", spec, kept)
+	}
+}
+
+// Two views choosing an order at once must not lose each other's, which is
+// what the read-merge-write SaveSort shares with SaveSplit is for.
+func TestSaveSort_KeepsEveryOtherViewsChoiceAndASplitBesideIt(t *testing.T) {
+	ownCache(t)
+
+	if err := SaveSplit("issue", 300); err != nil {
+		t.Fatalf("SaveSplit: %v", err)
+	}
+	for view, spec := range map[string]SortSpec{
+		"issues":  {Field: "key", Desc: false},
+		"backlog": {Field: "priority", Desc: true},
+	} {
+		if err := SaveSort(view, spec); err != nil {
+			t.Fatalf("SaveSort(%q): %v", view, err)
+		}
+	}
+	state := LoadUIState()
+	for view, want := range map[string]SortSpec{
+		"issues":  {Field: "key", Desc: false},
+		"backlog": {Field: "priority", Desc: true},
+	} {
+		if got, kept := state.Sort(view); !kept || got != want {
+			t.Errorf("%s kept %+v (kept=%v), want %+v", view, got, kept, want)
+		}
+	}
+	if share, kept := state.Split("issue"); !kept || share != 300 {
+		t.Errorf("the split was lost when a sort was saved: %d, kept=%v", share, kept)
+	}
+}
+
+// Going back to the search's own order is not a choice, so it is removed
+// rather than written as a field name nothing would produce.
+func TestSaveSort_BlankFieldForgetsTheChoiceRatherThanRecordingIt(t *testing.T) {
+	dir := ownCache(t)
+
+	if err := SaveSort("issues", SortSpec{Field: "updated", Desc: true}); err != nil {
+		t.Fatalf("SaveSort: %v", err)
+	}
+	if err := SaveSort("issues", SortSpec{}); err != nil {
+		t.Fatalf("SaveSort(blank): %v", err)
+	}
+	if spec, kept := LoadUIState().Sort("issues"); kept {
+		t.Errorf("the view still remembers an order of %+v", spec)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, uiStateFile))
+	if err != nil {
+		t.Fatalf("reading the state file: %v", err)
+	}
+	if strings.Contains(string(data), "updated") {
+		t.Errorf("the forgotten order is still in the file:\n%s", data)
+	}
+}
+
+// A hand-edited file naming no field, or one edited into an empty table, is
+// read as no choice rather than obeyed.
+func TestLoadUIState_RemembersNoSortRatherThanFailing(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		file string
+	}{
+		{name: "a file TOML cannot parse", file: "sorts = [[[["},
+		{name: "an entry with no field", file: "[sorts.issues]\ndesc = true\n"},
+		{name: "a section with nothing in it", file: "[sorts]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := ownCache(t)
+			if err := os.WriteFile(filepath.Join(dir, uiStateFile), []byte(tc.file), 0o600); err != nil {
+				t.Fatalf("seeding: %v", err)
+			}
+			if spec, kept := LoadUIState().Sort("issues"); kept {
+				t.Errorf("%s was read as a choice of %+v", tc.name, spec)
+			}
+		})
+	}
+}
+
 // And it is not in config.toml at all, which is the other half of the same
 // decision: that file has to stay safe to hand somebody and readable by hand.
 func TestSave_WritesNoSplitIntoTheConfigFile(t *testing.T) {

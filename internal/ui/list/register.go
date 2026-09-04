@@ -48,6 +48,16 @@ func init() {
 		},
 	})
 	kernel.RegisterCommand(kernel.Command{
+		ID:    "issues.sort",
+		Title: "Sort these issues",
+		Group: "Search",
+		Kind:  kernel.KindSearch,
+		Keys:  []string{keys.Sort.Help().Key},
+		Run: func(kernel.Deps) tea.Cmd {
+			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SortMsg{}))
+		},
+	})
+	kernel.RegisterCommand(kernel.Command{
 		ID:    "issues.save-query",
 		Title: "Save this query to a number key",
 		Group: "Search",

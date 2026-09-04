@@ -65,6 +65,17 @@ func init() {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(OpenFilterMsg{}))
 		},
 	})
+	kernel.RegisterCommand(kernel.Command{
+		ID:       "backlog.sort",
+		Title:    "Sort this backlog",
+		Group:    "Search",
+		Kind:     kernel.KindSearch,
+		Requires: jira.CapBoards,
+		Keys:     []string{keys.Sort.Help().Key},
+		Run: func(kernel.Deps) tea.Cmd {
+			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SortMsg{}))
+		},
+	})
 	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that
 	// clears a filter is shown only by the state that has one to clear.
 	kernel.RegisterCommand(kernel.Command{

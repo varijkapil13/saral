@@ -13,6 +13,7 @@ space pick or unpick this issue                       ↓/j  down         ctrl+d
 v     pick every issue in this section                ↑/k  up           ctrl+u half page up
 m     move these issues to a sprint or the backlog    pgdn page down    g g    first row
 f     filter by a person, a status, a label           pgup page up      G      last row
+s     sort
 
 board
 enter open                                     ↓/j down               pgdn    page down                 ...
@@ -88,7 +89,8 @@ f     filter by a person, a status, a label    ↑/k  up           ctrl+u  half 
 /     filter                                   pgdn page down    g g     first row
 a     all issues                               pgup page up      G / g e last row
 e     edit this search
-s     save this query to a key
+s     sort
+S     save this query to a key
 
 move
 enter use the project under the cursor    ↓/j  down         1-9          saved query           ctrl+k commands

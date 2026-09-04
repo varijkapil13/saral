@@ -11,6 +11,7 @@ backlog
 │ v      pick every issue in this section             │
 │ m      move these issues to a sprint or the backlog │
 │ f      filter by a person, a status, a label        │
+│ s      sort                                         │
 └─────────────────────────────────────────────────────┘
 
 board
@@ -75,7 +76,8 @@ list
 │ /      filter                                │
 │ a      all issues                            │
 │ e      edit this search                      │
-│ s      save this query to a key              │
+│ s      sort                                  │
+│ S      save this query to a key              │
 └──────────────────────────────────────────────┘
 
 move

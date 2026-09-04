@@ -63,6 +63,7 @@ const (
 	choosing
 	confirming
 	movingIssues
+	sorting
 )
 
 // group is one section: an open sprint, or the backlog itself as the last one.
@@ -118,6 +119,7 @@ type Model struct {
 	acts      map[string]action
 	inChooser map[string]action
 	inConfirm map[string]action
+	inSort    map[string]action
 
 	width, height int
 	lay           layout
@@ -155,6 +157,13 @@ type Model struct {
 	// filteredOut counts an issue regroup placed in no section because a term
 	// left it out, as distinct from one the done category excluded.
 	filteredOut int
+
+	// sort is the order this view reads each section's own issues in, over and
+	// above a board's own rank. A zero value is no choice made, and sorting is
+	// the mode that changes it.
+	sort           sortChoice
+	sortCursor     int
+	sortSaveFailed bool
 
 	cursor    int
 	top       int
@@ -204,7 +213,8 @@ func New(d kernel.Deps) kernel.View {
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.bar = filterbar.New(m.zones)
-	m.acts, m.inChooser, m.inConfirm = defaultKeys().tables()
+	m.acts, m.inChooser, m.inConfirm, m.inSort = defaultKeys().tables()
+	m.sort = loadSort(ViewID)
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 		m.site = d.Jira
@@ -218,7 +228,9 @@ func New(d kernel.Deps) kernel.View {
 // waiting on its y. Without it the kernel keeps esc for going back and the
 // digits for the saved queries, so the two questions this view asks could be
 // answered by nobody.
-func (m *Model) WantsRawKeys() bool { return m.mode == choosing || m.mode == confirming }
+func (m *Model) WantsRawKeys() bool {
+	return m.mode == choosing || m.mode == confirming || m.mode == sorting
+}
 
 // BlocksClose refuses to throw away a move that is part way through. The chunks
 // already accepted have moved and the rest have not, and a program that exits
@@ -285,6 +297,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case ClearFilterMsg:
 		cmd = m.clearFilter()
 
+	case SortMsg:
+		cmd = m.startSort()
+
+	case sortSaveFailedMsg:
+		cmd = m.reportSortSaveFailed(msg)
+
 	case loadedMsg:
 		cmd = m.took(msg)
 
@@ -326,6 +344,10 @@ type NextBoardMsg struct{}
 // MoveMsg starts the gesture that moves the picked issues. It is exported for
 // the same reason NextBoardMsg is.
 type MoveMsg struct{}
+
+// SortMsg opens the picker that chooses the order this view reads a section's
+// issues in. It is exported for the same reason NextBoardMsg is.
+type SortMsg struct{}
 
 func (m *Model) resize(w, h int) {
 	if w == m.width && h == m.height {
@@ -604,7 +626,7 @@ func (m *Model) regroup() {
 		}
 		m.groups[at].issues = append(m.groups[at].issues, i)
 	}
-	m.rank()
+	m.orderIssues()
 	m.rebuildRows()
 	m.restore(under)
 }
@@ -987,6 +1009,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.chooserKey(stroke)
 	case confirming:
 		return m.confirmKey(stroke)
+	case sorting:
+		return m.sortKey(stroke)
 	case movingIssues:
 		return nil
 	case browsing:
@@ -1032,7 +1056,10 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.openFilterPicker()
 	case actClearFilter:
 		return m.clearFilter()
-	case actNone, actChoose, actBack, actConfirm:
+	case actSort:
+		return m.startSort()
+	case actNone, actChoose, actBack, actConfirm,
+		actSortPrev, actSortNext, actSortChoose, actSortCancel:
 	}
 	return nil
 }
@@ -1090,6 +1117,8 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 			return nil
 		}
 		return nil
+	case sorting:
+		return nil
 	case movingIssues:
 		return nil
 	case browsing:
@@ -1099,6 +1128,9 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	}
 	if m.zones.Hit(zoneBoard, msg) {
 		return m.nextBoard()
+	}
+	if m.sort.chosen() && m.zones.Hit(sortZone, msg) {
+		return m.startSort()
 	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.rows)); i++ {
 		if !m.zones.Hit(m.zoneOf(i), msg) {
@@ -1213,11 +1245,17 @@ func (m *Model) board() jira.Board {
 // A board with no rank field is ordered by its saved filter, and reading that
 // filter is not something this session can do — so the rows are in an order this
 // program chose and the pane says which. A board that does rank still offers no
-// reorder: the port has no way to write a rank, and a gesture that silently did
-// nothing would be worse than the sentence.
+// reorder of its own: the port has no way to write a rank, and a gesture that
+// silently did nothing would be worse than the sentence.
+//
+// A sort chosen here takes over from both: it is this program's own local
+// reorder, described in its own words rather than the board's.
 func (m *Model) ordering() string {
 	if !m.loaded || len(m.boards) == 0 {
 		return ""
+	}
+	if m.sort.chosen() {
+		return "Sorted within each section by " + m.sort.plain(m.deps.Theme.Glyphs) + "."
 	}
 	if m.config.Ordering() == jira.OrderRank {
 		return "Rank order. Rows cannot be reordered here: nothing can write a rank."

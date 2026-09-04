@@ -36,6 +36,18 @@ type UIState struct {
 	// out of SplitScale. A share and not a column count, because the same
 	// terminal is not always the same width.
 	Splits map[string]int `toml:"splits"`
+
+	// Sorts maps a view id to the order it was last left reading its rows in.
+	// Beside Splits for the same reason: how this machine likes to look at a
+	// view is not a Jira account's business.
+	Sorts map[string]SortSpec `toml:"sorts"`
+}
+
+// SortSpec is the order one view reads its rows in: a field it named for
+// itself and the direction, never anything read off a site.
+type SortSpec struct {
+	Field string `toml:"field"`
+	Desc  bool   `toml:"desc"`
 }
 
 // UIStatePath is the file the arrangement is kept in.
@@ -100,6 +112,47 @@ func SaveSplit(view string, share int) error {
 		delete(state.Splits, view)
 	} else {
 		state.Splits[view] = share
+	}
+	var b strings.Builder
+	if err := toml.NewEncoder(&b).Encode(state); err != nil {
+		return fmt.Errorf("encoding %s: %w", path, err)
+	}
+	return writeAtomic(path, []byte(b.String()))
+}
+
+// Sort is the order the named view was last left reading its rows in, and
+// whether it ever chose one at all. A field this program no longer names, from
+// a file edited by hand or from a build that once offered a ninth field, is
+// read as no choice rather than obeyed.
+func (s UIState) Sort(view string) (SortSpec, bool) {
+	spec, kept := s.Sorts[view]
+	if !kept || strings.TrimSpace(spec.Field) == "" {
+		return SortSpec{}, false
+	}
+	return spec, true
+}
+
+// SaveSort records one view's chosen order and writes the file, keeping every
+// other view's — the same read-merge-write SaveSplit already does, so two
+// views choosing at once cannot lose each other's. A blank field is a view
+// that has gone back to its search's own order, and is removed rather than
+// written as a choice nothing would produce.
+func SaveSort(view string, spec SortSpec) error {
+	path, err := UIStatePath()
+	if err != nil {
+		return err
+	}
+	uiWrite.Lock()
+	defer uiWrite.Unlock()
+
+	state := LoadUIState()
+	if state.Sorts == nil {
+		state.Sorts = make(map[string]SortSpec, 1)
+	}
+	if strings.TrimSpace(spec.Field) == "" {
+		delete(state.Sorts, view)
+	} else {
+		state.Sorts[view] = spec
 	}
 	var b strings.Builder
 	if err := toml.NewEncoder(&b).Encode(state); err != nil {

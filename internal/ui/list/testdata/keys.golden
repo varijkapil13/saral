@@ -1,13 +1,13 @@
 browsing
-  acts   enter open · f filter by · / filter · a all · e search · s save
+  acts   enter open · f filter by · / filter · a all · e search · s sort · S save
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G / g e last row]
-  full   [enter open, f filter by a person, a status, a label, / filter, a all issues, e edit this search, s save this query to a key]
+  full   [enter open, f filter by a person, a status, a label, / filter, a all issues, e edit this search, s sort, S save this query to a key]
 a filter kept on the rows
-  acts   enter open · f filter by · / filter · ctrl+g clear · a all · e search · s save
+  acts   enter open · f filter by · / filter · ctrl+g clear · a all · e search · s sort · S save
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G / g e last row]
-  full   [enter open, f filter by a person, a status, a label, / filter, ctrl+g clear everything narrowing these rows, a all issues, e edit this search, s save this query to a key]
+  full   [enter open, f filter by a person, a status, a label, / filter, ctrl+g clear everything narrowing these rows, a all issues, e edit this search, s sort, S save this query to a key]
 filter open
   acts   enter keep filter · esc clear filter
   full   [enter keep filter, esc clear filter]
@@ -22,3 +22,7 @@ editing the search on screen
   acts   enter run this search · esc keep the one on screen
   full   [enter run this search, esc keep the one on screen]
   full   [alt+k delete to end of line]
+choosing the order
+  acts   ←/h prev · →/l next · enter choose this order · esc leave the order as it is
+  full   [←/h previous field, →/l next field]
+  full   [enter choose this order, esc leave the order as it is]

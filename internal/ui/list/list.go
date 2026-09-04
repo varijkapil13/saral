@@ -54,6 +54,7 @@ type Model struct {
 	normal   map[string]action
 	inFilter map[string]action
 	inAsk    map[string]action
+	inSort   map[string]action
 	styles   *styles
 	rows     *rowCache
 
@@ -104,6 +105,14 @@ type Model struct {
 	terms    filter.Terms
 	termsGen int
 	bar      *filterbar.Bar
+
+	// sort is the order this view's search is asked to run in, over and above
+	// whatever it would otherwise name for itself. A zero value is no choice
+	// made, and sorting is the picker that changes it.
+	sort           sortChoice
+	sorting        bool
+	sortCursor     int
+	sortSaveFailed bool
 
 	// defaulted records that the search on screen is still the one this view
 	// chose from the session's project. A project switch retargets that search
@@ -186,7 +195,9 @@ const (
 // query loses every digit, r triggers a refetch, esc cannot cancel, and q quits
 // the program out from under the typing — and the digit that was meant to bind
 // a key would run whatever is already on it instead.
-func (m *Model) WantsRawKeys() bool { return m.filtering || m.asking || m.bind != bindNone }
+func (m *Model) WantsRawKeys() bool {
+	return m.filtering || m.asking || m.sorting || m.bind != bindNone
+}
 
 // New builds the issue list. The query it opens on is the user's own work,
 // narrowed to the session's project when there is one — and the project itself
@@ -215,8 +226,10 @@ func New(d kernel.Deps) kernel.View {
 	m.zones = widget.NewZoner(d.Zones)
 	m.bar = filterbar.New(m.zones)
 	m.clicks = widget.NewClicks(d.Now)
-	m.normal, m.inFilter, m.inAsk = defaultKeys().tables()
+	m.normal, m.inFilter, m.inAsk, m.inSort = defaultKeys().tables()
+	m.sort = loadSort(ViewID)
 	m.jql, m.title = defaultQuery(d.Project)
+	m.jql = applySort(m.jql, m.sort)
 	m.defaulted = true
 	m.relayout()
 	m.fromCache()
@@ -265,6 +278,10 @@ type QueryMsg struct {
 // key. It is exported so that the palette reaches the same gesture the key
 // does, rather than a second implementation of it.
 type SaveQueryMsg struct{}
+
+// SortMsg opens the picker that chooses the order the search on screen runs
+// in. It is exported for the same reason SaveQueryMsg is.
+type SortMsg struct{}
 
 // ClearFilterMsg drops the filter narrowing the rows. It is exported for the
 // same reason FacetMsg is: the palette has to reach the gesture the key does.
@@ -349,6 +366,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case EditQueryMsg:
 		cmd = m.startAsk()
+
+	case SortMsg:
+		cmd = m.startSort()
+
+	case sortSaveFailedMsg:
+		cmd = m.reportSortSaveFailed(msg)
 
 	case FacetMsg:
 		cmd = m.facetMsg(msg)
@@ -459,7 +482,7 @@ func (m *Model) rowsHeight() int {
 	if m.keptFilter() {
 		h--
 	}
-	if m.filtering || m.asking || m.bind != bindNone {
+	if m.filtering || m.asking || m.sorting || m.bind != bindNone {
 		h--
 	}
 	return max(h, 1)
@@ -579,7 +602,7 @@ func (m *Model) setQuery(jql, title string, byDefault bool) tea.Cmd {
 	if jql == "" {
 		return nil
 	}
-	m.jql, m.defaulted = jql, byDefault
+	m.jql, m.defaulted = applySort(jql, m.sort), byDefault
 	if title != "" {
 		m.title = title
 	}
@@ -872,6 +895,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.asking {
 		return m.askKey(msg, stroke)
 	}
+	if m.sorting {
+		return m.sortKey(stroke)
+	}
 	if m.bind != bindNone {
 		return m.bindKey(stroke)
 	}
@@ -915,9 +941,12 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.openFilter()
 	case actEdit:
 		return m.startAsk()
+	case actSort:
+		return m.startSort()
 	case actSave:
 		m.startBind()
-	case actNone, actAccept, actRun, actKeep:
+	case actNone, actAccept, actRun, actKeep,
+		actSortPrev, actSortNext, actSortChoose, actSortCancel:
 	}
 	return nil
 }
@@ -1061,6 +1090,10 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		m.clicks.Forget()
 		return m.startAsk()
 	}
+	if m.sort.chosen() && m.zones.Hit(sortZone, msg) {
+		m.clicks.Forget()
+		return m.startSort()
+	}
 	if cmd, dropped := m.clickTerm(msg); dropped {
 		m.clicks.Forget()
 		return cmd
@@ -1138,6 +1171,9 @@ func (m *Model) View() string {
 	if m.bind != bindNone {
 		lines = append(lines, m.bindPrompt())
 	}
+	if m.sorting {
+		lines = append(lines, m.sortPrompt())
+	}
 	m.lines = lines
 	return strings.Join(lines, "\n")
 }
@@ -1184,6 +1220,8 @@ type summaryKey struct {
 	stale           bool
 	failed          bool
 	checked         int64
+	sortField       string
+	sortDesc        bool
 }
 
 func (m *Model) summaryKey() summaryKey {
@@ -1192,6 +1230,7 @@ func (m *Model) summaryKey() summaryKey {
 		issues: len(m.issues), visible: len(m.view), more: m.hasMore(),
 		loading: m.loading, loaded: m.loaded, filtered: m.filtered(),
 		stale: m.stale, failed: m.failure != nil, checked: m.checked.UnixNano(),
+		sortField: m.sort.field, sortDesc: m.sort.desc,
 	}
 }
 
@@ -1209,12 +1248,16 @@ func (m *Model) summaryLine() string {
 	if m.stale {
 		badge = m.deps.Theme.StaleBadge.Render(staleLabel)
 	}
+	sort := ""
+	if m.sort.chosen() {
+		sort = m.zones.Mark(sortZone, m.styles.muted.Render(m.sort.label(m.deps.Theme.Glyphs))) + "  "
+	}
 	stamp := m.checkedLabel()
-	right := ansi.StringWidth(stamp) + ansi.StringWidth(badge) + ansi.StringWidth(count)
+	right := ansi.StringWidth(sort) + ansi.StringWidth(stamp) + ansi.StringWidth(badge) + ansi.StringWidth(count)
 	title := ansi.Truncate(m.title, max(m.width-right-1, 1), ell)
 	pad := max(m.width-ansi.StringWidth(title)-right, 1)
 	m.summary = m.zones.Mark(titleZone, m.styles.title.Render(title)) +
-		strings.Repeat(" ", pad) + stamp + badge + m.styles.count.Render(count)
+		strings.Repeat(" ", pad) + sort + stamp + badge + m.styles.count.Render(count)
 	m.sumKey = key
 	return m.summary
 }
