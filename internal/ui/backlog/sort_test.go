@@ -208,7 +208,7 @@ func TestSort_HeaderNamesTheChoiceAcrossGlyphTiers(t *testing.T) {
 			d.Theme = kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
 			dr := newDriver(t, d, 100, 24)
 			dr.key("s", "l", "l", "l", "l", "l", "l", "l", "enter") // ...updated
-			dr.key("s", "enter")                                   // toggle to descending
+			dr.key("s", "enter")                                    // toggle to descending
 
 			golden(t, "sort_header_"+tier.name+"_100x24.golden", firstLine(dr.view()))
 		})
