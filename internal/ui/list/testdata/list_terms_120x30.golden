@@ -27,4 +27,4 @@ status Shipped in PROJ                                                          
 
 
 
-status "Shipped"  click one to drop it
+status: Shipped x  ctrl+g clears everything

@@ -385,7 +385,10 @@ func TestPicker_ALabelThatIsNotASCIIKeepsTheColumnsWhereTheyAre(t *testing.T) {
 	}
 }
 
-func TestPicker_ChoosingAValueClosesAndNamesTheTerm(t *testing.T) {
+// The picker stays open on a choice: it is a toggle now, not a close, so a
+// second value costs another enter rather than a fresh trip through the facet
+// menu.
+func TestPicker_ChoosingAValueTogglesItInForceWithoutClosing(t *testing.T) {
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake(20)), 120, 30)
@@ -399,13 +402,19 @@ func TestPicker_ChoosingAValueClosesAndNamesTheTerm(t *testing.T) {
 	if term.Facet != FacetPriority || term.ID != "10401" || term.Label != "Urgent" {
 		t.Errorf("the term is %+v, want the priority 10401", term)
 	}
-	if dr.pops != 1 {
-		t.Errorf("choosing a value closed the picker %d times, want once", dr.pops)
+	if dr.pops != 0 {
+		t.Errorf("choosing a value closed the picker %d times, want it to stay open", dr.pops)
+	}
+	if dr.m.state != pickValue || dr.m.facet != FacetPriority {
+		t.Fatal("choosing a value left the picker off the values it was on")
+	}
+	if !dr.m.terms.Has(Term{Facet: FacetPriority, ID: "10401"}) {
+		t.Error("the picker's own row does not show the value as in force")
 	}
 }
 
-// The picker never applies a term itself: it is pushed over the view being
-// filtered and holds no pointer to it.
+// The picker keeps its own copy of what is in force only to draw the check
+// marks; it never applies a term to the view being filtered directly.
 func TestPicker_ChoosingAValueAlreadyInForceNamesItAgainSoItComesOff(t *testing.T) {
 	t.Parallel()
 
@@ -422,6 +431,31 @@ func TestPicker_ChoosingAValueAlreadyInForceNamesItAgainSoItComesOff(t *testing.
 	term, chose := dr.chosen()
 	if !chose || term.ID != "10401" {
 		t.Errorf("choosing a value in force named %+v, want the same term back so the list toggles it off", term)
+	}
+	if dr.m.terms.Has(urgent) {
+		t.Error("the picker's own copy still holds the value after toggling it off")
+	}
+}
+
+// Two values of one facet are the case multi-select exists for: neither costs a
+// fresh trip through the facet menu.
+func TestPicker_TwoValuesOfOneFacetAreBothInForceAfterTwoToggles(t *testing.T) {
+	t.Parallel()
+
+	dr := newDriver(t, testDeps(newFake(20)), 120, 30)
+	dr.pick(FacetPriority)
+	dr.key("enter")
+	dr.key("down")
+	dr.key("enter")
+
+	if dr.pops != 0 {
+		t.Fatalf("toggling two values closed the picker %d times, want it to stay open", dr.pops)
+	}
+	if got := len(dr.m.terms); got != 2 {
+		t.Fatalf("two toggles left %d terms in force, want 2: %+v", got, dr.m.terms)
+	}
+	if dr.m.terms[0].Facet != FacetPriority || dr.m.terms[1].Facet != FacetPriority {
+		t.Errorf("the two terms are %+v, want both priorities", dr.m.terms)
 	}
 }
 

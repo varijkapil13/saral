@@ -66,9 +66,13 @@ One widget, `internal/ui/widget/filterbar`, drawn under the rows by whichever vi
 
 - **One chip per facet, listing its values.** Not one chip per value: the grouping is what
   `filter.Terms` already promises, and a facet with three assignees on it is one narrowing, not three.
-- **`×` removes a facet's whole clause**; clicking a value name inside a chip removes that value. Both
-  go through `Terms.Toggle`, so the keyboard, the chips and the picker cannot disagree.
-- **`ctrl+g` clears everything**, which is the stroke the issue list already binds for exactly this.
+- **`×` removes a facet's whole clause**, through the new `Terms.Without`; clicking a value name inside
+  a chip removes that value, through `Terms.Toggle`, the same one the keyboard uses — so the keyboard,
+  the chips and the picker cannot disagree. `×` is drawn from the glyph tier (`Glyphs.Cross`) rather
+  than the literal character, so an ASCII terminal gets `x` and not tofu.
+- **`ctrl+g` clears everything.** Checked against the tree: the issue list's `ctrl+g` only cleared the
+  typed `/` filter before this packet — a term set by the picker survived it, silently, because nothing
+  had ever asked it to clear one too. `clearFilter` now drops both.
 - **The bar is drawn only when something is in force**, so a view with no filter loses no rows to it.
 - Every chip is a mouse zone, per principle 3 in `docs/UX.md`.
 

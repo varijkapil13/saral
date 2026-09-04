@@ -27,4 +27,4 @@ assignee Alan Turing and status Shipped in PROJ                                 
 
 
 
-assignee "Alan Turing"  | status "Shipped"  click one to drop it
+assignee: Alan Turing x  | status: Shipped x  ctrl+g clears everything

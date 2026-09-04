@@ -159,6 +159,33 @@ func TestTerms_ToggleDoesNotWriteThroughToWhatItWasGiven(t *testing.T) {
 	}
 }
 
+func TestTerms_WithoutDropsOneFacetsWholeClause(t *testing.T) {
+	t.Parallel()
+
+	held := Terms{
+		{Facet: FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"},
+		{Facet: FacetAssignee, ID: "acct-grace", Label: "Grace Hopper"},
+		{Facet: FacetStatus, ID: "10201", Label: "Triage"},
+	}
+	got := held.Without(FacetAssignee)
+	if len(got) != 1 || got[0].Facet != FacetStatus {
+		t.Fatalf("Without(assignee) left %+v, want only the status", got)
+	}
+	if len(held) != 3 {
+		t.Errorf("Without wrote through to what it was given: %+v", held)
+	}
+}
+
+func TestTerms_WithoutOfAFacetNotInForceLeavesTheRestAlone(t *testing.T) {
+	t.Parallel()
+
+	held := Terms{{Facet: FacetStatus, ID: "10201", Label: "Triage"}}
+	got := held.Without(FacetPriority)
+	if len(got) != 1 || got[0].Facet != FacetStatus {
+		t.Errorf("Without of a facet not in force left %+v", got)
+	}
+}
+
 func TestTerms_CountIsPerFacet(t *testing.T) {
 	t.Parallel()
 

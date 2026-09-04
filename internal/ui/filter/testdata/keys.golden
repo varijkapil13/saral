@@ -5,7 +5,7 @@ choosing what to filter by
 typing for a value
   acts   enter use it · esc facets
   full   [↓ down, ↑ up, pgdn page down, pgup page up]
-  full   [enter filter by this value, esc back to the facets]
+  full   [enter toggle this value, esc back to the facets]
   full   [alt+k delete to end of line]
 nothing on offer
   acts   esc facets

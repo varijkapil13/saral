@@ -1354,16 +1354,29 @@ Nothing anywhere sorts. The design, the decisions and the consumer sweep are in
   (now meaning nerd rather than unicode), and `cmd/saral` gains a `--glyphs` flag on the same pattern
   as `--theme` and `--scheme`.
 
-- [ ] **F2 — One filter bar, and a picker that takes more than one value** ·
+- [x] **F2 — One filter bar, and a picker that takes more than one value** ·
   **owns** `internal/ui/widget/filterbar/**`, `internal/ui/filter/**`,
-  `internal/ui/list/{terms.go,list.go,keys.go}`, `docs/{FILTERS,UX,ROADMAP}.md`
-  The chip line lifted out of `internal/ui/list/terms.go` into a widget every list-shaped view draws:
-  one chip per facet listing its values, `×` to drop a facet, a click on a value to drop that value,
-  `ctrl+g` to clear, every chip a mouse zone. One chip per facet and not per value, because the
-  grouping is what `filter.Terms` already promises.
-  `filter.Model` stops sending `kernel.Pop()` with its answer: `enter` toggles and the list stays up
-  with what is chosen marked, `esc` closes, and the rows behind it narrow as each toggle lands rather
-  than at the end. `ChosenMsg` keeps its shape — one term per toggle is what lets the rows follow.
+  `internal/ui/list/{terms.go,list.go,keys.go}`, `docs/{FILTERS,UX,ROADMAP}.md`. Grew to include
+  `internal/ui/list/{filter_test.go,mouse_test.go}`, unavoidable per-consumer test adoption: both drove
+  the old close-on-choose picker gesture directly, and a rewrite of that gesture is this packet's own
+  behaviour change, not a drive-by.
+  The chip line lifted out of `internal/ui/list/terms.go` into `internal/ui/widget/filterbar`, drawn by
+  `list` in its place: one chip per facet listing its values, `×` (`Glyphs.Cross`, so ASCII gets `x`
+  rather than tofu) to drop a facet through the new `Terms.Without`, a click on a value to drop that
+  value through the existing `Terms.Toggle`, every chip a mouse zone. One chip per facet and not per
+  value, because the grouping is what `filter.Terms` already promised and `terms.go`'s own line never
+  used — it drew one chip per term, the exact gap this packet closes.
+  **`ctrl+g` clears everything, which the tree said the issue list already bound — and did not.**
+  Checked against `list/list.go`: `ctrl+g` cleared the typed `/` filter and nothing else: `clearFilter`
+  no-opped whenever `m.query` was empty, so a term set by the picker with no typed filter beside it had
+  no keyboard way off at all except reopening the picker or pressing `a`. `clearFilter` now drops the
+  terms too, and `LiveKeys`' narrowed state — and the footer hint that comes with it — now answers to
+  terms in force as well as to a kept filter, not only the latter.
+  `filter.Model` stops sending `kernel.Pop()` with its answer: `enter` toggles the value under the
+  cursor — the picker keeps its own copy of what is in force to draw the check marks, still never
+  applying a term to the view being filtered — and `esc`'s existing value→facet→closed path is
+  untouched. `ChosenMsg` keeps its shape — one term per toggle is what lets the rows follow — and now
+  travels once per toggle rather than once per picker.
 
 - [ ] **F3 — Every list-shaped view filters** · depends on F2 ·
   **owns** `internal/ui/{board,backlog,timeline}/**`, `docs/{FILTERS,UX,ROADMAP}.md`

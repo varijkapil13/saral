@@ -12,6 +12,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -92,11 +93,11 @@ func TestList_ClickingACellAsksTheSiteForThatValueAndClickingItAgainDropsIt(t *t
 			if len(dr.m.terms) != 1 || dr.m.terms[0].Facet != tc.kind || dr.m.terms[0].Label != tc.label {
 				t.Fatalf("the terms in force are %+v, want one %s named %q", dr.m.terms, tc.kind.Label(), tc.label)
 			}
-			mustContain(t, dr.view(), tc.kind.Label()+" \""+tc.label+"\"")
+			mustContain(t, dr.view(), tc.kind.Label()+": "+tc.label)
 
-			// The chip is the one way off a term that is there whatever the
+			// The chip's × is the one way off a term that is there whatever the
 			// search came back with, which a cell of a row is not.
-			pressOn(t, d, dr, termZone(0))
+			pressOn(t, d, dr, filterbar.FacetZone(tc.kind))
 
 			if len(dr.m.terms) != 0 {
 				t.Fatalf("clicking the chip left %+v in force", dr.m.terms)
@@ -104,7 +105,7 @@ func TestList_ClickingACellAsksTheSiteForThatValueAndClickingItAgainDropsIt(t *t
 			if got := dr.m.jql; got != allUpdated {
 				t.Errorf("dropping the term asked for %q, want the whole project again: %q", got, allUpdated)
 			}
-			mustNotContain(t, dr.view(), tc.kind.Label()+" \""+tc.label+"\"")
+			mustNotContain(t, dr.view(), tc.kind.Label()+": "+tc.label)
 		})
 	}
 }

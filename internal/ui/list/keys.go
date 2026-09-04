@@ -64,7 +64,7 @@ func defaultKeys() keyMap {
 		Save:     kernel.Bind([]string{"s"}, "s", "save this query to a key"),
 		Accept:   kernel.Bind([]string{"enter"}, "enter", "keep filter"),
 		Clear:    kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "clear filter"),
-		Unfilter: kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter"),
+		Unfilter: kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear everything narrowing these rows"),
 		Run:      kernel.Bind([]string{"enter"}, "enter", "run this search"),
 		Keep:     kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "keep the one on screen"),
 		Slot:     kernel.Bind(digits, "1-9", "the key to bind it to"),
@@ -80,8 +80,8 @@ var digits = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
 // that moves cannot leave a stale hint behind.
 func (k keyMap) keySet() kernel.KeySet { return k.browsing(false) }
 
-// browsing is the resting state, with or without a filter already narrowing the
-// rows. The narrowed one offers the key that clears it.
+// browsing is the resting state, with or without a term or a filter already
+// narrowing the rows. The narrowed one offers the key that clears them.
 //
 // Everything the list can do is offered, in the order it gets used. Nothing is
 // left out of the inventory to make it fit: whatever the row cannot hold folds
@@ -152,7 +152,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 // open filter answers enter and esc and nothing else; the prompt holding the
 // search answers the same two strokes for two other things; the gesture that
 // binds a number key answers a digit, then a y; a list already narrowed by a
-// filter offers the key that widens it again.
+// term or a filter offers the key that clears them.
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	state := keysBrowsing
 	switch {
@@ -164,7 +164,7 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysPickingSlot
 	case m.bind == bindConfirm:
 		state = keysConfirmingSlot
-	case m.keptFilter():
+	case m.keptFilter() || len(m.terms) > 0:
 		state = keysNarrowed
 	}
 	return liveSets[state], int(state)

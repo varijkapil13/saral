@@ -65,11 +65,6 @@ func statusZone(key string) string { return "status:" + key }
 func typeZone(key string) string   { return "type:" + key }
 func whoZone(key string) string    { return "who:" + key }
 
-// termZone is one chip on the line that says what is in force. Clicking it
-// drops that term, which is the pointer's half of the same toggle the picker
-// makes with enter.
-func termZone(at int) string { return "term:" + strconv.Itoa(at) }
-
 // --- the terms in force ------------------------------------------------------
 
 // applyTerm puts a value in force or takes it off again, and re-runs the search
@@ -146,13 +141,21 @@ func (m *Model) clickFacet(msg tea.MouseClickMsg, iss *jira.Issue) (tea.Cmd, boo
 	return nil, false
 }
 
+// clickTerm resolves a click on the filter bar: one on a value's name drops
+// just that value, and one on a facet's × drops the whole clause, both through
+// the same Toggle the keyboard uses so the two cannot disagree.
 func (m *Model) clickTerm(msg tea.MouseClickMsg) (tea.Cmd, bool) {
-	for i := range m.terms {
-		if m.zones.Hit(termZone(i), msg) {
-			return m.applyTerm(m.terms[i]), true
-		}
+	if len(m.terms) == 0 {
+		return nil, false
 	}
-	return nil, false
+	facet, value, ok := m.bar.Click(msg, m.terms)
+	if !ok {
+		return nil, false
+	}
+	if facet != filter.FacetNone {
+		return m.applyTerms(m.terms.Without(facet)), true
+	}
+	return m.applyTerm(value), true
 }
 
 // openFilter pushes the picker over this view, with what is already in force so
@@ -164,68 +167,23 @@ func (m *Model) openFilter() tea.Cmd {
 		filter.New(m.deps, filter.WithTerms(m.terms), filter.WithEditKey(keys.Edit.Help().Key)))
 }
 
-// --- the line that says what is in force -------------------------------------
+// --- the line that says what a kept filter is --------------------------------
 
-// chipKey is everything the line under the rows is built from, so that
-// scrolling under one costs what scrolling without one costs.
+// chipKey is everything the local filter's own line under the rows is built
+// from, so that scrolling under one costs what scrolling without one costs.
+// The terms in force draw through internal/ui/widget/filterbar instead, which
+// keeps its own memo.
 type chipKey struct {
 	query      string
-	terms      int
 	width, gen int
-	mouse      bool
 }
 
 func (m *Model) chipKey() chipKey {
-	return chipKey{
-		query: m.query, terms: m.termsGen, width: m.width,
-		gen: m.styles.gen, mouse: m.zones.Enabled(),
-	}
-}
-
-// termsLine names every term the search is narrowed by, each marked so that a
-// click drops it, and says how to change them without a pointer. A filter that
-// is not on screen is one nobody can get off.
-func (m *Model) termsLine() string {
-	key := m.chipKey()
-	if m.chip != "" && key == m.chipAt {
-		return m.chip
-	}
-	hint := "  " + defaultKeys().FilterBy.Help().Key + " changes them"
-	if m.zones.Enabled() {
-		hint = "  click one to drop it"
-	}
-	room, used := max(m.width-ansi.StringWidth(hint), 8), 0
-	ell := m.deps.Theme.Glyphs.Ellipsis
-	var b strings.Builder
-	// Each chip is cut before it is marked. Truncating the joined line instead
-	// would cut inside a zone marker and leave a click resolving to the chip
-	// before it.
-	for i, term := range m.terms {
-		sep := ""
-		if i > 0 {
-			sep = "  " + m.deps.Theme.Glyphs.Separator + " "
-		}
-		left := room - used - ansi.StringWidth(sep)
-		if left <= 0 {
-			b.WriteString(m.styles.muted.Render(" " + ell))
-			break
-		}
-		text := term.Facet.Label() + " " + strconv.Quote(term.Label)
-		if ansi.StringWidth(text) > left {
-			text = ansi.Truncate(text, left, ell)
-		}
-		b.WriteString(m.styles.muted.Render(sep))
-		b.WriteString(m.zones.Mark(termZone(i), m.styles.prompt.Render(text)))
-		used += ansi.StringWidth(sep) + ansi.StringWidth(text)
-	}
-	m.chip = b.String() + m.styles.muted.Render(hint)
-	m.chipAt = key
-	return m.chip
+	return chipKey{query: m.query, width: m.width, gen: m.styles.gen}
 }
 
 // filterChip names the filter the rows are being narrowed by, and the key that
-// takes it off — the same answer termsLine gives for a term, and for the same
-// reason.
+// takes it off.
 func (m *Model) filterChip() string {
 	key := m.chipKey()
 	if m.filterLine != "" && key == m.filterAt {

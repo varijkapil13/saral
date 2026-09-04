@@ -1,7 +1,7 @@
-// Package filter is the filter picker: choose a facet, then choose one of the
-// values this site actually holds for it. It exists so that narrowing a search
-// by a person, a status, a type, a priority or a label costs a keystroke rather
-// than a JQL query typed from memory.
+// Package filter is the filter picker: choose a facet, then toggle any number
+// of the values this site actually holds for it. It exists so that narrowing a
+// search by a person, a status, a type, a priority or a label costs a
+// keystroke rather than a JQL query typed from memory.
 //
 // It never resolves anything by display name. A value is carried as the id the
 // site gave it, because a name is localised, is not unique on one site, and on
@@ -383,19 +383,22 @@ func (m *Model) facetAt(f Facet) int {
 	return 0
 }
 
-// chooseValue puts the value in force and closes. A value already in force
-// comes off instead, which is the same gesture a second click on a cell makes.
+// chooseValue toggles the value under the cursor: in force if it was not, off
+// again if it was — the same gesture a second click on a cell makes. The
+// picker stays open and the row's own check mark follows, so a second value
+// costs another enter rather than a fresh trip through the facet menu.
 //
-// The picker names the value and never applies it: it is pushed over the view
-// being filtered and holds no pointer to it, so the term travels as a broadcast
-// and the view that owns the search decides what to do with it.
+// The picker keeps its own copy of what is in force only to draw the check
+// marks; it never applies a term to the view being filtered. That view holds
+// no pointer here either — what reaches it is the broadcast below, once per
+// toggle rather than once per picker, which is what lets its rows follow live.
 func (m *Model) chooseValue() tea.Cmd {
 	v := m.selected()
 	if v == nil {
 		return nil
 	}
-	m.stop()
-	return tea.Sequence(kernel.Pop(), kernel.Broadcast(ChosenMsg{Term: v.term}))
+	m.terms = m.terms.Toggle(v.term)
+	return kernel.Broadcast(ChosenMsg{Term: v.term})
 }
 
 func (m *Model) selected() *value {
@@ -405,9 +408,11 @@ func (m *Model) selected() *value {
 	return &m.all[m.shown[m.cursor]]
 }
 
-// ChosenMsg carries the value the picker was closed on. It is a broadcast
-// because the picker is pushed over whatever view is being filtered and never
-// holds a pointer to one.
+// ChosenMsg carries one value just toggled in the picker, on or off. It is a
+// broadcast, sent once per toggle rather than once per picker, because the
+// picker is pushed over whatever view is being filtered and holds no pointer
+// to it — and a broadcast per toggle is what lets the rows behind it narrow
+// live instead of at the end.
 type ChosenMsg struct{ Term Term }
 
 // --- fetching ---------------------------------------------------------------

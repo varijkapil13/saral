@@ -147,7 +147,8 @@ settings               ctrl+, / g s   opens over what you were in, esc returns �
                                       used to carry as nine rows, now one. docs/SETTINGS.md.
                                       g s reaches it the way g i reaches the palette
 search in view         /              filter rows live
-clear that filter      ctrl+g         from the browsing state; esc does it while still typing
+clear everything       ctrl+g         a term the picker set and a typed filter both, from the browsing
+                                      state; esc clears the typed one while still typing
 filter by a value      f              pick a facet, then one of the values this site holds
 every issue here       a              widen the search to the whole of the session's project;
                                       also the state with no filter values in force
@@ -395,7 +396,8 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 | click a row | select it |
 | double-click a row | open it, same as `enter` — and only when both clicks are one gesture |
 | click a status, type or assignee cell | filter by that value; click it again to drop it |
-| click one of the chips under the rows | drop that filter |
+| click a value's name inside a chip under the rows | drop just that value |
+| click a chip's `×` | drop the whole facet the chip names |
 | wheel | scroll the pane under the pointer, not the focused one |
 | drag the column between two panes | move the boundary; the panes follow the pointer and the ratio is kept |
 | click the line that names the search | show its JQL and offer to change it, the same as `e` |
@@ -415,18 +417,20 @@ and a slower second click only re-selects.
 
 **Narrowing by a cell is one gesture of the filter picker below**, not a mechanism of its own. A
 click on a status, type or assignee cell puts that value in force by the id the row carries; the same
-cell again takes it off; the chips under the list say what is in force and a click on one drops it.
-The palette carries *filter by this row's status / type / assignee* and *drop every filter on these
-issues* for anyone without a pointer, and `f` reaches every value rather than only the ones a loaded
-row happens to carry. It composes with `/`: a term is what the site was asked and the filter is what
-is kept of the answer, so a row has to survive both.
+cell again takes it off. The bar under the list draws one chip per facet, its values comma-joined: a
+click on a value's name drops that value and a click on the chip's `×` drops the whole facet, both
+through the id the row or the picker carried rather than the name on screen. The palette carries
+*filter by this row's status / type / assignee* and *drop every filter on these issues* for anyone
+without a pointer, and `f` reaches every value rather than only the ones a loaded row happens to
+carry. It composes with `/`: a term is what the site was asked and the filter is what is kept of the
+answer, so a row has to survive both.
 
 **And `/`'s own filter is named the same way once it has been accepted.** `esc` closes the prompt and
 keeps the filter, and after that `esc` belongs to the kernel, so the count reading `1 of 3` was the
 only trace a filter was on at all and the only way off it was to open it again. So a kept filter gets
-the line under the rows too, `ctrl+g` clears it — the stroke `esc` already answers to while the
-prompt is open, which is why it is not a new key to learn — and the palette carries *clear the filter
-on these rows*. The footer offers `ctrl+g` only while there is a filter to clear.
+its own line under the rows too. `ctrl+g` clears both it and any terms in force — one key rather than
+two to learn — and the palette carries *clear the filter on these rows*. The footer offers `ctrl+g`
+whenever there is a term or a filter to clear.
 
 **The divider is a column of blank, and it is deliberate that it stays blank.** The boundary between
 the issue pane's description and its sidebar is one column wide and carries no rule, because the
@@ -488,10 +492,12 @@ The owner, after a week against a real site: *"From all views there is no easy w
 filter by person. I do not want to write JQL queries — this should also belong to the speed and ease
 of use."*
 
-`f` in the issue list opens a picker in two states: **choose a facet, then choose a value.** `esc`
-goes value → facet → closed. The facets are assignee, reporter, status, type, priority and label.
-`ctrl+k` reaches it from anywhere, including the issue pane, where `f` belongs to the viewport and is
-not taken away from it.
+`f` in the issue list opens a picker in two states: **choose a facet, then toggle any number of its
+values.** `enter` puts a value in force or takes it off again without closing the picker, so a second
+assignee costs another `enter` rather than a fresh trip through the facet menu; `esc` goes value →
+facet → closed. The facets are assignee, reporter, status, type, priority and label. `ctrl+k` reaches
+it from anywhere, including the issue pane, where `f` belongs to the viewport and is not taken away
+from it.
 
 **Version, component and sprint are not offered.** Not an oversight: none of the three can be read
 through the port role a session holds, so a row for one would be a facet with nowhere to get its
@@ -503,9 +509,11 @@ cannot — and it matches on the id the site gave the value rather than on a dis
 localised, is not unique on one site, and which one account answered to two of within a minute.
 
 **Terms compose, and the screen says what is in force.** Two facets narrow together; two values of
-one facet widen it — a person *and* a status, either of two people. Every term is a chip under the
-rows and a click on one drops it. `a` — every issue in this project — is the no-terms state, so
-dropping the last term lands exactly on it and there is no second way to clear a filter to learn.
+one facet widen it — a person *and* a status, either of two people. The bar under the rows draws one
+chip per facet, its values comma-joined rather than one chip per value — a facet with three assignees
+on it is one narrowing, not three — with `×` to drop the whole facet and a click on a value's name to
+drop just that one. `a` — every issue in this project — is the no-terms state, so dropping the last
+term lands exactly on it; `ctrl+g` clears every term at once, the same key that clears a typed filter.
 A project switch takes the terms with it and says so: a status and an issue type are minted per
 project, so the ids in force name values the new project has never heard of.
 

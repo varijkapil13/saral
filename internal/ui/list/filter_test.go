@@ -105,7 +105,8 @@ func TestList_AChosenValueBecomesTheSearchRatherThanAPassOverTheRows(t *testing.
 
 // The whole gesture, driven through the kernel the way a user drives it: f, a
 // facet, a value, and the rows come back narrowed with the term named under
-// them. Everything in between is a real keypress.
+// them — while the picker is still open, since a toggle no longer closes it.
+// Everything in between is a real keypress.
 func TestList_TheWholeGestureFromFToANarrowedList(t *testing.T) {
 	t.Parallel()
 
@@ -120,10 +121,41 @@ func TestList_TheWholeGestureFromFToANarrowedList(t *testing.T) {
 	mustContain(t, frame(m), "which status?", "Triage")
 
 	m = send(t, m, keyPress("enter"))
+	mustContain(t, frame(m), "which status?", "Triage")
+
+	// esc twice: back to the facets, then closed — the picker's own gesture,
+	// unchanged by multi-select.
+	m = send(t, m, keyPress("esc"))
+	m = send(t, m, keyPress("esc"))
 
 	got := frame(m)
-	mustContain(t, got, `status "Triage"`, "status Triage in PROJ", "PROJ-")
+	mustContain(t, got, `status: Triage`, "status Triage in PROJ", "PROJ-")
 	mustNotContain(t, got, "which status?", "The search failed.")
+}
+
+// The rows narrow on the first toggle, not on the close: the picker's own
+// multi-select decision is that the view behind it follows live rather than
+// being committed to at the end. Driven through the real kernel stack, with
+// the picker still the pane on screen, so this is the search the list underneath
+// it actually ran and not one a test injected directly.
+func TestList_RowsNarrowAfterTheFirstToggleWithoutWaitingForTheClose(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(20)
+	m := startAll(t, testDeps(f), 120, 30)
+	searches := countCalls(f, "Search")
+	m = send(t, m, keyPress("f"))
+	m = send(t, m, keyPress("j"))
+	m = send(t, m, keyPress("j"))
+	m = send(t, m, keyPress("enter"))
+
+	m = send(t, m, keyPress("enter"))
+
+	got := frame(m)
+	mustContain(t, got, "which status?", "Triage")
+	if countCalls(f, "Search") <= searches {
+		t.Fatal("the list has not asked the site again, so its rows have not narrowed")
+	}
 }
 
 func TestList_TermsCompose(t *testing.T) {
@@ -177,7 +209,7 @@ func TestList_DroppingEveryTermLandsOnTheSearchAIsBoundTo(t *testing.T) {
 	if got := dr.m.jql; got != allUpdated {
 		t.Errorf("a ran %q, want %q", got, allUpdated)
 	}
-	mustNotContain(t, dr.view(), "status \"Shipped\"")
+	mustNotContain(t, dr.view(), "status: Shipped")
 }
 
 // A filter you cannot see is one you cannot escape, so every term is on screen
@@ -189,12 +221,12 @@ func TestList_TheTermsInForceAreNamedUnderTheRows(t *testing.T) {
 	dr.send(filter.ChosenMsg{Term: shipped})
 	dr.send(filter.ChosenMsg{Term: adaTerm})
 
-	mustContain(t, dr.view(), `assignee "Ada Lovelace"`, `status "Shipped"`, "click one to drop it")
+	mustContain(t, dr.view(), `assignee: Ada Lovelace`, `status: Shipped`, "ctrl+g clears everything")
 }
 
-// With no pointer the line names the key that changes them instead, because
-// clicking a chip is the only other way off one.
-func TestList_TheTermsLineNamesAKeyWhenThereIsNoPointer(t *testing.T) {
+// The clear-everything hint names the key rather than the pointer, so it reads
+// the same whether or not there is one to click with.
+func TestList_TheTermsLineNamesTheClearKeyRegardlessOfThePointer(t *testing.T) {
 	t.Parallel()
 
 	d := plainDeps(newFake(20))
@@ -202,8 +234,7 @@ func TestList_TheTermsLineNamesAKeyWhenThereIsNoPointer(t *testing.T) {
 	dr := openAll(t, d, 120, 30)
 	dr.send(filter.ChosenMsg{Term: shipped})
 
-	mustContain(t, dr.view(), "f changes them")
-	mustNotContain(t, dr.view(), "click one to drop it")
+	mustContain(t, dr.view(), "ctrl+g clears everything")
 }
 
 // A status and an issue type are minted per project, so the ids in force name
@@ -240,7 +271,7 @@ func TestList_AnEditedSearchDropsTheTerms(t *testing.T) {
 	if len(dr.m.terms) != 0 {
 		t.Errorf("%+v survived a search run from somewhere else", dr.m.terms)
 	}
-	mustNotContain(t, dr.view(), `status "Shipped"`)
+	mustNotContain(t, dr.view(), `status: Shipped`)
 }
 
 // The rows and the terms are two different things being left out, and both are
@@ -254,7 +285,7 @@ func TestList_ATermAndAKeptFilterAreBothOnScreen(t *testing.T) {
 	dr.typeText("PROJ-2")
 	dr.key("enter")
 
-	mustContain(t, dr.view(), `status "Shipped"`, `only rows matching "PROJ-2"`)
+	mustContain(t, dr.view(), `status: Shipped`, `only rows matching "PROJ-2"`)
 }
 
 func TestList_TermsGolden(t *testing.T) {
@@ -290,9 +321,13 @@ func TestList_AReporterChosenInThePickerComesBackAsThatPersonsIssues(t *testing.
 	mustContain(t, frame(m), "which reporter?", "Ada Lovelace")
 
 	m = send(t, m, keyPress("enter"))
+	mustContain(t, frame(m), "which reporter?", "Ada Lovelace")
+
+	m = send(t, m, keyPress("esc"))
+	m = send(t, m, keyPress("esc"))
 
 	got := frame(m)
-	mustContain(t, got, `reporter "Ada Lovelace"`, strconv.Itoa(len(want))+" issues")
+	mustContain(t, got, `reporter: Ada Lovelace`, strconv.Itoa(len(want))+" issues")
 	mustNotContain(t, got, "which reporter?", "The search failed.")
 }
 

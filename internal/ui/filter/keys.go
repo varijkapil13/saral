@@ -29,8 +29,8 @@ type keyMap struct {
 	TypePageUp   kernel.Binding
 	TypePageDown kernel.Binding
 	// Use is enter over a value, which is the same stroke as Choose over a facet
-	// and a different sentence: one opens the values, the other puts one in
-	// force and closes.
+	// and a different sentence: one opens the values, the other toggles one in
+	// force or off again without closing.
 	Use kernel.Binding
 	// Back is esc while a value is being typed for. The kernel keeps esc for
 	// itself everywhere else, which is what closes the picker from the facets.
@@ -51,7 +51,7 @@ func defaultKeys() keyMap {
 		TypeDown:     kernel.Bind([]string{"down", "ctrl+n"}, "↓", "down"),
 		TypePageUp:   kernel.Bind([]string{"pgup"}, "pgup", "page up"),
 		TypePageDown: kernel.Bind([]string{"pgdown"}, "pgdn", "page down"),
-		Use:          kernel.Bind([]string{"enter"}, "enter", "filter by this value"),
+		Use:          kernel.Bind([]string{"enter"}, "enter", "toggle this value"),
 		Back:         kernel.Bind([]string{"esc"}, "esc", "back to the facets"),
 	}
 }

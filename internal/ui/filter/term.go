@@ -176,6 +176,19 @@ func (t Terms) Toggle(term Term) Terms {
 	return out
 }
 
+// Without drops every value of one facet, and answers with a new slice so that
+// nothing holding the old one sees it move — the whole-clause counterpart to
+// Toggle's one value at a time, which is what a click on a chip's × asks for.
+func (t Terms) Without(f Facet) Terms {
+	out := make(Terms, 0, len(t))
+	for _, term := range t {
+		if term.Facet != f {
+			out = append(out, term)
+		}
+	}
+	return out
+}
+
 func facetOrder(f Facet) int {
 	if at := slices.Index(Facets, f); at >= 0 {
 		return at

@@ -64,8 +64,11 @@ func TestPicker_ClickingAValueTwiceChoosesIt(t *testing.T) {
 	if !chose || term.ID != "10403" {
 		t.Errorf("a second click named %+v, want the priority 10403", term)
 	}
-	if dr.pops != 1 {
-		t.Errorf("choosing by pointer closed the picker %d times, want once", dr.pops)
+	if dr.pops != 0 {
+		t.Errorf("choosing by pointer closed the picker %d times, want it to stay open", dr.pops)
+	}
+	if !dr.m.terms.Has(term) {
+		t.Error("choosing by pointer did not mark the value in force")
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -80,8 +81,6 @@ type Model struct {
 	lines      []string
 	summary    string
 	sumKey     summaryKey
-	chip       string
-	chipAt     chipKey
 	filterLine string
 	filterAt   chipKey
 
@@ -104,6 +103,7 @@ type Model struct {
 	// comparable key the line naming them is memoized on.
 	terms    filter.Terms
 	termsGen int
+	bar      *filterbar.Bar
 
 	// defaulted records that the search on screen is still the one this view
 	// chose from the session's project. A project switch retargets that search
@@ -213,6 +213,7 @@ func New(d kernel.Deps) kernel.View {
 		m.search = app.NewSearch(d.Jira)
 	}
 	m.zones = widget.NewZoner(d.Zones)
+	m.bar = filterbar.New(m.zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.normal, m.inFilter, m.inAsk = defaultKeys().tables()
 	m.jql, m.title = defaultQuery(d.Project)
@@ -948,15 +949,21 @@ func (m *Model) filterKey(msg tea.KeyPressMsg, stroke string) tea.Cmd {
 	return nil
 }
 
-// clearFilter drops a filter that has already been accepted. The kernel takes
-// esc in a root view and never forwards it, so without this a filter put on with
-// / and enter comes off only by opening it again.
+// clearFilter drops everything narrowing the rows: the terms the picker put in
+// force and a filter already accepted. The kernel takes esc in a root view and
+// never forwards it, so without this a term or a filter put on with f or /
+// comes off only by opening the picker or the prompt again.
 func (m *Model) clearFilter() tea.Cmd {
-	if m.query == "" {
+	switch {
+	case len(m.terms) > 0:
+		m.dropFilter()
+		return m.applyTerms(nil)
+	case m.query != "":
+		m.dropFilter()
+		return nil
+	default:
 		return nil
 	}
-	m.dropFilter()
-	return nil
 }
 
 // dropFilter forgets the query and the haystacks that were built to match it.
@@ -1117,7 +1124,7 @@ func (m *Model) View() string {
 		m.warm(end)
 	}
 	if len(m.terms) > 0 {
-		lines = append(lines, m.termsLine())
+		lines = append(lines, m.bar.Render(m.terms, m.width, m.deps.Theme, clearAllKey, m.termsGen))
 	}
 	if m.keptFilter() {
 		lines = append(lines, m.filterChip())
@@ -1309,10 +1316,11 @@ func (m *Model) appendFailure(lines []string, h int) []string {
 // typed into it, which is the state with no prompt of its own to show it.
 func (m *Model) keptFilter() bool { return m.query != "" && !m.filtering }
 
-// The two sentences that name a key, spelt from the binding rather than written
-// out. The retry names the kernel's own refresh, which this view registers
-// nothing for.
+// The sentences and the key that name themselves from the binding rather than
+// being written out. The retry names the kernel's own refresh, which this view
+// registers nothing for.
 var (
-	retryHint = kernel.DefaultGlobalKeys().Refresh.Help().Key + " tries the search again."
-	clearHint = "  " + defaultKeys().Unfilter.Help().Key + " clears it"
+	retryHint   = kernel.DefaultGlobalKeys().Refresh.Help().Key + " tries the search again."
+	clearHint   = "  " + defaultKeys().Unfilter.Help().Key + " clears it"
+	clearAllKey = defaultKeys().Unfilter.Help().Key
 )
