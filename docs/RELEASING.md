@@ -109,16 +109,17 @@ build reports all four, because `report_sizes` is on:
 
 | Target | Binary | Archive |
 |---|---|---|
-| linux/amd64 | 13.53 MiB | 5.29 MiB |
-| darwin/amd64 | 13.48 MiB | 5.24 MiB |
-| darwin/arm64 | 12.37 MiB | 4.87 MiB |
-| linux/arm64 | 12.38 MiB | 4.81 MiB |
+| linux/amd64 | 13.73 MiB | 5.37 MiB |
+| darwin/amd64 | 13.68 MiB | 5.33 MiB |
+| darwin/arm64 | 12.55 MiB | 4.95 MiB |
+| linux/arm64 | 12.50 MiB | 4.89 MiB |
 
 The amd64 builds are about a megabyte larger than the arm64 ones, and linux/amd64 — the one `ci.yml`
-happens to measure, so the budget is guarded at its worst case — sits at 90% of the ceiling with
-1.47 MiB of headroom. That is not much. A single sizeable new dependency would spend it. The figures
-are read off the dry run in *Cutting a release* above and belong to v0.3.0; the settings screen and the colour schemes cost
-about 270 KiB between them.
+happens to measure, so the budget is guarded at its worst case — sits at 92% of the ceiling with
+1.27 MiB of headroom. The trend is the part worth writing down: 1.74 MiB of headroom at v0.2.1, 1.47
+at v0.3.0, 1.27 now. A single sizeable new dependency would spend what is left. The figures are read
+off the dry run in *Cutting a release* above and belong to v0.4.0; the filter bar, the sort pickers,
+the glyph tier and the field work cost about 200 KiB between them.
 
 ## Things worth knowing about the config
 
