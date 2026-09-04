@@ -379,7 +379,10 @@ func (m *Model) refresh(r region, w int, render func(int) content) {
 }
 
 func (m *Model) contentKey(w int) contentKey {
-	return contentKey{width: w, theme: m.styles.gen, data: m.dataGen, folds: m.folded}
+	return contentKey{
+		width: w, theme: m.styles.gen, data: m.dataGen, folds: m.folded,
+		bookkeeping: showBookkeeping.Load(),
+	}
 }
 
 func (m *Model) buildHeader() {

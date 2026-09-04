@@ -299,12 +299,19 @@ func TestFields_BookkeepingKeysAreAllPluginKeysNotFieldIDs(t *testing.T) {
 	if len(bookkeepingFields) == 0 {
 		t.Fatal("bookkeepingFields is empty, so this guard would pass by scanning nothing")
 	}
+	// Not "it contains a colon": a real site answers with read-only-string-issue-field
+	// among its plugin keys, so a colon is a habit of the common ones rather than a
+	// rule. What actually separates a key from the two things it must never be is
+	// that a field id is customfield_NNNNN and a display name has spaces in it.
 	for _, f := range bookkeepingFields {
-		if !strings.Contains(f.Key, ":") {
-			t.Errorf("%q has no colon, so it does not read as a plugin field type", f.Key)
-		}
 		if strings.HasPrefix(f.Key, "customfield_") {
 			t.Errorf("%q looks like a field id rather than a plugin key", f.Key)
+		}
+		if strings.ContainsAny(f.Key, " \t") {
+			t.Errorf("%q has whitespace in it, so it reads as a display name rather than a key", f.Key)
+		}
+		if f.Key == "" {
+			t.Error("an entry carries no key at all, and would match every field with no plugin type")
 		}
 	}
 }
@@ -532,4 +539,43 @@ func TestFields_PinnedGoldens(t *testing.T) {
 		dr.key("tab")
 		golden(t, "pinned_absent_90x40.golden", dr.view())
 	})
+}
+
+// The setting has to reach a pane that is already open. The regions are
+// memoized on a comparable key, so a flag the key does not carry leaves the
+// frame that was built before it changed on screen until something unrelated
+// happens to the pane — a stale frame, and the one failure a memo introduces.
+func TestFields_TurningThePluginFieldsOnRepaintsAPaneAlreadyOpen(t *testing.T) {
+	setting, ok := lookupBookkeepingSetting()
+	if !ok {
+		t.Fatal("no bookkeeping setting is registered, so this test proves nothing")
+	}
+	t.Cleanup(func() { showBookkeeping.Store(false) })
+	showBookkeeping.Store(false)
+
+	dr := bookkeepingPane(t, 90, 28)
+	dr.key("tab", "G")
+	before := dr.view()
+	if !strings.Contains(before, "hidden") {
+		t.Fatalf("the pane names no hidden field, so flipping the setting proves nothing:\n%s", before)
+	}
+
+	if cmd := setting.Set(dr.m.deps, "on"); cmd != nil {
+		cmd()
+	}
+	dr.send(kernel.SizeMsg{Width: 90, Height: 28})
+
+	if after := dr.view(); strings.Contains(after, "hidden") {
+		t.Errorf("the pane still hides the plugin's fields after the setting was turned on:\n%s", after)
+	}
+}
+
+func lookupBookkeepingSetting() (kernel.Setting, bool) {
+	all := kernel.Settings()
+	for i := range all {
+		if all[i].ID == "issue.bookkeeping" {
+			return all[i], true
+		}
+	}
+	return kernel.Setting{}, false
 }

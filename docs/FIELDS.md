@@ -32,24 +32,34 @@ The discriminator is `jira.FieldSchema.Custom`, the plugin key a custom field de
 above, `com.pyxis.greenhopper.jira:gh-lexo-rank` and its siblings.
 
 **A plugin key is not instance data.** It is the same string on every Jira Cloud site, which is what
-separates it from a field id, a field name or a status name.
+separates it from a field id, a field name or a status name. Nothing in this tree matched one before
+this packet: `internal/app/dates.go` finds the sprint and the date fields by *name*, through
+`jira.ResolveField`, which is a different and more fragile thing — a name is localised and a
+team-managed project mints its own.
 
-No real site has been read for this packet, and none may be. The denylist is seeded from what this
-repo's own fixtures already confirm — `gh-lexo-rank`, minted by `pkg/jira/jiratest/gen.go` — plus this
-program's best knowledge of Jira Software's other presentation and ordering fields. Everything past
-`gh-lexo-rank` is unconfirmed until somebody runs `scripts/capture.sh` against a real site and checks
-it; `internal/ui/issue/fields.go`'s `bookkeepingFields` marks the difference per entry, and so does the
-table below.
+**No capture was run, and none may be** — `scripts/capture.sh` overwrites the whole synthetic fixture
+set with scrubbed real data, which is far more than a list of keys is worth. What the list is checked
+against instead is the output of one read-only `GET /rest/api/3/field`, run by hand against a real
+Jira Cloud site and pasted in: 67 distinct plugin keys across Jira Software, Service Management,
+Product Discovery, Advanced Roadmaps and ProForma. That answer names only plugin identifiers, which
+are the same on every site, so nothing about that instance came with it.
 
-| Plugin key | Field | Confirmed by |
+**All seven below appear in it**, and the four the report started from were the ones on screen.
+
+| Plugin key | Field | Why it is not for a person |
 |---|---|---|
-| `com.pyxis.greenhopper.jira:gh-lexo-rank` | Rank | `pkg/jira/jiratest/gen.go` |
-| `com.pyxis.greenhopper.jira:gh-epic-color` | Epic Colour | best knowledge, unconfirmed |
-| `com.pyxis.greenhopper.jira:jsw-issue-color` | Issue colour | best knowledge, unconfirmed |
-| `com.pyxis.greenhopper.jira:gh-epic-status` | Epic Status | best knowledge, unconfirmed |
-| `com.atlassian.jira.ext.charting:timeinstatus` | Time in Status | best knowledge, unconfirmed |
-| `com.atlassian.jira.plugins.jira-development-integration-plugin:devsummarycf` | Development | best knowledge, unconfirmed |
-| `com.atlassian.servicedesk:vp-origin` | (internal) | best knowledge, unconfirmed |
+| `com.pyxis.greenhopper.jira:gh-lexo-rank` | Rank | a lexorank cursor, `0\|i034ri:` |
+| `com.pyxis.greenhopper.jira:gh-epic-color` | Epic Colour | a palette slot, `ghx-label-5` |
+| `com.pyxis.greenhopper.jira:jsw-issue-color` | Issue colour | a palette name, `dark_teal` |
+| `com.pyxis.greenhopper.jira:gh-epic-status` | Epic Status | Atlassian's own legacy duplicate of the epic's status |
+| `com.atlassian.jira.ext.charting:timeinstatus` | Time in Status | an encoded transition histogram |
+| `com.atlassian.jira.plugins.jira-development-integration-plugin:devsummarycf` | Development | an opaque blob Jira's own UI renders as a widget |
+| `com.atlassian.servicedesk:vp-origin` | (internal) | a marker for where a request came from |
+
+**One key on that site carries no colon at all — `read-only-string-issue-field`.** So "a plugin key
+contains a colon" is not a rule this can be guarded with, and the guard is instead that no entry is a
+`customfield_NNNNN` id and none contains a space, which is what separates a key from an id and from a
+display name.
 
 **What is deliberately kept**, because the list is easier to get wrong in this direction: `gh-sprint`,
 `gh-epic-link`, `gh-epic-label` (which is the Epic *Name*, not a colour), story points and every

@@ -85,14 +85,16 @@ var platformIDs = func() []string {
 // instead would be matching on the one thing here that differs per site and is
 // translated besides.
 //
-// Seen marks a key this repository's own fixtures already carry —
-// gh-lexo-rank is minted by pkg/jira/jiratest/gen.go. An unseen key is this
-// program's best knowledge of Jira's plugin field types, entered here (and in
-// docs/FIELDS.md's own table) to be checked against a real site's
-// GET /rest/api/3/field the first time somebody can run scripts/capture.sh,
-// which has not happened yet. A wrong key is inert: it matches nothing on any
-// site, so it hides nothing that should have been drawn, which is the
-// direction a mistake in this table is safe to fall in.
+// Seen marks a key a real site's GET /rest/api/3/field has been observed to
+// carry. Every key here is one, checked against a site running Jira Software,
+// Service Management, Product Discovery, Advanced Roadmaps and ProForma; the
+// answer to that call names only plugin identifiers, which are the same
+// everywhere, so nothing about that instance is written down here.
+//
+// A key that is wrong is inert — it matches nothing on any site, so it hides
+// nothing that should have been drawn — which is the direction a mistake in
+// this table is safe to fall in. Adding a key on a guess is still not the way
+// to grow it: the same call answers for any site.
 type bookkeepingField struct {
 	Key  string
 	Name string // documents the row; never compared against
@@ -102,15 +104,15 @@ type bookkeepingField struct {
 // bookkeepingFields is the denylist. Add a row to extend it.
 var bookkeepingFields = []bookkeepingField{
 	{Key: "com.pyxis.greenhopper.jira:gh-lexo-rank", Name: "Rank", Seen: true},
-	{Key: "com.pyxis.greenhopper.jira:gh-epic-color", Name: "Epic Colour", Seen: false},
-	{Key: "com.pyxis.greenhopper.jira:jsw-issue-color", Name: "Issue colour", Seen: false},
-	{Key: "com.pyxis.greenhopper.jira:gh-epic-status", Name: "Epic Status", Seen: false},
-	{Key: "com.atlassian.jira.ext.charting:timeinstatus", Name: "Time in Status", Seen: false},
+	{Key: "com.pyxis.greenhopper.jira:gh-epic-color", Name: "Epic Colour", Seen: true},
+	{Key: "com.pyxis.greenhopper.jira:jsw-issue-color", Name: "Issue colour", Seen: true},
+	{Key: "com.pyxis.greenhopper.jira:gh-epic-status", Name: "Epic Status", Seen: true},
+	{Key: "com.atlassian.jira.ext.charting:timeinstatus", Name: "Time in Status", Seen: true},
 	{
 		Key:  "com.atlassian.jira.plugins.jira-development-integration-plugin:devsummarycf",
-		Name: "Development", Seen: false,
+		Name: "Development", Seen: true,
 	},
-	{Key: "com.atlassian.servicedesk:vp-origin", Name: "(internal, Service Management)", Seen: false},
+	{Key: "com.atlassian.servicedesk:vp-origin", Name: "(internal, Service Management)", Seen: true},
 }
 
 // isBookkeeping reports whether a plugin key names one of bookkeepingFields. A
@@ -129,16 +131,9 @@ func isBookkeeping(pluginKey string) bool {
 }
 
 // showBookkeeping is whether the sidebar draws the fields bookkeepingFields
-// names instead of hiding and counting them. It is kernel.ScopeSession: this
-// packet owns no file that outlives a restart (config.toml and the cache
-// directory's ui.toml both belong to other packets), so the setting's state
-// lives here rather than on disk.
-//
-// Flipping it does not by itself repaint a pane already on screen:
-// detailContent's caller memoizes on a contentKey (internal/ui/issue/issue.go,
-// outside this file) that this flag is not part of, so an open pane catches up
-// on its next real change — a resize, a theme switch, the issue reloading —
-// rather than the frame the setting changes on.
+// names instead of hiding and counting them. It lasts a run and no longer,
+// which is the shape the choice has: it is turned on to answer a question
+// about one issue rather than to change how the program looks.
 var showBookkeeping atomic.Bool
 
 func init() { kernel.RegisterSetting(bookkeepingSetting()) }

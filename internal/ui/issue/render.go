@@ -96,6 +96,11 @@ type contentKey struct {
 	theme int
 	data  int
 	folds int
+	// bookkeeping is whether the plugin's own fields are being drawn. It is part
+	// of the key because it changes what the fields region holds, and a pane
+	// already on screen when the setting flips would otherwise keep the frame it
+	// had until something else happened to it.
+	bookkeeping bool
 }
 
 // content is one region's lines at one width, with the width of each measured
