@@ -1,8 +1,8 @@
 looking at the board
-  acts   enter open · m move · b board
+  acts   enter open · m move · b board · f filter by · F 1-9 quick filters
   full   [↓/j down, ↑/k up, ←/h previous column, →/l next column]
   full   [pgdn page down, pgup page up, g g first card in this column, G / g e last card in this column]
-  full   [enter open, m move this issue to another column, b another board of this project]
+  full   [enter open, m move this issue to another column, b another board of this project, f filter by a person, a status, a label, F 1-9 quick filters]
 a card in hand
   acts   enter move it here · ctrl+g put it back
   full   [←/h previous column, →/l next column]

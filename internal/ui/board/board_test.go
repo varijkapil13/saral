@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -460,5 +461,219 @@ func TestBoard_SaysWhichOfItsThreeQuestionsIsOutstanding(t *testing.T) {
 			dr.m.forget()
 			mustContain(t, dr.view(), tc.said)
 		})
+	}
+}
+
+// The whole reason a board reads its own quick filters: toggling one on
+// actually narrows the cards, toggling it back off restores them, and the
+// title says which are on.
+func TestBoard_TogglingAQuickFilterNarrowsTheCardsAndTogglingItAgainRestoresThem(t *testing.T) {
+	t.Parallel()
+	me := jira.User{AccountID: "acct-board-qf", DisplayName: "Board QF Tester", Kind: jira.AccountPerson}
+	base := jiratest.Gen(6)
+	mine := base[0]
+	mine.ID, mine.Key, mine.Assignee = "39001", "PROJ-9001", &me
+	fake := jiratest.New(
+		jiratest.WithProject("PROJ", jiratest.Scrum),
+		jiratest.WithMe(me),
+		jiratest.WithIssues(append(base, mine)),
+	)
+	dr := newDriver(t, testDeps(fake), 120, 20)
+
+	if len(dr.m.quickFilters) != 2 {
+		t.Fatalf("the board loaded %d quick filters, want the two this fake mints on a Scrum board", len(dr.m.quickFilters))
+	}
+	if line := dr.m.quickFilterLine(); line != "" {
+		t.Fatalf("quickFilterLine() = %q before anything was toggled on", line)
+	}
+	before := len(dr.m.issues)
+	if before == 0 {
+		t.Fatal("the board answered with no cards before any filter was toggled, so narrowing proves nothing")
+	}
+
+	name := dr.m.quickFilters[0].Name
+	dr.key("F", "1")
+	if got := len(dr.m.issues); got == 0 || got >= before {
+		t.Fatalf("toggling %q on left %d cards, want fewer than the %d before", name, got, before)
+	}
+	if line := dr.m.quickFilterLine(); !strings.Contains(line, name) {
+		t.Errorf("quickFilterLine() = %q, want it to name %q", line, name)
+	}
+	if title := dr.m.boardTitle(); !strings.Contains(title, name) {
+		t.Errorf("the title reads %q and does not name the active filter %q", title, name)
+	}
+
+	dr.key("F", "1")
+	if got := len(dr.m.issues); got != before {
+		t.Errorf("toggling %q back off left %d cards, want the original %d", name, got, before)
+	}
+	if line := dr.m.quickFilterLine(); line != "" {
+		t.Errorf("quickFilterLine() = %q after toggling the only active filter back off", line)
+	}
+}
+
+// Capital F says so rather than latching a digit that would answer nothing,
+// on a board this fake reports none for.
+func TestBoard_PressingCapitalFWithNoQuickFiltersSaysSoRatherThanLatching(t *testing.T) {
+	t.Parallel()
+	fake := jiratest.New(jiratest.WithProject("PROJ", jiratest.Kanban), jiratest.WithIssues(jiratest.Gen(4)))
+	dr := newDriver(t, testDeps(fake), 120, 20)
+	if len(dr.m.quickFilters) != 0 {
+		t.Fatalf("a Kanban board here reports %d quick filters, want none for this case", len(dr.m.quickFilters))
+	}
+
+	dr.key("F")
+	if dr.m.pendingFilter {
+		t.Error("F latched waiting for a digit on a board with nothing for one to bind to")
+	}
+	if got := dr.lastStatus().Text; !strings.Contains(got, "no quick filters") {
+		t.Errorf("pressing F said %q, want it to say this board has none", got)
+	}
+}
+
+// A digit with no quick filter bound to it says so and changes nothing, the
+// same way a footer slot with nothing bound to it does.
+func TestBoard_ADigitWithNoQuickFilterBoundToItSaysSoAndChangesNothing(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
+	if len(dr.m.quickFilters) == 0 {
+		t.Fatal("this case needs a board with quick filters and got none")
+	}
+	before := len(dr.m.issues)
+
+	dr.key("F", "9")
+	if got := dr.lastStatus().Text; !strings.Contains(got, "no quick filter is bound to 9") {
+		t.Errorf("pressing F 9 said %q, want it to name the digit", got)
+	}
+	if got := len(dr.m.issues); got != before {
+		t.Errorf("a digit bound to nothing still changed the cards: %d, want %d", got, before)
+	}
+}
+
+// Capital F on its own answers nothing until a digit completes it, the same
+// gap K7 closed for g itself — so it has to say what the digit will do before
+// either key is pressed, not only after.
+func TestBoard_PressingCapitalFListsTheQuickFiltersAndTheirDigitsBeforeAnyIsChosen(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
+	if len(dr.m.quickFilters) == 0 {
+		t.Fatal("this case needs a board with quick filters and got none")
+	}
+
+	dr.key("F")
+	if !dr.m.pendingFilter {
+		t.Fatal("F did not latch waiting for a digit")
+	}
+	view := dr.view()
+	for i, qf := range dr.m.quickFilters {
+		if !strings.Contains(view, strconv.Itoa(i+1)) || !strings.Contains(view, qf.Name) {
+			t.Errorf("the prompt does not show %q against its digit %d:\n%s", qf.Name, i+1, view)
+		}
+	}
+
+	dr.key("1")
+	if dr.m.pendingFilter {
+		t.Error("the prompt is still latched after a digit was pressed")
+	}
+	if line := dr.m.quickFilterLine(); !strings.Contains(line, dr.m.quickFilters[0].Name) {
+		t.Errorf("quickFilterLine() = %q after toggling filter 1 on, want it to name it", line)
+	}
+	if !strings.Contains(dr.view(), dr.m.quickFilters[0].Name) {
+		t.Errorf("the title does not name %q once it is toggled on:\n%s", dr.m.quickFilters[0].Name, dr.view())
+	}
+
+	// F again shows the same list with filter 1 now marked on.
+	dr.key("F")
+	if !strings.Contains(dr.view(), "[x] "+dr.m.quickFilters[0].Name) {
+		t.Errorf("the prompt does not mark %q as on the second time F is pressed:\n%s", dr.m.quickFilters[0].Name, dr.view())
+	}
+}
+
+func boardShown(dr *driver) int {
+	total := 0
+	for i := range dr.m.cols {
+		total += dr.m.columnLen(i)
+	}
+	return total
+}
+
+// f is a different key from capital F's quick filters, and opens the same
+// person/status/label picker the issue list uses.
+func TestBoard_FOpensThePersonStatusLabelPicker(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
+	dr.key("f")
+	if got := dr.pushes; len(got) != 1 || got[0].ID != filter.ViewID {
+		t.Fatalf("f pushed %+v, want one push of %q", got, filter.ViewID)
+	}
+}
+
+// The whole reason this exists: choosing a term narrows what the board shows,
+// without asking the site again, and choosing the same term again restores it.
+func TestBoard_ChoosingATermNarrowsTheBoardLocallyAndChoosingItAgainRestoresIt(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(16)), 120, 20)
+	before := boardShown(dr)
+	if before == 0 {
+		t.Fatal("the board answered with no cards before any term was chosen")
+	}
+	var term filter.Term
+	found := false
+	for i := range dr.m.issues {
+		if a := dr.m.issues[i].Assignee; a != nil && a.AccountID != "" {
+			term = filter.Term{Facet: filter.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("no generated issue carries an assignee, so this case proves nothing")
+	}
+
+	dr.send(filter.ChosenMsg{Term: term})
+	if got := boardShown(dr); got == 0 || got >= before {
+		t.Fatalf("choosing %s narrowed to %d cards, want fewer than the %d before", term.Label, got, before)
+	}
+	if dr.m.filteredOut == 0 {
+		t.Error("filteredOut is 0 after a term hid at least one card")
+	}
+	for i := range dr.m.cols {
+		for row := range dr.m.columnLen(i) {
+			iss := dr.m.issueAt(i, row)
+			if iss.Assignee == nil || iss.Assignee.AccountID != term.ID {
+				t.Errorf("%s is on the board and is not assigned to %s", iss.Key, term.Label)
+			}
+		}
+	}
+
+	dr.send(filter.ChosenMsg{Term: term})
+	if got := boardShown(dr); got != before {
+		t.Errorf("choosing %s again left %d cards, want the original %d", term.Label, got, before)
+	}
+	if dr.m.filteredOut != 0 {
+		t.Errorf("filteredOut is %d after the only term was toggled back off", dr.m.filteredOut)
+	}
+}
+
+// A board with more cards than are loaded says so when a term is chosen,
+// because the filter can only see what is already on screen.
+func TestBoard_ChoosingATermWhileMoreIsLoadedWarnsThatTheFilterCannotSeeThem(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
+	dr.m.more = true
+	var term filter.Term
+	for i := range dr.m.issues {
+		if a := dr.m.issues[i].Assignee; a != nil && a.AccountID != "" {
+			term = filter.Term{Facet: filter.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}
+			break
+		}
+	}
+	if term.ID == "" {
+		t.Fatal("no generated issue carries an assignee, so this case proves nothing")
+	}
+
+	dr.send(filter.ChosenMsg{Term: term})
+	if got := dr.lastStatus().Text; !strings.Contains(got, "more cards than are loaded") {
+		t.Errorf("choosing a term with more loaded said %q, want it to warn about unseen cards", got)
 	}
 }

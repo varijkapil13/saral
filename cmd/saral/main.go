@@ -67,6 +67,7 @@ type options struct {
 	// arg is the positional argument, which names a view, an issue or a Jira URL.
 	arg        string
 	theme      string
+	scheme     string
 	poll       time.Duration
 	mouse      bool
 	mouseSet   bool
@@ -81,6 +82,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fs.StringVar(&opt.project, "project", "", "project key to scope the session to; several capabilities are per-project")
 	fs.StringVar(&opt.profile, "profile", "", "profile to use (default: the active one)")
 	fs.StringVar(&opt.theme, "theme", "", "auto, dark, light or no-color")
+	fs.StringVar(&opt.scheme, "scheme", "", "default, nord, dracula, solarized or gruvbox")
 	fs.DurationVar(&opt.poll, "poll", 0, "re-read the focused view this often; off by default, and pauses when Jira rate-limits")
 	fs.BoolVar(&opt.mouse, "mouse", true, "enable mouse reporting")
 	fs.BoolVar(&opt.benchPaint, "bench-first-paint", false, "render one frame, print how long it took, and exit")
@@ -208,7 +210,15 @@ func build(opt options) (deps kernel.Deps, kopts []kernel.Option, notice string,
 		theme = profile.Theme
 	}
 	mode := kernel.ThemeModeFromEnv(os.Environ(), theme)
-	deps.Theme = kernel.NewTheme(mode, true, kernel.GlyphsFor(profile.Glyphs))
+	scheme := opt.scheme
+	if scheme == "" {
+		scheme = profile.Scheme
+	}
+	// An unrecognised scheme falls back to the default the same way an
+	// unrecognised theme falls back to auto: silently, at the flag, with the
+	// error surfaced instead when a profile tries to save one.
+	resolvedScheme, _ := kernel.ParseScheme(scheme)
+	deps.Theme = kernel.NewTheme(mode, true, kernel.GlyphsFor(profile.Glyphs), kernel.WithScheme(resolvedScheme))
 
 	mouse := cfg.Mouse
 	if opt.mouseSet {

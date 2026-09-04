@@ -77,12 +77,16 @@ type ranked struct {
 	freq  float64
 }
 
-// entry is one row on offer: a command the filter left, or an issue the cache
-// answered with. at indexes rows or hits accordingly.
+// entry is one row on offer: a command the filter left, an issue the cache
+// answered with, or the heading above a run of commands sharing a group. at
+// is meaningless on a heading.
 type entry struct {
-	issue bool
-	at    int
+	issue   bool
+	heading string
+	at      int
 }
+
+func (e entry) selectable() bool { return e.heading == "" }
 
 // mark names the row the selection is on, so that a list rebuilt for a reason
 // other than typing can land on it again.
@@ -107,6 +111,8 @@ type Model struct {
 	hits  []hit
 	shown []entry
 	ranks []ranked
+	// shownCmds excludes the headings len(shown) would count.
+	shownCmds int
 	// said is the drop count already reported, so a cache holding less than it
 	// looks is said once rather than on every keystroke over the same walk.
 	said int
@@ -348,10 +354,14 @@ func (m *Model) activate() tea.Cmd {
 		return nil
 	}
 	at := m.shown[m.cursor]
-	if at.issue {
+	switch {
+	case !at.selectable():
+		return nil
+	case at.issue:
 		return m.open(&m.hits[at.at])
+	default:
+		return kernel.RunCommand(m.rows[at.at].cmd.ID)
 	}
-	return kernel.RunCommand(m.rows[at.at].cmd.ID)
 }
 
 // open puts the detail pane over what the palette was opened from rather than
@@ -367,6 +377,9 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.shown)); i++ {
+		if !m.shown[i].selectable() {
+			continue
+		}
 		if !m.deps.Zones.Get(m.zone(m.shown[i])).InBounds(msg) {
 			continue
 		}
@@ -424,18 +437,38 @@ func (m *Model) refilter(keep mark) tea.Cmd {
 	// The filter decides which commands and frecency orders the equals, so a
 	// habit never demotes a better match: the query is the later intent.
 	sortRanks(m.ranks)
-	for _, rk := range m.ranks {
+	m.shownCmds = len(m.ranks)
+	// Headings are drawn only unfiltered: the moment anything is typed, rank
+	// beats grouping and a heading is a row that cannot be chosen.
+	group, headed := "", text == ""
+	for i, rk := range m.ranks {
+		if headed {
+			if g := m.rows[rk.at].cmd.Group; i == 0 || g != group {
+				group = g
+				m.shown = append(m.shown, entry{heading: group})
+			}
+		}
 		m.shown = append(m.shown, entry{at: rk.at})
 	}
 	cmd := m.search(text, now)
-	m.cursor = 0
+	m.cursor = m.firstSelectable()
 	if keep.id != "" {
-		if at := slices.IndexFunc(m.shown, func(e entry) bool { return m.markOf(e) == keep }); at >= 0 {
+		if at := slices.IndexFunc(m.shown, func(e entry) bool { return e.selectable() && m.markOf(e) == keep }); at >= 0 {
 			m.cursor = at
 		}
 	}
 	m.scrollToCursor()
 	return cmd
+}
+
+// firstSelectable skips the heading a fresh, unfiltered list opens on.
+func (m *Model) firstSelectable() int {
+	for i, e := range m.shown {
+		if e.selectable() {
+			return i
+		}
+	}
+	return 0
 }
 
 // sortRanks orders a filtered run best first, with a habit breaking a tie and
@@ -456,12 +489,17 @@ func sortRanks(ranks []ranked) {
 	})
 }
 
-// markOf names one row, whichever half of the list it came from.
+// markOf names one row, whichever half of the list it came from; a heading
+// names nothing.
 func (m *Model) markOf(at entry) mark {
-	if at.issue {
+	switch {
+	case !at.selectable():
+		return mark{}
+	case at.issue:
 		return mark{issue: true, id: m.hits[at.at].key}
+	default:
+		return mark{id: m.rows[at.at].cmd.ID}
 	}
-	return mark{id: m.rows[at.at].cmd.ID}
 }
 
 func (m *Model) selection() mark {
@@ -486,16 +524,38 @@ func (m *Model) onIssue() bool {
 	return m.cursor < len(m.shown) && m.shown[m.cursor].issue
 }
 
+// moveTo steps over a heading rather than resting on it.
 func (m *Model) moveTo(at int) {
 	if len(m.shown) == 0 {
 		m.cursor, m.top = 0, 0
 		return
 	}
-	m.cursor = min(max(at, 0), len(m.shown)-1)
+	at = min(max(at, 0), len(m.shown)-1)
+	step := 1
+	if at < m.cursor {
+		step = -1
+	}
+	for !m.shown[at].selectable() {
+		next := at + step
+		if next < 0 || next >= len(m.shown) {
+			break
+		}
+		at = next
+	}
+	if !m.shown[at].selectable() {
+		return
+	}
+	m.cursor = at
 	m.scrollToCursor()
 }
 
+// scrollToCursor is a no-op before the first SizeMsg: rowsHeight floors at 1
+// with no real height yet, which would strand top past row zero once a real
+// size arrives.
 func (m *Model) scrollToCursor() {
+	if m.height <= 0 {
+		return
+	}
 	h := m.rowsHeight()
 	if m.cursor < m.top {
 		m.top = m.cursor

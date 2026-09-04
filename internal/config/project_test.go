@@ -79,3 +79,29 @@ func TestValidate_RefusesAProjectThatIsNotAKey(t *testing.T) {
 		t.Errorf("error %q does not quote the offending value", err)
 	}
 }
+
+func TestValidate_AcceptsEveryKnownSchemeAndRefusesAnythingElse(t *testing.T) {
+	t.Parallel()
+
+	base := Profile{
+		Name: "work", Site: "example.atlassian.net", Email: "you@example.com",
+		Token: TokenSource{Env: "JIRA_TOKEN"},
+	}
+	for _, scheme := range []string{"", "default", "nord", "dracula", "solarized", "gruvbox"} {
+		p := base
+		p.Scheme = scheme
+		if err := p.Validate(); err != nil {
+			t.Errorf("scheme %q was refused: %v", scheme, err)
+		}
+	}
+
+	p := base
+	p.Scheme = "monokai"
+	err := p.Validate()
+	if err == nil {
+		t.Fatal("an unknown colour scheme was accepted")
+	}
+	if !strings.Contains(err.Error(), "monokai") {
+		t.Errorf("error %q does not quote the offending value", err)
+	}
+}

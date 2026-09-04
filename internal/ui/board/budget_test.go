@@ -52,12 +52,15 @@ func TestBudget_BoardColumnsAreVirtualizedAsWellAsItsRows(t *testing.T) {
 // construction, which is what says the miss itself is bounded: two lines are
 // rebuilt and two cards with them, not a screen of either.
 //
-// 61 on an M2 Pro and 63 compiled for amd64, every run of each.
+// 93 on an M2 Pro, every run: the ceiling moved from 72 when a card's key
+// picked up the status category colour a column caption already carries —
+// one more Style.Render per resting card, the same call list.go's own status
+// cell already makes and already budgets for.
 func TestBudget_ABoardMemoMissCostsTwoLinesAndNotAScreen(t *testing.T) {
 	got := testing.Benchmark(BenchmarkBoardWalk10k).AllocsPerOp()
-	t.Logf("a frame that moves the cursor one card: %d allocations, ceiling 72", got)
-	if got > 72 {
-		t.Errorf("moving the cursor one card allocates %d times, over the ceiling of 72; it measured 61 "+
+	t.Logf("a frame that moves the cursor one card: %d allocations, ceiling 105", got)
+	if got > 105 {
+		t.Errorf("moving the cursor one card allocates %d times, over the ceiling of 105; it measured 93 "+
 			"when the ceiling was set, and a screen of thirty-six lines would be an order of magnitude more", got)
 	}
 }

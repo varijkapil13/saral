@@ -106,6 +106,7 @@ func TestServer_ServesEveryDefaultRouteWithItsFixture(t *testing.T) {
 		{"board issues", http.MethodGet, "/rest/agile/1.0/board/10/issue", http.StatusOK, "board_issues.json"},
 		{"board backlog", http.MethodGet, "/rest/agile/1.0/board/10/backlog", http.StatusOK, "board_issues.json"},
 		{"board epics", http.MethodGet, "/rest/agile/1.0/board/10/epic", http.StatusOK, "board_epics.json"},
+		{"board quick filters", http.MethodGet, "/rest/agile/1.0/board/10/quickfilter", http.StatusOK, "board_quickfilters.json"},
 		{"plans refused", http.MethodGet, "/rest/api/3/plans/plan", http.StatusForbidden, "plans_403.json"},
 		{"bulk move submitted", http.MethodPost, "/rest/api/3/bulk/issues/move", http.StatusCreated, "bulkmove_submit.json"},
 		{"generic task", http.MethodGet, "/rest/api/3/task/11072", http.StatusOK, "task_complete.json"},

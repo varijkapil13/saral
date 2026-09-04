@@ -20,7 +20,7 @@ getting thirty per cent worse with room to spare.
 |---|---|---|
 | Cold start → first paint (no cache) | **< 250 ms** | `ci.yml`, best of five `saral --bench-first-paint` runs against an empty cache directory |
 | Cold start → first paint (warm cache) | < 60 ms | *measured, not guarded.* `hyperfine` on `saral --bench-first-paint`. Warming the cache needs a site, so CI cannot; the in-process half is `TestBudget_FirstPaintFromCache` |
-| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the timeline, the palette, the form and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, and the regression gate reads the same means, so p99 is still unmeasured here and stays on the list below |
+| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the timeline, the palette, the form, settings and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, and the regression gate reads the same means, so p99 is still unmeasured here and stays on the list below |
 | Scroll a 10k-row list | 1 allocation a frame | the frame string `View` returns, and nothing behind it. Asserted with the mouse on, under a kept filter and under terms in force |
 | Scroll any other list | the frame and the lines the keystroke changed | every view that scrolls asserts `allocs/op` against a ceiling and against the same view at twenty rows: the backlog, the board, the comment thread, the attachment pane, the filter picker, the form, the move confirm screen, the palette, plans, releases, sprints and the timeline |
 | Pan a chart across a thousand years of calendar | the allocations and the bytes that ten years costs, and **< 16 ms** a frame over either span | the timeline is the one view that scrolls in two dimensions. `TestBudget_TimelinePanningCostsTheSameOverAThousandYearsAsOverTen` compares the two runs on the counts and the bytes, holds the count to a ceiling of 1700 besides, and holds each frame's time against the budget rather than against the other run |
@@ -198,6 +198,9 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/richtext` | `TestBudget_Render` |
 | `internal/ui/richtext` | `TestBudget_ScalesWithTheDocument` |
 | `internal/ui/richtext` | `TestBudget_Summary` |
+| `internal/ui/settings` | `TestBudget_SettingsKeystrokeToFrame` |
+| `internal/ui/settings` | `TestBudget_SettingsRowRenderCostsWhatAMemoMissPays` |
+| `internal/ui/settings` | `TestBudget_SettingsRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/sprint` | `TestBudget_SprintRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/sprint` | `TestBudget_SprintScrollingCostsTheSameOnTwoThousandSprintsAsOnTwenty` |
 | `internal/ui/sprint` | `TestBudget_SprintsFullRedrawAt200x60` |

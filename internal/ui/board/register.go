@@ -35,6 +35,7 @@ func init() {
 		ID:    "board.open",
 		Title: "Board",
 		Group: "Go to",
+		Kind:  kernel.KindGoTo,
 		Keys:  []string{kernel.SlotGesture(slot)},
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
 	})

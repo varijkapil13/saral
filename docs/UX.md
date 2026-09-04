@@ -143,6 +143,9 @@ quit                   q / ctrl+c     only from a root view, and only when nothi
                                       is holding a draft
 palette                ctrl+k         everything, fuzzy; opens over what you were in, esc returns.
                                       the one global a view taking typing cannot swallow
+settings               ctrl+, / g s   opens over what you were in, esc returns — the state the palette
+                                      used to carry as nine rows, now one. docs/SETTINGS.md.
+                                      g s reaches it the way g i reaches the palette
 search in view         /              filter rows live
 clear that filter      ctrl+g         from the browsing state; esc does it while still typing
 filter by a value      f              pick a facet, then one of the values this site holds

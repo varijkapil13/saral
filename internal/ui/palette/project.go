@@ -22,6 +22,46 @@ const projectViewID = "palette.project"
 
 const switchCommandID = "project.switch"
 
+// sessionSection is the settings section session.project registers into. It is
+// not exported: the settings screen groups by the section name kernel.Settings
+// hands back, not by a shared constant.
+const sessionSection = "Session"
+
+func init() { kernel.RegisterSetting(projectSetting()) }
+
+// projectSetting is session.project: state rather than a verb, so it is a
+// setting and not only a command, per docs/SETTINGS.md. Options answers with
+// the scope already in force rather than the site's whole list — the site is
+// read asynchronously, inside the picker this row opens, and Setting.Options
+// has no room for a read in flight — which keeps it consistent with Value by
+// construction rather than by convention.
+//
+// Switching project is not written anywhere: cmd/saral reads profile.Project
+// once at startup and nothing here persists a later switch, so the scope is
+// this run's alone and Scope says so.
+func projectSetting() kernel.Setting {
+	return kernel.Setting{
+		ID:      "session.project",
+		Section: sessionSection,
+		Order:   0,
+		Title:   "Project",
+		Summary: `what a search means by "this project", and what the probe ran against`,
+		Kind:    kernel.KindChoice,
+		Scope:   kernel.ScopeSession,
+		Options: func(d kernel.Deps) []kernel.SettingOption {
+			if d.Project == "" {
+				return []kernel.SettingOption{{ID: "", Label: "The whole site"}}
+			}
+			return []kernel.SettingOption{{ID: d.Project, Label: d.Project}}
+		},
+		Value: func(d kernel.Deps) string { return d.Project },
+		Set:   func(_ kernel.Deps, id string) tea.Cmd { return kernel.SetProject(id) },
+		OpenPicker: func(d kernel.Deps) tea.Cmd {
+			return kernel.Push(projectViewID, "Project", newProject(d))
+		},
+	}
+}
+
 // lookTimeout bounds the one read the picker makes. Somebody is waiting on this
 // one, so it is shorter than a setup step's.
 const lookTimeout = 15 * time.Second

@@ -131,6 +131,11 @@ func GlyphsFor(name string) Glyphs {
 	return UnicodeGlyphs()
 }
 
+// IsASCII reports whether these are the ASCII fallback glyphs rather than the
+// Unicode default. Glyphs holds a slice field, so it is not comparable with
+// ==; Bullet is enough to tell the two sets this program ships apart.
+func (g Glyphs) IsASCII() bool { return g.Bullet == ASCIIGlyphs().Bullet }
+
 // Theme holds every style the UI uses, built once so that nothing constructs a
 // lipgloss.Style inside a render loop. Gen changes whenever the theme is
 // rebuilt, which is what row memoization keys off.
@@ -140,6 +145,11 @@ type Theme struct {
 	Dark   bool
 	Color  bool
 	Glyphs Glyphs
+	// Scheme is which set of colours Base through Overlay below were built
+	// from. It travels with the theme so that switching mode (SwitchTheme)
+	// without being told a scheme keeps the one already in force, the same way
+	// switching scheme keeps the mode.
+	Scheme Scheme
 
 	Base       lipgloss.Style
 	Muted      lipgloss.Style
@@ -172,15 +182,36 @@ type Theme struct {
 
 var themeGen atomic.Int64
 
+// ThemeOption configures NewTheme beyond mode, dark and glyphs. It exists so
+// that the scheme is optional at every one of NewTheme's existing call
+// sites — a caller that never heard of one still gets DefaultScheme, which is
+// the colours this program always drew.
+type ThemeOption func(*themeConfig)
+
+type themeConfig struct {
+	scheme Scheme
+}
+
+// WithScheme sets which named set of colours the theme is built from. Not
+// given, a theme is built from DefaultScheme.
+func WithScheme(s Scheme) ThemeOption {
+	return func(c *themeConfig) { c.scheme = s }
+}
+
 // NewTheme builds the styles for a mode. dark is only consulted when the mode
 // is Auto; it comes from the terminal's reported background colour.
-func NewTheme(mode ThemeMode, dark bool, glyphs Glyphs) *Theme {
+func NewTheme(mode ThemeMode, dark bool, glyphs Glyphs, opts ...ThemeOption) *Theme {
+	cfg := themeConfig{scheme: DefaultScheme}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	t := &Theme{
 		Gen:    int(themeGen.Add(1)),
 		Mode:   mode,
 		Dark:   dark,
 		Color:  mode != ThemeNoColor,
 		Glyphs: glyphs,
+		Scheme: cfg.scheme,
 	}
 	switch mode {
 	case ThemeDark:
@@ -190,7 +221,7 @@ func NewTheme(mode ThemeMode, dark bool, glyphs Glyphs) *Theme {
 	case ThemeAuto, ThemeNoColor:
 	}
 	if t.Color {
-		t.colored()
+		t.colored(cfg.scheme.colors(t.Dark))
 	} else {
 		t.plain()
 	}
@@ -238,19 +269,13 @@ func (t *Theme) plain() {
 	}
 }
 
-func (t *Theme) colored() {
-	pick := lipgloss.LightDark(t.Dark)
-	var (
-		fg       = pick(lipgloss.Color("#1f2328"), lipgloss.Color("#e6edf3"))
-		muted    = pick(lipgloss.Color("#6e7781"), lipgloss.Color("#8b949e"))
-		accent   = pick(lipgloss.Color("#0550ae"), lipgloss.Color("#79c0ff"))
-		danger   = pick(lipgloss.Color("#cf222e"), lipgloss.Color("#ff7b72"))
-		warning  = pick(lipgloss.Color("#9a6700"), lipgloss.Color("#d29922"))
-		success  = pick(lipgloss.Color("#1a7f37"), lipgloss.Color("#3fb950"))
-		surface  = pick(lipgloss.Color("#eaeef2"), lipgloss.Color("#161b22"))
-		selected = pick(lipgloss.Color("#ddf4ff"), lipgloss.Color("#1f6feb"))
-		onAccent = pick(lipgloss.Color("#0a3069"), lipgloss.Color("#f0f6fc"))
-	)
+// colored builds the styles from one scheme's nine roles, already resolved
+// for this theme's mode by the caller — colored itself never asks whether it
+// is drawing light or dark, so a scheme with the two reversed cannot make it
+// draw the wrong one.
+func (t *Theme) colored(c schemeColors) {
+	fg, muted, accent, danger, warning, success, surface, selected, onAccent :=
+		c.fg, c.muted, c.accent, c.danger, c.warning, c.success, c.surface, c.selected, c.onAccent
 	base := lipgloss.NewStyle().Foreground(fg)
 	t.Base = base
 	t.Muted = lipgloss.NewStyle().Foreground(muted)
@@ -288,41 +313,107 @@ func (t *Theme) colored() {
 	}
 }
 
-// The theme is switchable while the program runs. It registers commands rather
-// than keys: there is no letter left that would not also be a letter somebody
-// types into a field, and docs/UX.md points at the palette for everything that
-// has no key of its own.
-func init() { registerThemeCommands() }
+// themeModes is every mode the theme setting offers, in the order it draws
+// them.
+var themeModes = []ThemeMode{ThemeAuto, ThemeDark, ThemeLight, ThemeNoColor}
 
-func registerThemeCommands() {
-	for _, mode := range []ThemeMode{ThemeAuto, ThemeDark, ThemeLight, ThemeNoColor} {
-		RegisterCommand(Command{
-			ID:    "theme." + mode.String(),
-			Title: mode.title(),
-			Group: "Appearance",
-			Run:   func(d Deps) tea.Cmd { return SwitchTheme(d, mode) },
-		})
+// The theme and the glyph set are both switchable while the program runs,
+// registered as settings: state that is, and stays that way until changed,
+// rather than a verb the palette runs once. docs/SETTINGS.md is the design.
+func init() {
+	RegisterSetting(themeSetting())
+	RegisterSetting(glyphsSetting())
+}
+
+func themeSetting() Setting {
+	return Setting{
+		ID:      "appearance.theme",
+		Section: appearanceSection,
+		Order:   0,
+		Title:   "Theme",
+		Summary: "how colours are chosen",
+		Kind:    KindChoice,
+		Scope:   ScopeProfile,
+		Options: func(Deps) []SettingOption {
+			out := make([]SettingOption, len(themeModes))
+			for i, mode := range themeModes {
+				out[i] = SettingOption{ID: mode.String(), Label: mode.label()}
+			}
+			return out
+		},
+		Value: func(d Deps) string {
+			if d.Theme == nil {
+				return ThemeAuto.String()
+			}
+			return d.Theme.Mode.String()
+		},
+		Set: func(d Deps, id string) tea.Cmd {
+			mode, err := ParseThemeMode(id)
+			if err != nil {
+				return nil
+			}
+			return SwitchTheme(d, mode)
+		},
+		// The sentence is noColorForced's own, not a second copy of it: SwitchTheme
+		// refuses a colour mode with exactly these words, and the two must not drift
+		// apart.
+		Unavailable: func(Deps) string {
+			if forced, why := noColorForced(); forced {
+				return why
+			}
+			return ""
+		},
 	}
 }
 
-// title is how the palette offers the mode.
-func (m ThemeMode) title() string {
+func glyphsSetting() Setting {
+	return Setting{
+		ID:      "appearance.glyphs",
+		Section: appearanceSection,
+		Order:   2,
+		Title:   "Glyphs",
+		Summary: "box drawing, or plain ASCII for a font you cannot trust",
+		Kind:    KindChoice,
+		Scope:   ScopeProfile,
+		Options: func(Deps) []SettingOption {
+			return []SettingOption{
+				{ID: "unicode", Label: "unicode"},
+				{ID: "ascii", Label: "ascii"},
+			}
+		},
+		Value: func(d Deps) string {
+			if d.Theme != nil && d.Theme.Glyphs.IsASCII() {
+				return "ascii"
+			}
+			return "unicode"
+		},
+		Set: func(d Deps, id string) tea.Cmd { return SwitchGlyphs(d, id == "ascii") },
+	}
+}
+
+// label is the mode as a settings row names it, which is a value and not an
+// instruction: the row already says it is the theme, and "Theme: use the dark
+// theme" reads as a command left over from the palette this moved out of.
+func (m ThemeMode) label() string {
 	switch m {
 	case ThemeDark:
-		return "Use the dark theme"
+		return "dark"
 	case ThemeLight:
-		return "Use the light theme"
+		return "light"
 	case ThemeNoColor:
-		return "Turn colour off"
+		return "no colour"
 	default:
-		return "Follow the terminal's own colours"
+		return "auto"
 	}
 }
 
-// SwitchTheme rebuilds the styles in a new mode and keeps the choice. The glyph
-// set comes along unchanged: it answers a question about the font rather than
-// about colour, and a session that fell back to ASCII must not quietly get box
-// drawing back.
+// SwitchTheme rebuilds the styles in a new mode and keeps the choice. The
+// glyph set and the colour scheme both come along unchanged: the glyphs answer
+// a question about the font rather than about colour, and a session that fell
+// back to ASCII must not quietly get box drawing back — and the scheme answers
+// a question about which colours, so switching mode without being told a
+// scheme must not silently revert a Nord session to the default palette while
+// the profile still says otherwise.
 //
 // Auto asks the terminal for its background again rather than reusing the answer
 // the old theme settled on, because that is the whole of what auto means and a
@@ -331,11 +422,11 @@ func SwitchTheme(d Deps, mode ThemeMode) tea.Cmd {
 	if forced, why := noColorForced(); forced && mode != ThemeNoColor {
 		return func() tea.Msg { return StatusMsg{Text: why, Level: LevelWarn} }
 	}
-	dark, glyphs := true, UnicodeGlyphs()
+	dark, glyphs, scheme := true, UnicodeGlyphs(), DefaultScheme
 	if d.Theme != nil {
-		dark, glyphs = d.Theme.Dark, d.Theme.Glyphs
+		dark, glyphs, scheme = d.Theme.Dark, d.Theme.Glyphs, d.Theme.Scheme
 	}
-	next := NewTheme(mode, dark, glyphs)
+	next := NewTheme(mode, dark, glyphs, WithScheme(scheme))
 	cmds := []tea.Cmd{
 		func() tea.Msg { return ThemeMsg{Theme: next} },
 		saveTheme(d.Site, mode),
@@ -344,6 +435,25 @@ func SwitchTheme(d Deps, mode ThemeMode) tea.Cmd {
 		cmds = append(cmds, tea.RequestBackgroundColor)
 	}
 	return tea.Batch(cmds...)
+}
+
+// SwitchGlyphs rebuilds the styles with a new glyph set and keeps the choice.
+// The mode and the scheme both come along unchanged: glyphs answer a question
+// about the font, not about light, dark or which colours.
+func SwitchGlyphs(d Deps, ascii bool) tea.Cmd {
+	mode, dark, scheme := ThemeAuto, true, DefaultScheme
+	if d.Theme != nil {
+		mode, dark, scheme = d.Theme.Mode, d.Theme.Dark, d.Theme.Scheme
+	}
+	glyphs := UnicodeGlyphs()
+	if ascii {
+		glyphs = ASCIIGlyphs()
+	}
+	next := NewTheme(mode, dark, glyphs, WithScheme(scheme))
+	return tea.Batch(
+		func() tea.Msg { return ThemeMsg{Theme: next} },
+		saveGlyphs(d.Site, glyphs),
+	)
 }
 
 // noColorForced reports whether the environment has already said no colour, in
@@ -413,6 +523,63 @@ func writeTheme(site string, mode ThemeMode) error {
 		return nil
 	}
 	profile.Theme = value
+	cfg.Profiles[profile.Name] = profile
+	return cfg.Save(path)
+}
+
+// saveGlyphs writes the glyph set into the profile it came from, the same
+// shape saveTheme already answers in.
+func saveGlyphs(site string, g Glyphs) tea.Cmd {
+	return func() tea.Msg {
+		switch err := writeGlyphs(site, g); {
+		case err == nil:
+			return nil
+		case errors.Is(err, config.ErrNoConfig), errors.Is(err, config.ErrNoProfile):
+			return StatusMsg{
+				Text:  "the glyphs changed for this session; there is no profile to save it to",
+				Level: LevelInfo,
+			}
+		default:
+			return StatusMsg{
+				Text:  "the glyphs changed for this session, but saving it failed: " + err.Error(),
+				Level: LevelWarn,
+			}
+		}
+	}
+}
+
+// writeGlyphs reads the whole file and writes it back with one field changed,
+// for the reason writeTheme already does: Save writes the profile it is
+// handed and nothing else, so a fresh Profile built from what is on screen
+// would drop the saved queries, the timeline field names and the theme.
+func writeGlyphs(site string, g Glyphs) error {
+	path, err := config.Path()
+	if err != nil {
+		return err
+	}
+	cfg, err := config.LoadFile(path)
+	if err != nil {
+		return err
+	}
+	profile, err := cfg.Current()
+	if err != nil {
+		return err
+	}
+	if site != "" && profile.Site != site {
+		return fmt.Errorf("this session is on %s and the active profile %q is on %s, so nothing was written",
+			site, profile.Name, profile.Site)
+	}
+	// Unicode is the absence of a glyph set in the file rather than a value, so
+	// that a profile that never chose and a profile that chose unicode read the
+	// same.
+	value := "ascii"
+	if !g.IsASCII() {
+		value = ""
+	}
+	if profile.Glyphs == value {
+		return nil
+	}
+	profile.Glyphs = value
 	cfg.Profiles[profile.Name] = profile
 	return cfg.Save(path)
 }

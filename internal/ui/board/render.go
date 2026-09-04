@@ -70,7 +70,7 @@ func planLayout(width, rows, columns int) layout {
 // the prompt a gesture in progress puts under them.
 func (m *Model) rowsHeight() int {
 	h := m.height - chromeLines
-	if m.card != nil || m.moving {
+	if m.card != nil || m.moving || m.pendingFilter {
 		h--
 	}
 	return max(h, 1)
@@ -227,7 +227,7 @@ func (m *Model) View() string {
 		}
 	}
 	lines = append(lines, rule)
-	if m.card != nil || m.moving {
+	if m.card != nil || m.moving || m.pendingFilter {
 		lines = append(lines, m.prompt())
 	}
 	m.lines = lines
@@ -316,8 +316,19 @@ func renderCard(iss *jira.Issue, cell int, selected, inHand bool, st *styles, t 
 	if left := room - ansi.StringWidth(estimate); left < minSummary {
 		estimate = ""
 	}
-	body := iss.Key
-	if left := room - ansi.StringWidth(estimate) - ansi.StringWidth(body) - 1; left > 0 {
+	key := iss.Key
+	// The key carries the status category's colour while the card is resting:
+	// a column already says which status something is in, so this is which
+	// kind of status. Selected and held both invert the whole card, which a
+	// second colour on the key would only fight, so neither applies it — and
+	// it goes on before truncation, never after, so a narrow cell cutting the
+	// key cannot separate the colour from what it was coloring.
+	renderedKey := key
+	if !selected && !inHand {
+		renderedKey = st.categories[categoryIndex(iss.Status.Category)].Render(key)
+	}
+	body := renderedKey
+	if left := room - ansi.StringWidth(estimate) - ansi.StringWidth(key) - 1; left > 0 {
 		body += " " + ansi.Truncate(iss.Summary, left, ell)
 	}
 	out := mark + padTruncate(body, max(room-ansi.StringWidth(estimate), 0), ell) + estimate
@@ -422,30 +433,32 @@ func (m *Model) estimateOf(col int) float64 {
 // summaryKey is everything the top line is built from, so that the line is
 // rebuilt when one of them moves and never otherwise.
 type summaryKey struct {
-	board      string
-	width, gen int
-	columns    int
-	cards      int
-	unmapped   int
-	shown      int
-	boards     int
-	more       bool
-	loading    bool
-	loaded     bool
-	failed     bool
-	ordering   jira.Ordering
-	estimates  bool
-	checked    int64
+	board       string
+	width, gen  int
+	columns     int
+	cards       int
+	unmapped    int
+	filteredOut int
+	shown       int
+	boards      int
+	more        bool
+	loading     bool
+	loaded      bool
+	failed      bool
+	ordering    jira.Ordering
+	estimates   bool
+	checked     int64
+	filters     string
 }
 
 func (m *Model) summaryKey() summaryKey {
 	return summaryKey{
 		board: m.boardName(), width: m.width, gen: m.styles.gen,
 		columns: len(m.plan.columns), cards: len(m.issues), unmapped: m.unmapped,
-		shown: m.lay.cols, boards: len(m.all), more: m.more,
+		filteredOut: m.filteredOut, shown: m.lay.cols, boards: len(m.all), more: m.more,
 		loading: m.loading, loaded: m.loaded, failed: m.failure != nil,
 		ordering: m.plan.ordering, estimates: m.plan.estimates,
-		checked: m.checked.UnixNano(),
+		checked: m.checked.UnixNano(), filters: m.quickFilterLine(),
 	}
 }
 
@@ -483,10 +496,12 @@ func (m *Model) twoCells(left, right string, ls, rs lipgloss.Style) string {
 func (m *Model) boardTitle() string {
 	name := m.boardName()
 	if name == "" {
-		return "Board"
+		name = "Board"
+	} else if len(m.all) > 1 {
+		name += " (" + strconv.Itoa(m.at+1) + " of " + strconv.Itoa(len(m.all)) + ")"
 	}
-	if len(m.all) > 1 {
-		return name + " (" + strconv.Itoa(m.at+1) + " of " + strconv.Itoa(len(m.all)) + ")"
+	if line := m.quickFilterLine(); line != "" {
+		name += " · " + line
 	}
 	return name
 }
@@ -512,6 +527,9 @@ func (m *Model) counts() string {
 	if m.unmapped > 0 {
 		parts = append(parts, strconv.Itoa(m.unmapped)+" in no column")
 	}
+	if m.filteredOut > 0 {
+		parts = append(parts, strconv.Itoa(m.filteredOut)+" hidden by filter")
+	}
 	parts = append(parts, m.plan.orderWords())
 	if !m.checked.IsZero() {
 		parts = append(parts, "checked "+m.checked.In(m.deps.Caps.Location()).Format("15:04"))
@@ -525,27 +543,49 @@ func (m *Model) counts() string {
 }
 
 // prompt is the line a gesture in progress puts under the grid: which issue is
-// in hand, where it is going and what the two keys do. It is the named
-// confirmation a move gets — the words say what will change before either
-// gesture commits it.
+// in hand, where it is going and what the two keys do, or which quick filters
+// f is waiting for a digit to pick one of. It is the named confirmation a
+// gesture gets — the words say what will change before it commits.
 func (m *Model) prompt() string {
 	ell := m.deps.Theme.Glyphs.Ellipsis
-	if m.card == nil {
-		if !m.moving {
-			return strings.Repeat(" ", m.width)
+	switch {
+	case m.pendingFilter:
+		return m.quickFilterPrompt()
+	case m.card != nil:
+		said := "move " + m.card.key + " from " + m.card.status + " to " +
+			m.plan.columns[m.card.target].name
+		hint := dropHint
+		if m.moving {
+			hint = m.deps.Theme.Glyphs.Stale + " asking the site"
 		}
+		if ansi.StringWidth(hint) > m.width/2 {
+			hint = defaultKeys().Drop.Help().Key
+		}
+		return m.twoCells(said, hint+"  ", m.styles.aimed, m.styles.muted)
+	case m.moving:
 		return padCells(m.styles.muted.Render("  asking the site for the move"+ell), m.width, ell)
+	default:
+		return strings.Repeat(" ", m.width)
 	}
-	said := "move " + m.card.key + " from " + m.card.status + " to " +
-		m.plan.columns[m.card.target].name
-	hint := dropHint
-	if m.moving {
-		hint = m.deps.Theme.Glyphs.Stale + " asking the site"
+}
+
+// quickFilterPrompt lists the board's own quick filters while f waits for the
+// digit that picks one, each numbered the way toggleQuickFilter reads them and
+// marked for whether it is already on. Without this the gesture is exactly the
+// one K7 found for g itself: a key that answers nothing until the digit after
+// it, with no way to learn what the digit does first.
+func (m *Model) quickFilterPrompt() string {
+	ell := m.deps.Theme.Glyphs.Ellipsis
+	parts := make([]string, 0, len(m.quickFilters))
+	for i, qf := range m.quickFilters {
+		mark := " "
+		if m.qfOn[qf.ID] {
+			mark = "x"
+		}
+		parts = append(parts, strconv.Itoa(i+1)+" ["+mark+"] "+qf.Name)
 	}
-	if ansi.StringWidth(hint) > m.width/2 {
-		hint = defaultKeys().Drop.Help().Key
-	}
-	return m.twoCells(said, hint+"  ", m.styles.aimed, m.styles.muted)
+	said := "quick filters — " + strings.Join(parts, "  ")
+	return padCells(m.styles.aimed.Render(ansi.Truncate("  "+said, m.width, ell)), m.width, ell)
 }
 
 // appendEmpty says which kind of empty this is, and keeps saying it. Six are
@@ -683,3 +723,13 @@ func padTruncate(s string, width int, ellipsis string) string {
 // board measuring in points holds 3 far more often than 3.5, and "3.0" in every
 // cell of a narrow column is a column of noise.
 func trimNumber(n float64) string { return strconv.FormatFloat(n, 'f', -1, 64) }
+
+// categoryIndex is the position a status's category indexes styles.categories
+// at, with anything outside the four the site can answer read as unknown
+// rather than indexed out of bounds.
+func categoryIndex(c jira.StatusCategory) int {
+	if c < jira.CategoryUnknown || c > jira.CategoryDone {
+		return int(jira.CategoryUnknown)
+	}
+	return int(c)
+}

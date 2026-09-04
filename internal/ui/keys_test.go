@@ -28,6 +28,9 @@ var keyOwners = map[string]string{
 	// the gesture it teaches is in the global keymap and no view's footer shows
 	// it. GlobalScope names that keymap.
 	"views.switch": kernel.GlobalScope,
+	// ctrl+, and g s are GlobalKeys.Settings, not a footer slot: settings.open
+	// is reached the same way from every view, so no one view's footer shows it.
+	"settings.open": kernel.GlobalScope,
 
 	"comments.write":          comment.ViewID,
 	"comments.edit":           comment.ViewID,

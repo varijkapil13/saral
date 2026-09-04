@@ -1045,6 +1045,86 @@ are guesses.
   reorder when the board exposes a rank field. Takes the footer slot PC.2 assigns it; the kernel
   rejects a duplicate at startup, so this cannot be settled by guessing.
 
+- [x] **P6.4 — Board quick filters, and the person/status/label picker on the board too** ·
+  [#136](https://github.com/varijkapil13/saral/issues/136) ·
+  **owns** `pkg/jira/{port,types,roles}.go` (the `QuickFilters` amendment), `pkg/jira/cloud/quickfilter.go`
+  and its tests, the `boardJQL` composition and its tests in `pkg/jira/cloud/board.go`,
+  `pkg/jira/jiratest/{fake,boardissues_test}.go` (the `QuickFilters` half), `pkg/jira/jiratest/fixtures/board_quickfilters*.json`,
+  `internal/ui/board/{quickfilter,terms,keys}.go` and the wiring in `board.go`, `render.go` and `plan.go`,
+  `docs/{API-NOTES,ROADMAP}.md`
+  A board's own quick filters — "Only My Issues", "Recently Updated" — were unread: `GET
+  /rest/agile/1.0/board/{id}/quickfilter` is a **separate** endpoint from `/configuration`, paged the
+  way `/board` and `/board/{id}/sprint` are, and nothing on the port named it.
+  `BoardQuery` gained `QuickFilters []string`, ANDed onto `SubQuery` into the one `jql` parameter the
+  endpoint takes — bracketed the same way `SubQuery` already is, so a filter with an OR at the top of
+  it cannot widen the board rather than narrow it. The type doc's existing "no further narrowing" rule
+  stands: every entry has to be JQL a caller read back from `QuickFilters`, never one it composed, so
+  what it narrows to is a state the site's own board draws too.
+  **The gesture is `F` (capital) then a digit**, not `1`-`9` alone: the kernel already claims the bare
+  digits for a root view's saved queries, so a board's own prefix buffers the way `g` does, and the
+  digit is the 1-indexed position `QuickFilters` answered in. A board with none says so rather than
+  latching a digit that would answer nothing, and a digit past the count says so and changes nothing.
+  Toggling re-reads the board with the result; the title names whichever are on.
+  **`F` on its own answers nothing until the digit that completes it — the same gap K7 found and fixed
+  for `g` itself.** So it does not stop at buffering: the row under the grid lists every quick filter
+  against the digit that picks it and marks whichever are already on, the way K7's own overlay lists a
+  view against the digit that switches to it, before either key is pressed rather than only after.
+  `jiratest.Fake` mints two quick filters on a Scrum board and none on a Kanban one — not a feature
+  detection real Jira makes, but the split gives a test both a populated and a well-formed empty
+  answer without inventing an option nothing else needs yet — and applies them through the same small
+  JQL subset `Search` already reads with, so `assignee = currentUser()` and `assignee is empty` are
+  real narrowing and not just echoed back.
+  **`f` opens the same person/status/label picker the issue list uses**, over the board too — reported
+  directly after the packet above shipped: quick filters and this picker are different features on
+  purpose. The first cut gave quick filters the lowercase key; changed on request so `f` is the picker
+  and `F` is quick filters, and both were also added to the footer's action row, where neither had
+  been at all — only the `?` overlay and the right-click menu had named them, which is why pressing
+  either looked like nothing had happened. Unlike a quick filter, a term
+  chosen here is never sent to the site: `BoardQuery`'s "no further narrowing" rule is about narrowing
+  nothing can compare against the board on screen, and a person/status/type/priority/label pick is
+  exactly that — this program's own idea of a subset, not a state the site's board draws too. So it is
+  applied locally, against the cards already loaded, the way the type doc already says a caller in
+  that position should. `plan.projection()` widened to ask for `reporter` and `labels` as well, the
+  two of the picker's six facets `ListProjection` did not already carry, so all six actually narrow
+  rather than four of them matching against fields that were never asked for. A board with more cards
+  than are loaded says so when a term is chosen, since the filter can only see what is on screen — the
+  same limit the picker never has on the issue list, which re-runs its search instead of narrowing
+  locally, for exactly this reason.
+  **What this does not cover:** the backlog view (`internal/ui/backlog`) draws on the same board and
+  could offer the same quick filters and the same picker; that is a separate packet.
+
+- [x] **P6.5 — Configurable colour schemes, and the category colour two views already computed and
+  never drew** · [#139](https://github.com/varijkapil13/saral/issues/139) ·
+  **owns** `internal/ui/kernel/scheme*.go`, the `Theme.Scheme`/`WithScheme` addition in
+  `internal/ui/kernel/theme.go`, the `Scheme` field and its validation in `internal/config/config.go`,
+  the `-scheme` flag in `cmd/saral/main.go`, the category-colour wiring in `internal/ui/board/render.go`
+  and `internal/ui/issue/render.go`
+  Requested directly, not picked off the roadmap in advance — recorded here after the fact, the way
+  #136 was. `kernel.Scheme` is nine semantic roles (`fg, muted, accent, danger, warning, success,
+  surface, selected, onAccent`), each resolved separately for light and dark, never a `lipgloss.Color`
+  hardcoded at a call site; five named presets ship (default, Nord, Dracula, Solarized, Gruvbox).
+  `NewTheme` took a variadic `...ThemeOption` rather than a new required parameter, so none of its
+  roughly seventy existing call sites had to change. `internal/config` cannot import
+  `internal/ui/kernel` — the kernel already imports `config` for save/load, and the reverse would
+  cycle — so its `schemes` validation list is a hand-kept mirror of `kernel.Schemes`, the same
+  precedent `themes` already set for `kernel.ThemeMode`. Switchable at runtime from the command
+  palette (one command per scheme, in an "Appearance" group), via `-scheme`, or via a profile's
+  `scheme = "..."` key, independent of `-theme`: light/dark and which colours stays two separate axes.
+  **The rest of the packet is two colour gaps that were already half-built and never wired up**, not
+  new colour: the board's own `categories [4]lipgloss.Style` was computed every theme generation and
+  never rendered anywhere, so a resting card's key now carries its status category's colour the way
+  its column caption already implies it. The issue detail pane coloured a *related* issue's status by
+  category already; its own header did not, for no reason the diff could find, so it does now — each
+  fact in the header line renders with its own style now rather than the whole line once, since
+  nesting a coloured substring inside one outer `Render()` call risks the outer style's reset code
+  cutting the inner colour off partway through rather than closing cleanly at the fact's own end.
+  **What this does not cover:** priority and issue-type colouring. Both are per-instance configurable
+  on a real Jira site — names, and for priority the severity order too — so colouring by name match
+  would be exactly the instance-specific hardcoding this file's own working agreement calls out as the
+  most common way a PR gets rejected here. The instance-safe version, deriving relative severity from
+  the site's own priority order via `Priorities(ctx)`, needs a session-level priority-order cache
+  nothing in the codebase keeps yet; left for a follow-up rather than folded in here.
+
 ## Batch 7 — Cross-project move · parallel ×1
 
 - [x] **P7.1 — Move wizard** · [#25](https://github.com/varijkapil13/saral/issues/25) · **owns** `pkg/jira/cloud/bulkmove.go`, `internal/ui/move/**`
@@ -1145,6 +1225,84 @@ Rules 1 to 5 are tried in order and the first that yields **both** ends wins; th
 of them found becomes the milestone under rule 6 when none does. `app.Provenance.Rule()` numbers
 itself against this table, so a row added here is a row the code already counts on — the rollup is 7
 and an unresolved issue is 0.
+
+## Settings · state out of the palette
+
+The palette had become the place everything went that had nowhere else to go: nine of its rows are a
+theme mode or a colour scheme, drawn as nine unrelated peers with nothing saying they are two sets and
+nothing saying which value of each is in force. And because `kernel.Commands` sorts by group name and
+the empty pattern scores every candidate alike, `Appearance` sorts first — **the first twenty rows of
+an empty `ctrl+k` on an 80×24 terminal are appearance, attachments, backlog, board and comments, and
+you cannot see a single destination or *Create an issue* without typing.**
+
+The rule the three packets apply is one sentence: **the palette is for verbs, settings are for state.**
+The design, the control vocabulary and the consumer sweep are in [`docs/SETTINGS.md`](SETTINGS.md).
+S1 lands the registry and the kernel's own settings, S2 the screen, S3 the palette's own ordering.
+S2 depends on S1; S3 depends on neither and can run beside them.
+
+- [x] **S1 — The setting registry, and the kernel's own state** ·
+  **owns** `internal/ui/kernel/{setting.go,setting_test.go,theme.go,theme_test.go,scheme.go,scheme_test.go,keys.go,kernel.go,msg.go}`,
+  `internal/config/{config.go,config_test.go}`, `docs/{SETTINGS,UX,ROADMAP}.md`
+  `kernel.Setting` and `RegisterSetting` beside the three registries that exist, with `Value` a
+  function of `Deps` rather than a stored string — the theme is on `Deps.Theme` and the project is
+  `Deps.Project`, so a mark computed from the live session cannot drift from what is on screen and
+  one cached at `init()` is the value as of program start. `Unavailable` is a second question from
+  `Requires` and is drawn rather than hidden: `kernel.noColorForced` already computes one of these
+  and throws it into a status line.
+  Registers `appearance.theme` and `appearance.scheme` and **deletes `registerThemeCommands` and
+  `registerSchemeCommands`** — nine commands out, two settings in; `SwitchTheme` and `SwitchScheme`
+  stay as they are and become the settings' `Set`. Adds `appearance.glyphs` (a `SwitchGlyphs` beside
+  `SwitchTheme`) and `appearance.mouse`, neither of which the running program could change at all
+  before: `Config.Mouse` and `Profile.Glyphs` were hand-edited TOML.
+  **Two bugs are fixed here and each gets a regression test named for it.** `SwitchTheme` builds
+  `NewTheme(mode, dark, glyphs)` with no `WithScheme`, so *use the dark theme* silently reverts a Nord
+  session to the default colours while `writeTheme` leaves `scheme = "nord"` in the file — so the next
+  run comes back Nord and nothing ever said what happened. And `NewTheme` ignores the scheme entirely
+  under `ThemeNoColor`, so picking one with colour off does nothing and still writes the profile.
+  `GlobalKeys` gains `Settings`, bound to `ctrl+,` and to `g s`. Both are free: the globals are
+  `q ctrl+c esc ? ctrl+k r R g` and the digits, `alt+k` is kill-line, and the kernel buffers `g` so
+  no view loses a gesture.
+
+- [x] **S2 — The settings screen** · depends on S1 ·
+  **owns** `internal/ui/settings/**`, `internal/ui/views.go` (one blank import),
+  `internal/ui/palette/{project.go,project_view.go}` (the picker gains a second door),
+  `docs/{SETTINGS,UX,ROADMAP}.md`
+  A new package and a `ViewSpec` with `Slot: 0` — the digits stay with the views a session lives in.
+  Five row shapes and no sixth without a reason written down: inline radios where the options fit the
+  row, a value with a picker behind it where they do not, a toggle, a dimmed `KindInfo` value and a
+  `KindAction` button. **No save button**: every one of these is already a live switch, and a screen
+  with an apply step would be a second model of the same state, which is the thing this change
+  removes.
+  **The picker behind a `▸` is the one that already exists.** `palette.projectModel` is a filtered,
+  frecency-ranked list with a `current` marker — commented *"so that switching to it is visibly a
+  no-op rather than a mystery"*, which is exactly the mark the schemes never got — and the project row
+  opens that very picker. The scheme row opens one built the same way, each row drawn in its own
+  scheme's colours through `Option.Style`, which is the preview the palette structurally could not do.
+  **Profile is `KindInfo` and the reason is in the tree**: `run()` builds the token, the client, the
+  cache and the theme before `kernel.New`, so a live profile swap means rebuilding all four and
+  re-probing. The row names the profile, its site, its account and where its token comes from, and
+  `enter` on a multi-profile config writes `active = "…"` and says it takes effect next run. A hot
+  swap that half worked would be worse than a restart that is admitted to.
+
+- [x] **S3 — The palette orders itself** ·
+  **owns** `internal/ui/kernel/{view.go,registry.go,registry_test.go,destinations.go}`,
+  `internal/ui/palette/{palette.go,render.go,*_test.go}`, the `Kind` line of
+  `internal/ui/{board,backlog,list,plan,release,sprint,timeline}/register.go`,
+  `docs/{SETTINGS,UX,ROADMAP}.md`
+  `Command.Kind` — `KindVerb`, `KindGoTo`, `KindSearch`, `KindSession` — defaulting to zero, so
+  every command that does not care needs no edit. Not `KindAction`: `kernel.SettingKind` already
+  claims that identifier in this package, which docs/SETTINGS.md's own draft had not caught.
+  `Commands()` orders by `Kind`, then `Group`, then `Title`, with `KindVerb` sorting after every named
+  `Kind` rather than by its zero value. A rank on the command and **not** a table of group names in the
+  palette, because a table is a central switch every new group has to be added to.
+  With nothing typed the palette draws group headings in `Kind` order and frecency still reorders
+  *within* a group, so a habit is still rewarded. The moment anything is typed the headings go and it
+  is one flat ranked list: when you are filtering, rank beats grouping and a heading is a row that
+  cannot be chosen. The gate is a test that the unfiltered first screen of an 80×24 palette holds at
+  least one destination, over the registry the running program actually links rather than a fixture.
+  `project.switch` and `settings.open` are `KindSession` by design but sit in files S3 does not own
+  (`internal/ui/palette/register.go`, `internal/ui/settings/settings.go`); they still carry the
+  default until whoever owns those sets it, which the gate does not require.
 
 ## Later, deliberately not now
 

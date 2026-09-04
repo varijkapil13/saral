@@ -30,6 +30,7 @@ func init() {
 		ID:    switchCommandID,
 		Title: "Switch project",
 		Group: "Session",
+		Kind:  kernel.KindSession,
 		Run: func(d kernel.Deps) tea.Cmd {
 			return kernel.Push(projectViewID, "Project", newProject(d))
 		},

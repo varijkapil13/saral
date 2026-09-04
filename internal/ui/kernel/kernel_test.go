@@ -62,6 +62,8 @@ func keyPress(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	case "ctrl+k":
 		return tea.KeyPressMsg{Code: 'k', Mod: tea.ModCtrl}
+	case "ctrl+,":
+		return tea.KeyPressMsg{Code: ',', Mod: tea.ModCtrl}
 	default:
 		r, _ := utf8.DecodeRuneInString(s)
 		return tea.KeyPressMsg{Code: r, Text: s}

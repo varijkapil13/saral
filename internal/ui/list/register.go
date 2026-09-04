@@ -22,6 +22,7 @@ func init() {
 		ID:    "issues.open",
 		Title: "Issues",
 		Group: "Go to",
+		Kind:  kernel.KindGoTo,
 		Keys:  []string{kernel.SlotGesture(slot)},
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
 	})
@@ -29,6 +30,7 @@ func init() {
 		ID:    "issues.filter-by",
 		Title: "Filter these issues by a person, a status or a label",
 		Group: "Search",
+		Kind:  kernel.KindSearch,
 		Keys:  []string{keys.FilterBy.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(OpenFilterMsg{}))
@@ -38,6 +40,7 @@ func init() {
 		ID:    "issues.edit-query",
 		Title: "Edit this search",
 		Group: "Search",
+		Kind:  kernel.KindSearch,
 		Keys:  []string{keys.Edit.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(EditQueryMsg{}))
@@ -47,6 +50,7 @@ func init() {
 		ID:    "issues.save-query",
 		Title: "Save this query to a number key",
 		Group: "Search",
+		Kind:  kernel.KindSearch,
 		Keys:  []string{keys.Save.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SaveQueryMsg{}))
@@ -58,6 +62,7 @@ func init() {
 		ID:    "issues.clear-filter",
 		Title: "Clear the filter on these rows",
 		Group: "Search",
+		Kind:  kernel.KindSearch,
 		Run: func(kernel.Deps) tea.Cmd {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(ClearFilterMsg{}))
 		},
@@ -79,6 +84,7 @@ func init() {
 			ID:    f.id,
 			Title: f.title,
 			Group: "Search",
+			Kind:  kernel.KindSearch,
 			Run: func(kernel.Deps) tea.Cmd {
 				return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(FacetMsg{Kind: kind}))
 			},
@@ -92,6 +98,7 @@ func init() {
 			ID:    s.id,
 			Title: s.palette(),
 			Group: "Search",
+			Kind:  kernel.KindSearch,
 			Keys:  bound[s.id],
 			Run: func(d kernel.Deps) tea.Cmd {
 				jql, title := s.at(d.Project)

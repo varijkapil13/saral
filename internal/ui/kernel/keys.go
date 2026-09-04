@@ -61,22 +61,29 @@ type GlobalKeys struct {
 	// more obvious k or j: the destinations overlay this prefix now opens
 	// already spends both, and up/down, on moving its own cursor.
 	Jump Binding
+	// Settings opens the settings screen: state rather than a verb, so it is
+	// not in the palette. It answers to two chords — the bare one, matched
+	// directly, and g then s, matched once the prefix has already been spent —
+	// and Keys() carries both for the same reason Slot's carries bare digits:
+	// what a second stroke completes is never what the first one alone means.
+	Settings Binding
 }
 
 // DefaultGlobalKeys is the keymap from docs/UX.md. Vim keys and arrows are both
 // always bound inside views; these are the ones the kernel itself handles.
 func DefaultGlobalKeys() GlobalKeys {
 	return GlobalKeys{
-		Quit:    Bind([]string{"q", "ctrl+c"}, "q", "quit"),
-		Back:    Bind([]string{"esc"}, "esc", "back"),
-		Help:    Bind([]string{"?"}, "?", "help"),
-		Palette: Bind([]string{"ctrl+k"}, "ctrl+k", "commands"),
-		Refresh: Bind([]string{"r"}, "r", "refresh"),
-		Purge:   Bind([]string{"R"}, "R", "refetch everything"),
-		Go:      Bind([]string{"g"}, "g", "where to go"),
-		Slot:    Bind(digits, "g 1-9", "switch view"),
-		Saved:   Bind(digits, "1-9", "saved query"),
-		Jump:    Bind([]string{"i"}, "g i", "jump to an issue"),
+		Quit:     Bind([]string{"q", "ctrl+c"}, "q", "quit"),
+		Back:     Bind([]string{"esc"}, "esc", "back"),
+		Help:     Bind([]string{"?"}, "?", "help"),
+		Palette:  Bind([]string{"ctrl+k"}, "ctrl+k", "commands"),
+		Refresh:  Bind([]string{"r"}, "r", "refresh"),
+		Purge:    Bind([]string{"R"}, "R", "refetch everything"),
+		Go:       Bind([]string{"g"}, "g", "where to go"),
+		Slot:     Bind(digits, "g 1-9", "switch view"),
+		Saved:    Bind(digits, "1-9", "saved query"),
+		Jump:     Bind([]string{"i"}, "g i", "jump to an issue"),
+		Settings: Bind([]string{"ctrl+,", "s"}, "ctrl+, / g s", "settings"),
 	}
 }
 
@@ -86,7 +93,10 @@ var digits = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
 func (g GlobalKeys) KeySet() KeySet {
 	return KeySet{
 		Short: []Binding{g.Help, g.Palette, g.Quit},
-		Full:  [][]Binding{{g.Saved, g.Go, g.Slot, g.Jump, g.Back, g.Refresh, g.Purge}, {g.Palette, g.Help, g.Quit}},
+		Full: [][]Binding{
+			{g.Saved, g.Go, g.Slot, g.Settings, g.Jump, g.Back, g.Refresh, g.Purge},
+			{g.Palette, g.Help, g.Quit},
+		},
 	}
 }
 

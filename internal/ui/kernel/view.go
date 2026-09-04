@@ -47,6 +47,33 @@ type ViewSpec struct {
 	New func(Deps) View
 }
 
+// CommandKind ranks a command in the palette's unfiltered list. It is not a
+// table of group names: AGENTS.md forbids the central switch that would be.
+type CommandKind int
+
+// The command kinds, in the order the unfiltered palette heads them. KindVerb
+// is the default and is drawn last; see rank below.
+const (
+	// KindVerb is the default; not KindAction, which SettingKind already uses
+	// in this package.
+	KindVerb    CommandKind = iota
+	KindGoTo                // a destination
+	KindSearch              // a search to run
+	KindSession             // scope: the project, the settings screen
+)
+
+// lastNamedKind must move down if a Kind is ever added after KindSession.
+const lastNamedKind = KindSession
+
+// rank sorts KindVerb last despite being the zero value; every other Kind
+// sorts by its own ordinal.
+func (k CommandKind) rank() int {
+	if k == KindVerb {
+		return int(lastNamedKind) + 1
+	}
+	return int(k)
+}
+
 // Command is an action for the command palette. Anything may register one.
 type Command struct {
 	// ID is the command's stable name, used by frecency ranking.
@@ -55,6 +82,8 @@ type Command struct {
 	Title string
 	// Group buckets related commands in the palette.
 	Group string
+	// Kind ranks this command ahead of Group and Title in the unfiltered list.
+	Kind CommandKind
 	// Requires names the capability the command needs, if any.
 	Requires jira.CapabilityKey
 	// Keys are the ways to reach this same action without the palette, each

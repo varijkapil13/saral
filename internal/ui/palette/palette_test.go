@@ -380,9 +380,10 @@ func TestPalette_ClickingARowSelectsItAndClickingItAgainRunsIt(t *testing.T) {
 	}
 }
 
-// New is what the kernel calls, and it has to be built from the registry rather
-// than from anything of the palette's own: the theme commands live in the kernel
-// and reach a user through here or not at all.
+// New is what the kernel calls, and it has to be built from the registry
+// rather than from anything of the palette's own: views.switch is registered
+// by the kernel package itself, in every build, and reaches a user through
+// here or not at all.
 func TestNew_OffersWhatIsRegistered(t *testing.T) {
 	t.Parallel()
 
@@ -394,9 +395,47 @@ func TestNew_OffersWhatIsRegistered(t *testing.T) {
 	for i := range view.rows {
 		titles = append(titles, view.rows[i].cmd.Title)
 	}
-	if !slices.Contains(titles, "Use the dark theme") {
-		t.Errorf("the palette offers %v, and none of it is the kernel's own theme commands", titles)
+	if !slices.Contains(titles, "Switch view") {
+		t.Errorf("the palette offers %v, and none of it is the kernel's own commands", titles)
 	}
+}
+
+func TestPalette_GroupsTheUnfilteredListUnderHeadingsAndDropsThemOnceTyped(t *testing.T) {
+	t.Parallel()
+
+	p := fly(t, paletteDeps(), sample(), memoryTable(), 120, 24)
+	if !hasHeadingLine(p.frame(), "Go to") {
+		t.Errorf("no standalone heading line names Go to, unfiltered:\n%s", p.frame())
+	}
+	if got := p.m.selectedID(); got != "theme.dark" {
+		t.Errorf("the cursor opens on %q, want the first selectable row rather than the heading above it", got)
+	}
+
+	p.typeText("mine")
+	if hasHeadingLine(p.frame(), "Search") {
+		t.Errorf("a heading survived typing:\n%s", p.frame())
+	}
+}
+
+func TestPalette_ArrowsStepOverAHeadingRatherThanRestingOnIt(t *testing.T) {
+	t.Parallel()
+
+	p := fly(t, paletteDeps(), sample(), memoryTable(), 120, 24)
+	for range len(sample()) {
+		if id := p.m.selectedID(); id == "" {
+			t.Fatalf("the cursor landed on something with no command ID, likely a heading")
+		}
+		p.press("down")
+	}
+}
+
+func hasHeadingLine(frame, group string) bool {
+	for _, line := range strings.Split(frame, "\n") {
+		if strings.TrimSpace(line) == group {
+			return true
+		}
+	}
+	return false
 }
 
 func lineWith(t *testing.T, frame, want string) string {

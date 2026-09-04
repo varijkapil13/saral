@@ -282,6 +282,20 @@ func TestProject_ARefusedTokenStillGetsTheReasonInTheSitesWords(t *testing.T) {
 	}
 }
 
+func TestProject_ATransportFailureReachesTheStatusLine(t *testing.T) {
+	t.Parallel()
+
+	client := refusesToSearch{
+		Fake: twoProjects(),
+		err:  &jira.TransportError{Op: "search", Err: context.DeadlineExceeded},
+	}
+	p := openPicker(t, projectDeps(client), memoryProjects(), 120, 24)
+
+	if !strings.Contains(strings.Join(p.statuses(), " "), "search failed") {
+		t.Errorf("a transport failure reached the user as %v", p.statuses())
+	}
+}
+
 func TestProject_WithNoConnectionAtAllStillOffersTheScopesItKnows(t *testing.T) {
 	t.Parallel()
 
