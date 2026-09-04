@@ -1,18 +1,20 @@
  saral | Issues                                                                            PROJ | example.atlassian.net 
-┌─────────────────────────────┐                                                                                         
-│ Where g goes                │                                                                                         
-│ > g1   Issues     on screen │                                                                                         
-│   g2   Board                │                                                                                         
-│   g3   Backlog              │                                                                                         
-│   g4   Sprints              │                                                                                         
-│   g5   Releases             │                                                                                         
-│   g6   Timeline             │                                                                                         
-│   g7   Plans                │                                                                                         
-│                             │                                                                                         
-│ In this view                │                                                                                         
-│   g g  first row            │                                                                                         
-│   g e  last row             │                                                                                         
-└─────────────────────────────┘                                                                                         
+┌──────────────────────────────────────────┐                                                                            
+│ Where g goes                             │                                                                            
+│ > g1   Issues                  on screen │                                                                            
+│   g2   Board                             │                                                                            
+│   g3   Backlog                           │                                                                            
+│   g4   Sprints                           │                                                                            
+│   g5   Releases                          │                                                                            
+│   g6   Timeline                          │                                                                            
+│   g7   Plans                             │                                                                            
+│   g i  An issue by key or URL            │                                                                            
+│   g s  Settings                          │                                                                            
+│                                          │                                                                            
+│ In this view                             │                                                                            
+│   g g  first row                         │                                                                            
+│   g e  last row                          │                                                                            
+└──────────────────────────────────────────┘                                                                            
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -33,6 +35,4 @@
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                                                                                                                        
-                                                                                                                        
- Issues  1-9 switch view  i jump to an issue  up/down choose  enter go there  esc cancel
+ Issues  1-9 switch view  i jump to an issue  s settings  up/down choose  enter go there  esc cancel

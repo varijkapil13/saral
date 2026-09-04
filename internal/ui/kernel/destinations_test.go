@@ -730,6 +730,15 @@ func BenchmarkFrameWithTheDestinationsUp(b *testing.B) {
 			New: func(Deps) View { return &stubView{id: id, content: strings.Repeat("row\n", 40)} }})
 	}
 	RegisterKeys("issues", KeySet{Full: [][]Binding{{Bind([]string{"home"}, "g g", "first row")}}})
+	// The gestures the prefix completes on its own are rows of this box, and a
+	// build without the views behind them draws a refusal in place of each — a
+	// wider box than any shipped binary has, since internal/ui links both.
+	RegisterView(ViewSpec{ID: PaletteViewID, Title: "Commands", New: func(Deps) View {
+		return &stubView{id: PaletteViewID}
+	}})
+	RegisterView(ViewSpec{ID: SettingsViewID, Title: "Settings", New: func(Deps) View {
+		return &stubView{id: SettingsViewID}
+	}})
 
 	m, err := New(testDeps(), WithSize(200, 60), WithMouse(false))
 	if err != nil {

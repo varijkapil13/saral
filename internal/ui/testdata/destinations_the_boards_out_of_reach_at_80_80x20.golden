@@ -1,13 +1,15 @@
  saral | Issues                                    PROJ | example.atlassian.net 
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Where g goes                                                                 │
-│ > g1   Issues     on screen                                                  │
-│   g2   Board      Boards need a Jira Software project, and this token can... │
-│   g3   Backlog    Boards need a Jira Software project, and this token can... │
-│   g4   Sprints    Boards need a Jira Software project, and this token can... │
+│ > g1   Issues                  on screen                                     │
+│   g2   Board                   Boards need a Jira Software project, and t... │
+│   g3   Backlog                 Boards need a Jira Software project, and t... │
+│   g4   Sprints                 Boards need a Jira Software project, and t... │
 │   g5   Releases                                                              │
 │   g6   Timeline                                                              │
 │   g7   Plans                                                                 │
+│   g i  An issue by key or URL                                                │
+│   g s  Settings                                                              │
 │                                                                              │
 │ In this view                                                                 │
 │   g g  first row                                                             │
@@ -15,6 +17,4 @@
 └──────────────────────────────────────────────────────────────────────────────┘
                                                                                 
                                                                                 
-                                                                                
-                                                                                
- Issues  1-9 switch view  i jump to an issue  up/down choose  enter go there  +1
+ Issues  1-9 switch view  i jump to an issue  s settings  up/down choose  +2

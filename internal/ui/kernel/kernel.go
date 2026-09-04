@@ -818,10 +818,14 @@ func (m Model) resolvePrefix(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if slot, err := strconv.Atoi(msg.String()); err == nil {
 			return m.openSlot(slot)
 		}
-	case Matches(msg, m.keys.Jump):
-		return m.openPalette()
-	case Matches(msg, m.keys.Settings):
-		return m.openSettings()
+	}
+	// The gestures the prefix completes on its own come from the one table the
+	// overlay and the footer also read, so a new one is dispatched and taught by
+	// the same edit.
+	for _, g := range m.prefixGestures() {
+		if g.key.Enabled() && Matches(msg, g.key) {
+			return g.open(m)
+		}
 	}
 	first, cmd := m.forwardTop(buffered)
 	model, ok := first.(Model)

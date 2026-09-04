@@ -1,10 +1,12 @@
  saral | Issues                                           example.atlassian.net 
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Where g goes                                                                 │
-│ > g1   Issues     on screen                                                  │
+│ > g1   Issues                  on screen                                     │
 │   g2   Board                                                                 │
 │   g3   Backlog                                                               │
-│   g7   Plans      Plans need Administer Jira, which this token does not have │
+│   g7   Plans                   Plans need Administer Jira, which this tok... │
+│   g i  An issue by key or URL  palette is not available in this build        │
+│   g s  Settings                settings is not available in this build       │
 │                                                                              │
 │ In this view                                                                 │
 │   g g  first row                                                             │
@@ -15,6 +17,4 @@
                                                                                 
                                                                                 
                                                                                 
-                                                                                
-                                                                                
- Issues  1-9 switch view  i jump to an issue  up/down choose  enter go there  +1
+ Issues  1-9 switch view  i jump to an issue  s settings  up/down choose  +2

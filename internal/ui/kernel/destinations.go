@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -70,12 +71,46 @@ func (m Model) latch(press tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// prefixGesture is one thing the go-to prefix completes on its own: a global
+// whose second stroke is neither a digit nor a key the focused view claims.
+//
+// This table is the only place they are written down. resolvePrefix dispatches
+// from it, the overlay lists it and the footer advertises it, so one cannot be
+// added to the dispatcher and missed by the two that show it — which is how
+// g s came to work and be invisible everywhere it should have been taught.
+type prefixGesture struct {
+	key Binding
+	// name is what the overlay calls the gesture, in the register the view
+	// titles beside it use.
+	name string
+	// view is what it opens, so a build without that view dims the row and gives
+	// the reason rather than teaching a key that answers with a refusal.
+	view string
+	open func(Model) (tea.Model, tea.Cmd)
+}
+
+func (m Model) prefixGestures() []prefixGesture {
+	return []prefixGesture{
+		{key: m.keys.Jump, name: "An issue by key or URL", view: PaletteViewID, open: Model.openPalette},
+		{key: m.keys.Settings, name: "Settings", view: SettingsViewID, open: Model.openSettings},
+	}
+}
+
+// destination is one row of the overlay: a view on a digit, or a gesture the
+// prefix completes on its own. Both are places g goes, so both are drawn,
+// arrowed onto and clicked the same way.
 type destination struct {
-	slot      int
+	slot int
+	// key is the gesture as the overlay spells it, "g1" or "g i".
+	key       string
 	title     string
 	note      string
 	here      bool
 	reachable bool
+	zone      string
+	// open is how the row is spent. A view slot leaves it nil and goes through
+	// openSlot, which answers for a digit nothing is bound to.
+	open func(Model) (tea.Model, tea.Cmd)
 }
 
 func (m Model) destinations() []destination {
@@ -83,12 +118,15 @@ func (m Model) destinations() []destination {
 	if len(m.stack) > 0 {
 		root = m.stack[0].spec.ID
 	}
-	out := make([]destination, 0, len(m.roots))
+	out := make([]destination, 0, len(m.roots)+2)
 	for _, spec := range m.roots {
 		if spec.Slot <= 0 {
 			continue
 		}
-		d := destination{slot: spec.Slot, title: spec.Title, reachable: true}
+		d := destination{
+			slot: spec.Slot, key: slotGesture(m.keys, spec.Slot), title: spec.Title,
+			reachable: true, zone: destZone + strconv.Itoa(spec.Slot),
+		}
 		if d.title == "" {
 			d.title = spec.ID
 		}
@@ -97,6 +135,25 @@ func (m Model) destinations() []destination {
 			d.note, d.reachable = m.unavailable(spec), false
 		case spec.ID == root:
 			d.note, d.here = destOn, true
+		}
+		out = append(out, d)
+	}
+	for _, g := range m.prefixGestures() {
+		if !g.key.Enabled() {
+			continue
+		}
+		gesture, ok := gestureIn(g.key, m.keys.Go.Help().Key+" ")
+		if !ok {
+			continue
+		}
+		d := destination{
+			key: gesture, title: g.name, reachable: true,
+			zone: destZone + gesture, open: g.open,
+		}
+		if spec, known := LookupView(g.view); !known {
+			d.note, d.reachable = g.view+" is not available in this build", false
+		} else if !m.available(spec) {
+			d.note, d.reachable = m.unavailable(spec), false
 		}
 		out = append(out, d)
 	}
@@ -158,6 +215,9 @@ func (m Model) chooseDest(at int) (tea.Model, tea.Cmd) {
 	if at < 0 || at >= len(dests) {
 		return m, nil
 	}
+	if open := dests[at].open; open != nil {
+		return open(m)
+	}
 	return m.openSlot(dests[at].slot)
 }
 
@@ -167,7 +227,7 @@ func (m Model) destMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	for i, d := range m.destinations() {
-		if m.deps.Zones.Get(m.zonePrefix + destZone + strconv.Itoa(d.slot)).InBounds(click) {
+		if m.deps.Zones.Get(m.zonePrefix + d.zone).InBounds(click) {
 			return m.chooseDest(i)
 		}
 	}
@@ -176,13 +236,15 @@ func (m Model) destMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) destFooterActs() []Binding {
-	return []Binding{
-		Bind(m.keys.Slot.Keys(), "1-9", "switch view"),
-		Bind(m.keys.Jump.Keys(), m.keys.Jump.Keys()[0], m.keys.Jump.Help().Desc),
-		destDown,
-		destChoose,
-		Bind(m.keys.Back.Keys(), "esc", "cancel"),
+	out := make([]Binding, 0, len(m.prefixGestures())+4)
+	out = append(out, Bind(m.keys.Slot.Keys(), "1-9", "switch view"))
+	for _, g := range m.prefixGestures() {
+		if !g.key.Enabled() || len(g.key.Keys()) == 0 {
+			continue
+		}
+		out = append(out, Bind(g.key.Keys(), g.key.Keys()[len(g.key.Keys())-1], g.key.Help().Desc))
 	}
+	return append(out, destDown, destChoose, Bind(m.keys.Back.Keys(), "esc", "cancel"))
 }
 
 // viewGestures is what the focused view spends this same prefix on, taken from
@@ -259,13 +321,18 @@ type destRow struct {
 // destination is ever dropped.
 func (m Model) destRows(height int) []destRow {
 	dests := m.destinations()
-	rows := make([]destRow, 0, len(dests)+4)
+	rows := make([]destRow, 0, len(dests)+5)
+	// The digits and the gestures are two answers, and the box holds the second
+	// even where the first is empty. Saying so is still about the digits.
+	if !slices.ContainsFunc(dests, func(d destination) bool { return d.slot > 0 }) {
+		rows = append(rows, destRow{name: destNone, head: true, dim: true})
+	}
 	for i, d := range dests {
 		rows = append(rows, destRow{
-			key:  slotGesture(m.keys, d.slot),
+			key:  d.key,
 			name: d.title,
 			note: d.note,
-			zone: destZone + strconv.Itoa(d.slot),
+			zone: d.zone,
 			dim:  !d.reachable,
 			on:   i == m.dest,
 		})

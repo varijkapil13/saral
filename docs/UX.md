@@ -120,12 +120,12 @@ While the prefix is latched the row says what that overlay answers to and nothin
 it already does under `?` and under the right-click menu:
 
 ```
- Issues  1-9 switch view  up/down choose  enter go there  esc cancel
+ Issues  1-9 switch view  i jump to an issue  s settings  up/down choose  enter go there  esc cancel
 ```
 
-The theme is switched from the palette — *use the dark theme*, *follow the terminal's own colours* —
-and the choice is written back into the profile it came from. There is no key for it: every letter
-left is one somebody types into a field.
+The theme is a setting rather than a command, reached with `ctrl+,` or `g s`, and the choice is
+written back into the profile it came from — see [`docs/SETTINGS.md`](SETTINGS.md). It was nine
+palette rows once, one per mode and per colour scheme, with nothing saying which was in force.
 
 ## Navigation model
 
@@ -281,10 +281,12 @@ already waiting is thrown away the moment a view takes the keyboard, for the sam
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Where g goes                                                                 │
-│ > g1   Issues     on screen                                                  │
-│   g2   Board      Boards need a Jira Software project, and this token can... │
-│   g3   Backlog    Boards need a Jira Software project, and this token can... │
+│ > g1   Issues                  on screen                                     │
+│   g2   Board                   Boards need a Jira Software project, and t... │
+│   g3   Backlog                 Boards need a Jira Software project, and t... │
 │   g5   Releases                                                              │
+│   g i  An issue by key or URL                                                │
+│   g s  Settings                                                              │
 │                                                                              │
 │ In this view                                                                 │
 │   g g  first row                                                             │
@@ -296,6 +298,12 @@ What it holds, and why each half is there:
 
 - **Every slot a view claimed, in slot order, from the registry.** Not a list written down: a view
   moved to another digit cannot leave this teaching the old one.
+- **Every gesture the prefix completes on its own** — `g i` to an issue by key or URL, `g s` to
+  settings. These are globals rather than slots, and they come from `Model.prefixGestures`, which is
+  the same table `resolvePrefix` dispatches from and the footer advertises. One table, three readers:
+  a gesture cannot be added to the dispatcher and missed by the two surfaces that teach it, which is
+  what happened to `g s` — it worked from the day it was bound and appeared nowhere. A row whose view
+  this build does not have is dimmed with the reason, exactly as an unreachable slot is.
 - **A view out of reach keeps its row and carries the probe's own sentence**, because a negative
   capability is an answer with a reason attached and not an omission — the rule the rest of this
   document already follows. Plans is the usual case and the boards are the other. The cursor skips

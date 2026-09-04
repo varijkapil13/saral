@@ -37,7 +37,7 @@ func TestBudget_AFrameCostsWhatTheChromeCosts(t *testing.T) {
 		// figures docs/PERFORMANCE.md quotes are ones this table checks.
 		{"a frame with the help overlay up", BenchmarkFrameWithTheHelpOverlayUp, 629, 700},
 		{"a frame with the right-click menu open", BenchmarkFrameWithTheMenuOpen, 800, 880},
-		{"a frame with the destinations up", BenchmarkFrameWithTheDestinationsUp, 1120, 1240},
+		{"a frame with the destinations up", BenchmarkFrameWithTheDestinationsUp, 1532, 1690},
 	} {
 		got := testing.Benchmark(tc.bench).AllocsPerOp()
 		t.Logf("%s: %d allocations, ceiling %d", tc.what, got, tc.ceiling)
