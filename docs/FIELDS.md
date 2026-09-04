@@ -33,9 +33,37 @@ above, `com.pyxis.greenhopper.jira:gh-lexo-rank` and its siblings.
 
 **A plugin key is not instance data.** It is the same string on every Jira Cloud site, which is what
 separates it from a field id, a field name or a status name; the tree already matches on one, in
-`internal/app/dates.go`, to find the sprint field. **The exact keys must be read off
-`GET /rest/api/3/field` on a real site rather than written from memory** — `scripts/capture.sh` exists
-for that and has never been run, which is why this packet starts there.
+`internal/app/dates.go`, to find the sprint field.
+
+The keys below were read off `GET /rest/api/3/field` on a real site — 67 distinct ones, across Jira
+Software, Service Management, Product Discovery, Advanced Roadmaps and ProForma — rather than written
+from memory. **Seven are left out**, and the test of each is the same: is the value written for a
+person?
+
+| Plugin key | Field | Why |
+|---|---|---|
+| `com.pyxis.greenhopper.jira:gh-lexo-rank` | Rank | a lexorank cursor, `0\|i034ri:` |
+| `com.pyxis.greenhopper.jira:gh-epic-color` | Epic Colour | a palette slot, `ghx-label-5` |
+| `com.pyxis.greenhopper.jira:jsw-issue-color` | Issue colour | a palette name, `dark_teal` |
+| `com.pyxis.greenhopper.jira:gh-epic-status` | Epic Status | Atlassian's own legacy duplicate of the epic's status |
+| `com.atlassian.jira.ext.charting:timeinstatus` | Time in Status | an encoded transition histogram, not a value |
+| `com.atlassian.jira.plugins.jira-development-integration-plugin:devsummarycf` | Development | an opaque blob Jira's own UI renders as a widget |
+| `com.atlassian.servicedesk:vp-origin` | (internal) | a marker for where a request came from |
+
+The first four are the ones on screen in the report that started this.
+
+**What is deliberately kept**, because the list is easier to get wrong in this direction: `gh-sprint`,
+`gh-epic-link`, `gh-epic-label` (which is the Epic *Name*, not a colour), `jsw-story-points` and every
+`customfieldtypes:*`, which are the fields somebody defined on purpose. And all three
+`com.atlassian.jpo:jpo-custom-field-*` — Advanced Roadmaps' baseline start, baseline end and parent
+link — because the timeline resolves a bar's dates from exactly those, so hiding them would hide what
+a bar is drawn from. Service Management's SLA, participants, organisations and approvals stay, and so
+does every `jira.polaris:*`: a Product Discovery field is somebody's research, not bookkeeping.
+
+**One key on that site carries no colon at all — `read-only-string-issue-field`.** So "a plugin key
+contains a colon" is not a rule this can be guarded with, and the guard is instead that no entry is a
+`customfield_NNNNN` id and no entry contains a space, which is what separates a key from an id and
+from a display name.
 
 - Hidden fields are **counted, not dropped**: the "N more, all empty" line becomes a line that says
   how many were left out and why, because a value on the issue that the program silently discards is
