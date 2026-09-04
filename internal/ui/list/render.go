@@ -185,11 +185,11 @@ func renderRow(iss *jira.Issue, lay layout, sel bool, st *styles, t *kernel.Them
 	writeCell(&b, iss.Summary, lay.summary, ell)
 	if lay.typ > 0 {
 		writeGap(&b)
-		b.WriteString(z.Mark(typeZone(iss.Key), padTruncate(iss.Type.Name, lay.typ, ell)))
+		b.WriteString(z.Mark(typeZone(iss.Key), iconOrName(iss.Type.Name, t.Glyphs.TypeGlyph(iss.Type), lay.typ, ell)))
 	}
 	if lay.status > 0 {
 		writeGap(&b)
-		cell := padTruncate(iss.Status.Name, lay.status, ell)
+		cell := iconOrName(iss.Status.Name, t.Glyphs.CategoryGlyph(iss.Status.Category), lay.status, ell)
 		if !sel {
 			cell = st.categories[categoryIndex(iss.Status.Category)].Render(cell)
 		}
@@ -208,6 +208,15 @@ func renderRow(iss *jira.Issue, lay layout, sel bool, st *styles, t *kernel.Them
 		return st.selected.Render(b.String())
 	}
 	return b.String()
+}
+
+// iconOrName drops to an icon only where the name would have been
+// truncated anyway, never beside a name that already fits.
+func iconOrName(name, icon string, width int, ellipsis string) string {
+	if icon == "" || ansi.StringWidth(name) <= width {
+		return padTruncate(name, width, ellipsis)
+	}
+	return padTruncate(icon, width, ellipsis)
 }
 
 func categoryIndex(c jira.StatusCategory) int {

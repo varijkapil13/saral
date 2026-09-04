@@ -10,6 +10,37 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
+func TestHeader_FactsFallBackToIconsOnceTheLineIsTooWide(t *testing.T) {
+	seed := jira.Issue{
+		Key:      "PROJ-1",
+		Summary:  "one",
+		Type:     jira.IssueType{Name: "Documentation Requirement"},
+		Status:   jira.Status{Name: "Waiting on External Vendor Response", Category: jira.CategoryInProgress},
+		Priority: &jira.Priority{Name: "Absolutely Mission Critical"},
+	}
+
+	for _, tier := range []struct {
+		name   string
+		glyphs kernel.Glyphs
+	}{
+		{"nerd", kernel.NerdGlyphs()},
+		{"unicode", kernel.UnicodeGlyphs()},
+		{"ascii", kernel.ASCIIGlyphs()},
+	} {
+		t.Run(tier.name, func(t *testing.T) {
+			d := testDeps(nil)
+			d.Theme = kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
+			dr := newDriver(t, d, seed, 60, 24)
+
+			got := ansi.Strip(dr.m.header())
+			if ansi.StringWidth(strings.SplitN(got, "\n", 3)[1]) > 60 {
+				t.Fatalf("the facts line still overflows the pane:\n%s", got)
+			}
+			golden(t, "header_facts_"+tier.name+".golden", got+"\n")
+		})
+	}
+}
+
 // The status fact in the header carries its category's colour, the way a
 // resting board card's key already does, rather than the one uniform muted
 // colour every other fact still uses.

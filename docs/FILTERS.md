@@ -86,24 +86,37 @@ rows follow along. What changes is that the picker no longer sends `kernel.Pop()
 `kernel.Glyphs` gains a third constructor beside `UnicodeGlyphs` and `ASCIIGlyphs`, and gains the
 fields the icons need. `GlyphsFor` resolves `"nerd"`, `"unicode"`, `"ascii"`, defaulting to nerd.
 
-**Issue type is resolved by the site's own type, never by name.** A type's name is localised and a
-team-managed project mints its own, so the icon comes from `jira.IssueType.Hierarchy` and the
-subtask flag — epic above story, story, task, subtask below — with `Bug` recognised only through
-whatever the site marks as a bug-shaped type. **A hardcoded `"Bug"` string is the failure mode this
-repo rejects most often**; if the site gives nothing to resolve an icon from, the type falls back to
-its first letter, which is always available and never wrong.
+**This row's second paragraph was checked against `pkg/jira.IssueType` and was wrong.** There is no
+`Hierarchy` field on the port — the type this program actually reads carries an `ID`, a `Name`, a
+`Subtask` flag and an `IconURL`, nothing else. So the hierarchy `Subtask above story, story, task, bug
+below` this row used to describe cannot be resolved at all: **only the subtask flag is real**, and
+everything that is not a subtask falls back to its own first letter, which is always available and
+never wrong the way matching on `"Bug"` would be — that hardcoded string is the failure mode this repo
+rejects most often, and it is exactly what the letter fallback exists to make unnecessary. `TypeEpic`,
+`TypeStory`, `TypeTask` and `TypeBug` are still fields on `Glyphs`, ready for the port amendment that
+would let a caller reach them; today `TypeGlyph` can only ever return `TypeSubtask` or a letter.
 
 | Meaning | nerd | unicode | ascii |
 |---|---|---|---|
-| epic | `` | `◆` | `<>` |
-| story | `` | `●` | `*` |
-| task | `` | `■` | `#` |
-| bug | `` | `▲` | `!` |
-| subtask | `` | `▪` | `-` |
+| epic | `` (nf-fa-bolt) | `◆` | `<>` |
+| story | `` (nf-fa-bookmark) | `●` | `*` |
+| task | `` (nf-fa-tasks) | `■` | `#` |
+| bug | `` (nf-fa-bug) | `▲` | `!` |
+| subtask | `` (nf-fa-level_down) | `▪` | `-` |
 
 Priority and status category get the same treatment where a column already spends cells on their
 names, and the icon replaces the word only where the word was being truncated anyway — an icon beside
-a full name is two spellings of one thing.
+a full name is two spellings of one thing. Status category resolves cleanly, keyed by
+`jira.StatusCategory` rather than by a status name. Priority does not: `pkg/jira.Priority` carries only
+an `ID` and a `Name`, no ordinal and no icon of its own, so there is nothing to resolve a severity icon
+from that is not the name — `PriorityGlyph` falls back to the same first-letter escape hatch `TypeGlyph`
+uses, for the same reason. Checked against the four render packages that draw these cells:
+`internal/ui/list` and `internal/ui/backlog` truncate a status name in a fixed column and now show the
+category icon there once the name would not have fit; `internal/ui/board` never draws a type or a
+status name on a card at all — the status colours the key instead — so its resting card marker, blank
+before this, is the type icon; and `internal/ui/issue`'s header draws all three in full and only
+truncates the joined line as a whole, so it renders the full names until the line overflows the pane
+and only then swaps in the icons.
 
 ## Sort
 

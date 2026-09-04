@@ -548,8 +548,11 @@ one. A facet that disappeared would be one nobody could find out about.
   a capability: `kernel.ThemeModeFromEnv` reads `NO_COLOR` and `TERM`, both beat the configured theme
   and the runtime switch, and the resulting theme keeps bold, faint and reverse — `NO_COLOR` asks for
   colour to go away, not for emphasis to.
-- **Never assume a Nerd Font.** Icons come from a glyph set with an ASCII fallback selected by
-  config or capability detection; the default set is plain Unicode box-drawing and geometric shapes.
+- **A Nerd Font is assumed, as a tier and not as a floor.** This reverses what this bullet used to say
+  outright — icons come from a three-tier glyph set, `nerd` the default, and the two tiers under it —
+  plain Unicode box-drawing and geometric shapes, then ASCII — are kept whole rather than deleted. A
+  terminal without the font shows tofu where an icon should be, which is exactly what the settings
+  screen's Glyphs row (`docs/SETTINGS.md`) is for.
 - **Grapheme-cluster-correct widths.** Emoji, CJK and combining marks must not shift columns. Use a
   width-aware truncation helper everywhere; never `len()` on a display string.
 - **Resize is not a redraw hack.** Layout is computed from the current size on every `WindowSizeMsg`,

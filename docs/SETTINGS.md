@@ -209,7 +209,7 @@ you could enter from an issue and not get out of. The kernel builds it through t
     Colour scheme             nord                                       ▸
       which colours mean accent, danger and the rest
 
-    Glyphs                    (•) unicode  ( ) ascii
+    Glyphs                    (•) nerd font  ( ) unicode  ( ) ascii
       box drawing, or plain ASCII for a font you cannot trust
 
     Mouse                     [✓] on
@@ -288,7 +288,7 @@ go; `SwitchTheme` and `SwitchScheme` stay exactly as they are and become the set
 
 | State | Setting | Where it is kept |
 |---|---|---|
-| `Profile.Glyphs` | `appearance.glyphs`, choice of unicode/ascii | profile |
+| `Profile.Glyphs` | `appearance.glyphs`, choice of nerd font/unicode/ascii | profile |
 | `Config.Mouse` | `appearance.mouse`, toggle | config.toml, shared |
 
 Glyphs already switches cleanly: `NewTheme` takes a `Glyphs` and a `ThemeMsg` carries the rebuilt

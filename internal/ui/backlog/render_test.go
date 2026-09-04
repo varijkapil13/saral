@@ -5,7 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -138,6 +141,35 @@ func TestBacklog_Golden(t *testing.T) {
 				t.Errorf("the frame is %d lines, want %d", lines, tc.height)
 			}
 			golden(t, tc.golden, got)
+		})
+	}
+}
+
+func TestRenderRow_StatusIconAcrossGlyphTiers(t *testing.T) {
+	iss := jira.Issue{
+		Key:     "PROJ-42",
+		Summary: "A row whose status name does not fit its column",
+		Status:  jira.Status{Name: "Waiting on somebody else entirely", Category: jira.CategoryInProgress},
+	}
+	lay := planLayout(100, 8)
+
+	for _, tier := range []struct {
+		name   string
+		glyphs kernel.Glyphs
+	}{
+		{"nerd", kernel.NerdGlyphs()},
+		{"unicode", kernel.UnicodeGlyphs()},
+		{"ascii", kernel.ASCIIGlyphs()},
+	} {
+		t.Run(tier.name, func(t *testing.T) {
+			m := &Model{
+				deps:  kernel.Deps{Theme: kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)},
+				lay:   lay,
+				zones: widget.Zoner{},
+			}
+			m.styles = newStyles(m.deps.Theme)
+			got := ansi.Strip(m.renderRow(&iss, false, false))
+			golden(t, "row_icon_"+tier.name+".golden", got+"\n")
 		})
 	}
 }

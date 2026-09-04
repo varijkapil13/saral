@@ -6,12 +6,14 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"unicode/utf8"
 
 	"charm.land/bubbles/v2/help"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/varijkapil13/saral/internal/config"
+	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 // ThemeMode is how colours are chosen.
@@ -76,8 +78,10 @@ func ThemeModeFromEnv(env []string, configured string) ThemeMode {
 	return mode
 }
 
-// Glyphs is the icon set. Nothing here may assume a Nerd Font; the default set
-// is plain Unicode and the fallback is ASCII.
+// Glyphs is the icon set. A Nerd Font is assumed here as a tier, not as a
+// floor: NerdGlyphs is the default, and the two tiers under it are kept whole
+// rather than deleted — the settings screen's Glyphs row is how somebody
+// without the font gets out of the tofu it draws.
 type Glyphs struct {
 	Bullet     string
 	Arrow      string
@@ -99,9 +103,26 @@ type Glyphs struct {
 	Diamond    string
 	ProgressOn string
 	ProgressNo string
+
+	// The five icons docs/FILTERS.md names for an issue's place in the
+	// hierarchy. TypeGlyph can only ever reach TypeSubtask today —
+	// pkg/jira.IssueType carries the subtask flag and nothing that places the
+	// rest in the hierarchy — the other four wait for the port amendment that
+	// will.
+	TypeEpic    string
+	TypeStory   string
+	TypeTask    string
+	TypeBug     string
+	TypeSubtask string
+
+	// Keyed by jira.StatusCategory rather than by a status name.
+	CategoryToDo       string
+	CategoryInProgress string
+	CategoryDone       string
+	CategoryUnknown    string
 }
 
-// UnicodeGlyphs is the default set: box drawing and geometric shapes only.
+// UnicodeGlyphs is the mid tier: box drawing and geometric shapes only.
 func UnicodeGlyphs() Glyphs {
 	return Glyphs{
 		Bullet: "•", Arrow: "→", Check: "✓", Cross: "✗", Dot: "·",
@@ -109,10 +130,13 @@ func UnicodeGlyphs() Glyphs {
 		VLine: "│", HLine: "─", CornerTL: "╭", CornerTR: "╮", CornerBL: "╰", CornerBR: "╯",
 		Separator: "•", Collapsed: "▸", Expanded: "▾", Diamond: "◆",
 		ProgressOn: "█", ProgressNo: "░",
+		TypeEpic: "◆", TypeStory: "●", TypeTask: "■", TypeBug: "▲", TypeSubtask: "▪",
+		CategoryToDo: "○", CategoryInProgress: "◐", CategoryDone: "●", CategoryUnknown: "◌",
 	}
 }
 
-// ASCIIGlyphs is the fallback for terminals and fonts that cannot be trusted.
+// ASCIIGlyphs is the floor: the fallback for terminals and fonts that cannot
+// be trusted with anything past plain ASCII.
 func ASCIIGlyphs() Glyphs {
 	return Glyphs{
 		Bullet: "*", Arrow: "->", Check: "+", Cross: "x", Dot: ".",
@@ -120,21 +144,109 @@ func ASCIIGlyphs() Glyphs {
 		VLine: "|", HLine: "-", CornerTL: "+", CornerTR: "+", CornerBL: "+", CornerBR: "+",
 		Separator: "|", Collapsed: ">", Expanded: "v", Diamond: "<>",
 		ProgressOn: "#", ProgressNo: "-",
+		TypeEpic: "<>", TypeStory: "*", TypeTask: "#", TypeBug: "!", TypeSubtask: "-",
+		CategoryToDo: "o", CategoryInProgress: "~", CategoryDone: "x", CategoryUnknown: ".",
 	}
 }
 
-// GlyphsFor picks a glyph set by name, falling back to Unicode.
+// NerdGlyphs is the top tier, assumed by default: every icon a Nerd Font
+// patches in over the box-drawing and geometric shapes UnicodeGlyphs already
+// carries, which a Nerd Font renders as well as any other font does.
+func NerdGlyphs() Glyphs {
+	g := UnicodeGlyphs()
+	g.Check = ""              // nf-fa-check
+	g.Cross = ""              // nf-fa-times
+	g.Arrow = ""              // nf-fa-arrow_right
+	g.Stale = ""              // nf-fa-clock_o
+	g.Collapsed = ""          // nf-fa-caret_right
+	g.Expanded = ""           // nf-fa-caret_down
+	g.Diamond = ""            // nf-fa-diamond
+	g.TypeEpic = ""           // nf-fa-bolt
+	g.TypeStory = ""          // nf-fa-bookmark
+	g.TypeTask = ""           // nf-fa-tasks
+	g.TypeBug = ""            // nf-fa-bug
+	g.TypeSubtask = ""        // nf-fa-level_down
+	g.CategoryToDo = ""       // nf-fa-circle_o
+	g.CategoryInProgress = "" // nf-fa-clock_o
+	g.CategoryDone = ""       // nf-fa-check_circle
+	g.CategoryUnknown = ""    // nf-fa-question
+	return g
+}
+
+// GlyphsFor picks a glyph set by name: "nerd", "unicode" or "ascii", falling
+// back to nerd, the default tier.
 func GlyphsFor(name string) Glyphs {
-	if strings.EqualFold(strings.TrimSpace(name), "ascii") {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "ascii":
 		return ASCIIGlyphs()
+	case "unicode":
+		return UnicodeGlyphs()
+	default:
+		return NerdGlyphs()
 	}
-	return UnicodeGlyphs()
 }
 
-// IsASCII reports whether these are the ASCII fallback glyphs rather than the
-// Unicode default. Glyphs holds a slice field, so it is not comparable with
-// ==; Bullet is enough to tell the two sets this program ships apart.
+// IsASCII reports whether these are the ASCII fallback glyphs rather than one
+// of the other two tiers. Glyphs holds a slice field, so it is not comparable
+// with ==; Bullet is enough to tell ASCII apart from the other two, which both
+// keep it as the plain bullet.
 func (g Glyphs) IsASCII() bool { return g.Bullet == ASCIIGlyphs().Bullet }
+
+// Tier names which of the three sets this is. Cross differs across all three,
+// which is what makes one field enough to tell them apart.
+func (g Glyphs) Tier() string {
+	switch g.Cross {
+	case NerdGlyphs().Cross:
+		return "nerd"
+	case ASCIIGlyphs().Cross:
+		return "ascii"
+	default:
+		return "unicode"
+	}
+}
+
+// TypeGlyph resolves the icon for an issue type from what the site's own type
+// carries, never from its name. pkg/jira.IssueType has no hierarchy level,
+// only the subtask flag, so everything else falls back to the type's own
+// first letter rather than to a hardcoded guess like "Bug".
+func (g Glyphs) TypeGlyph(it jira.IssueType) string {
+	if it.Subtask {
+		return g.TypeSubtask
+	}
+	return firstLetterGlyph(it.Name)
+}
+
+// CategoryGlyph resolves the icon for a status category, which is the one
+// status property the same on every site.
+func (g Glyphs) CategoryGlyph(c jira.StatusCategory) string {
+	switch c {
+	case jira.CategoryToDo:
+		return g.CategoryToDo
+	case jira.CategoryInProgress:
+		return g.CategoryInProgress
+	case jira.CategoryDone:
+		return g.CategoryDone
+	default:
+		return g.CategoryUnknown
+	}
+}
+
+// PriorityGlyph resolves a priority's icon. pkg/jira.Priority carries only an
+// ID and a name, nothing to rank it by, so it falls back to the same letter
+// TypeGlyph does.
+func (g Glyphs) PriorityGlyph(p jira.Priority) string { return firstLetterGlyph(p.Name) }
+
+// firstLetterGlyph is the fallback every unresolved glyph shares: the first
+// rune of a name, decoded rather than byte-sliced so a non-ASCII name still
+// gives back one whole letter.
+func firstLetterGlyph(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "?"
+	}
+	r, _ := utf8.DecodeRuneInString(name)
+	return strings.ToUpper(string(r))
+}
 
 // Theme holds every style the UI uses, built once so that nothing constructs a
 // lipgloss.Style inside a render loop. Gen changes whenever the theme is
@@ -372,22 +484,23 @@ func glyphsSetting() Setting {
 		Section: appearanceSection,
 		Order:   2,
 		Title:   "Glyphs",
-		Summary: "box drawing, or plain ASCII for a font you cannot trust",
+		Summary: "Nerd Font icons, plain box drawing, or ASCII for a font you cannot trust",
 		Kind:    KindChoice,
 		Scope:   ScopeProfile,
 		Options: func(Deps) []SettingOption {
 			return []SettingOption{
+				{ID: "nerd", Label: "nerd font"},
 				{ID: "unicode", Label: "unicode"},
 				{ID: "ascii", Label: "ascii"},
 			}
 		},
 		Value: func(d Deps) string {
-			if d.Theme != nil && d.Theme.Glyphs.IsASCII() {
-				return "ascii"
+			if d.Theme == nil {
+				return "nerd"
 			}
-			return "unicode"
+			return d.Theme.Glyphs.Tier()
 		},
-		Set: func(d Deps, id string) tea.Cmd { return SwitchGlyphs(d, id == "ascii") },
+		Set: SwitchGlyphs,
 	}
 }
 
@@ -422,7 +535,7 @@ func SwitchTheme(d Deps, mode ThemeMode) tea.Cmd {
 	if forced, why := noColorForced(); forced && mode != ThemeNoColor {
 		return func() tea.Msg { return StatusMsg{Text: why, Level: LevelWarn} }
 	}
-	dark, glyphs, scheme := true, UnicodeGlyphs(), DefaultScheme
+	dark, glyphs, scheme := true, NerdGlyphs(), DefaultScheme
 	if d.Theme != nil {
 		dark, glyphs, scheme = d.Theme.Dark, d.Theme.Glyphs, d.Theme.Scheme
 	}
@@ -437,18 +550,17 @@ func SwitchTheme(d Deps, mode ThemeMode) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// SwitchGlyphs rebuilds the styles with a new glyph set and keeps the choice.
+// SwitchGlyphs rebuilds the styles in a new glyph tier and keeps the choice.
 // The mode and the scheme both come along unchanged: glyphs answer a question
-// about the font, not about light, dark or which colours.
-func SwitchGlyphs(d Deps, ascii bool) tea.Cmd {
+// about the font, not about light, dark or which colours. tier is resolved
+// through GlyphsFor, so an id this build does not know falls back to the same
+// default a first run gets.
+func SwitchGlyphs(d Deps, tier string) tea.Cmd {
 	mode, dark, scheme := ThemeAuto, true, DefaultScheme
 	if d.Theme != nil {
 		mode, dark, scheme = d.Theme.Mode, d.Theme.Dark, d.Theme.Scheme
 	}
-	glyphs := UnicodeGlyphs()
-	if ascii {
-		glyphs = ASCIIGlyphs()
-	}
+	glyphs := GlyphsFor(tier)
 	next := NewTheme(mode, dark, glyphs, WithScheme(scheme))
 	return tea.Batch(
 		func() tea.Msg { return ThemeMsg{Theme: next} },
@@ -569,11 +681,11 @@ func writeGlyphs(site string, g Glyphs) error {
 		return fmt.Errorf("this session is on %s and the active profile %q is on %s, so nothing was written",
 			site, profile.Name, profile.Site)
 	}
-	// Unicode is the absence of a glyph set in the file rather than a value, so
-	// that a profile that never chose and a profile that chose unicode read the
+	// Nerd is the absence of a glyph set in the file rather than a value, so
+	// that a profile that never chose and a profile that chose nerd read the
 	// same.
-	value := "ascii"
-	if !g.IsASCII() {
+	value := g.Tier()
+	if value == "nerd" {
 		value = ""
 	}
 	if profile.Glyphs == value {

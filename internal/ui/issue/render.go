@@ -121,28 +121,47 @@ func (m *Model) header() string {
 	room := max(m.width-ansi.StringWidth(m.issue.Key)-2, 1)
 	title := m.styles.title.Render(ansi.Truncate(m.issue.Summary, room, ell))
 
+	joinedSep := m.styles.muted.Render(sep)
+	meta := strings.Join(m.headerFacts(false), joinedSep)
+	if ansi.StringWidth(meta) > m.width {
+		meta = strings.Join(m.headerFacts(true), joinedSep)
+	}
+	meta = ansi.Truncate(meta, m.width, ell)
+
+	return key + "  " + title + "\n" + meta + "\n" +
+		m.styles.rule.Render(strings.Repeat(t.Glyphs.HLine, max(m.width, 1)))
+}
+
+// headerFacts builds the header's summary line. compact is asked for only
+// once the full names have measured too wide for the pane, and it stands an
+// icon in for the type, the status category and the priority.
+func (m *Model) headerFacts(compact bool) []string {
+	t := m.deps.Theme
+	facts := make([]string, 0, 5)
 	// Each fact is styled on its own rather than the joined line being styled
 	// once: the status carries its category's colour, the way a related
 	// issue's already does, and nesting that inside one outer muted.Render
 	// would have the outer reset code cut the colour off partway through
 	// rather than stopping cleanly at the status.
-	facts := make([]string, 0, 5)
-	addFact := func(s string, style lipgloss.Style) {
+	add := func(s string, style lipgloss.Style) {
 		if s != "" {
 			facts = append(facts, style.Render(s))
 		}
 	}
-	addFact(m.issue.Type.Name, m.styles.muted)
-	addFact(statusLabel(m.issue.Status), m.styles.category(m.issue.Status.Category))
-	addFact(priorityName(m.issue), m.styles.muted)
-	addFact(assigneeName(m.issue, "unassigned"), m.styles.muted)
-	if when := formatWhen(m.issue.Updated, m.location()); when != "" {
-		addFact("updated "+when, m.styles.muted)
+	if compact {
+		add(t.Glyphs.TypeGlyph(m.issue.Type), m.styles.muted)
+		add(compactStatusLabel(m.issue.Status, t), m.styles.category(m.issue.Status.Category))
+		add(compactPriority(m.issue, t), m.styles.muted)
+	} else {
+		add(m.issue.Type.Name, m.styles.muted)
+		add(statusLabel(m.issue.Status), m.styles.category(m.issue.Status.Category))
+		add(priorityName(m.issue), m.styles.muted)
 	}
-	meta := ansi.Truncate(strings.Join(facts, m.styles.muted.Render(sep)), m.width, ell)
-
-	return key + "  " + title + "\n" + meta + "\n" +
-		m.styles.rule.Render(strings.Repeat(t.Glyphs.HLine, max(m.width, 1)))
+	add(assigneeName(m.issue, "unassigned"), m.styles.muted)
+	if when := formatWhen(m.issue.Updated, m.location()); when != "" {
+		add("updated "+when, m.styles.muted)
+	}
+	return facts
 }
 
 // statusLabel names the status and, where it adds something, the category it
@@ -158,6 +177,29 @@ func statusLabel(s jira.Status) string {
 		return s.Name
 	}
 	return s.Name + " (" + strings.ToLower(category) + ")"
+}
+
+// compactStatusLabel is statusLabel's narrow form: the category icon in place
+// of the parenthetical, which is the half of the full label a pane under
+// pressure can give up first.
+func compactStatusLabel(s jira.Status, t *kernel.Theme) string {
+	if s.Name == "" {
+		return ""
+	}
+	icon := t.Glyphs.CategoryGlyph(s.Category)
+	if icon == "" {
+		return s.Name
+	}
+	return icon + " " + s.Name
+}
+
+// compactPriority is priorityName's narrow form: the priority's own icon,
+// which pkg/jira.Priority carries nothing to resolve beyond its first letter.
+func compactPriority(iss jira.Issue, t *kernel.Theme) string {
+	if iss.Priority == nil {
+		return ""
+	}
+	return t.Glyphs.PriorityGlyph(*iss.Priority)
 }
 
 // View draws the identity header and the regions under it.

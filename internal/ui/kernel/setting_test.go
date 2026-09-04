@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -258,7 +259,7 @@ func TestThemeSetting_UnavailableReusesNoColorForced(t *testing.T) {
 	}
 }
 
-func TestGlyphsSetting_ValueReadsWhetherTheThemeIsASCII(t *testing.T) {
+func TestGlyphsSetting_ValueReadsTheTier(t *testing.T) {
 	s := glyphsSetting()
 	if got := s.Value(Deps{Theme: NewTheme(ThemeDark, true, ASCIIGlyphs())}); got != "ascii" {
 		t.Errorf("got %q for an ASCII theme, want ascii", got)
@@ -266,8 +267,11 @@ func TestGlyphsSetting_ValueReadsWhetherTheThemeIsASCII(t *testing.T) {
 	if got := s.Value(Deps{Theme: NewTheme(ThemeDark, true, UnicodeGlyphs())}); got != "unicode" {
 		t.Errorf("got %q for a unicode theme, want unicode", got)
 	}
-	if got := s.Value(Deps{}); got != "unicode" {
-		t.Errorf("got %q with no theme at all, want the default unicode", got)
+	if got := s.Value(Deps{Theme: NewTheme(ThemeDark, true, NerdGlyphs())}); got != "nerd" {
+		t.Errorf("got %q for a nerd theme, want nerd", got)
+	}
+	if got := s.Value(Deps{}); got != "nerd" {
+		t.Errorf("got %q with no theme at all, want the default nerd", got)
 	}
 }
 
@@ -275,8 +279,8 @@ func TestSwitchGlyphs_KeepsModeAndScheme(t *testing.T) {
 	colourfulEnv(t)
 	writeConfig(t, profileWithEverything)
 
-	d := Deps{Theme: NewTheme(ThemeLight, false, UnicodeGlyphs(), WithScheme(nordScheme)), Site: "example.atlassian.net"}
-	msg := firstMsgOfType[ThemeMsg](t, SwitchGlyphs(d, true))
+	d := Deps{Theme: NewTheme(ThemeLight, false, NerdGlyphs(), WithScheme(nordScheme)), Site: "example.atlassian.net"}
+	msg := firstMsgOfType[ThemeMsg](t, SwitchGlyphs(d, "ascii"))
 	switch {
 	case !msg.Theme.Glyphs.IsASCII():
 		t.Error("the glyph set was not switched to ascii")
@@ -308,6 +312,21 @@ func TestWriteGlyphs_ChangesGlyphsAndNothingElseInTheProfile(t *testing.T) {
 		t.Errorf("the theme changed to %q", got.Theme)
 	case len(got.Queries) != 1 || got.Queries[0].Slot != 2:
 		t.Errorf("the saved queries did not survive: %+v", got.Queries)
+	}
+}
+
+func TestWriteGlyphs_WritesNerdAsNoGlyphSetAtAll(t *testing.T) {
+	path := writeConfig(t, profileWithEverything)
+
+	if err := writeGlyphs("example.atlassian.net", NerdGlyphs()); err != nil {
+		t.Fatalf("writeGlyphs: %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "glyphs") {
+		t.Errorf("nerd was written as a value rather than as an absence:\n%s", body)
 	}
 }
 

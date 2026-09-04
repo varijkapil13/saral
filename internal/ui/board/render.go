@@ -297,7 +297,9 @@ func (m *Model) cell(col, row int) string {
 // summary as is left, and the board's estimate for it where the board has one.
 func renderCard(iss *jira.Issue, cell int, selected, inHand bool, st *styles, t *kernel.Theme, p plan) string {
 	ell := t.Glyphs.Ellipsis
-	mark := " "
+	// Selected and held both need the marker for their own gesture and take it
+	// back from the type icon it otherwise carries at rest.
+	mark := t.Glyphs.TypeGlyph(iss.Type)
 	switch {
 	case inHand:
 		mark = t.Glyphs.Diamond

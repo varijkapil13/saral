@@ -3,6 +3,7 @@ package kernel
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/config"
+	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 func TestParseThemeMode(t *testing.T) {
@@ -108,6 +110,7 @@ func TestGlyphs_ASCIIFallbackIsPlain(t *testing.T) {
 	for name, g := range map[string]string{
 		"bullet": ascii.Bullet, "arrow": ascii.Arrow, "check": ascii.Check,
 		"vline": ascii.VLine, "separator": ascii.Separator, "diamond": ascii.Diamond,
+		"type epic": ascii.TypeEpic, "type bug": ascii.TypeBug, "category done": ascii.CategoryDone,
 	} {
 		for _, r := range g {
 			if r > 127 {
@@ -115,8 +118,88 @@ func TestGlyphs_ASCIIFallbackIsPlain(t *testing.T) {
 			}
 		}
 	}
-	if GlyphsFor("").Bullet != UnicodeGlyphs().Bullet {
-		t.Error("the default glyph set should be unicode")
+}
+
+func TestGlyphsFor_DefaultsToNerd(t *testing.T) {
+	t.Parallel()
+	for _, in := range []string{"", "  ", "nerd", "NERD", "something unrecognised"} {
+		if got := GlyphsFor(in); got.Tier() != "nerd" {
+			t.Errorf("GlyphsFor(%q).Tier() = %q, want nerd", in, got.Tier())
+		}
+	}
+	if GlyphsFor("unicode").Tier() != "unicode" {
+		t.Error("GlyphsFor(\"unicode\") did not resolve to the unicode tier")
+	}
+	if GlyphsFor("ascii").Tier() != "ascii" {
+		t.Error("GlyphsFor(\"ascii\") did not resolve to the ascii tier")
+	}
+}
+
+// TestGlyphs_EveryTierDefinesEveryField walks every field of Glyphs by
+// reflection, over all three tiers, and fails on the first one any tier left
+// at its zero value — a missing nerd icon must draw as a letter or a fallback
+// rather than as an empty cell, and reflection is what lets a field added
+// later be caught here without the test being told its name.
+func TestGlyphs_EveryTierDefinesEveryField(t *testing.T) {
+	t.Parallel()
+	tiers := map[string]Glyphs{"nerd": NerdGlyphs(), "unicode": UnicodeGlyphs(), "ascii": ASCIIGlyphs()}
+	scanned := 0
+	rt := reflect.TypeOf(Glyphs{})
+	for _, tier := range []string{"nerd", "unicode", "ascii"} {
+		g := reflect.ValueOf(tiers[tier])
+		for i := 0; i < rt.NumField(); i++ {
+			field := rt.Field(i)
+			v := g.Field(i)
+			scanned++
+			switch v.Kind() {
+			case reflect.String:
+				if v.String() == "" {
+					t.Errorf("%s tier: field %s is empty", tier, field.Name)
+				}
+			case reflect.Slice:
+				if v.Len() == 0 {
+					t.Errorf("%s tier: field %s is empty", tier, field.Name)
+				}
+			default:
+				t.Fatalf("unhandled Glyphs field kind for %s: %v", field.Name, v.Kind())
+			}
+		}
+	}
+	if scanned == 0 {
+		t.Fatal("the scan visited no fields at all, so this test proves nothing")
+	}
+}
+
+func TestGlyphs_TypeGlyphFallsBackToTheLetterForAnUnresolvedType(t *testing.T) {
+	t.Parallel()
+	g := UnicodeGlyphs()
+	if got := g.TypeGlyph(jira.IssueType{Subtask: true}); got != g.TypeSubtask {
+		t.Errorf("a subtask got %q, want the subtask icon %q", got, g.TypeSubtask)
+	}
+	for name, want := range map[string]string{
+		"Bug": "B", "Story": "S", "Epic": "E", "Task": "T",
+		"böcker": "B", "": "?",
+	} {
+		if got := g.TypeGlyph(jira.IssueType{Name: name}); got != want {
+			t.Errorf("TypeGlyph(%q) = %q, want %q — pkg/jira.IssueType carries no hierarchy level, "+
+				"so nothing here may resolve by matching the name", name, got, want)
+		}
+	}
+}
+
+func TestGlyphs_CategoryGlyphIsKeyedByCategoryNotName(t *testing.T) {
+	t.Parallel()
+	g := NerdGlyphs()
+	for cat, want := range map[jira.StatusCategory]string{
+		jira.CategoryToDo:       g.CategoryToDo,
+		jira.CategoryInProgress: g.CategoryInProgress,
+		jira.CategoryDone:       g.CategoryDone,
+		jira.CategoryUnknown:    g.CategoryUnknown,
+		jira.StatusCategory(99): g.CategoryUnknown,
+	} {
+		if got := g.CategoryGlyph(cat); got != want {
+			t.Errorf("CategoryGlyph(%v) = %q, want %q", cat, got, want)
+		}
 	}
 }
 

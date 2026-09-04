@@ -215,6 +215,57 @@ func TestBoardRender_ABoardThatDoesNotEstimateDrawsNoNumbers(t *testing.T) {
 // already says which status something is in, so this is which kind of
 // status — and selecting or holding the card, which inverts the whole thing,
 // does not layer a second colour on top of that.
+func TestRenderCard_RestingMarkAcrossGlyphTiers(t *testing.T) {
+	iss := jira.Issue{
+		Key:     "PROJ-42",
+		Summary: "A resting card",
+		Type:    jira.IssueType{Name: "Defect"},
+		Status:  jira.Status{Category: jira.CategoryInProgress},
+	}
+
+	for _, tier := range []struct {
+		name   string
+		glyphs kernel.Glyphs
+	}{
+		{"nerd", kernel.NerdGlyphs()},
+		{"unicode", kernel.UnicodeGlyphs()},
+		{"ascii", kernel.ASCIIGlyphs()},
+	} {
+		t.Run(tier.name, func(t *testing.T) {
+			theme := kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
+			st := newStyles(theme)
+			got := ansi.Strip(renderCard(&iss, 30, false, false, st, theme, plan{}))
+			golden(t, "card_mark_"+tier.name+".golden", got+"\n")
+		})
+	}
+}
+
+// A subtask is the one type TypeGlyph can actually tell apart from the rest.
+func TestRenderCard_SubtaskMarkAcrossGlyphTiers(t *testing.T) {
+	iss := jira.Issue{
+		Key:     "PROJ-43",
+		Summary: "A resting subtask card",
+		Type:    jira.IssueType{Name: "Offshoot", Subtask: true},
+		Status:  jira.Status{Category: jira.CategoryToDo},
+	}
+
+	for _, tier := range []struct {
+		name   string
+		glyphs kernel.Glyphs
+	}{
+		{"nerd", kernel.NerdGlyphs()},
+		{"unicode", kernel.UnicodeGlyphs()},
+		{"ascii", kernel.ASCIIGlyphs()},
+	} {
+		t.Run(tier.name, func(t *testing.T) {
+			theme := kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
+			st := newStyles(theme)
+			got := ansi.Strip(renderCard(&iss, 30, false, false, st, theme, plan{}))
+			golden(t, "card_mark_subtask_"+tier.name+".golden", got+"\n")
+		})
+	}
+}
+
 func TestRenderCard_TheKeyCarriesItsStatusCategorysColourWhileResting(t *testing.T) {
 	t.Parallel()
 	th := kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs())

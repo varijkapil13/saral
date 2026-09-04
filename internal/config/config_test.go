@@ -214,7 +214,7 @@ func TestLoadFile_RefusesAFileThatIsWrongOrHoldsASecret(t *testing.T) {
 		{
 			name:     "an unknown glyph set",
 			file:     "bad_glyphs.toml",
-			contains: []string{`glyphs "nerdfont"`, "unicode, ascii"},
+			contains: []string{`glyphs "nerdfont"`, "nerd, unicode, ascii"},
 		},
 		{
 			name:     "active naming a profile that is not there",

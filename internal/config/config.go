@@ -89,7 +89,7 @@ var (
 	// so the reverse import would cycle — the same reason themes above is its
 	// own hand-kept list rather than reading ThemeMode's.
 	schemes   = []string{"", "default", "nord", "dracula", "solarized", "gruvbox"}
-	glyphSets = []string{"", "unicode", "ascii"}
+	glyphSets = []string{"", "nerd", "unicode", "ascii"}
 
 	secretKeys = []string{"token", "value", "secret", "password", "api_token", "api-token", "apitoken"}
 )

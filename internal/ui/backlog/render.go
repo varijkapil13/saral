@@ -318,7 +318,7 @@ func (m *Model) renderRow(iss *jira.Issue, sel, picked bool) string {
 	writeCell(&b, iss.Summary, lay.summary, ell)
 	if lay.status > 0 {
 		writeGap(&b)
-		cell := padTruncate(iss.Status.Name, lay.status, ell)
+		cell := iconOrName(iss.Status.Name, t.Glyphs.CategoryGlyph(iss.Status.Category), lay.status, ell)
 		if !sel {
 			cell = m.styles.categories[categoryIndex(iss.Status.Category)].Render(cell)
 		}
@@ -535,6 +535,15 @@ func (m *Model) fit(s string) string {
 		return s
 	}
 	return ansi.Truncate(s, m.width, m.deps.Theme.Glyphs.Ellipsis)
+}
+
+// iconOrName drops to an icon only where the name would have been
+// truncated anyway, never beside a name that already fits.
+func iconOrName(name, icon string, width int, ellipsis string) string {
+	if icon == "" || ansi.StringWidth(name) <= width {
+		return padTruncate(name, width, ellipsis)
+	}
+	return padTruncate(icon, width, ellipsis)
 }
 
 func categoryIndex(c jira.StatusCategory) int {

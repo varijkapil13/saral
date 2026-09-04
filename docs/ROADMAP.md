@@ -1315,18 +1315,44 @@ what "issue type in every filter" actually asks for — `FacetType` has existed 
 Nothing anywhere sorts. The design, the decisions and the consumer sweep are in
 [`docs/FILTERS.md`](FILTERS.md). F2 blocks F3; F1 and F4 are independent of both.
 
-- [ ] **F1 — The glyph tier, and an icon for what an issue is** ·
+- [x] **F1 — The glyph tier, and an icon for what an issue is** ·
   **owns** `internal/ui/kernel/{theme.go,theme_test.go}`, `internal/config/{config.go,config_test.go}`,
   the type/priority/status cells of `internal/ui/{list,board,backlog,issue}/render.go`,
-  `docs/{FILTERS,UX,SETTINGS,ROADMAP}.md`
+  `docs/{FILTERS,UX,SETTINGS,ROADMAP}.md`. Grew to include the two files this row's own change forced:
+  `internal/ui/kernel/setting_test.go`, whose `TestSwitchGlyphs_KeepsModeAndScheme` called the function
+  this packet's signature changed, and `cmd/saral/main.go` plus its test, which `docs/FILTERS.md`'s
+  consumer sweep names directly as needing the flag.
   A third tier beside `UnicodeGlyphs` and `ASCIIGlyphs`, `nerd` the default, all three switchable from
-  the settings screen's existing Glyphs row. **This reverses the rule `kernel/theme.go` states in as
-  many words** — *"Nothing here may assume a Nerd Font"* — deliberately and on request; the tier below
-  is kept whole rather than deleted, which is what the setting is for.
-  **The icon is resolved from the site's own type and never from its name.** A name is localised and
-  a team-managed project mints its own, so the hierarchy level and the subtask flag decide, and a type
-  nothing can resolve falls back to its first letter. A hardcoded `"Bug"` is the way a change gets
-  rejected here most often. `config.Profile.Glyphs` gains a third legal value and `cmd/saral` its flag.
+  the settings screen's existing Glyphs row via `Glyphs.Tier()`. **This reverses the rule `kernel/theme.go`
+  stated in as many words** — *"Nothing here may assume a Nerd Font"* — deliberately and on request; the
+  two tiers under `nerd` are kept whole rather than deleted, which is what the setting is for.
+  **`docs/FILTERS.md`'s own design was checked against `pkg/jira.IssueType` and half of it was wrong.**
+  The type carries an `ID`, a `Name`, a `Subtask` flag and an `IconURL` — no hierarchy level anywhere —
+  so "epic above story, story, task, subtask below" cannot be resolved from what the port actually
+  hands back. `TypeGlyph` therefore only ever reaches `TypeSubtask` or the type's own first letter; the
+  four other fields the glyph table asks for (`TypeEpic`, `TypeStory`, `TypeTask`, `TypeBug`) are on
+  `Glyphs` and defined in every tier, ready for the port amendment that would let something reach them,
+  but nothing today can resolve a type as one of them without matching its name — which is the
+  hardcoded-`"Bug"` failure mode this repo rejects most often, so the letter fallback is what runs
+  instead. Proven against the fake's own fixtures: `jiratest.Gen` names its types "Story", "Defect",
+  "Chore" and "Epic" rather than the stock English names precisely so a hardcoded match cannot pass,
+  and the board's golden files now show `S`/`D`/`C`/`E` — the type's own initial, never `"Bug"`.
+  **Priority has even less to resolve from**: `pkg/jira.Priority` is an `ID` and a `Name`, nothing that
+  ranks it, so `PriorityGlyph` falls back to the same letter for the same reason, and status category
+  resolves cleanly off `jira.StatusCategory` since that is the one status property every site agrees on.
+  **Where the icon actually lands is what a walk of the four owned render.go files, not the doc's
+  guess, decided.** `internal/ui/list` and `internal/ui/backlog` each truncate a status name in a fixed
+  column and now swap in the category icon exactly where the name would have been cut anyway; neither
+  ever drew a priority column, so priority gets no icon in either — the fields exist and are tested,
+  unused until a column spends cells on a priority name. `internal/ui/board` draws no type, status or
+  priority name on a card at all — status is already a colour on the key — so its resting card's marker
+  (blank before this) is the type icon instead; selected and held keep the markers they already had.
+  `internal/ui/issue`'s header draws all three in full and truncates only the joined line as a whole, so
+  it keeps full names until the line overflows the pane and only then substitutes the three icons,
+  never printing an icon beside a name that already fit.
+  `config.Profile.Glyphs` gains `"nerd"` as a third legal value, empty stays the absence of a choice
+  (now meaning nerd rather than unicode), and `cmd/saral` gains a `--glyphs` flag on the same pattern
+  as `--theme` and `--scheme`.
 
 - [ ] **F2 — One filter bar, and a picker that takes more than one value** ·
   **owns** `internal/ui/widget/filterbar/**`, `internal/ui/filter/**`,

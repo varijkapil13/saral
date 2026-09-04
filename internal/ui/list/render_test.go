@@ -89,6 +89,33 @@ func TestRenderRow_IsExactlyAsWideAsTheLayoutWhateverTheContent(t *testing.T) {
 	}
 }
 
+func TestRenderRow_TypeAndStatusIconsAcrossGlyphTiers(t *testing.T) {
+	iss := jira.Issue{
+		Key:     "PROJ-42",
+		Summary: "A row whose type and status names do not fit their columns",
+		Type:    jira.IssueType{Name: "Documentation"},
+		Status:  jira.Status{Name: "Waiting on somebody else entirely", Category: jira.CategoryInProgress},
+	}
+	now := time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC)
+	lay := planLayout(100, 8)
+
+	for _, tier := range []struct {
+		name   string
+		glyphs kernel.Glyphs
+	}{
+		{"nerd", kernel.NerdGlyphs()},
+		{"unicode", kernel.UnicodeGlyphs()},
+		{"ascii", kernel.ASCIIGlyphs()},
+	} {
+		t.Run(tier.name, func(t *testing.T) {
+			theme := kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
+			st := newStyles(theme)
+			got := ansi.Strip(renderRow(&iss, lay, false, st, theme, time.UTC, now, widget.Zoner{}))
+			golden(t, "row_icons_"+tier.name+".golden", got+"\n")
+		})
+	}
+}
+
 func TestFormatWhen_RendersInTheAccountsZoneAndDropsTheYearOnlyWhenItIsThisOne(t *testing.T) {
 	t.Parallel()
 

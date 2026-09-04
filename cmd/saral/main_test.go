@@ -103,6 +103,32 @@ func TestBuild_NoColorEnvironmentWinsOverTheFlag(t *testing.T) {
 	}
 }
 
+func TestBuild_DefaultsToTheNerdGlyphTier(t *testing.T) {
+	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
+
+	deps, _, _, _, err := build(options{})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if got := deps.Theme.Glyphs.Tier(); got != "nerd" {
+		t.Errorf("a fresh build's glyph tier is %q, want nerd", got)
+	}
+}
+
+func TestBuild_GlyphsFlagOverridesTheProfile(t *testing.T) {
+	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
+
+	deps, _, _, _, err := build(options{glyphs: "ascii"})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if got := deps.Theme.Glyphs.Tier(); got != "ascii" {
+		t.Errorf("the --glyphs flag was ignored: got tier %q, want ascii", got)
+	}
+}
+
 func TestBuild_AFirstRunStartsAtSetup(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
 	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
