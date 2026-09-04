@@ -98,11 +98,11 @@ func (m *Model) Init() tea.Cmd { return nil }
 func (m *Model) rebuildRows() {
 	under := m.selectedID()
 	m.rows = m.rows[:0]
-	for _, s := range m.all {
-		if refusal(m.deps.Caps, s.Requires, s.Title) != "" {
+	for i := range m.all {
+		if refusal(m.deps.Caps, m.all[i].Requires, m.all[i].Title) != "" {
 			continue
 		}
-		m.rows = append(m.rows, s)
+		m.rows = append(m.rows, m.all[i])
 	}
 	m.layoutLines()
 	if at := m.indexOf(under); at >= 0 {
@@ -116,10 +116,10 @@ func (m *Model) rebuildRows() {
 func (m *Model) layoutLines() {
 	m.lineStart = make([]int, len(m.rows))
 	line, last := 0, ""
-	for i, s := range m.rows {
-		if s.Section != last {
+	for i := range m.rows {
+		if m.rows[i].Section != last {
 			line += 2
-			last = s.Section
+			last = m.rows[i].Section
 		}
 		m.lineStart[i] = line
 		line += 3
@@ -371,8 +371,9 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if msg.Button != tea.MouseLeft || m.deps.Zones == nil {
 		return nil
 	}
-	for i, s := range m.rows {
-		if shapeOf(s, m.deps) == shapeRadios {
+	for i := range m.rows {
+		s := &m.rows[i]
+		if shapeOf(*s, m.deps) == shapeRadios {
 			for _, o := range s.Options(m.deps) {
 				if m.deps.Zones.Get(m.optZone(s.ID, o.ID)).InBounds(msg) {
 					m.cursor = i
@@ -423,12 +424,12 @@ func (m *Model) renderAll() []string {
 	}
 	out := make([]string, 0, m.total)
 	last := ""
-	for i, s := range m.rows {
-		if s.Section != last {
-			out = append(out, m.renderHeader(s.Section), "")
-			last = s.Section
+	for i := range m.rows {
+		if m.rows[i].Section != last {
+			out = append(out, m.renderHeader(m.rows[i].Section), "")
+			last = m.rows[i].Section
 		}
-		ctrl, detail := m.renderRow(i, s)
+		ctrl, detail := m.renderRow(i, m.rows[i])
 		out = append(out, ctrl, detail, "")
 	}
 	return out
@@ -549,7 +550,8 @@ func (m *Model) scopeSuffix(s kernel.Setting) string {
 func (m *Model) dominantScope(section string) (kernel.SettingScope, bool) {
 	counts := map[kernel.SettingScope]int{}
 	var order []kernel.SettingScope
-	for _, s := range m.rows {
+	for i := range m.rows {
+		s := &m.rows[i]
 		if s.Section != section || s.Kind == kernel.KindAction {
 			continue
 		}

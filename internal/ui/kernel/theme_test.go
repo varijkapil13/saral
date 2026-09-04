@@ -202,9 +202,10 @@ func TestThemeIsASettingNotACommand(t *testing.T) {
 // LookupCommand already do for their own registries.
 func lookupSetting(t *testing.T, id string) (Setting, bool) {
 	t.Helper()
-	for _, s := range Settings() {
-		if s.ID == id {
-			return s, true
+	all := Settings()
+	for i := range all {
+		if all[i].ID == id {
+			return all[i], true
 		}
 	}
 	return Setting{}, false

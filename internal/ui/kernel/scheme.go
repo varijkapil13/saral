@@ -140,8 +140,10 @@ func schemeSetting() Setting {
 		Scope:   ScopeProfile,
 		Options: func(Deps) []SettingOption {
 			out := make([]SettingOption, len(Schemes))
-			for i, sc := range Schemes {
-				out[i] = SettingOption{ID: sc.id, Label: sc.name, Style: schemeStyle(sc)}
+			for i := range Schemes {
+				out[i] = SettingOption{
+					ID: Schemes[i].id, Label: Schemes[i].name, Style: schemeStyle(Schemes[i]),
+				}
 			}
 			return out
 		},

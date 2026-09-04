@@ -34,6 +34,7 @@ const (
 // section so that nothing has to guess whether a choice survives the session.
 type SettingScope int
 
+// The scopes a setting's value can be kept in.
 const (
 	ScopeProfile SettingScope = iota // config.toml, the active profile
 	ScopeFile                        // config.toml, shared by every profile
@@ -165,8 +166,8 @@ func Settings() []Setting {
 	defer reg.mu.RUnlock()
 	sections := reg.settingSections
 	out := make([]Setting, 0, len(reg.settings))
-	for _, s := range reg.settings {
-		out = append(out, s)
+	for id := range reg.settings {
+		out = append(out, reg.settings[id])
 	}
 	sort.Slice(out, func(i, j int) bool {
 		si, sj := slices.Index(sections, out[i].Section), slices.Index(sections, out[j].Section)

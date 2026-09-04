@@ -51,6 +51,8 @@ type ViewSpec struct {
 // table of group names: AGENTS.md forbids the central switch that would be.
 type CommandKind int
 
+// The command kinds, in the order the unfiltered palette heads them. KindVerb
+// is the default and is drawn last; see rank below.
 const (
 	// KindVerb is the default; not KindAction, which SettingKind already uses
 	// in this package.

@@ -54,8 +54,8 @@ type fakeState struct {
 // sampleSettings is five settings across two sections — one of every kind —
 // injected rather than read from the real registry, so these tests do not
 // depend on which view packages happen to be linked into the test binary.
-func sampleSettings(st *fakeState) ([]kernel.Setting, []string) {
-	settings := []kernel.Setting{
+func sampleSettings(st *fakeState) (settings []kernel.Setting, sections []string) {
+	settings = []kernel.Setting{
 		{
 			ID: "appearance.theme", Section: "Appearance", Order: 0, Title: "Theme",
 			Summary: "how colours are chosen", Kind: kernel.KindChoice, Scope: kernel.ScopeProfile,

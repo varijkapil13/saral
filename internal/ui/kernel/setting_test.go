@@ -56,7 +56,8 @@ func TestSettings_EveryOneAnswersValueWithAnOptionThatExists(t *testing.T) {
 
 func checkSettingsAnswerTheirOwnOptions(t *testing.T, settings []Setting, d Deps) {
 	t.Helper()
-	for _, s := range settings {
+	for i := range settings {
+		s := &settings[i]
 		if s.Kind != KindChoice && s.Kind != KindToggle {
 			continue
 		}
