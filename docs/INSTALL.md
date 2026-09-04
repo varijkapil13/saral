@@ -125,3 +125,10 @@ link time, so they describe the binary in your hand rather than whatever the rep
 
 Both overrides must be absolute paths. Uninstalling never touches either unless you ask for it — see
 `brew uninstall --zap` above, or delete the two directories.
+
+**A build from a checkout uses `saral-dev` instead of `saral`, in both places.** An installed copy and
+one you built are two programs on one machine, and sharing a directory means testing a change rewrites
+the profile, the project and the colour scheme the installed copy reads — and the two contend for the
+cache's file lock. Run `saral --version`: it prints the config path it settled on and says which kind
+of build it is. Either override still names a directory outright and is not qualified again, so
+pointing a development build at the installed configuration is a matter of setting `SARAL_CONFIG_DIR`.

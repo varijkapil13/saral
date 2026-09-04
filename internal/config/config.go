@@ -110,6 +110,11 @@ func Path() (string, error) {
 }
 
 // os.UserConfigDir ignores XDG_CONFIG_HOME on darwin, so the lookup is done here.
+//
+// The directory is named for the build: a release keeps its files under saral
+// and anything built from a checkout under saral-dev, so a development copy
+// cannot rewrite what an installed one reads. SARAL_CONFIG_DIR and
+// SARAL_CACHE_DIR name a directory outright and are not qualified again.
 func xdgPath(override, xdgVar, homeRelative string) (string, error) {
 	if v := strings.TrimSpace(os.Getenv(override)); v != "" {
 		if !filepath.IsAbs(v) {
@@ -121,13 +126,13 @@ func xdgPath(override, xdgVar, homeRelative string) (string, error) {
 		if !filepath.IsAbs(v) {
 			return "", fmt.Errorf("%s must be an absolute path, got %q", xdgVar, v)
 		}
-		return filepath.Join(v, appName), nil
+		return filepath.Join(v, dirName()), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("locating the home directory: %w", err)
 	}
-	return filepath.Join(home, homeRelative, appName), nil
+	return filepath.Join(home, homeRelative, dirName()), nil
 }
 
 // Load reads the config file from its XDG location. A missing file yields

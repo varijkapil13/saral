@@ -95,7 +95,9 @@ the site before saving, and writes the profile. Re-running it over an existing p
 those four and leaves your theme, timeline field names and saved queries alone.
 [Get an API token here.](https://id.atlassian.com/manage-profile/security/api-tokens)
 
-The file it writes is `~/.config/saral/config.toml`, and it is meant to stay safe to hand somebody:
+The file it writes is `~/.config/saral/config.toml` — `saral-dev` in place of `saral` for a build from
+a checkout, so an installed copy and a development one never share a profile; `saral --version` prints
+the path. It is meant to stay safe to hand somebody:
 **the token is never in it, only where to find it.**
 
 ```toml

@@ -32,6 +32,10 @@ import (
 // cacheFile is the bbolt database inside config.CacheDir().
 const cacheFile = "cache.db"
 
+// fileNameTOML is what config.Path builds; --version names it without asking
+// for the path, which would fail on a machine with no home directory.
+const fileNameTOML = "config.toml"
+
 // tokenTimeout bounds resolving the token, which happens before the first frame
 // and cannot be cancelled by anyone watching it. internal/config gives a command
 // source 15s plus a 2s wait delay of its own, so this sits above that and lets
@@ -75,6 +79,33 @@ type options struct {
 	showVer    bool
 }
 
+// printVersion names the build and where it keeps its files. The path is not
+// decoration: a checkout and an installed copy are two programs on one machine,
+// and the first question about a profile that did not save is which of them
+// wrote it.
+func printVersion(stdout io.Writer) error {
+	if _, err := fmt.Fprintf(stdout, "saral %s (%s, %s)\n", version, commit, date); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(stdout, configNote())
+	return err
+}
+
+// configNote is where this build keeps its profile, and why that is not where
+// another copy keeps its. A machine with no home directory has nowhere to put
+// one, which is worth saying rather than leaving the line off.
+func configNote() string {
+	dir, err := config.Dir()
+	if err != nil {
+		return "config nowhere: " + err.Error()
+	}
+	kind := "release"
+	if config.IsDevBuild() {
+		kind = "development build, kept apart from an installed copy"
+	}
+	return "config " + filepath.Join(dir, fileNameTOML) + " (" + kind + ")"
+}
+
 func run(args []string, stdout, stderr io.Writer) error {
 	var opt options
 	fs := flag.NewFlagSet("saral", flag.ContinueOnError)
@@ -108,8 +139,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		}
 	})
 	if opt.showVer {
-		_, err := fmt.Fprintf(stdout, "saral %s (%s, %s)\n", version, commit, date)
-		return err
+		return printVersion(stdout)
 	}
 	switch rest := fs.Args(); len(rest) {
 	case 0:

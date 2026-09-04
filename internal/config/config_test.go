@@ -348,11 +348,11 @@ func TestDirAndCacheDir_PreferTheOverrideThenXDGThenHome(t *testing.T) {
 			{
 				name: "XDG gets the application directory appended",
 				xdg:  filepath.Join(string(filepath.Separator), "tmp", "xdg"),
-				want: filepath.Join(string(filepath.Separator), "tmp", "xdg", "saral"),
+				want: filepath.Join(string(filepath.Separator), "tmp", "xdg", dirName()),
 			},
 			{
 				name: "with neither set it lands under the home directory on every platform",
-				want: filepath.Join(home, d.fallback, "saral"),
+				want: filepath.Join(home, d.fallback, dirName()),
 			},
 			{
 				name:        "a relative override is refused",

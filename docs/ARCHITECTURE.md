@@ -740,8 +740,16 @@ it, so `errors.As` still classifies it as whichever of them the site answered wi
 
 XDG paths, profiles, and **no secrets in the config file** — it must stay safe to share or commit.
 
+**The directory is named for the build.** A release keeps its files under `saral` and anything built
+from a checkout under `saral-dev`, config and cache alike, so a development copy cannot rewrite the
+profile, the project scope or the colour scheme an installed one reads, and the two never contend for
+the bbolt cache's file lock. `internal/config` decides it from `debug.ReadBuildInfo`: a clean tag is a
+release, a pseudo-version or `(devel)` is not — a prerelease tag is a release, because somebody tagged
+it. `SARAL_CONFIG_DIR` and `SARAL_CACHE_DIR` name a directory outright and are never qualified again,
+which is how `docs/DEMO.md` drives the program. `saral --version` prints the path it settled on.
+
 ```toml
-# ~/.config/saral/config.toml
+# ~/.config/saral/config.toml — saral-dev/ for a build from a checkout
 active = "work"
 
 [profiles.work]
