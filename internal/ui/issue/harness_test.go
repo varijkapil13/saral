@@ -24,21 +24,38 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
-// TestMain points the cache directory at one of this run's own. The comment
-// thread the detail pane opens finds its drafts directory when it is built, and
-// nothing here may reach the cache directory of whoever is running the suite.
+// isolatedConfigDir is the directory TestMain points SARAL_CONFIG_DIR at, so a
+// test that never calls t.Setenv itself can still assert it is not reading
+// whoever is running the suite's real config.toml.
+var isolatedConfigDir string
+
+// TestMain points the cache and config directories at ones of this run's own.
+// The comment thread the detail pane opens finds its drafts directory when it
+// is built, customFields reads a profile's pins on every render, and nothing
+// here may reach the real directories of whoever is running the suite.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "saral-issue-cache")
+	cacheDir, err := os.MkdirTemp("", "saral-issue-cache")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	if err := os.Setenv("SARAL_CACHE_DIR", dir); err != nil {
+	if err := os.Setenv("SARAL_CACHE_DIR", cacheDir); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	configDir, err := os.MkdirTemp("", "saral-issue-config")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := os.Setenv("SARAL_CONFIG_DIR", configDir); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	isolatedConfigDir = configDir
 	code := m.Run()
-	_ = os.RemoveAll(dir)
+	_ = os.RemoveAll(cacheDir)
+	_ = os.RemoveAll(configDir)
 	os.Exit(code)
 }
 

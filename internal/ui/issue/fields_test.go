@@ -468,6 +468,23 @@ func TestFields_AnUnknownPinnedIDIsSkippedButSurvivesASave(t *testing.T) {
 	}
 }
 
+// customFields runs on every sidebar render, not just the pin-specific tests
+// here, so a case that never calls writeProfile still has to prove
+// pinnedFieldIDs is reading the package's isolated config directory rather
+// than falling through to whoever is running the suite's real one.
+func TestFields_CustomFieldsNeverReadsOutsideTheIsolatedConfigDir(t *testing.T) {
+	if dir, err := config.Dir(); err != nil || dir != isolatedConfigDir {
+		t.Fatalf("config.Dir() = %q, %v, want the isolated %q", dir, err, isolatedConfigDir)
+	}
+	iss, labels := pinnableIssue()
+	dr := newDriver(t, testDeps(newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 40)
+	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
+	dr.key("tab")
+
+	got := dr.view()
+	mustNotContain(t, got, "Pinned")
+}
+
 // A profile on a different site is never the source of what draws here: a
 // session on example.atlassian.net must not pick up another site's pins.
 func TestFields_APinFromAnotherSiteIsNeverDrawn(t *testing.T) {
