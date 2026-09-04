@@ -51,6 +51,12 @@ type Model struct {
 	labels      app.FieldLabels
 	loadedIssue bool
 
+	// edit is the site's own answer to which fields belong on this issue's
+	// screen right now. A read that never arrives — it failed, or this build
+	// has no site to ask — leaves it at its zero value, which fields.go reads
+	// as "no ordering signal" rather than as an empty screen.
+	edit jira.EditMeta
+
 	// thread is the comment view itself rather than a second rendering of one.
 	// The full-screen gesture hands this same instance to the kernel, so the
 	// footer and the ? overlay are the thread's own keys and coming back lands
@@ -186,6 +192,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 			m.dataGen++
 		}
 
+	case editMetaMsg:
+		if m.current(msg.gen) {
+			m.edit = msg.meta
+			m.dataGen++
+		}
+
 	case failedMsg:
 		if m.current(msg.gen) {
 			cmd = kernel.Fail(msg.err)
@@ -247,6 +259,12 @@ func join(a, b tea.Cmd) tea.Cmd {
 
 func (m *Model) current(gen int) bool { return gen == m.gen }
 
+// fetch reads the issue and, alongside it rather than after it, asks the site
+// which fields belong on its screen right now. Both share this pane's
+// cancellation and its generation, and neither waits on the other: the second
+// request is the whole cost of the ordering signal fields.go draws with, and
+// starting it only once the first has answered would double what opening an
+// issue costs to draw.
 func (m *Model) fetch() tea.Cmd {
 	if m.search == nil || m.deps.Jira == nil || m.issue.Key == "" {
 		return nil
@@ -255,7 +273,10 @@ func (m *Model) fetch() tea.Cmd {
 	m.gen++
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	return kernel.Reply(load(ctx, m.search, m.issue.Key, m.gen), m.addr)
+	return join(
+		kernel.Reply(load(ctx, m.search, m.issue.Key, m.gen), m.addr),
+		kernel.Reply(loadEditMeta(ctx, m.deps.Jira, m.issue.Key, m.gen), m.addr),
+	)
 }
 
 func (m *Model) stop() {

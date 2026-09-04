@@ -142,6 +142,12 @@ type Client interface {
 	// CreateMeta reports what a project and issue type require to create an
 	// issue.
 	CreateMeta(ctx context.Context, projectKey, issueTypeID string) (Schema, error)
+	// EditMeta reports the fields on this issue's screen right now, resolved
+	// through the screen scheme, the field configuration and each custom
+	// field's context. It answers with editable fields only — see EditMeta's
+	// own documentation for what that does and does not mean about drawing a
+	// field it never names.
+	EditMeta(ctx context.Context, key string) (EditMeta, error)
 	// BulkMove submits an asynchronous cross-project move and returns the task
 	// to poll. It is the only way to change an issue's project.
 	BulkMove(ctx context.Context, in MoveRequest) (TaskRef, error)

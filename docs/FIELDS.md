@@ -82,10 +82,20 @@ what belongs on this issue type, needing only *Browse projects*.
 - It answers with **editable** fields, so a field that is read-only on the view screen is absent from
   it. That makes it an ordering and relevance signal and **not** the sole rule about what to draw; a
   field with a value that editmeta does not mention is still drawn, below the ones it does.
-- One extra request per issue opened. It is coalesced with the read already in flight and cached
-  against the issue, and it is not fetched at all where the sidebar is not drawn.
-- A port method, so `pkg/jira/port.go` grows one — which `docs/PARALLEL.md` says needs an issue
-  labelled `contract` and a fast review, because it unblocks or blocks everyone.
+- One extra request per issue opened, started alongside the issue read rather than after it —
+  `internal/ui/issue`'s `fetch` batches `loadEditMeta` beside `load` under the same cancellation and
+  generation, so opening a pane costs one round trip's worth of latency and not two. It is not
+  re-fetched on a keystroke that only redraws the pane, and it is asked for only where `fetch` asks for
+  the issue at all — a build with no Jira client draws no sidebar to order in the first place.
+- A failed read — a capability refusal, a rate limit, a transport error — never reaches the pane at
+  all: `loadEditMeta` answers with no message rather than a `failedMsg`, so the fields section falls
+  back to the plain alphabetical order it always had. That fallback is not a branch of its own — an
+  `EditMeta` that never arrived is the zero value, `EditMeta.Order` answers `false` for every field on
+  it, and the sort that reads that answer is the same sort that runs once the screen has arrived.
+- `pkg/jira/port.go` grows `EditMeta(ctx, key) (EditMeta, error)`, on `SchemaReader` — the role that
+  already read "a create **or edit** screen is built from the answer" before this packet gave it
+  something to mean. `docs/PARALLEL.md` says that needs an issue labelled `contract` and a fast review,
+  because it unblocks or blocks everyone.
 
 ## P7 — Pin your own
 

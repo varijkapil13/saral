@@ -144,6 +144,7 @@ type Fake struct {
 
 	issues    map[string]*jira.Issue
 	issueKeys []string
+	editMeta  map[string]jira.EditMeta
 
 	boards   map[int64]*jira.Board
 	sprints  map[int64]*jira.Sprint
@@ -197,6 +198,7 @@ func (f *Fake) fakeInit() {
 	f.projectKeys = nil
 	f.issues = make(map[string]*jira.Issue)
 	f.issueKeys = nil
+	f.editMeta = make(map[string]jira.EditMeta)
 	f.boards = make(map[int64]*jira.Board)
 	f.sprints = make(map[int64]*jira.Sprint)
 	f.versions = make(map[string]*jira.Version)

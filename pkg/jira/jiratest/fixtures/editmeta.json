@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "customfield_10032": {
+      "required": false,
+      "schema": {
+        "type": "number",
+        "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+        "customId": 10032
+      },
+      "name": "Story Points",
+      "key": "customfield_10032",
+      "operations": ["set"]
+    },
+    "summary": {
+      "required": true,
+      "schema": { "type": "string", "system": "summary" },
+      "name": "Summary",
+      "key": "summary",
+      "operations": ["set"]
+    },
+    "labels": {
+      "required": false,
+      "schema": { "type": "array", "items": "string", "system": "labels" },
+      "name": "Labels",
+      "key": "labels",
+      "operations": ["add", "set", "remove"]
+    }
+  }
+}

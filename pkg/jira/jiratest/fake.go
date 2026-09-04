@@ -165,6 +165,30 @@ func (f *Fake) Issue(ctx context.Context, key string) (jira.Issue, error) {
 	return out, nil
 }
 
+// EditMeta answers what SetEditMeta configured for this issue, or an empty
+// screen when nothing was: a fake that models nothing about a site's screen
+// configuration is a fake correctly saying so, not one guessing at a shape
+// nobody has captured.
+func (f *Fake) EditMeta(ctx context.Context, key string) (jira.EditMeta, error) {
+	if err := f.fakeBegin(ctx, "EditMeta"); err != nil {
+		return jira.EditMeta{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.issues[key]; !ok {
+		return jira.EditMeta{}, fakeNotFound("issue", key)
+	}
+	return jira.EditMeta{Fields: slices.Clone(f.editMeta[key].Fields)}, nil
+}
+
+// SetEditMeta sets what EditMeta answers for one issue: the fields on its
+// screen right now, in the order given.
+func (f *Fake) SetEditMeta(key string, fields ...jira.FieldMeta) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.editMeta[key] = jira.EditMeta{Fields: slices.Clone(fields)}
+}
+
 // CreateIssue creates an issue, refusing a missing summary or an unknown
 // project, issue type or parent with a *jira.ValidationError naming the field.
 func (f *Fake) CreateIssue(ctx context.Context, in jira.IssueInput) (jira.Issue, error) {

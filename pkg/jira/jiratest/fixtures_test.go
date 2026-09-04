@@ -204,6 +204,7 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"createmeta_bug.json",
 		"createmeta_issuetypes.json",
 		"createmeta_task.json",
+		"editmeta.json",
 		"field.json",
 		"field_localised.json",
 		"forbidden_browse_users.json",

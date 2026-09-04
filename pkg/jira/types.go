@@ -751,6 +751,32 @@ func (s Schema) Required() []FieldMeta {
 	return out
 }
 
+// EditMeta is what GET .../issue/{key}/editmeta answered for one issue: the
+// fields on its screen right now, in the order the site sent them, resolved
+// through the screen scheme, the field configuration and each custom field's
+// context.
+//
+// It answers with editable fields only, so a field that is read-only on the
+// view screen is absent from it. That makes Order an ordering and relevance
+// signal and never the sole rule about what to draw: a field carrying a value
+// that Order does not find is still drawn, below the ones it does — see
+// docs/FIELDS.md.
+type EditMeta struct {
+	Fields []FieldMeta
+}
+
+// Order returns where a field id sits among the screen's own fields, in the
+// order the site sent them. The zero value answers false for every id, which
+// is also what a read that never arrived answers.
+func (e EditMeta) Order(id string) (int, bool) {
+	for i := range e.Fields {
+		if e.Fields[i].Field.ID == id {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
 // Transition is a workflow move available on one issue right now. Status is not
 // writable on Jira, so this is the only way an issue changes state.
 type Transition struct {

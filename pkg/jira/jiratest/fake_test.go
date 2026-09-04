@@ -2290,6 +2290,66 @@ func TestCreateMeta_MarksTheFieldsTheCreateScreenRequires(t *testing.T) {
 	}
 }
 
+// An issue nothing has configured a screen for answers with an empty one
+// rather than a guess: this fake models nothing about a real site's screen
+// configuration by default.
+func TestEditMeta_AnUnconfiguredIssueAnswersAnEmptyScreen(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 1)
+
+	got, err := c.EditMeta(t.Context(), "PROJ-1")
+	if err != nil {
+		t.Fatalf("EditMeta: %v", err)
+	}
+	if len(got.Fields) != 0 {
+		t.Fatalf("got %d fields, want none: %v", len(got.Fields), got.Fields)
+	}
+}
+
+// SetEditMeta is what a test tells the fake this issue's screen names, in the
+// order the fields were given.
+func TestEditMeta_SetEditMetaIsWhatTheNextReadAnswers(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 2)
+	c.SetEditMeta("PROJ-1",
+		jira.FieldMeta{Field: jira.FieldRef{ID: "labels"}, Required: false},
+		jira.FieldMeta{Field: jira.FieldRef{ID: "summary"}, Required: true},
+	)
+
+	got, err := c.EditMeta(t.Context(), "PROJ-1")
+	if err != nil {
+		t.Fatalf("EditMeta: %v", err)
+	}
+	if at, on := got.Order("labels"); !on || at != 0 {
+		t.Errorf("Order(labels) = %d, %v, want 0, true", at, on)
+	}
+	if at, on := got.Order("summary"); !on || at != 1 {
+		t.Errorf("Order(summary) = %d, %v, want 1, true", at, on)
+	}
+	if _, on := got.Order("duedate"); on {
+		t.Error("a field SetEditMeta never named reads as on this screen")
+	}
+
+	// A different issue is unaffected: the screen is set per issue, not site-wide.
+	other, err := c.EditMeta(t.Context(), "PROJ-2")
+	if err != nil {
+		t.Fatalf("EditMeta: %v", err)
+	}
+	if len(other.Fields) != 0 {
+		t.Fatalf("PROJ-2 got %d fields from a call made for PROJ-1: %v", len(other.Fields), other.Fields)
+	}
+}
+
+func TestEditMeta_RefusesAnUnknownIssue(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 1)
+
+	var notFound *jira.NotFoundError
+	if _, err := c.EditMeta(t.Context(), "PROJ-999"); !errors.As(err, &notFound) {
+		t.Fatalf("got %T (%v), want a *jira.NotFoundError", err, err)
+	}
+}
+
 func TestGen_IsIdenticalOnEveryRun(t *testing.T) {
 	t.Parallel()
 	if !reflect.DeepEqual(jiratest.Gen(120), jiratest.Gen(120)) {

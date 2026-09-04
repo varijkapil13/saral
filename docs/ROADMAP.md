@@ -1516,7 +1516,7 @@ read: there is no public API for them, only an internal route that nothing here 
   than written from memory. A hidden field is **counted, not dropped**, the way a value this client
   cannot label already is, and a setting brings the whole lot back.
 
-- [ ] **P6 — Let the site say which fields belong on this issue** · **contract** ·
+- [x] **P6 — Let the site say which fields belong on this issue** · **contract** ·
   **owns** `pkg/jira/{port.go,roles.go,types.go}`, `pkg/jira/cloud/editmeta.go`,
   `pkg/jira/jiratest/**`, `internal/ui/issue/**`, `docs/{FIELDS,API-NOTES,ROADMAP}.md`
   `GET /rest/api/3/issue/{key}/editmeta` answers with the fields on this issue's screen, resolved

@@ -1,6 +1,8 @@
 package issue
 
 import (
+	"cmp"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -296,8 +298,18 @@ func (r *rows) custom() {
 // valueRoom is how many cells a value has once the label column has its own.
 func (r *rows) valueRoom() int { return max(r.width-labelWidth-2, 8) }
 
-// named is one field's display name and the text of its value.
-type named struct{ label, text string }
+// named is one field's display name, the text of its value, and where it sits
+// on the issue's screen right now.
+type named struct {
+	label, text string
+	order       int
+}
+
+// noScreenOrder marks a field editmeta did not name, which is most of them on
+// a site this build has never read a screen from: it sorts every such field
+// after every one editmeta did, and among themselves they keep sorting by
+// label exactly as they did before this program could ask.
+const noScreenOrder = math.MaxInt
 
 // customFields is every field this site defines that the issue carries a value
 // for, named the way the site spells it, minus the ones bookkeepingFields
@@ -308,6 +320,12 @@ type named struct{ label, text string }
 // differs on every site and its name is translated, so neither can be written
 // down here; an ID the catalogue could not name shows as the ID, because a value
 // nobody can label is still a value somebody put there.
+//
+// Ordering is the site's own screen first, in the order it put its fields in,
+// and everything editmeta did not name below that alphabetically — never the
+// other way, and never a reason to leave a field out: editmeta answers with
+// editable fields, so a field this issue carries a value for and the current
+// screen does not offer is still drawn, just last.
 func (m *Model) customFields(room int) (values []named, hidden, empty int) {
 	ids := m.issue.Fields.IDs()
 	values = make([]named, 0, len(ids))
@@ -327,9 +345,18 @@ func (m *Model) customFields(room int) (values []named, hidden, empty int) {
 			hidden++
 			continue
 		}
-		values = append(values, named{label: firstNonEmpty(ref.Name, id), text: text})
+		order := noScreenOrder
+		if at, on := m.edit.Order(id); on {
+			order = at
+		}
+		values = append(values, named{label: firstNonEmpty(ref.Name, id), text: text, order: order})
 	}
-	slices.SortFunc(values, func(a, b named) int { return strings.Compare(a.label, b.label) })
+	slices.SortFunc(values, func(a, b named) int {
+		if a.order != b.order {
+			return cmp.Compare(a.order, b.order)
+		}
+		return strings.Compare(a.label, b.label)
+	})
 	for _, id := range m.labels.IDs() {
 		ref, known := m.labels.Field(id)
 		switch {

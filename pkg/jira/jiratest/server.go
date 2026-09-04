@@ -213,6 +213,7 @@ var srvDefaultRoutes = []srvRoute{
 	{http.MethodPost, "/rest/api/3/search/jql", srvSearch},
 	{http.MethodPost, "/rest/api/3/search/approximate-count", srvFixtureHandler(http.StatusOK, "approximate_count.json")},
 	{http.MethodGet, "/rest/api/3/issue/{key}", srvFixtureHandler(http.StatusOK, "issue_rich_adf.json")},
+	{http.MethodGet, "/rest/api/3/issue/{key}/editmeta", srvFixtureHandler(http.StatusOK, "editmeta.json")},
 	{http.MethodGet, "/rest/api/3/issue/{key}/comment", srvFixtureHandler(http.StatusOK, "comments.json")},
 	{http.MethodGet, "/rest/api/3/issue/{key}/transitions", srvFixtureHandler(http.StatusOK, "transitions.json")},
 	// An attachment id is a number on this route and a string in the upload's

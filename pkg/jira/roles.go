@@ -48,6 +48,7 @@ type FieldCatalogue interface {
 // all are site configuration.
 type SchemaReader interface {
 	CreateMeta(ctx context.Context, projectKey, issueTypeID string) (Schema, error)
+	EditMeta(ctx context.Context, key string) (EditMeta, error)
 }
 
 // IssueWriter creates issues and applies sparse patches to them. It cannot move
