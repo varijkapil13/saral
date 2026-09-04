@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/richtext"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -275,17 +276,25 @@ func (r *rows) ref(ref *jira.IssueRef, keyW, statusW int) {
 	r.line(line + ref.Summary)
 }
 
-// custom lists the site's own fields, sorted by the name this site displays,
-// then says how many more came back with nothing in them and how many carry a
-// value this program is choosing not to draw — two different answers to "what
-// else is on this issue" that a row disappearing without a count cannot give.
+// custom lists the site's own fields: this profile's pinned ones first, under
+// their own heading and in the order they were pinned, then the rest sorted by
+// the name this site displays. It ends with how many more came back with
+// nothing in them and how many carry a value this program is choosing not to
+// draw — two different answers to "what else is on this issue" that a row
+// disappearing without a count cannot give.
 func (r *rows) custom() {
-	values, hidden, empty := r.m.customFields(r.valueRoom())
-	if len(values) > 0 {
-		r.heading("Fields")
+	pinned, rest, hidden, empty := r.m.customFields(r.valueRoom())
+	if len(pinned) > 0 {
+		r.heading("Pinned")
+		for _, v := range pinned {
+			r.field(v.label, v.text)
+		}
 	}
-	for _, v := range values {
-		r.field(v.label, v.text)
+	if len(rest) > 0 {
+		r.heading("Fields")
+		for _, v := range rest {
+			r.field(v.label, v.text)
+		}
 	}
 	if empty > 0 {
 		r.note(strconv.Itoa(empty) + " more, all empty")
@@ -298,11 +307,11 @@ func (r *rows) custom() {
 // valueRoom is how many cells a value has once the label column has its own.
 func (r *rows) valueRoom() int { return max(r.width-labelWidth-2, 8) }
 
-// named is one field's display name, the text of its value, and where it sits
-// on the issue's screen right now.
+// named is one field's id, its display name, the text of its value, and where
+// it sits on the issue's screen right now.
 type named struct {
-	label, text string
-	order       int
+	id, label, text string
+	order           int
 }
 
 // noScreenOrder marks a field editmeta did not name, which is most of them on
@@ -321,14 +330,18 @@ const noScreenOrder = math.MaxInt
 // down here; an ID the catalogue could not name shows as the ID, because a value
 // nobody can label is still a value somebody put there.
 //
-// Ordering is the site's own screen first, in the order it put its fields in,
-// and everything editmeta did not name below that alphabetically — never the
-// other way, and never a reason to leave a field out: editmeta answers with
-// editable fields, so a field this issue carries a value for and the current
-// screen does not offer is still drawn, just last.
-func (m *Model) customFields(room int) (values []named, hidden, empty int) {
+// pinned holds this profile's own picks, in the order they were pinned; rest is
+// everything else, ordered the site's own screen first, in the order it put its
+// fields in, and everything editmeta did not name below that alphabetically —
+// never the other way, and never a reason to leave a field out: editmeta
+// answers with editable fields, so a field this issue carries a value for and
+// the current screen does not offer is still drawn, just last. A pinned id this
+// issue carries no value for — the site no longer has it, or nobody has filled
+// it in — is in neither slice, which is what leaves it off the drawing without
+// touching the profile that still names it.
+func (m *Model) customFields(room int) (pinned, rest []named, hidden, empty int) {
 	ids := m.issue.Fields.IDs()
-	values = make([]named, 0, len(ids))
+	values := make([]named, 0, len(ids))
 	for _, id := range ids {
 		if _, drawn := slices.BinarySearch(platformIDs, id); drawn {
 			continue
@@ -349,7 +362,7 @@ func (m *Model) customFields(room int) (values []named, hidden, empty int) {
 		if at, on := m.edit.Order(id); on {
 			order = at
 		}
-		values = append(values, named{label: firstNonEmpty(ref.Name, id), text: text, order: order})
+		values = append(values, named{id: id, label: firstNonEmpty(ref.Name, id), text: text, order: order})
 	}
 	slices.SortFunc(values, func(a, b named) int {
 		if a.order != b.order {
@@ -357,6 +370,7 @@ func (m *Model) customFields(room int) (values []named, hidden, empty int) {
 		}
 		return strings.Compare(a.label, b.label)
 	})
+	pinned, rest = splitPinned(values, pinnedFieldIDs(m.deps.Site))
 	for _, id := range m.labels.IDs() {
 		ref, known := m.labels.Field(id)
 		switch {
@@ -367,7 +381,55 @@ func (m *Model) customFields(room int) (values []named, hidden, empty int) {
 			empty++
 		}
 	}
-	return values, hidden, empty
+	return pinned, rest, hidden, empty
+}
+
+// splitPinned pulls the pinned ids out of values, in the order pinnedIDs names
+// them, and leaves everything else in the order values already had. A pinned
+// id absent from values — the issue carries no value for it — is simply not in
+// either slice.
+func splitPinned(values []named, pinnedIDs []string) (pinned, rest []named) {
+	if len(pinnedIDs) == 0 {
+		return nil, values
+	}
+	byID := make(map[string]named, len(values))
+	for _, v := range values {
+		byID[v.id] = v
+	}
+	pinned = make([]named, 0, len(pinnedIDs))
+	for _, id := range pinnedIDs {
+		if v, ok := byID[id]; ok {
+			pinned = append(pinned, v)
+		}
+	}
+	rest = make([]named, 0, len(values))
+	for _, v := range values {
+		if !slices.Contains(pinnedIDs, v.id) {
+			rest = append(rest, v)
+		}
+	}
+	return pinned, rest
+}
+
+// pinnedFieldIDs is the field ids this profile draws first, in the order they
+// were pinned — config.toml's own answer, read fresh rather than cached on the
+// pane, since a pin list a settings row just changed has to be seen the next
+// time a sidebar is built rather than after a restart.
+//
+// A profile whose site does not match the one this session is on is never the
+// source, the same guard writeTheme applies before touching a profile a
+// --profile flag chose instead of the active one: a session on one site must
+// never draw the pins another site's profile happens to have.
+func pinnedFieldIDs(site string) []string {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil
+	}
+	profile, err := cfg.Current()
+	if err != nil || profile.Site != site {
+		return nil
+	}
+	return profile.Pinned
 }
 
 // fieldText renders one field value as a line of text. The kind decides what to

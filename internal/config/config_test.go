@@ -506,6 +506,74 @@ end   = ["Target end"]
 	}
 }
 
+// A field id is a site's own, so the list is kept per profile beside
+// Timeline's field names rather than in ui.toml, and it round-trips in the
+// order it was pinned rather than however a map would happen to iterate it.
+func TestSave_RoundTripsPinnedFieldIDsInPinOrder(t *testing.T) {
+	t.Parallel()
+
+	want := Config{
+		Active: "work",
+		Mouse:  true,
+		Profiles: map[string]Profile{
+			"work": {
+				Name: "work", Site: "example.atlassian.net", Email: "you@example.com",
+				Token:  TokenSource{Env: "JIRA_TOKEN"},
+				Pinned: []string{"customfield_13401", "duedate", "customfield_13402"},
+			},
+		},
+	}
+
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := want.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading back: %v", err)
+	}
+	if !strings.Contains(string(written), `pinned = ["customfield_13401", "duedate", "customfield_13402"]`) {
+		t.Errorf("Save did not write the pinned array, in pin order:\n%s", written)
+	}
+
+	got, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile of what Save wrote: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("round trip\n got %+v\nwant %+v", got, want)
+	}
+}
+
+// An id the site no longer has is this profile's business to keep, not
+// config's to prune: nothing here resolves a field id against a site, so a
+// profile that has seen two sites keeps every id either one ever answered to.
+func TestSave_KeepsAnUnrecognisedPinnedIDRatherThanPruningIt(t *testing.T) {
+	t.Parallel()
+
+	want := Config{
+		Profiles: map[string]Profile{
+			"work": {
+				Name: "work", Site: "example.atlassian.net", Email: "you@example.com",
+				Token:  TokenSource{Env: "JIRA_TOKEN"},
+				Pinned: []string{"customfield_10999", "customfield_13401"},
+			},
+		},
+	}
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := want.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if pinned := got.Profiles["work"].Pinned; !reflect.DeepEqual(pinned, want.Profiles["work"].Pinned) {
+		t.Errorf("Pinned = %v, want both ids kept: %v", pinned, want.Profiles["work"].Pinned)
+	}
+}
+
 func TestSave_NeverWritesTheTokenItself(t *testing.T) {
 	const secret = "9d8f7a6b5c4d3e2f1a0b"
 	t.Setenv("SARAL_TEST_TOKEN", secret)

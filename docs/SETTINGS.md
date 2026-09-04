@@ -297,6 +297,15 @@ the kernel holds `m.mouse`, calls `Zones.SetEnabled` once in `Init` and reads `m
 `View`, so a `SetMouseMsg` that sets the field, re-enables the zone manager and writes `Config.Mouse`
 is all of it.
 
+| State | Setting | Where it is kept |
+|---|---|---|
+| `Profile.Pinned` | `issue.pinned`, a new Issue section: a `KindChoice` row whose `Options`/`Set` only satisfy the registry contract, real work is `OpenPicker` | profile |
+
+`issue.pinned` opens `fieldPickerModel`, its own small multi-select picker over the site's field
+catalogue (`docs/FIELDS.md` says why `filter.Model`'s was not the one reused). `enter` toggles a field
+in or out of the working list without closing the picker; `esc` writes it to the profile in one save,
+in the order things were pinned.
+
 ### Stays a command *and* appears as a setting
 
 | Command | Why both |

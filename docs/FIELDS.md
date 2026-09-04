@@ -110,8 +110,17 @@ pinned = ["customfield_13401", "duedate", "customfield_13402"]
 
 - Pinned fields draw first, in the order they were pinned, under their own heading; everything else
   follows as it does now.
-- Editing the list is a settings row that opens **the multi-select picker F2 built**, over the site's
-  own field catalogue. That is the whole of the UI, and it is a picker that already exists.
+- Editing the list is a settings row, `issue.pinned` under a new Issue section. **`filter.Model`'s
+  multi-select picker (commit bc75989) was not reused**: it is wired to `filter.Facet`, a fixed enum of
+  assignee/reporter/status/type/priority/label, each fetched as JQL vocabulary through a package this
+  packet does not own — a field catalogue is neither a facet nor a vocabulary of *values* for one, and
+  offering it would mean adding a seventh facet and a new fetch to `internal/ui/filter`.
+  `internal/ui/settings` gets its own small multi-select picker instead (`fieldPickerModel`), built the
+  way the existing single-select options picker already is: a fuzzy filter over rows, `enter` toggles
+  membership without closing the picker — the one piece of bc75989's shape actually needed here — and
+  `esc` writes the accumulated list to the profile in one save rather than one per toggle. The site's
+  field catalogue comes from `SchemaReader.Fields`, wrapped in the picker's own `app.Search` the way
+  every other view already caches it.
 - Pinning from the issue itself is not in this packet: the sidebar has no per-field cursor, and
   giving it one is a bigger change than the list is worth.
 

@@ -92,8 +92,8 @@ func TestFields_WithNoScreenSignalTheOrderIsAlphabetical(t *testing.T) {
 	dr := newDriver(t, testDeps(newFake(1)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 28)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
 
-	values, _, _ := dr.m.customFields(60)
-	if got := fieldOrder(values); !equalOrder(got, "Alpha Field", "Zebra Field") {
+	_, rest, _, _ := dr.m.customFields(60)
+	if got := fieldOrder(rest); !equalOrder(got, "Alpha Field", "Zebra Field") {
 		t.Fatalf("got %v, want Alpha before Zebra", got)
 	}
 }
@@ -111,8 +111,8 @@ func TestFields_TheScreenTheSiteSentOrdersOnScreenFieldsFirst(t *testing.T) {
 		Fields: []jira.FieldMeta{{Field: jira.FieldRef{ID: zebraID}}},
 	}})
 
-	values, _, _ := dr.m.customFields(60)
-	if got := fieldOrder(values); !equalOrder(got, "Zebra Field", "Alpha Field") {
+	_, rest, _, _ := dr.m.customFields(60)
+	if got := fieldOrder(rest); !equalOrder(got, "Zebra Field", "Alpha Field") {
 		t.Fatalf("got %v, want Zebra before Alpha: editmeta named Zebra and not Alpha", got)
 	}
 }

@@ -1527,16 +1527,18 @@ read: there is no public API for them, only an internal route that nothing here 
   method, so this needs the `contract` label and a fast review per `docs/PARALLEL.md`, and a failed
   read leaves the sidebar drawing what it drew before.
 
-- [ ] **P7 — Pin your own** · depends on P5 ·
+- [x] **P7 — Pin your own** · depends on P5 ·
   **owns** `internal/config/{config.go,config_test.go}`, `internal/ui/settings/**`,
   `internal/ui/issue/{fields.go,fields_test.go}`, `docs/{FIELDS,SETTINGS,ROADMAP}.md`
   A list of field ids kept **per profile**, in `config.toml` beside the timeline field names. Per
   profile and not per machine, because a field id is a site's own — `customfield_13401` means nothing
   on another site — which is the opposite of the reason `ui.toml` holds the pane split. Pinned fields
   draw first, in the order they were pinned, under their own heading. Editing the list is a settings
-  row that opens **the multi-select picker F2 landed**, over the site's field catalogue, so the whole
-  of the UI already exists. A pinned id the site no longer has is dropped from the drawing and kept in
-  the file, so a profile that has seen two sites does not lose its list.
+  row, `issue.pinned`: the multi-select picker F2 landed is `filter.Model`'s, wired to a fixed enum of
+  JQL facets it fetches vocabulary for, and a field catalogue is neither — so this is a small picker of
+  its own in `internal/ui/settings`, the one piece of bc75989's shape it actually needed. A pinned id
+  the site no longer has is dropped from the drawing and kept in the file, so a profile that has seen
+  two sites does not lose its list.
 
 ## Later, deliberately not now
 

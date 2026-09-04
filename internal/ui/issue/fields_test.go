@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -281,11 +282,11 @@ func TestFields_AFieldWithAnUnknownPluginKeyIsNeverHidden(t *testing.T) {
 	t.Parallel()
 
 	dr := fieldsPane(t, 80, 26)
-	values, hidden, _ := dr.m.customFields(60)
+	_, rest, hidden, _ := dr.m.customFields(60)
 	if hidden != 0 {
 		t.Fatalf("got %d hidden fields, want 0: this fixture carries no bookkeeping key", hidden)
 	}
-	if !slices.ContainsFunc(values, func(v named) bool { return v.label == "Aufwandsschätzung" }) {
+	if !slices.ContainsFunc(rest, func(v named) bool { return v.label == "Aufwandsschätzung" }) {
 		t.Error("a field with an ordinary plugin key was hidden or dropped")
 	}
 }
@@ -348,4 +349,170 @@ func TestFields_ThePluginFieldsSettingBringsRankBack(t *testing.T) {
 	if got := setting.Value(kernel.Deps{}); got != "off" {
 		t.Fatalf("got %q after Set(\"off\"), want off", got)
 	}
+}
+
+// pinnableIssue carries four custom fields with values, named so that
+// alphabetical order and pin order never coincide by accident.
+func pinnableIssue() (jira.Issue, app.FieldLabels) {
+	mk := func(id, name string) jira.Field {
+		return jira.Field{
+			ID: id, Key: id, Name: name, Custom: true,
+			Schema: jira.FieldSchema{Type: "string", Custom: "com.atlassian.jira:textfield"},
+		}
+	}
+	alpha, bravo, charlie, delta :=
+		mk("customfield_30001", "Alpha"), mk("customfield_30002", "Bravo"),
+		mk("customfield_30003", "Charlie"), mk("customfield_30004", "Delta")
+	catalogue := []jira.Field{alpha, bravo, charlie, delta}
+	ids := []string{alpha.ID, bravo.ID, charlie.ID, delta.ID}
+	labels := app.NewFieldLabels(catalogue, ids)
+
+	iss := jira.Issue{
+		ID: "40001", Key: "PROJ-4", Summary: "pinned fields",
+		Project: jira.ProjectRef{Key: "PROJ", Name: "Pinning"},
+		Type:    jira.IssueType{Name: "Story"},
+		Status:  jira.Status{Name: "Building", Category: jira.CategoryInProgress},
+		Fields: jira.NewFieldSet(map[string]jira.FieldValue{
+			alpha.ID:   {Kind: jira.KindText, Text: "one"},
+			bravo.ID:   {Kind: jira.KindText, Text: "two"},
+			charlie.ID: {Kind: jira.KindText, Text: "three"},
+			delta.ID:   {Kind: jira.KindText, Text: "four"},
+		}),
+		Requested: jira.NewFieldMask(append([]string{"summary", "status", "issuetype", "project"}, ids...)),
+	}
+	return iss, labels
+}
+
+// writeProfile puts a profile at config.Path, on the site testDeps hands every
+// pane in this file, so pinnedFieldIDs finds it the way it would a real one.
+func writeProfile(t *testing.T, pinned []string) {
+	t.Helper()
+	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	cfg := config.Config{
+		Active: "work",
+		Profiles: map[string]config.Profile{
+			"work": {
+				Site: "example.atlassian.net", Email: "you@example.com",
+				Token: config.TokenSource{Env: "JIRA_TOKEN"}, Pinned: pinned,
+			},
+		},
+	}
+	path, err := config.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// pinnedPane opens pinnableIssue with the given profile pinned, or with no
+// config file at all when pinned is nil — the "nothing pinned because there is
+// nowhere to read it from" case rather than "nothing pinned because the list is
+// empty", which useConfig-style helpers elsewhere keep apart the same way.
+func pinnedPane(t *testing.T, pinned []string, w, h int) *driver {
+	t.Helper()
+	if pinned != nil {
+		writeProfile(t, pinned)
+	} else {
+		t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	}
+	iss, labels := pinnableIssue()
+	dr := newDriver(t, testDeps(newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
+	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
+	return dr
+}
+
+// Pinning out of alphabetical order is the case that proves the sidebar is
+// following the pin list rather than happening to agree with it.
+func TestFields_PinnedFieldsDrawFirstAndInPinOrder(t *testing.T) {
+	dr := pinnedPane(t, []string{"customfield_30003", "customfield_30001"}, 90, 40)
+	dr.key("tab")
+	got := dr.view()
+
+	mustContain(t, got, "Pinned", "Charlie", "Alpha", "Fields", "Bravo", "Delta")
+	if at, bt := strings.Index(got, "Pinned"), strings.Index(got, "Fields"); at < 0 || bt < 0 || at > bt {
+		t.Fatalf("Pinned heading does not come before Fields:\n%s", got)
+	}
+	if ac, aa := strings.Index(got, "Charlie"), strings.Index(got, "Alpha"); ac < 0 || aa < 0 || ac > aa {
+		t.Fatalf("Charlie does not come before Alpha, though it was pinned first:\n%s", got)
+	}
+}
+
+// A pinned id the site's own catalogue no longer answers for — and that no
+// issue carries a value for any more — never reaches the drawing, and nothing
+// about drawing the rest of the sidebar rewrites the profile that still names
+// it.
+func TestFields_AnUnknownPinnedIDIsSkippedButSurvivesASave(t *testing.T) {
+	pinned := []string{"customfield_99999", "customfield_30002"}
+	writeProfile(t, pinned)
+	iss, labels := pinnableIssue()
+	dr := newDriver(t, testDeps(newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 40)
+	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
+	dr.key("tab")
+
+	got := dr.view()
+	mustContain(t, got, "Pinned", "Bravo")
+	mustNotContain(t, got, "customfield_99999")
+
+	path, err := config.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, err := config.LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := saved.Profiles["work"].Pinned; !slices.Equal(got, pinned) {
+		t.Errorf("Pinned on disk is %v after drawing the sidebar, want %v unchanged", got, pinned)
+	}
+}
+
+// A profile on a different site is never the source of what draws here: a
+// session on example.atlassian.net must not pick up another site's pins.
+func TestFields_APinFromAnotherSiteIsNeverDrawn(t *testing.T) {
+	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	cfg := config.Config{
+		Active: "other",
+		Profiles: map[string]config.Profile{
+			"other": {
+				Site: "other.atlassian.net", Email: "you@example.com",
+				Token: config.TokenSource{Env: "JIRA_TOKEN"}, Pinned: []string{"customfield_30001"},
+			},
+		},
+	}
+	path, err := config.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	iss, labels := pinnableIssue()
+	dr := newDriver(t, testDeps(newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 40)
+	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
+	dr.key("tab")
+
+	mustNotContain(t, dr.view(), "Pinned")
+}
+
+// The sidebar with nothing pinned, three pinned, and one pinned field the site
+// no longer answers for — the three shapes docs/FIELDS.md asks for goldens of.
+func TestFields_PinnedGoldens(t *testing.T) {
+	t.Run("nothing_pinned", func(t *testing.T) {
+		dr := pinnedPane(t, nil, 90, 40)
+		dr.key("tab")
+		golden(t, "pinned_none_90x40.golden", dr.view())
+	})
+	t.Run("three_pinned", func(t *testing.T) {
+		dr := pinnedPane(t, []string{"customfield_30004", "customfield_30002", "customfield_30001"}, 90, 40)
+		dr.key("tab")
+		golden(t, "pinned_three_90x40.golden", dr.view())
+	})
+	t.Run("one_absent_from_site", func(t *testing.T) {
+		dr := pinnedPane(t, []string{"customfield_30001", "customfield_99999"}, 90, 40)
+		dr.key("tab")
+		golden(t, "pinned_absent_90x40.golden", dr.view())
+	})
 }

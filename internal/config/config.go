@@ -55,7 +55,12 @@ type Profile struct {
 	Project  string
 	Token    TokenSource
 	Timeline Timeline
-	Theme    string
+	// Pinned is the field ids this profile draws first in the issue sidebar, in
+	// the order they were pinned. A field id is a site's own —
+	// customfield_13401 means nothing on another site — which is why it is
+	// kept per profile rather than in ui.toml, the same reason Timeline is.
+	Pinned []string
+	Theme  string
 	// Scheme is which named set of colours the theme draws from — Theme is
 	// light or dark, Scheme is which colours mean accent, danger and the rest.
 	// The two are independent: any scheme works in either mode.
@@ -173,6 +178,7 @@ type fileProfile struct {
 	Project  string         `toml:"project"`
 	Token    toml.Primitive `toml:"token"`
 	Timeline Timeline       `toml:"timeline"`
+	Pinned   []string       `toml:"pinned"`
 	Theme    string         `toml:"theme"`
 	Scheme   string         `toml:"scheme"`
 	Glyphs   string         `toml:"glyphs"`
@@ -261,6 +267,7 @@ func decodeProfile(md *toml.MetaData, name string, fp fileProfile) (Profile, err
 		Project:  strings.TrimSpace(fp.Project),
 		Token:    token,
 		Timeline: fp.Timeline,
+		Pinned:   fp.Pinned,
 		Theme:    strings.TrimSpace(fp.Theme),
 		Scheme:   strings.TrimSpace(fp.Scheme),
 		Glyphs:   strings.TrimSpace(fp.Glyphs),
@@ -611,6 +618,9 @@ func (c Config) encode() ([]byte, error) {
 		}
 		if p.Glyphs != "" {
 			pairs = append(pairs, [2]string{"glyphs", quote(p.Glyphs)})
+		}
+		if len(p.Pinned) > 0 {
+			pairs = append(pairs, [2]string{"pinned", tomlArray(p.Pinned)})
 		}
 		pairs = append(pairs, [2]string{"token", inlineToken(p.Token)})
 		writePairs(&b, pairs)

@@ -32,12 +32,13 @@ func init() {
 // program keeps on disk and nowhere in kernel.Deps, so a Setting.Value here
 // has no live field to read the way appearance.theme's does.
 type profileState struct {
-	err   error
-	name  string
-	site  string
-	email string
-	token string
-	names []string
+	err    error
+	name   string
+	site   string
+	email  string
+	token  string
+	names  []string
+	pinned []string
 }
 
 func (p profileState) multi() bool { return len(p.names) > 1 }
@@ -59,7 +60,7 @@ func readProfile() profileState {
 	sort.Strings(names)
 	return profileState{
 		name: current.Name, site: current.Site, email: current.Email,
-		token: current.Token.String(), names: names,
+		token: current.Token.String(), names: names, pinned: current.Pinned,
 	}
 }
 
