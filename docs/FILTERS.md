@@ -110,19 +110,17 @@ and never a letter.
 | bug | `` (nf-fa-bug) | `▲` | `!` |
 | subtask | `` (nf-fa-level_down) | `▪` | `-` |
 
-Priority and status category get the same treatment where a column already spends cells on their
-names, and the icon replaces the word only where the word was being truncated anyway — an icon beside
-a full name is two spellings of one thing. Status category resolves cleanly, keyed by
-`jira.StatusCategory` rather than by a status name. Priority does not: `pkg/jira.Priority` carries only
-an `ID` and a `Name`, no ordinal and no icon of its own, so there is nothing to resolve a severity icon
-from that is not the name — `PriorityGlyph` falls back to the same first-letter escape hatch `TypeGlyph`
-uses, for the same reason. Checked against the four render packages that draw these cells:
-`internal/ui/list` and `internal/ui/backlog` truncate a status name in a fixed column and now show the
-category icon there once the name would not have fit; `internal/ui/board` never draws a type or a
-status name on a card at all — the status colours the key instead — so its resting card marker, blank
-before this, is the type icon; and `internal/ui/issue`'s header draws all three in full and only
-truncates the joined line as a whole, so it renders the full names until the line overflows the pane
-and only then swaps in the icons.
+The icon goes **first, everywhere the type or the status category is drawn**, with the name behind it
+where the name fits and alone where it does not — the shape is the part a reader takes in without
+reading, and Jira's own UI draws both. The first pass of this read one sentence here as *icon only where
+the name would have been truncated*, so at any ordinary width the list and the issue header showed the
+word and never the shape, and only the board — which never drew the name — got an icon. That sentence
+is gone. The list's type and status columns are one cell wider each for it — `Sub-task` and `In
+Progress` fit exactly behind their icons, and every column still fits at a hundred columns; the backlog, which drew no type
+at all, draws the board card's cell — the icon, muted, and a space before the key; the issue header
+carries both icons at every width and gives up only the status's parenthetical when the pane is narrow.
+Priority has no icon that is not its first letter, and a letter standing alone among the facts read as
+a fact of its own, so it keeps its name.
 
 ## Sort
 

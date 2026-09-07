@@ -10,7 +10,9 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-func TestHeader_FactsFallBackToIconsOnceTheLineIsTooWide(t *testing.T) {
+// The facts carry their icons at every width; a narrow pane gives up only the
+// status's parenthetical. The priority is never a bare letter among them.
+func TestHeader_FactsCarryTheirIconsAtEveryWidth(t *testing.T) {
 	seed := jira.Issue{
 		Key:      "PROJ-1",
 		Summary:  "one",
@@ -33,8 +35,16 @@ func TestHeader_FactsFallBackToIconsOnceTheLineIsTooWide(t *testing.T) {
 			dr := newDriver(t, d, seed, 60, 24)
 
 			got := ansi.Strip(dr.m.header())
-			if ansi.StringWidth(strings.SplitN(got, "\n", 3)[1]) > 60 {
+			facts := strings.SplitN(got, "\n", 3)[1]
+			if ansi.StringWidth(facts) > 60 {
 				t.Fatalf("the facts line still overflows the pane:\n%s", got)
+			}
+			if !strings.Contains(facts, tier.glyphs.TypeGlyph(seed.Type)+" ") ||
+				!strings.Contains(facts, tier.glyphs.CategoryGlyph(seed.Status.Category)+" ") {
+				t.Errorf("the type or the status fact lacks its icon:\n%s", facts)
+			}
+			if strings.Contains(" "+facts+" ", " A ") {
+				t.Errorf("the priority is drawn as its bare letter:\n%s", facts)
 			}
 			golden(t, "header_facts_"+tier.name+".golden", got+"\n")
 		})
@@ -57,7 +67,8 @@ func TestHeader_TheStatusFactCarriesItsCategorysColour(t *testing.T) {
 		t.Fatal("a header built from a colour theme carries no colour at all, so this test proves nothing")
 	}
 
-	want := dr.m.styles.category(jira.CategoryDone).Render(statusLabel(seed.Status))
+	want := dr.m.styles.category(jira.CategoryDone).Render(
+		withIcon(d.Theme.Glyphs.CategoryGlyph(jira.CategoryDone), statusLabel(seed.Status)))
 	if !strings.Contains(raw, want) {
 		t.Errorf("header %q does not contain the status rendered in its category colour %q", raw, want)
 	}

@@ -12,13 +12,17 @@ import (
 )
 
 const (
-	gap         = 2
-	marker      = 2
-	box         = 2
+	gap    = 2
+	marker = 2
+	box    = 2
+	// typ is the type icon and the space that keeps it off the key, the way a
+	// board card draws it. Fixed rather than dropped: two cells, and the shape
+	// is what a reader takes in without reading.
+	typ         = 2
 	minSummary  = 24
 	minKeyWidth = 6
 	maxKeyWidth = 14
-	statusWidth = 12
+	statusWidth = 14
 	userWidth   = 16
 )
 
@@ -60,12 +64,12 @@ type layout struct {
 func planLayout(width, keyWidth int) layout {
 	keyWidth = min(max(keyWidth, minKeyWidth), maxKeyWidth)
 	lay := layout{
-		width: max(width, marker+box+minKeyWidth+minSummary),
+		width: max(width, marker+box+typ+minKeyWidth+minSummary),
 		key:   keyWidth, status: statusWidth, who: userWidth,
 	}
 	drop := []*int{&lay.who, &lay.status}
 	for {
-		lay.summary = lay.width - marker - box - lay.key - gap - optionalWidth(lay)
+		lay.summary = lay.width - marker - box - typ - lay.key - gap - optionalWidth(lay)
 		if lay.summary >= minSummary || len(drop) == 0 {
 			break
 		}
@@ -100,6 +104,20 @@ type styles struct {
 	warn       lipgloss.Style
 	badge      lipgloss.Style
 	categories [4]lipgloss.Style
+	// marks are the type icons already drawn as a row's cell before the key,
+	// muted and followed by their space: six glyphs, rendered once per theme
+	// rather than once per row.
+	marks map[string]string
+}
+
+func (s *styles) mark(glyph string, sel bool) string {
+	if sel {
+		return glyph + " "
+	}
+	if cell, ok := s.marks[glyph]; ok {
+		return cell
+	}
+	return s.muted.Render(glyph) + " "
 }
 
 func newStyles(t *kernel.Theme) *styles {
@@ -120,6 +138,11 @@ func newStyles(t *kernel.Theme) *styles {
 		jira.CategoryToDo:       t.Base,
 		jira.CategoryInProgress: t.Accent,
 		jira.CategoryDone:       t.Success,
+	}
+	g := t.Glyphs
+	s.marks = make(map[string]string, 6)
+	for _, glyph := range []string{g.TypeEpic, g.TypeStory, g.TypeTask, g.TypeBug, g.TypeSubtask, g.TypeOther} {
+		s.marks[glyph] = t.Muted.Render(glyph) + " "
 	}
 	return s
 }
@@ -321,12 +344,13 @@ func (m *Model) renderRow(iss *jira.Issue, sel, picked bool) string {
 	} else {
 		b.WriteString(strings.Repeat(" ", box))
 	}
+	b.WriteString(m.styles.mark(t.Glyphs.TypeGlyph(iss.Type), sel))
 	writeCell(&b, iss.Key, lay.key, ell)
 	writeGap(&b)
 	writeCell(&b, iss.Summary, lay.summary, ell)
 	if lay.status > 0 {
 		writeGap(&b)
-		cell := iconOrName(iss.Status.Name, t.Glyphs.CategoryGlyph(iss.Status.Category), lay.status, ell)
+		cell := iconAndName(iss.Status.Name, t.Glyphs.CategoryGlyph(iss.Status.Category), lay.status, ell)
 		if !sel {
 			cell = m.styles.categories[categoryIndex(iss.Status.Category)].Render(cell)
 		}
@@ -554,11 +578,18 @@ func (m *Model) fit(s string) string {
 	return ansi.Truncate(s, m.width, m.deps.Theme.Glyphs.Ellipsis)
 }
 
-// iconOrName drops to an icon only where the name would have been
-// truncated anyway, never beside a name that already fits.
-func iconOrName(name, icon string, width int, ellipsis string) string {
-	if icon == "" || ansi.StringWidth(name) <= width {
+// iconAndName draws a cell as the icon and then the name — the name where it
+// fits behind the icon, the icon alone where it does not. It used to be the
+// name where it fit and the icon only where it did not, so a row at any
+// ordinary width showed the word and never the shape; the shape is the part a
+// reader takes in without reading, and it goes first, everywhere.
+func iconAndName(name, icon string, width int, ellipsis string) string {
+	if icon == "" {
 		return padTruncate(name, width, ellipsis)
+	}
+	lead := icon + " "
+	if rest := width - ansi.StringWidth(lead); rest >= 1 {
+		return lead + padTruncate(name, rest, ellipsis)
 	}
 	return padTruncate(icon, width, ellipsis)
 }

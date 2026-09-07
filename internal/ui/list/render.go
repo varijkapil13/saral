@@ -18,8 +18,8 @@ const (
 	minSummary  = 28
 	minKeyWidth = 6
 	maxKeyWidth = 14
-	typeWidth   = 9
-	statusWidth = 12
+	typeWidth   = 10
+	statusWidth = 13
 	userWidth   = 16
 	whenWidth   = 12
 )
@@ -102,6 +102,20 @@ type styles struct {
 	prompt     lipgloss.Style
 	danger     lipgloss.Style
 	categories [4]lipgloss.Style
+	// leads are the icons a type or status cell opens with, each already joined
+	// to the space that keeps it off the name. Ten glyphs exist; building the
+	// pair per row put the join on every fresh row, which has a budget.
+	leads map[string]string
+}
+
+func (s *styles) lead(glyph string) string {
+	if glyph == "" {
+		return ""
+	}
+	if l, ok := s.leads[glyph]; ok {
+		return l
+	}
+	return glyph + " "
 }
 
 func newStyles(t *kernel.Theme) *styles {
@@ -120,6 +134,14 @@ func newStyles(t *kernel.Theme) *styles {
 		jira.CategoryToDo:       t.Base,
 		jira.CategoryInProgress: t.Accent,
 		jira.CategoryDone:       t.Success,
+	}
+	g := t.Glyphs
+	s.leads = make(map[string]string, 10)
+	for _, glyph := range []string{
+		g.TypeEpic, g.TypeStory, g.TypeTask, g.TypeBug, g.TypeSubtask, g.TypeOther,
+		g.CategoryToDo, g.CategoryInProgress, g.CategoryDone, g.CategoryUnknown,
+	} {
+		s.leads[glyph] = glyph + " "
 	}
 	return s
 }
@@ -185,11 +207,11 @@ func renderRow(iss *jira.Issue, lay layout, sel bool, st *styles, t *kernel.Them
 	writeCell(&b, iss.Summary, lay.summary, ell)
 	if lay.typ > 0 {
 		writeGap(&b)
-		b.WriteString(z.Mark(typeZone(iss.Key), iconOrName(iss.Type.Name, t.Glyphs.TypeGlyph(iss.Type), lay.typ, ell)))
+		b.WriteString(z.Mark(typeZone(iss.Key), iconAndName(iss.Type.Name, st.lead(t.Glyphs.TypeGlyph(iss.Type)), lay.typ, ell)))
 	}
 	if lay.status > 0 {
 		writeGap(&b)
-		cell := iconOrName(iss.Status.Name, t.Glyphs.CategoryGlyph(iss.Status.Category), lay.status, ell)
+		cell := iconAndName(iss.Status.Name, st.lead(t.Glyphs.CategoryGlyph(iss.Status.Category)), lay.status, ell)
 		if !sel {
 			cell = st.categories[categoryIndex(iss.Status.Category)].Render(cell)
 		}
@@ -210,13 +232,19 @@ func renderRow(iss *jira.Issue, lay layout, sel bool, st *styles, t *kernel.Them
 	return b.String()
 }
 
-// iconOrName drops to an icon only where the name would have been
-// truncated anyway, never beside a name that already fits.
-func iconOrName(name, icon string, width int, ellipsis string) string {
-	if icon == "" || ansi.StringWidth(name) <= width {
+// iconAndName draws a cell as the icon and then the name — the name where it
+// fits behind the icon, the icon alone where it does not. It used to be the
+// name where it fit and the icon only where it did not, so a row at any
+// ordinary width showed the word and never the shape; the shape is the part a
+// reader takes in without reading, and it goes first, everywhere.
+func iconAndName(name, lead string, width int, ellipsis string) string {
+	if lead == "" {
 		return padTruncate(name, width, ellipsis)
 	}
-	return padTruncate(icon, width, ellipsis)
+	if rest := width - ansi.StringWidth(lead); rest >= 1 {
+		return lead + padTruncate(name, rest, ellipsis)
+	}
+	return padTruncate(strings.TrimSuffix(lead, " "), width, ellipsis)
 }
 
 func categoryIndex(c jira.StatusCategory) int {

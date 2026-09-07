@@ -1,18 +1,18 @@
  saral | Issues                                    PROJ | example.atlassian.net 
 All issues in PROJ                                      checked 09:00  12 issues
-  KEY      SUMMARY                                       TYPE       STATUS      
-> PROJ-12  Retire the nightly export                     Story      Triage      
-  PROJ-11  Document the login flow                       Epic       Shipped     
-  PROJ-10  Investigate the release checklist             Defect     Building    
-  PROJ-9   Rework the mobile layout                      Story      Triage      
-  PROJ-8   Add invoice rounding                          Chore      Shipped     
-  PROJ-7   Fix the search index                          Defect     Building    
-  PROJ-6   Speed up session expiry                       Story      Triage      
-  PROJ-5   Retire the audit trail                        Chore      Shipped     
-  PROJ-4   Document CSV import                           Defect     Building    
-  PROJ-3   Investigate the onboarding wizard             Story      Triage      
-  PROJ-2   Rework webhook retries                        Chore      Shipped     
-  PROJ-1   Add the nightly export                        Epic       Building    
+  KEY      SUMMARY                                     TYPE        STATUS       
+> PROJ-12  Retire the nightly export                   o Story     o Triage     
+  PROJ-11  Document the login flow                     o Epic      x Shipped    
+  PROJ-10  Investigate the release checklist           o Defect    ~ Building   
+  PROJ-9   Rework the mobile layout                    o Story     o Triage     
+  PROJ-8   Add invoice rounding                        o Chore     x Shipped    
+  PROJ-7   Fix the search index                        o Defect    ~ Building   
+  PROJ-6   Speed up session expiry                     o Story     o Triage     
+  PROJ-5   Retire the audit trail                      o Chore     x Shipped    
+  PROJ-4   Document CSV import                         o Defect    ~ Building   
+  PROJ-3   Investigate the onboarding wizard           o Story     o Triage     
+  PROJ-2   Rework webhook retries                      o Chore     x Shipped    
+  PROJ-1   Add the nightly export                      o Epic      ~ Building   
                                                                                 
                                                                                 
                                                                                 

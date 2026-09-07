@@ -228,3 +228,17 @@ func TestBacklog_RedrawsEverythingWhenTheThemeChanges(t *testing.T) {
 		t.Error("the view drew nothing after the theme changed")
 	}
 }
+
+// The backlog drew no type at all. It draws the board card's cell now: the
+// icon, muted, and a space before the key, so the two never read as one token.
+func TestRenderRow_TheTypeIconPrecedesTheKey(t *testing.T) {
+	g := kernel.UnicodeGlyphs()
+	iss := jira.Issue{Key: "PROJ-42", Summary: "typed", Type: jira.IssueType{Name: "Bug", AvatarID: "10303"},
+		Status: jira.Status{Name: "Done", Category: jira.CategoryDone}}
+	m := &Model{deps: kernel.Deps{Theme: kernel.NewTheme(kernel.ThemeNoColor, true, g)}, lay: planLayout(120, 8), zones: widget.Zoner{}}
+	m.styles = newStyles(m.deps.Theme)
+	got := ansi.Strip(m.renderRow(&iss, false, false))
+	if !strings.Contains(got, g.TypeBug+" PROJ-42") {
+		t.Errorf("the key is not preceded by its type icon and a space:\n%s", got)
+	}
+}

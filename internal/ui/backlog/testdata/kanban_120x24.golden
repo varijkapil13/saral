@@ -1,10 +1,10 @@
   PROJ board | 0 open sprints | 5 issues
 > v Backlog | 5 issues                                                                                                  
-    PROJ-1  Add the nightly export                                                        Building      Grace Hopper    
-    PROJ-3  Investigate the onboarding wizard                                             Triage        Ada Lovelace    
-    PROJ-4  Document CSV import                                                           Building      unassigned      
-    PROJ-6  Speed up session expiry                                                       Triage        Ada Lovelace    
-    PROJ-7  Fix the search index                                                          Building      Grace Hopper    
+    o PROJ-1  Add the nightly export                                                    ~ Building      Grace Hopper    
+    o PROJ-3  Investigate the onboarding wizard                                         o Triage        Ada Lovelace    
+    o PROJ-4  Document CSV import                                                       ~ Building      unassigned      
+    o PROJ-6  Speed up session expiry                                                   o Triage        Ada Lovelace    
+    o PROJ-7  Fix the search index                                                      ~ Building      Grace Hopper    
 
 
 

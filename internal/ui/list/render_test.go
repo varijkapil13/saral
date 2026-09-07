@@ -203,3 +203,22 @@ func TestRowCache_StaysBoundedAndForgetsARowWhoseIssueMoved(t *testing.T) {
 		t.Errorf("the memo grew to %d entries with a limit of 4", len(c.rows))
 	}
 }
+
+// The icon is not a fallback for a name that does not fit: a short name gets
+// it too, in front. Both cells, so the rule is one rule.
+func TestRenderRow_TheIconPrecedesANameThatFits(t *testing.T) {
+	g := kernel.UnicodeGlyphs()
+	iss := jira.Issue{
+		Key: "PROJ-7", Summary: "short names",
+		Type:   jira.IssueType{Name: "Bug", AvatarID: "10303"},
+		Status: jira.Status{Name: "Done", Category: jira.CategoryDone},
+	}
+	theme := kernel.NewTheme(kernel.ThemeNoColor, true, g)
+	got := ansi.Strip(renderRow(&iss, planLayout(140, 8), false, newStyles(theme), theme, time.UTC,
+		time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC), widget.Zoner{}))
+	for _, want := range []string{g.TypeBug + " Bug", g.CategoryDone + " Done"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the row lacks %q — the icon was only ever drawn where the name did not fit:\n%s", want, got)
+		}
+	}
+}

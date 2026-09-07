@@ -153,15 +153,19 @@ func (m *Model) headerFacts(compact bool) []string {
 			facts = append(facts, style.Render(s))
 		}
 	}
+	// The type and the status carry their icons at every width: the shape is the
+	// part a reader takes in without reading. compact gives up the status's
+	// parenthetical category, which the icon already says, and nothing else.
+	// The priority has no icon that is not its first letter, and a letter
+	// standing alone among the facts read as a fact of its own; it keeps its
+	// name.
+	add(withIcon(t.Glyphs.TypeGlyph(m.issue.Type), m.issue.Type.Name), m.styles.muted)
+	status := statusLabel(m.issue.Status)
 	if compact {
-		add(t.Glyphs.TypeGlyph(m.issue.Type), m.styles.muted)
-		add(compactStatusLabel(m.issue.Status, t), m.styles.category(m.issue.Status.Category))
-		add(compactPriority(m.issue, t), m.styles.muted)
-	} else {
-		add(m.issue.Type.Name, m.styles.muted)
-		add(statusLabel(m.issue.Status), m.styles.category(m.issue.Status.Category))
-		add(priorityName(m.issue), m.styles.muted)
+		status = m.issue.Status.Name
 	}
+	add(withIcon(t.Glyphs.CategoryGlyph(m.issue.Status.Category), status), m.styles.category(m.issue.Status.Category))
+	add(priorityName(m.issue), m.styles.muted)
 	add(assigneeName(m.issue, "unassigned"), m.styles.muted)
 	if when := formatWhen(m.issue.Updated, m.location()); when != "" {
 		add("updated "+when, m.styles.muted)
@@ -184,27 +188,16 @@ func statusLabel(s jira.Status) string {
 	return s.Name + " (" + strings.ToLower(category) + ")"
 }
 
-// compactStatusLabel is statusLabel's narrow form: the category icon in place
-// of the parenthetical, which is the half of the full label a pane under
-// pressure can give up first.
-func compactStatusLabel(s jira.Status, t *kernel.Theme) string {
-	if s.Name == "" {
+// withIcon puts an icon in front of a fact, and is the fact alone where there
+// is no icon to put — an empty name has no icon worth drawing either.
+func withIcon(icon, text string) string {
+	if text == "" {
 		return ""
 	}
-	icon := t.Glyphs.CategoryGlyph(s.Category)
 	if icon == "" {
-		return s.Name
+		return text
 	}
-	return icon + " " + s.Name
-}
-
-// compactPriority is priorityName's narrow form: the priority's own icon,
-// which pkg/jira.Priority carries nothing to resolve beyond its first letter.
-func compactPriority(iss jira.Issue, t *kernel.Theme) string {
-	if iss.Priority == nil {
-		return ""
-	}
-	return t.Glyphs.PriorityGlyph(*iss.Priority)
+	return icon + " " + text
 }
 
 // View draws the identity header and the regions under it.
