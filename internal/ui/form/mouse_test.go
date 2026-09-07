@@ -29,13 +29,13 @@ func TestForm_TwoDeliberateClicksOnARowDoNotOpenItsEditor(t *testing.T) {
 	dr.m.moveTo(0)
 
 	at := 2
-	dr.send(clickIn(t, d, dr.m, dr.m.View(), dr.m.rowZone(at)))
+	dr.send(clickIn(t, d, dr.m, dr.m.View, dr.m.rowZone(at)))
 	if dr.m.cursor != at {
 		t.Fatalf("the cursor is on row %d, want the row that was clicked", dr.m.cursor)
 	}
 
 	clock.after(time.Second)
-	dr.send(clickIn(t, d, dr.m, dr.m.View(), dr.m.rowZone(at)))
+	dr.send(clickIn(t, d, dr.m, dr.m.View, dr.m.rowZone(at)))
 
 	if dr.m.edit != editNone {
 		t.Error("two clicks a second apart opened the field's editor")
@@ -52,13 +52,13 @@ func TestForm_TwoDeliberateClicksOnAValueDoNotTakeIt(t *testing.T) {
 	dr.focus("priority")
 	dr.key("enter")
 
-	dr.send(clickIn(t, d, dr.m, dr.m.View(), dr.m.choiceZone(1)))
+	dr.send(clickIn(t, d, dr.m, dr.m.View, dr.m.choiceZone(1)))
 	if dr.m.pick != 1 {
 		t.Fatalf("the picker is on value %d, want the one that was clicked", dr.m.pick)
 	}
 
 	clock.after(2 * time.Second)
-	dr.send(clickIn(t, d, dr.m, dr.m.View(), dr.m.choiceZone(1)))
+	dr.send(clickIn(t, d, dr.m, dr.m.View, dr.m.choiceZone(1)))
 
 	if got := dr.field("priority").picked; len(got) != 0 {
 		t.Errorf("two clicks two seconds apart took %+v", got)

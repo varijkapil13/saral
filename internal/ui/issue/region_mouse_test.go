@@ -1,14 +1,13 @@
 package issue
 
 import (
-	"runtime"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/adf"
 )
 
@@ -18,18 +17,8 @@ import (
 func regionZone(t *testing.T, dr *driver, d kernel.Deps, r region) *zone.ZoneInfo {
 	t.Helper()
 
-	id := dr.m.zones.ID(zoneNames[r])
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		d.Zones.Scan(dr.m.View())
-		if at := d.Zones.Get(id); !at.IsZero() {
-			return at
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("nothing on screen is marked %q", id)
-		}
-		runtime.Gosched()
-	}
+	at := uitest.Zone(t, d.Zones, dr.m.View, dr.m.zones.ID(zoneNames[r]))
+	return &at
 }
 
 // Each region is a rectangle the pointer resolves through, so a click moves the
@@ -81,17 +70,7 @@ func TestRegions_AClickOnAnExpandOpensThatOne(t *testing.T) {
 	mustContain(t, dr.view(), "How we tested it", "What is left")
 	mustNotContain(t, dr.view(), "Twice on staging", "The German site")
 
-	id := dr.m.zones.ID(foldZone(1))
-	deadline := time.Now().Add(10 * time.Second)
-	var at *zone.ZoneInfo
-	for at.IsZero() {
-		d.Zones.Scan(dr.m.View())
-		at = d.Zones.Get(id)
-		if time.Now().After(deadline) {
-			t.Fatalf("nothing on screen is marked %q", id)
-		}
-		runtime.Gosched()
-	}
+	at := uitest.Zone(t, d.Zones, dr.m.View, dr.m.zones.ID(foldZone(1)), dr.m.zones.ID(zoneNames[regionDesc]))
 	dr.send(tea.MouseClickMsg{X: at.StartX + 2, Y: at.StartY, Button: tea.MouseLeft})
 
 	mustContain(t, dr.view(), "The German site")

@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +15,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -262,17 +262,6 @@ func mustNotContain(t *testing.T, got string, unwanted ...string) {
 	}
 }
 
-func eventually(t *testing.T, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatal("condition never became true")
-		}
-		runtime.Gosched()
-	}
-}
-
 func countCalls(f *jiratest.Fake, name string) int {
 	n := 0
 	for _, call := range f.Calls() {
@@ -294,8 +283,5 @@ func pressOn(t *testing.T, d kernel.Deps, dr *driver, name string) {
 
 func zoneOf(t *testing.T, d kernel.Deps, dr *driver, name string) zone.ZoneInfo {
 	t.Helper()
-	_ = d.Zones.Scan(dr.m.View())
-	id := dr.m.zones.ID(name)
-	eventually(t, func() bool { return !d.Zones.Get(id).IsZero() })
-	return *d.Zones.Get(id)
+	return uitest.Zone(t, d.Zones, dr.m.View, dr.m.zones.ID(name))
 }

@@ -1,10 +1,8 @@
 package onboarding
 
 import (
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
@@ -13,6 +11,7 @@ import (
 	"github.com/zalando/go-keyring"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -156,18 +155,13 @@ func TestKernel_ClickingASuggestionAndACompletedStepWorks(t *testing.T) {
 	d.atStep(stepProject)
 
 	prefix := d.model().zones.ID("")
-	scan(t, zones, d.view.View())
-	eventually(t, func() bool { return !zones.Get(prefix + "project:PROJ").IsZero() })
-
-	info := zones.Get(prefix + "project:PROJ")
+	info := uitest.Zone(t, zones, d.view.View, prefix+"project:PROJ")
 	d.send(tea.MouseClickMsg{X: info.StartX + 2, Y: info.StartY, Button: tea.MouseLeft})
 	if got := d.model().value(fieldProject); got != "PROJ" {
 		t.Errorf("clicking a suggestion left the field at %q", got)
 	}
 
-	scan(t, zones, d.view.View())
-	eventually(t, func() bool { return !zones.Get(prefix + "step:email").IsZero() })
-	info = zones.Get(prefix + "step:email")
+	info = uitest.Zone(t, zones, d.view.View, prefix+"step:email")
 	d.send(tea.MouseClickMsg{X: info.StartX + 4, Y: info.StartY, Button: tea.MouseLeft})
 	d.atStep(stepEmail)
 	if got := d.model().value(fieldEmail); got != testEmail {
@@ -184,31 +178,10 @@ func TestKernel_ClickingATokenStoreChoosesIt(t *testing.T) {
 	d.atStep(stepStorage)
 
 	prefix := d.model().zones.ID("")
-	scan(t, zones, d.view.View())
-	eventually(t, func() bool { return !zones.Get(prefix + "store:command").IsZero() })
-
-	info := zones.Get(prefix + "store:command")
+	info := uitest.Zone(t, zones, d.view.View, prefix+"store:command")
 	d.send(tea.MouseClickMsg{X: info.StartX + 2, Y: info.StartY, Button: tea.MouseLeft})
 	if got := d.model().store; got != storeCommand {
 		t.Errorf("the store is %v after clicking the command row", got)
-	}
-}
-
-// scan hands a frame to the zone manager the way the kernel does when the mouse
-// is on, which is what turns a marked string into coordinates.
-func scan(t *testing.T, zones *zone.Manager, frame string) {
-	t.Helper()
-	_ = zones.Scan(frame)
-}
-
-func eventually(t *testing.T, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatal("the zone never turned up; the scan is asynchronous but not this slow")
-		}
-		runtime.Gosched()
 	}
 }
 

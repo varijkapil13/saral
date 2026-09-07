@@ -3,7 +3,6 @@ package palette
 import (
 	"errors"
 	"maps"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -445,15 +445,7 @@ func TestPalette_KeepsTheSelectedIssueWhenTheCapabilitiesChange(t *testing.T) {
 // hitZone resolves the click target the palette marked a cached issue with.
 func (p *pilot) hitZone(key string) zoneBounds {
 	p.t.Helper()
-	_ = p.m.deps.Zones.Scan(p.m.View())
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if at := p.m.deps.Zones.Get(p.m.zonePrefix + zoneHit + key); !at.IsZero() {
-			return zoneBounds{StartX: at.StartX, StartY: at.StartY}
-		}
-		if time.Now().After(deadline) {
-			p.t.Fatalf("the palette never marked a click target for %q", key)
-		}
-		runtime.Gosched()
-	}
+	id := p.m.zonePrefix + zoneHit + key
+	at := uitest.Zone(p.t, p.m.deps.Zones, p.m.View, id)
+	return zoneBounds{StartX: at.StartX, StartY: at.StartY}
 }

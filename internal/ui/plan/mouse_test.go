@@ -9,20 +9,18 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// pressOn scans the frame the view would draw and presses the left button in
-// the first cell of one of its zones. The manager records a zone on its own
-// goroutine, so the zone is waited for rather than assumed.
+// pressOn presses the left button in the first cell of one of the view's
+// zones.
 func pressOn(t *testing.T, d kernel.Deps, dr *driver, name string) {
 	t.Helper()
 
-	_ = d.Zones.Scan(dr.m.View())
 	id := dr.m.zones.ID(name)
-	eventually(t, func() bool { return !d.Zones.Get(id).IsZero() })
-	at := d.Zones.Get(id)
+	at := uitest.Zone(t, d.Zones, dr.m.View, id)
 	dr.send(tea.MouseClickMsg{X: at.StartX, Y: at.StartY, Button: tea.MouseLeft})
 }
 
@@ -143,18 +141,19 @@ func TestPlans_ClickingADetailLineDoesNothing(t *testing.T) {
 	dr := newDriver(t, d, 120, 30, WithDefined(defined()))
 	dr.key("enter")
 
-	frame := dr.m.View()
-	_ = d.Zones.Scan(frame)
 	at := 0
+	var plans []string
 	for i := range dr.m.rows {
-		if dr.m.rows[i].kind != rowPlan {
+		if dr.m.rows[i].kind == rowPlan {
+			plans = append(plans, dr.m.zones.ID(dr.m.zoneOf(i)))
+		} else if at == 0 {
 			at = i
-			break
 		}
 	}
 	if at == 0 {
 		t.Fatal("the open plan has no detail lines under it")
 	}
+	uitest.Zone(t, d.Zones, dr.m.View, plans[0], plans[1:]...)
 	dr.send(tea.MouseClickMsg{X: 6, Y: headHeight + at, Button: tea.MouseLeft})
 
 	if !dr.m.open[dr.m.plans[0].plan.ID] {

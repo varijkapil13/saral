@@ -1,10 +1,8 @@
 package issue
 
 import (
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -12,6 +10,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
@@ -46,18 +45,8 @@ func splitPane(t *testing.T, w, h int) (*driver, kernel.Deps, *jiratest.Fake) {
 func boundary(t *testing.T, dr *driver, d kernel.Deps) *zone.ZoneInfo {
 	t.Helper()
 
-	id := dr.m.zones.ID(dividerZone)
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		d.Zones.Scan(dr.m.View())
-		if at := d.Zones.Get(id); !at.IsZero() {
-			return at
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("nothing on screen is marked %q", id)
-		}
-		runtime.Gosched()
-	}
+	at := uitest.Zone(t, d.Zones, dr.m.View, dr.m.zones.ID(dividerZone))
+	return &at
 }
 
 func pressAt(x, y int) tea.MouseClickMsg {

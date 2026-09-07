@@ -9,19 +9,15 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// pressOn scans the frame the view would draw and presses the left button in
-// the first cell of one of its zones. The manager records a zone on its own
-// goroutine, so the zone is waited for rather than assumed.
 func pressOn(t *testing.T, d kernel.Deps, dr *driver, name string) {
 	t.Helper()
 
-	_ = d.Zones.Scan(dr.m.View())
 	id := dr.m.zones.ID(name)
-	eventually(t, func() bool { return !d.Zones.Get(id).IsZero() })
-	at := d.Zones.Get(id)
+	at := uitest.Zone(t, d.Zones, dr.m.View, id)
 	dr.send(tea.MouseClickMsg{X: at.StartX, Y: at.StartY, Button: tea.MouseLeft})
 }
 

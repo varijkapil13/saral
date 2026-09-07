@@ -1,7 +1,6 @@
 package palette
 
 import (
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -10,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -462,17 +462,9 @@ func actsOf(set kernel.KeySet) string {
 // the manager's own goroutine.
 func (p *pilot) zoneOf(id string) zoneBounds {
 	p.t.Helper()
-	_ = p.m.deps.Zones.Scan(p.m.View())
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if at := p.m.deps.Zones.Get(p.m.zonePrefix + zoneRow + id); !at.IsZero() {
-			return zoneBounds{StartX: at.StartX, StartY: at.StartY}
-		}
-		if time.Now().After(deadline) {
-			p.t.Fatalf("the palette never marked a click target for %q", id)
-		}
-		runtime.Gosched()
-	}
+	zid := p.m.zonePrefix + zoneRow + id
+	at := uitest.Zone(p.t, p.m.deps.Zones, p.m.View, zid)
+	return zoneBounds{StartX: at.StartX, StartY: at.StartY}
 }
 
 type zoneBounds struct{ StartX, StartY int }

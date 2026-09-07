@@ -1,33 +1,13 @@
 package widget
 
 import (
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 )
-
-// scanned draws a frame the way the kernel does and waits for the manager to
-// record what it found. Zones land on the manager's own goroutine, so a test
-// that asks straight after scanning asks too early.
-func scanned(t *testing.T, mgr *zone.Manager, z Zoner, frame string, names ...string) string {
-	t.Helper()
-
-	out := mgr.Scan(frame)
-	deadline := time.Now().Add(5 * time.Second)
-	for _, name := range names {
-		for mgr.Get(z.ID(name)).IsZero() {
-			if time.Now().After(deadline) {
-				t.Fatalf("the zone %q was never recorded from the frame %q", name, frame)
-			}
-			runtime.Gosched()
-		}
-	}
-	return out
-}
 
 func clickAt(x, y int) tea.MouseClickMsg {
 	return tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}
@@ -79,7 +59,7 @@ func TestZoner_ResolvesAClickToTheElementItLandedIn(t *testing.T) {
 	if !z.Enabled() {
 		t.Fatal("a live manager reports the mouse off")
 	}
-	scanned(t, mgr, z, frame, "row:PROJ-1", "row:PROJ-2")
+	uitest.Zone(t, mgr, func() string { return frame }, z.ID("row:PROJ-1"), z.ID("row:PROJ-2"))
 
 	for _, tc := range []struct {
 		name  string
@@ -114,7 +94,8 @@ func TestZoner_MarkedLinesCoverTheWholeBlockAndNotItsLastLine(t *testing.T) {
 	z := NewZoner(mgr)
 
 	lines := z.MarkLines("comment:1", []string{"Ada wrote        ", "the body of it   ", "and signed it off"})
-	scanned(t, mgr, z, strings.Join(lines, "\n"), "comment:1")
+	frame := strings.Join(lines, "\n")
+	uitest.Zone(t, mgr, func() string { return frame }, z.ID("comment:1"))
 
 	for _, y := range []int{0, 1, 2} {
 		if !z.Hit("comment:1", clickAt(2, y)) {
@@ -140,8 +121,7 @@ func TestZoner_TwoViewsMarkTheSameNameApart(t *testing.T) {
 	}
 
 	frame := first.Mark("row:1", "the first view's row") + "\n\n" + second.Mark("row:1", "the second view's row")
-	scanned(t, mgr, first, frame, "row:1")
-	scanned(t, mgr, second, frame, "row:1")
+	uitest.Zone(t, mgr, func() string { return frame }, first.ID("row:1"), second.ID("row:1"))
 
 	click := clickAt(2, 0)
 	if !first.Hit("row:1", click) {

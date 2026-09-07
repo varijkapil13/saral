@@ -11,6 +11,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -41,10 +42,7 @@ func newPointerClock() *pointerClock {
 func pressOn(t *testing.T, d kernel.Deps, dr *driver, name string) {
 	t.Helper()
 
-	_ = d.Zones.Scan(dr.m.View())
-	id := dr.m.zones.ID(name)
-	eventually(t, func() bool { return !d.Zones.Get(id).IsZero() })
-	at := d.Zones.Get(id)
+	at := uitest.Zone(t, d.Zones, dr.m.View, dr.m.zones.ID(name))
 	dr.send(tea.MouseClickMsg{X: at.StartX, Y: at.StartY, Button: tea.MouseLeft})
 }
 

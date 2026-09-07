@@ -58,10 +58,12 @@ func TestBar_ClickOnAValueNamesJustThatValue(t *testing.T) {
 	t.Parallel()
 
 	bar, z, mgr := markedBar(t)
-	line := bar.Render(filter.Terms{ada, ben, prog}, 120, plainTheme(), "ctrl+g", 1)
-	msg := pressOn(t, mgr, z, line, ValueZone(ben))
+	terms := filter.Terms{ada, ben, prog}
+	theme := plainTheme()
+	frame := func() string { return bar.Render(terms, 120, theme, "ctrl+g", 1) }
+	msg := pressOn(t, mgr, z, frame, ValueZone(ben))
 
-	facet, value, ok := bar.Click(msg, filter.Terms{ada, ben, prog})
+	facet, value, ok := bar.Click(msg, terms)
 	if !ok {
 		t.Fatal("the click resolved to nothing")
 	}
@@ -78,8 +80,9 @@ func TestBar_ClickOnTheCrossDropsTheWholeFacet(t *testing.T) {
 
 	bar, z, mgr := markedBar(t)
 	terms := filter.Terms{ada, ben, prog}
-	line := bar.Render(terms, 120, plainTheme(), "ctrl+g", 1)
-	msg := pressOn(t, mgr, z, line, FacetZone(filter.FacetAssignee))
+	theme := plainTheme()
+	frame := func() string { return bar.Render(terms, 120, theme, "ctrl+g", 1) }
+	msg := pressOn(t, mgr, z, frame, FacetZone(filter.FacetAssignee))
 
 	facet, _, ok := bar.Click(msg, terms)
 	if !ok || facet != filter.FacetAssignee {

@@ -4,13 +4,12 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
@@ -47,25 +46,10 @@ func markedBar(tb testing.TB) (*Bar, widget.Zoner, *zone.Manager) {
 	return New(z), z, mgr
 }
 
-// pressOn scans a rendered line for one of its zones and clicks the first cell
-// of it. The manager records a zone on its own goroutine, so the zone is
-// waited for rather than assumed.
-func pressOn(t *testing.T, mgr *zone.Manager, z widget.Zoner, line, name string) tea.MouseClickMsg {
+// pressOn scans the frame drawn now for one of its zones and clicks the first
+// cell of it.
+func pressOn(t *testing.T, mgr *zone.Manager, z widget.Zoner, frame func() string, name string) tea.MouseClickMsg {
 	t.Helper()
-	_ = mgr.Scan(line)
-	id := z.ID(name)
-	eventually(t, func() bool { return !mgr.Get(id).IsZero() })
-	at := mgr.Get(id)
+	at := uitest.Zone(t, mgr, frame, z.ID(name))
 	return tea.MouseClickMsg{X: at.StartX, Y: at.StartY, Button: tea.MouseLeft}
-}
-
-func eventually(t *testing.T, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatal("condition never became true")
-		}
-		runtime.Gosched()
-	}
 }

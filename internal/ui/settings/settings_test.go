@@ -1,14 +1,13 @@
 package settings
 
 import (
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -169,16 +168,8 @@ func TestSettings_MouseClickOnARadioOptionAppliesThatExactValue(t *testing.T) {
 	d := settingsDeps(defaultTheme())
 	p := fly(t, d, all, sections, 100, 30)
 
-	_ = d.Zones.Scan(p.m.View())
 	id := p.m.optZone("appearance.theme", "light")
-	deadline := time.Now().Add(5 * time.Second)
-	for d.Zones.Get(id).IsZero() {
-		if time.Now().After(deadline) {
-			t.Fatal("the light option drew with no zone of its own")
-		}
-		runtime.Gosched()
-	}
-	info := d.Zones.Get(id)
+	info := uitest.Zone(t, d.Zones, p.m.View, id)
 	p.send(tea.MouseClickMsg{X: info.StartX, Y: info.StartY, Button: tea.MouseLeft})
 	if st.theme != "light" {
 		t.Errorf("clicking the light option left the theme at %q", st.theme)

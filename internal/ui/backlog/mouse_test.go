@@ -9,18 +9,15 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 )
 
-// at scans the frame the view would draw and reports where one of its zones
-// landed. The manager records a zone on its own goroutine, so it is waited for
-// rather than assumed.
+// at reports where one of the view's zones lands in the frame drawn now.
 func at(t *testing.T, d kernel.Deps, dr *driver, name string) (x, y int) {
 	t.Helper()
-	_ = d.Zones.Scan(dr.m.View())
 	id := dr.m.zones.ID(name)
-	eventually(t, func() bool { return !d.Zones.Get(id).IsZero() })
-	got := d.Zones.Get(id)
-	return got.StartX, got.StartY
+	info := uitest.Zone(t, d.Zones, dr.m.View, id)
+	return info.StartX, info.StartY
 }
 
 func pressOn(t *testing.T, d kernel.Deps, dr *driver, name string) {

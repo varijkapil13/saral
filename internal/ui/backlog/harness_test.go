@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -312,17 +311,6 @@ func mustNotContain(t *testing.T, got string, unwanted ...string) {
 		if strings.Contains(got, w) {
 			t.Errorf("output still contains %q:\n%s", w, got)
 		}
-	}
-}
-
-func eventually(t *testing.T, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatal("condition never became true")
-		}
-		runtime.Gosched()
 	}
 }
 

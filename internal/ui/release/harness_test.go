@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -19,6 +18,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -301,10 +301,8 @@ func (d *driver) moveTo(id string) {
 func pressOn(t *testing.T, d kernel.Deps, dr *driver, name string) {
 	t.Helper()
 
-	_ = d.Zones.Scan(dr.m.View())
 	id := zoner(dr).ID(name)
-	eventually(t, func() bool { return !d.Zones.Get(id).IsZero() })
-	at := d.Zones.Get(id)
+	at := uitest.Zone(t, d.Zones, dr.m.View, id)
 	dr.send(tea.MouseClickMsg{X: at.StartX, Y: at.StartY, Button: tea.MouseLeft})
 }
 
@@ -401,17 +399,6 @@ func mustNotContain(t *testing.T, got string, unwanted ...string) {
 		if strings.Contains(got, w) {
 			t.Errorf("output still contains %q:\n%s", w, got)
 		}
-	}
-}
-
-func eventually(t *testing.T, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatal("condition never became true")
-		}
-		runtime.Gosched()
 	}
 }
 

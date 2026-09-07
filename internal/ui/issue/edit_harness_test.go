@@ -3,11 +3,9 @@ package issue
 import (
 	"context"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
@@ -16,6 +14,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -158,17 +157,8 @@ func (p *panel) zoneAt(d kernel.Deps, suffix string) *zone.ZoneInfo {
 	p.t.Helper()
 
 	id := p.zoneID(suffix)
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		d.Zones.Scan(p.view.View())
-		if at := d.Zones.Get(id); !at.IsZero() {
-			return at
-		}
-		if time.Now().After(deadline) {
-			p.t.Fatalf("nothing on screen is marked %q", id)
-		}
-		runtime.Gosched()
-	}
+	at := uitest.Zone(p.t, d.Zones, p.view.View, id)
+	return &at
 }
 
 func (p *panel) zoneID(suffix string) string {

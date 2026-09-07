@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
@@ -17,10 +18,7 @@ import (
 func pressOn(t *testing.T, d kernel.Deps, dr *driver, name string) {
 	t.Helper()
 
-	_ = d.Zones.Scan(dr.m.View())
-	id := dr.m.zones.ID(name)
-	eventually(t, func() bool { return !d.Zones.Get(id).IsZero() })
-	at := d.Zones.Get(id)
+	at := uitest.Zone(t, d.Zones, dr.m.View, dr.m.zones.ID(name))
 	dr.send(tea.MouseClickMsg{X: at.StartX, Y: at.StartY, Button: tea.MouseLeft})
 }
 
@@ -148,10 +146,7 @@ func TestMouse_NoClickReachesTheChartUnderTheNotes(t *testing.T) {
 	d := testDeps(newFake(20))
 	dr := newDriver(t, d, 120, 24)
 	want := dr.m.rows[3].key
-	_ = d.Zones.Scan(dr.m.View())
-	id := dr.m.zones.ID(rowZone(want))
-	eventually(t, func() bool { return !d.Zones.Get(id).IsZero() })
-	at := d.Zones.Get(id)
+	at := uitest.Zone(t, d.Zones, dr.m.View, dr.m.zones.ID(rowZone(want)))
 
 	under := dr.m.selectedKey()
 	dr.key("n")

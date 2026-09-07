@@ -3,7 +3,6 @@ package form
 import (
 	"context"
 	"errors"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -632,13 +632,13 @@ func TestForm_SelectsARowOnAClickAndOpensItOnTheNext(t *testing.T) {
 	dr.m.moveTo(0)
 
 	at := 2
-	click := clickIn(t, d, dr.m, dr.m.View(), dr.m.rowZone(at))
+	click := clickIn(t, d, dr.m, dr.m.View, dr.m.rowZone(at))
 	dr.send(click)
 	if dr.m.cursor != at {
 		t.Fatalf("the cursor is on row %d, want the row that was clicked", dr.m.cursor)
 	}
 
-	dr.send(clickIn(t, d, dr.m, dr.m.View(), dr.m.rowZone(at)))
+	dr.send(clickIn(t, d, dr.m, dr.m.View, dr.m.rowZone(at)))
 	if dr.m.edit == editNone {
 		t.Error("a second click on the selected row did not open its editor")
 	}
@@ -652,11 +652,11 @@ func TestForm_ClickingAValueInAPickerTakesIt(t *testing.T) {
 	dr.focus("priority")
 	dr.key("enter")
 
-	dr.send(clickIn(t, d, dr.m, dr.m.View(), dr.m.choiceZone(1)))
+	dr.send(clickIn(t, d, dr.m, dr.m.View, dr.m.choiceZone(1)))
 	if dr.m.pick != 1 {
 		t.Fatalf("the picker is on value %d, want the one that was clicked", dr.m.pick)
 	}
-	dr.send(clickIn(t, d, dr.m, dr.m.View(), dr.m.choiceZone(1)))
+	dr.send(clickIn(t, d, dr.m, dr.m.View, dr.m.choiceZone(1)))
 
 	priority := dr.field("priority")
 	if len(priority.picked) != 1 || priority.picked[0].ID != priority.meta.AllowedValues[1].ID {
@@ -700,22 +700,12 @@ func TestForm_SurvivesATerminalTooNarrowToDrawIn(t *testing.T) {
 	}
 }
 
-// clickIn scans a frame for one of the view's own zones and builds a click
-// inside it. The manager records a zone on its own goroutine, so it is looked
-// for until it appears.
-func clickIn(t *testing.T, d kernel.Deps, m *Model, frame, name string) tea.MouseClickMsg {
+// clickIn scans the frame drawn now for one of the view's own zones and
+// builds a click inside it.
+func clickIn(t *testing.T, d kernel.Deps, m *Model, frame func() string, name string) tea.MouseClickMsg {
 	t.Helper()
 
-	id := m.zones.ID(name)
-	_ = d.Zones.Scan(frame)
-	deadline := time.Now().Add(5 * time.Second)
-	for d.Zones.Get(id).IsZero() {
-		if time.Now().After(deadline) {
-			t.Fatalf("zone %q was never rendered", id)
-		}
-		runtime.Gosched()
-	}
-	at := d.Zones.Get(id)
+	at := uitest.Zone(t, d.Zones, frame, m.zones.ID(name))
 	return tea.MouseClickMsg{Button: tea.MouseLeft, X: at.StartX + 2, Y: at.StartY}
 }
 

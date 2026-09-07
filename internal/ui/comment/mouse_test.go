@@ -1,40 +1,22 @@
 package comment
 
 import (
-	"runtime"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 )
 
-// clickOn presses the left button in the middle of a zone. Zones are recorded
-// on the manager's own goroutine as a side effect of scanning a drawn frame, so
-// the zone is looked for until it appears rather than assumed to be there.
+// clickOn presses the left button in the middle of a zone.
 func clickOn(t *testing.T, d kernel.Deps, dr *driver, name string) {
 	t.Helper()
 
-	_ = d.Zones.Scan(dr.m.View())
 	id := dr.m.zones.ID(name)
-	eventually(t, "the zone "+id+" to be recorded", func() bool {
-		return !d.Zones.Get(id).IsZero()
-	})
-	at := d.Zones.Get(id)
+	at := uitest.Zone(t, d.Zones, dr.m.View, id)
 	dr.send(tea.MouseClickMsg{X: at.StartX, Y: at.StartY, Button: tea.MouseLeft})
-}
-
-func eventually(t *testing.T, what string, cond func() bool) {
-	t.Helper()
-
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		runtime.Gosched()
-	}
 }
 
 func TestThread_ClickingACommentSelectsItAndClickingItAgainEditsIt(t *testing.T) {
