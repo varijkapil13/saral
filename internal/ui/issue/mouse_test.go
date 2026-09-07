@@ -39,18 +39,19 @@ func TestEdit_TwoDeliberateClicksOnARowDoNotOpenIt(t *testing.T) {
 	d := testDeps(f)
 	clock := newPaneClock()
 	d.Now = clock.now
-	p := newPanel(t, NewEdit(d, fullIssue(t, f, "PROJ-6"), withDrafts(tempDrafts(t))), 100, 28)
+	p := newPanel(t, New(d, readIssue(t, f, "PROJ-6"), withDrafts(tempDrafts(t))), 100, 28)
+	p.send(loadedMsg{gen: p.editor().gen, issue: readIssue(t, f, "PROJ-6")})
 
 	at := p.zoneAt(d, "row:labels")
 	p.clickAt(at)
-	if got := p.editor().row().id; got != "labels" {
-		t.Fatalf("the click put the cursor on %s, want labels", got)
+	if got := p.editor().currentCursorRow(); got == nil || got.id != "labels" {
+		t.Fatalf("the click did not put the cursor on labels: %+v", got)
 	}
 
 	clock.after(time.Second)
 	p.clickAt(at)
 
-	if p.editor().stage != stageBrowse {
+	if p.editor().stage != sideBrowse {
 		t.Error("two clicks a second apart opened the field, so a second look reads as a double-click")
 	}
 }
@@ -62,7 +63,7 @@ func TestMove_TwoDeliberateClicksOnAMoveDoNotChooseIt(t *testing.T) {
 	d := testDeps(f)
 	clock := newPaneClock()
 	d.Now = clock.now
-	p := newPanel(t, NewMove(d, fullIssue(t, f, "PROJ-6")), 100, 28)
+	p := newPanel(t, NewMove(d, readIssue(t, f, "PROJ-6")), 100, 28)
 
 	want := p.mover().moves[1]
 	at := p.zoneAt(d, "move:"+want.ID)
@@ -79,40 +80,49 @@ func TestMove_TwoDeliberateClicksOnAMoveDoNotChooseIt(t *testing.T) {
 	}
 }
 
-// The field rows are taller than a short terminal, and until now the pane drew
-// them all and let the frame clip: the last field could be neither seen nor
-// pointed at.
+// The sidebar has more rows than a short terminal can draw, and until now the
+// pane drew them all and let the frame clip: a row past the first few could be
+// neither seen nor pointed at.
 func TestEdit_TheWheelReachesTheFieldsAShortTerminalClipsOff(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(8)
 	d := testDeps(f)
-	p := newPanel(t, NewEdit(d, fullIssue(t, f, "PROJ-6"), withDrafts(tempDrafts(t))), 100, 6)
+	p := newPanel(t, New(d, readIssue(t, f, "PROJ-6"), withDrafts(tempDrafts(t))), 100, 16)
+	p.send(loadedMsg{gen: p.editor().gen, issue: readIssue(t, f, "PROJ-6")})
 
 	first := p.frame()
 	if !strings.Contains(first, "Summary") {
 		t.Fatalf("the first field is not on screen at all:\n%s", first)
 	}
-	if strings.Contains(first, "Due") {
-		t.Fatalf("every field fits, so this frame proves nothing:\n%s", first)
+
+	last := len(p.editor().sideRows) - 1
+	if box := p.editor().lay.boxes[regionDetails].h; last < box {
+		t.Fatalf("this issue's %d sidebar rows all fit in a %d-row box, so this test proves nothing", last+1, box)
 	}
 
-	p.wheel(tea.MouseWheelDown, 3)
+	// The wheel targets whatever has the keyboard when it lands outside every
+	// region's own zone, so the details region is put there directly — the
+	// same as clicking a row would, and without a click's own race against the
+	// zone manager's background goroutine.
+	p.editor().focus = regionDetails
+	down, up := tea.MouseWheelMsg{Button: tea.MouseWheelDown, Y: 1000}, tea.MouseWheelMsg{Button: tea.MouseWheelUp, Y: 1000}
+	for range last + 2 {
+		p.send(down)
+	}
 	scrolled := p.frame()
-
-	if !strings.Contains(scrolled, "Due") {
-		t.Errorf("the wheel did not reach the last field:\n%s", scrolled)
-	}
 	if strings.Contains(scrolled, "Summary") {
 		t.Errorf("the wheel scrolled nothing away:\n%s", scrolled)
 	}
 
-	p.wheel(tea.MouseWheelUp, 6)
+	for range last + 4 {
+		p.send(up)
+	}
 	back := p.frame()
 	if !strings.Contains(back, "Summary") {
 		t.Errorf("the wheel could not get back to the first field:\n%s", back)
 	}
-	if got := p.editor().top; got != 0 {
+	if got := p.editor().tops[regionDetails]; got != 0 {
 		t.Errorf("the pane is scrolled to %d after going down and back up, want 0", got)
 	}
 }
@@ -124,15 +134,21 @@ func TestEdit_WalkingTheCursorDownBringsItsRowBackOnScreen(t *testing.T) {
 
 	f := newFake(8)
 	d := testDeps(f)
-	p := newPanel(t, NewEdit(d, fullIssue(t, f, "PROJ-6"), withDrafts(tempDrafts(t))), 100, 6)
+	p := newPanel(t, New(d, readIssue(t, f, "PROJ-6"), withDrafts(tempDrafts(t))), 100, 16)
+	p.send(loadedMsg{gen: p.editor().gen, issue: readIssue(t, f, "PROJ-6")})
+	p.editor().focus = regionDetails
 
-	p.keys("j", "j", "j", "j")
-
-	if got := p.editor().row().id; got != "duedate" {
-		t.Fatalf("the cursor is on %s, want the last field", got)
+	last := len(p.editor().sideRows) - 1
+	for range last {
+		p.keys("j")
 	}
-	if frame := p.frame(); !strings.Contains(frame, "Due") {
-		t.Errorf("the row under the cursor is off screen:\n%s", frame)
+
+	if got := p.editor().cursor; got != last {
+		t.Fatalf("the cursor is on row %d, want the last one (%d)", got, last)
+	}
+	if got := p.editor().tops[regionDetails]; got+p.editor().lay.boxes[regionDetails].h <= p.editor().sideRows[last].lineAt {
+		t.Errorf("the row under the cursor is off screen: top %d, box %d, row's line %d",
+			got, p.editor().lay.boxes[regionDetails].h, p.editor().sideRows[last].lineAt)
 	}
 }
 
@@ -157,7 +173,7 @@ func TestMove_TheWheelScrollsTheMovesAShortTerminalClipsOff(t *testing.T) {
 
 	f := newFake(8)
 	d := testDeps(f)
-	p := newPanel(t, NewMove(d, fullIssue(t, f, "PROJ-6")), 100, 8)
+	p := newPanel(t, NewMove(d, readIssue(t, f, "PROJ-6")), 100, 8)
 	p.send(movesLoadedMsg{gen: p.mover().gen, moves: manyMoves(12)})
 
 	last := "Stage 12"
@@ -187,7 +203,7 @@ func TestMove_WalkingTheCursorDownBringsTheMoveBackOnScreen(t *testing.T) {
 
 	f := newFake(8)
 	d := testDeps(f)
-	p := newPanel(t, NewMove(d, fullIssue(t, f, "PROJ-6")), 100, 8)
+	p := newPanel(t, NewMove(d, readIssue(t, f, "PROJ-6")), 100, 8)
 	p.send(movesLoadedMsg{gen: p.mover().gen, moves: manyMoves(12)})
 
 	for range 11 {
@@ -209,7 +225,7 @@ func TestMove_TheWheelLeavesATransitionScreenAlone(t *testing.T) {
 
 	f := newFake(8)
 	d := testDeps(f)
-	p := newPanel(t, NewMove(d, fullIssue(t, f, "PROJ-6")), 100, 24)
+	p := newPanel(t, NewMove(d, readIssue(t, f, "PROJ-6")), 100, 24)
 
 	p.keys("j", "enter")
 	if p.mover().stage == moveList {

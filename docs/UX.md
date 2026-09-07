@@ -566,6 +566,100 @@ exist. Either way the facet stays on the list with the reason beside it in the s
 choosing it repeats the reason and names `e`, which shows the search on screen and runs an edited
 one. A facet that disappeared would be one nobody could find out about.
 
+## Editing in place
+
+The owner, on the separate edit screen P2.3 shipped: *"Why open a different view when I can edit the
+thing directly in the same view?"* The Details sidebar is now the editing surface, and the pushed
+field editor is gone.
+
+**The sidebar has a row cursor.** `j`/`k`, the wheel and a click all move it, and every row the
+sidebar draws — a platform fact, a related issue, a custom field, editable or not — is one of its
+stops. `enter` or `e` acts on the row under it: an editable row opens in place, and a read-only one
+answers with the one word that is true of it, `read-only`, rather than doing nothing. A row is
+editable when the issue was read with its field (`Issue.Requested`, the same mask P2.3's fetch-edit-PUT
+cycle already answers to) *and* editmeta lists it *and* its kind is one this build can edit — see
+`docs/FIELDS.md`. This build's kinds are text (the summary), labels, date (the due date), the document
+the description is, opened from the description region itself rather than from a sidebar row, single
+choice (priority), person (the assignee) and status, through the issue's own transitions — see
+"Assigning, and changing status" below. Status answers for itself rather than through editmeta, since a
+transition is a workflow action and never a field a screen lists.
+
+**Committing a row is not sending it.** Enter on a text, labels or date row swaps its value for a
+`bubbles/textinput` seeded with what is there now; enter again keeps the typed value on the row and
+closes the field, `esc` leaves it alone. The description opens the same `bubbles/textarea` the comment
+composer uses, inline in the description region below the header, closed with `ctrl+s` to keep it or
+`esc` to leave it; `E` still hands the same document to `$EDITOR`, exactly as P2.3 built it. None of
+this writes to Jira — it marks the row **dirty**, on the pane, and nowhere else yet.
+
+**Dirty rows accumulate into one set**, not one request per field. A dirty row carries a bullet in the
+theme's accent colour and, where the line has room, the value the site still holds beside it as
+`(was …)`. The identity line under the issue's title — the one place on this pane that survives a
+keypress the way `docs/UX.md`'s own status-line rule asks for — names the set: `N unsaved · s save ·
+backspace undo this · U undo all`, each word a click target as well as a key. `s` (and `ctrl+s`, and
+the palette's *Save changes*) sends every dirty row as **one** `IssuePatch`; a field this pane cannot
+express — an empty summary, an unparsable date — is refused before anything is sent, and a rejection
+Jira does send back is shown in that field's own words rather than as a status line nobody can act on
+after the next keypress. `backspace` (not `u`: this pane already spends `u` and `ctrl+u` on half a page
+up) undoes the row under the cursor; `U` (and the palette's *Undo all changes*) undoes every row at
+once.
+
+**Leaving with dirty rows asks, everywhere the kernel would otherwise refuse.** `kernel.CloseAsker` is
+the additive interface that makes this possible: a `Blocker` that also answers to it is asked instead
+of refused, at every one of the three places a view is discarded — a pop, a root switch, and quitting
+from a lone root. The issue pane answers by putting up its own named prompt in place of the identity
+line's facts — `Save N changes to PROJ-12?  y save · n discard · esc stay`, each word a zone too — and
+resolves it itself: `y` saves and then sends the pop the kernel would have sent in the first place, `n`
+discards and sends it straight away, `esc` puts the prompt away and changes nothing. The mechanism does
+not know *which* gesture triggered it, so a root switch asked this way is answered by leaving the issue
+pane, not by completing the switch — the reader repeats the gesture once they are back at rest, which
+is the trade this packet makes rather than teaching every blocked gesture how to resume itself.
+
+**The dirty set survives a crash.** Every commit to a row writes the whole set through the same
+`draftStore` P2.3 built — one file per issue per site, replaced atomically — and it is picked back up
+the next time this issue is opened, with the identity line saying so: `unsaved changes from earlier
+restored · s save · U discard`. A `*jira.ConflictError` on save is answered the same way the pushed
+editor answered a 409: the issue is read again and the dirty set is rebased on top of the fresh copy,
+which is what every reload already does for a normal `r`, `R`, or the site simply being asked again the
+moment the pane opens — so a 409 costs this pane nothing beyond the one sentence that says the site
+moved under it and the edits are still there to review.
+
+**What editmeta still stops at.** Editmeta answers editable fields, and *editable* here has always
+meant "this build additionally knows the kind" — an option or user-typed custom field beyond priority
+and the assignee, an unfamiliar array type, anything this build has no row kind for stays a static
+line, counted the way P5 already counts a hidden or an unmodelled value, never silently offered as a
+row that opens onto nothing.
+
+## Assigning, and changing status
+
+Priority, the assignee and status are rows too, and each opens an inline list directly beneath itself
+— the same list `moveModel` used to push as its own screen for a transition, now drawn in place for
+all three — rather than a text field, because none of the three is free text. The list takes the
+keyboard while it is open (`esc` cancels it, `enter` chooses the row under its own cursor, a click
+does the same) and filters as it is typed into.
+
+**Priority** reads its candidates from editmeta's own `AllowedValues` for the field — the same read
+`fetch()` already made, so opening this list costs nothing further. **The assignee** searches the site
+as it is typed, because `jira.PeopleQuery`'s own matching cannot be reproduced locally: `Me()` (asked
+for once and kept for as long as the pane is open) and "Unassigned" are offered before anything is
+typed and before the site has answered anything at all, and a keystroke re-issues the search rather
+than narrowing what is already held. `@` opens this list from wherever the cursor already is, and the
+palette's *Assign to…*, *Assign to me* and *Unassign* reach the same three gestures without opening a
+list at all for the latter two. A token without *Browse users and groups* is told why in the
+capability's own words rather than shown an empty list.
+
+**Status is a workflow action, not a value waiting on `s`.** Choosing a transition off its list asks
+for any field the transition's own screen requires, exactly as `moveModel`'s pushed screen used to, and
+then a named confirmation — *"Move PROJ-12 to In Progress and save 2 changes?"* — naming the move and
+however many other rows are dirty at the same time, because `Transition` takes fields exactly as
+`UpdateIssue` does and a status change carries the rest of the dirty set in the one request rather than
+two. `t` (and the palette's *Change this issue's status*) open it from wherever the cursor already is,
+the existing binding `moveModel` used.
+
+**`moveModel` itself is not gone.** The board still pushes it directly for a card whose drag needs a
+screen the board has no sidebar to draw inline in — see `internal/ui/board`'s own use of
+`issue.NewMove` — so the type, its keys and its own tests are untouched; only the issue pane's route to
+the same gesture now draws it in place instead of pushing it.
+
 ## Rendering rules for modern terminals
 
 - **True color when available, 256 and 16 as graceful steps down, and a real no-color mode** driven

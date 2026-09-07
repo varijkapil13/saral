@@ -2,9 +2,15 @@ PROJ-10  Investigate the release checklist
 o Defect | ~ Building (in progress) | Normal | Grace Hopper | updated 03 Mar 2025 06:00
 ------------------------------------------------------------------------------------------------------------------------
 |Investigate the release checklist.                                             |Details                                
+|                                                                               |->Summary      Investigate the relea...
+|- Filed against PROJ-10.                                                       |  Description  4 lines                 
+|- Reproduced on staging twice in a row.                                        |  Status       Building                
+|                                                                               |  Priority     Normal                  
+|                                                                               |  Assignee     Grace Hopper            
 |                                                                               |  Project      PROJ PROJ Project       
-|- Filed against PROJ-10.                                                       |  Reporter     Alan Turing             
-|- Reproduced on staging twice in a row.                                        |  Created      02 Mar 2025 19:00       
+|                                                                               |  Reporter     Alan Turing             
+|                                                                               |  Due          not set                 
+|                                                                               |  Created      02 Mar 2025 19:00       
 |                                                                               |  Labels       customer                
 |                                                                               |  Fix versions 1.0                     
 |                                                                               |Parent                                 
@@ -17,12 +23,6 @@ o Defect | ~ Building (in progress) | Normal | Grace Hopper | updated 03 Mar 202
 |                                                                               |---------------------------------------
 |                                                                               |> Sam Tester | 02 Mar 2026 09:00       
 |                                                                               |    Still readable.                    
-|                                                                               |                                       
-|                                                                               |                                       
-|                                                                               |                                       
-|                                                                               |                                       
-|                                                                               |                                       
-|                                                                               |                                       
 |                                                                               |                                       
 |                                                                               |                                       
 |                                                                               |                                       

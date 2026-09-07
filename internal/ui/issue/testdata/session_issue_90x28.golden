@@ -3,10 +3,16 @@ PROJ-11  Document the login flow
 o Epic | x Shipped (done) | Whenever | Alan Turing | updated 03 Mar 2025 08:00            
 ------------------------------------------------------------------------------------------
 |Document the login flow.                              |Details                           
+|                                                      |->Summary      Document the log...
+|- Filed against PROJ-11.                              |  Description  4 lines            
+|- Only happens for accounts created before the        |  Status       Shipped            
+|  migration.                                          |  Priority     Whenever           
+|                                                      |  Assignee     Alan Turing        
 |                                                      |  Project      PROJ PROJ Project  
-|- Filed against PROJ-11.                              |  Reporter     Ada Lovelace       
-|- Only happens for accounts created before the        |  Resolution   Won't do           
-|  migration.                                          |  Resolved     03 Mar 2025 08:00  
+|                                                      |  Reporter     Ada Lovelace       
+|                                                      |  Resolution   Won't do           
+|                                                      |  Resolved     03 Mar 2025 08:00  
+|                                                      |  Due          not set            
 |                                                      |  Created      02 Mar 2025 20:00  
 |                                                      |  Labels       flaky, frontend    
 |                                                      |  5 more, all empty               
@@ -19,10 +25,4 @@ o Epic | x Shipped (done) | Whenever | Alan Turing | updated 03 Mar 2025 08:00
 |                                                      |                                  
 |                                                      |                                  
 |                                                      |                                  
-|                                                      |                                  
-|                                                      |                                  
-|                                                      |                                  
-|                                                      |                                  
-|                                                      |                                  
-|                                                      |                                  
- Issues  tab pane  e edit  t status  C comment                                       ? esc
+ Issues  tab pane  e edit  E open in $EDITOR  t status  C comment                    ? esc

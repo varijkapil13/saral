@@ -1636,6 +1636,101 @@ issue's, every single time — spinner and all.
   the same two calls (`recallTerms` in its constructor, `rememberTerms` wherever it sets `m.terms`)
   this packet's four already show.
 
+- [x] **E1 — Edit fields in place, text/labels/date/description, the dirty set and save** · **owns**
+  `internal/ui/issue/**` except `edit_transition*.go`, `internal/ui/kernel/kernel.go` (the
+  `CloseAsker` interface and the three `askOrRefuse` call sites) and `internal/ui/kernel/closeasker_test.go`,
+  `internal/ui/{livekeys_test,keys_test}.go`, `internal/ui/testdata/{footer,overlay,menu}_*.golden`,
+  `internal/ui/palette/kernel_test.go` and its `testdata/session_120x30.golden`, `docs/{UX,FIELDS,ROADMAP}.md`
+  The owner, on the pushed field editor P2.3 shipped: *"Why open a different view when I can edit the
+  thing directly in the same view? Save any dirty tickets and ask the user to save their changes."*
+  The Details sidebar is the editing surface now, with a row cursor (`j`/`k`, the wheel, a click) over
+  every row it draws, cursorable and read-only alike; `enter`/`e` opens an editable one in place —
+  `bubbles/textinput` for text, labels and date, the description's own `bubbles/textarea` inline in the
+  description region, `E` still handing off to `$EDITOR`. `docs/FIELDS.md`'s new P8 is which four ids
+  this build knows how to edit and why editmeta plus the fetch mask plus the kind decide it, not just
+  editmeta alone. **Single choice, person and status are left for the next packet on purpose** — their
+  rows exist, are on the cursor, and answer `read-only` until it lands; `edit_transition.go`'s
+  `moveModel` is untouched and still reachable on `t`.
+  Edits accumulate into one dirty set rather than one request per field: `s`/`ctrl+s` (and the
+  palette's *Save changes*) send every dirty row as one `IssuePatch`, `backspace` undoes the row under
+  the cursor and `U` undoes all of them — `u` was the design's first choice for the single-row undo and
+  already means half-page-up on this pane, so the collision is resolved by moving that one key rather
+  than the existing binding, exactly as `docs/PARALLEL.md` asks. The identity line under the title
+  names the set and is a set of zones as well as keys, the same as the row lines and the leave prompt.
+  **`kernel.CloseAsker`** is the one port-adjacent, cross-cutting change: a `Blocker` that also answers
+  to it is asked instead of refused, at all three places a view is discarded (a pop, a root switch,
+  quitting from a lone root) — additive, and every existing `Blocker` behaves exactly as before, which
+  `TestCloseAsker_APlainBlockerIsStillJustRefused` and the sweep in `internal/ui/livekeys_test.go` both
+  hold to. The issue pane answers by putting its own named prompt where the identity line's facts are,
+  resolving it itself and sending the kernel the same close it would have sent to begin with — which
+  means a root switch or a quit asked this way is answered by leaving the pane rather than by
+  completing the original gesture; the reader repeats it once back at rest. Extending the mechanism to
+  resume the original gesture automatically is left for later, filed as an open question rather than
+  guessed at.
+  The dirty set is drafted through the same `draftStore` P2.3 built (one file per issue per site,
+  atomic replace) — restored on reopen, surviving a crash or a "stay", and rebased on top of a fresh
+  read the same way a `*jira.ConflictError` is: `rebaseRows` is one function for the first read, `r`,
+  `R` and a 409's own reread alike, so a conflict costs this pane nothing beyond the sentence that says
+  the site moved under it.
+  The old pushed editor is deleted rather than kept as a fallback: `edit.go`, `edit_render.go`,
+  `edit_row.go` and the `"issue.edit"` command are gone; `edit_row.go`'s row logic moved into
+  `fieldrow.go` narrowed to the four kinds this build edits, `edit_draft.go` and `edit_editor.go` moved
+  to `draft.go` and `editor.go` unchanged, and `edit_render.go`'s styles and helpers `moveModel` still
+  needs moved to `move_render.go`. Three new palette commands replace it: *Edit this field*, *Save
+  changes*, *Undo all changes*.
+
+- [x] **E2 — The three kinds E1 left `rkStatic`: priority, the assignee and status, and assigning it** ·
+  **owns** `internal/ui/issue/{pick,pick_cmds,assign_register,fieldrow,fields,dirty,draft,issue,keys,cmds,edit_register}.go`
+  and their tests, `internal/ui/issue/testdata/**`, `internal/ui/kernel/kernel.go`'s `fullCaps`
+  (test-only, `internal/ui/issue/harness_test.go`), `docs/{UX,FIELDS,ROADMAP}.md`
+  Single choice, person and status land as real row kinds, each opening an inline list directly beneath
+  its own row rather than a pushed pane: priority reads editmeta's own `AllowedValues` for the field
+  fetch() already read, costing no request of its own; the assignee searches the site as it is typed,
+  `Me()` and "Unassigned" pinned before anything is typed or answered; status lists the issue's
+  transitions and, choosing one, asks for a screen's required fields the way `moveModel` used to and
+  then a named confirmation naming the move and however many other rows are dirty, because
+  `jira.Mover.Transition` takes fields exactly as `UpdateIssue` does — one request, not two. `@` opens
+  the assignee picker and `t` the status one from wherever the cursor already is; three new palette
+  commands, *Assign to…*, *Assign to me*, *Unassign*, reach the same gestures, and *Change this issue's
+  status* is repointed at the inline list rather than a push. `fieldRow` gained `chosenID`/`originalID`
+  for the two kinds whose dirtiness is an identifier rather than a display string, and the draft on disk
+  a `choices` map beside `values` so the pair survives a crash the same way a text edit does.
+  **`edit_transition.go`'s `moveModel` is not deleted.** The packet that named this one asked for it to
+  be, on the premise that its behaviour would live entirely inline once this packet landed — but
+  `internal/ui/board` pushes `issue.NewMove` directly, for a card's drag that needs a screen the board
+  has no sidebar to draw inline in, and deleting it would have broken a real, working consumer to honour
+  an instruction written before that consumer existed. Grepping for `NewMove`/`MoveViewID` found it
+  before any code moved; `moveModel`, `MoveViewID`, `edit_keys.go` and `edit_transition_test.go` are
+  therefore untouched, and only the issue pane's own route to the gesture — `openMove` in
+  `edit_register.go` — now opens the inline picker instead of pushing the shared view. Filed as the
+  correction this packet made rather than the deletion it was asked for.
+  **Found in `internal/ui/issue/harness_test.go`'s own `fullCaps()`:** it granted every capability this
+  package's tests need by default except `CapPeople`, which `internal/ui/filter`'s equivalent already
+  grants — an oversight from before this package had a person picker of its own, harmless until this
+  packet's own tests needed one and then failed every one of them the same way. Added `People: ok`
+  there, additively, since nothing before this packet asked the fake to refuse it.
+  **A real bug, caught by the harness rather than guessed at:** `movesLoaded` and `peopleFound` updated
+  the picker's own state without bumping `editGen`, the counter `contentKey` reads to know a keystroke
+  or an answer landing has to redraw the sidebar. Nothing here moves the cursor or the stage when a
+  network answer arrives, so the memoized frame never rebuilt and a picker's own loaded candidates
+  stayed invisible behind a stale "reading…" line until something else happened to invalidate it —
+  caught by `TestReply_AnAnswerLandingUnderThePaletteStillReachesTheViewThatAskedForIt`'s "the transition
+  picker" case, which this packet repointed at the new inline picker rather than the still-current
+  pushed one.
+  **Regenerating every golden this packet touched found several already stale from E1 itself** —
+  `overlay_120x38.golden`, `menu_120x38.golden` and the three `footer_*.golden` files still drew the
+  deleted pushed editor's own `issue.edit` section, and `keys.golden` still named states from before the
+  sidebar became the editing surface at all. None of that is this packet's own feature; all of it is
+  fixed in the same regeneration, because the golden a reader diffs against has to be the tree's own
+  truth and not a snapshot of whichever packet last remembered to run `-update`.
+  **Left for later:** option and user-typed custom fields beyond priority and the assignee, since
+  `editableRowSpecs` is still a fixed list of seven ids rather than a walk over `FieldSchema` — the same
+  scoping E1 named for date, extended here to the other two kinds it introduced. Header-fact click
+  targets for status, priority and assignee jumping the sidebar cursor to their row (E1's own
+  `leftForNextPacket`) were judged out of scope again: the header still names the summary's row as its
+  one click target, and the three new rows are reached from the sidebar itself, which the design's own
+  wording ties less tightly to than the row kinds it names first.
+
 ## Later, deliberately not now
 
 - **Confluence.** Arrives as `pkg/confluence` behind its own port. Note that Confluence storage

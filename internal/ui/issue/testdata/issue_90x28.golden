@@ -2,21 +2,21 @@ PROJ-12  Retire the nightly export
 o Story | o Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00
 ------------------------------------------------------------------------------------------
 |Retire the nightly export.                            |Details                           
+|                                                      |->Summary      Retire the night...
+|- Filed against PROJ-12.                              |  Description  5 lines            
+|- The old ticket for this was closed as cannot        |  Status       Triage             
+|  reproduce.                                          |  Priority     Urgent             
+|- Waiting on a decision.                              |  Assignee     unassigned         
 |                                                      |  Project      PROJ PROJ Project  
-|- Filed against PROJ-12.                              |  Reporter     Grace Hopper       
-|- The old ticket for this was closed as cannot        |  Due          2025-03-16         
-|  reproduce.                                          |  Created      02 Mar 2025 21:00  
-|- Waiting on a decision.                              |  Fix versions 2.0                
+|                                                      |  Reporter     Grace Hopper       
+|                                                      |  Due          2025-03-16         
+|                                                      |  Created      02 Mar 2025 21:00  
+|                                                      |  Labels       not set            
+|                                                      |  Fix versions 2.0                
 |                                                      |  5 more, all empty               
 |                                                      |  1 more, hidden as Jira's own ...
 |                                                      |PROJ-12 | 2 comments              
 |                                                      |----------------------------------
-|                                                      |  Sam Tester | 02 Mar 2026 09:00  
-|                                                      |    Reproduced on staging, twice. 
-|                                                      |                                  
-|                                                      |    The fix is in the shared      
-|                                                      |    client.                       
-|                                                      |                                  
 |                                                      |> Sam Tester | 02 Mar 2026 09:00  
 |                                                      |    Agreed. I will pick this up on
 |                                                      |    Monday.                       

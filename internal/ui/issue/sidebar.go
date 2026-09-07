@@ -47,6 +47,17 @@ func (r railRun) cell(s *styles, at int) string {
 	return s.railOff[part]
 }
 
+// arrowPrefix is the two cells in front of the sidebar row under the cursor,
+// padded so a row does not shift sideways when it is picked.
+func (m *Model) arrowPrefix() string {
+	arrow := m.deps.Theme.Glyphs.Arrow
+	pad := 2 - ansi.StringWidth(arrow)
+	if pad < 0 {
+		pad = 0
+	}
+	return m.styles.selected.Render(arrow) + strings.Repeat(" ", pad)
+}
+
 // marker is the zone sequence a region opens and closes with. A region is drawn
 // row by row beside another one, so it cannot be marked as a block of lines: the
 // sequence goes where the region starts and again where it ends, and the
@@ -170,24 +181,24 @@ func (m *Model) sizeThread() tea.Cmd {
 // while the box it fills is on screen.
 func (m *Model) readThread() {
 	if !m.lay.shows(regionComments) || !m.lay.boxes[regionComments].drawn() {
-		m.rows, m.rowWidths = m.rows[:0], m.rowWidths[:0]
+		m.threadLines, m.threadWidths = m.threadLines[:0], m.threadWidths[:0]
 		return
 	}
 	raw := m.thread.View()
-	if raw == m.threadRaw && len(m.rows) > 0 {
+	if raw == m.threadRaw && len(m.threadLines) > 0 {
 		return
 	}
 	m.threadRaw = raw
-	m.rows, m.rowWidths = m.rows[:0], m.rowWidths[:0]
+	m.threadLines, m.threadWidths = m.threadLines[:0], m.threadWidths[:0]
 	for rest := raw; ; {
 		at := strings.IndexByte(rest, '\n')
 		if at < 0 {
-			m.rows = append(m.rows, rest)
-			m.rowWidths = append(m.rowWidths, ansi.StringWidth(rest))
+			m.threadLines = append(m.threadLines, rest)
+			m.threadWidths = append(m.threadWidths, ansi.StringWidth(rest))
 			return
 		}
-		m.rows = append(m.rows, rest[:at])
-		m.rowWidths = append(m.rowWidths, ansi.StringWidth(rest[:at]))
+		m.threadLines = append(m.threadLines, rest[:at])
+		m.threadWidths = append(m.threadWidths, ansi.StringWidth(rest[:at]))
 		rest = rest[at+1:]
 	}
 }

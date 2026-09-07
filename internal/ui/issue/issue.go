@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
@@ -93,16 +95,68 @@ type Model struct {
 	folded  int
 	dataGen int
 
-	head      string
-	headAt    contentKey
-	rows      []string
-	rowWidths []int
-	threadRaw string
-	blank     string
-	buf       []byte
+	head         string
+	headAt       contentKey
+	threadLines  []string
+	threadWidths []int
+	threadRaw    string
+	blank        string
+	buf          []byte
 
 	width, height int
 	zones         widget.Zoner
+
+	// rows is the persistent state of the fields this build knows how to edit —
+	// summary, description, labels, due — rebuilt around every fresh read of the
+	// issue and never otherwise, so an edit survives a redraw. sideRows is every
+	// row the sidebar cursor can land on, cursorable and read-only alike,
+	// rebuilt on every frame the details region actually redraws — see fields.go.
+	rows     []fieldRow
+	sideRows []cursorRow
+	cursor   int
+	clicks   *widget.Clicks
+
+	// stage is what the sidebar is doing right now; leaving is the leave prompt,
+	// tracked apart from it because a save started from that prompt still passes
+	// through stage sideSaving and the prompt has to survive the save failing.
+	stage   sideStage
+	leaving bool
+	input   textinput.Model
+	docArea textarea.Model
+
+	// saveFail is the last save's own refusal, in the site's words; draftRestored
+	// says the dirty set on screen is one this pane picked back up rather than
+	// one the user is in the middle of typing.
+	saveFail      string
+	draftRestored bool
+	// editGen counts every keystroke a typing row or the description textarea
+	// takes, which is what tells the sidebar's own memo a frame has to be
+	// rebuilt when neither the cursor nor the stage has moved.
+	editGen int
+
+	drafts     draftStore
+	launch     editorLauncher
+	saveGen    int
+	saveCancel context.CancelFunc
+	docGen     int
+
+	// pick is the inline list open beneath a choice, person or status row —
+	// nil whenever stage is not sidePicking. pickGen and pickCancel are its own
+	// read's cancellation, apart from the issue read's and the save's, because
+	// a picker outlives neither of those and starts and cancels reads far more
+	// often than either.
+	pick       *picker
+	pickGen    int
+	pickCancel context.CancelFunc
+
+	// me is this session's own account, asked for once and kept for as long as
+	// this pane is open — the person picker's "me" row and "Assign to me" both
+	// use it rather than asking the site again. pendingAssignSelf is set while
+	// "Assign to me" is waiting on a first read of it.
+	me                *jira.User
+	meAsked           bool
+	meCancel          context.CancelFunc
+	pendingAssignSelf bool
 
 	search *app.Search
 	cache  app.Cache
@@ -119,6 +173,21 @@ type Model struct {
 // has been pushed over it since.
 func (m *Model) Addr() kernel.Addr { return m.addr }
 
+// modelOption configures the pane at construction. Nothing outside the package
+// builds one; the tests use it to stand in for the user's editor and for a
+// draft store nowhere near the person running them.
+type modelOption func(*Model)
+
+// withLauncher replaces the handoff to the user's editor.
+func withLauncher(l editorLauncher) modelOption {
+	return func(m *Model) { m.launch = l }
+}
+
+// withDrafts replaces where drafts are kept.
+func withDrafts(s draftStore) modelOption {
+	return func(m *Model) { m.drafts = s }
+}
+
 // New builds the detail pane around the row the user opened.
 //
 // The row is drawn immediately and the full issue replaces it when it arrives:
@@ -126,14 +195,16 @@ func (m *Model) Addr() kernel.Addr { return m.addr }
 // the key, the summary and the status. The split the reader last chose is read
 // here for the same reason: a constructor runs before the first frame and Init
 // does not.
-func New(d kernel.Deps, seed jira.Issue) kernel.View {
+func New(d kernel.Deps, seed jira.Issue, opts ...modelOption) kernel.View {
 	m := &Model{
-		deps:  d,
-		keys:  defaultKeys(),
-		issue: seed,
-		cache: d.Cache,
-		open:  map[int]bool{},
-		addr:  kernel.NewAddr(),
+		deps:   d,
+		keys:   defaultKeys(),
+		issue:  seed,
+		cache:  d.Cache,
+		open:   map[int]bool{},
+		addr:   kernel.NewAddr(),
+		input:  newSideInput(),
+		launch: launchEditor,
 	}
 	if share, chosen := config.LoadUIState().Split(ViewID); chosen {
 		m.split = split(share)
@@ -143,6 +214,7 @@ func New(d kernel.Deps, seed jira.Issue) kernel.View {
 	}
 	m.styles = newStyles(m.deps.Theme)
 	m.zones = widget.NewZoner(d.Zones)
+	m.clicks = widget.NewClicks(d.Now)
 	for r := range regionCount {
 		m.marks[r] = marker(m.zones, zoneNames[r])
 	}
@@ -150,9 +222,27 @@ func New(d kernel.Deps, seed jira.Issue) kernel.View {
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
+	if store, err := newDraftStore(); err == nil {
+		m.drafts = store
+	}
+	for _, o := range opts {
+		if o != nil {
+			o(m)
+		}
+	}
 	m.thread = comment.Thread(m.deps, seed.Key, m.addr)
 	m.fromCache()
+	m.rebaseRows()
 	return m
+}
+
+func newSideInput() textinput.Model {
+	ti := widget.NewInput()
+	ti.Prompt = ""
+	// The widget's own cursor blink is a timer this pane would then own for as
+	// long as a row is open, the same reason the description textarea drops it.
+	ti.SetVirtualCursor(false)
+	return ti
 }
 
 // fromCache enriches a seed that was not read wide — no seed at all, or the
@@ -237,12 +327,14 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		if m.current(msg.gen) {
 			m.issue, m.labels, m.loadedIssue = msg.issue, msg.labels, true
 			m.dataGen++
+			m.rebaseRows()
 			cmd = m.keepIssue(msg.issue)
 		}
 
 	case editMetaMsg:
 		if m.current(msg.gen) {
 			m.edit = msg.meta
+			m.relist()
 			m.dataGen++
 		}
 
@@ -250,6 +342,27 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		if m.current(msg.gen) {
 			cmd = kernel.Fail(msg.err)
 		}
+
+	case savedMsg:
+		cmd = m.saveResult(msg)
+
+	case editedMsg:
+		cmd = m.editedResult(msg)
+
+	case peopleFoundMsg:
+		m.peopleFound(msg)
+
+	case meLoadedMsg:
+		cmd = m.meLoaded(msg)
+
+	case movesLoadedMsg:
+		m.movesLoaded(msg)
+
+	case moveDoneMsg:
+		cmd = m.moveDone(msg)
+
+	case editFailedMsg:
+		cmd = m.pickFailed(msg)
 
 	case CommentsMsg:
 		cmd = m.openComments()
@@ -270,7 +383,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.key(msg)
 
 	case tea.MouseClickMsg:
-		m.clicked(msg)
+		cmd = m.clicked(msg)
 
 	case tea.MouseMotionMsg:
 		m.dragDivider(msg)
@@ -283,7 +396,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.wheel(msg)
 
 	default:
-		cmd = join(m.splitMsg(msg), join(m.editMsg(msg), m.tell(msg)))
+		cmd = join(m.splitMsg(msg), join(m.moveMsg(msg), join(m.assignMsg(msg), join(m.dirtyMsg(msg), m.tell(msg)))))
 	}
 	// The regions are laid out here rather than only in View so that a key
 	// pressed before the first frame moves the content that is already in hand,
@@ -335,9 +448,17 @@ func (m *Model) stop() {
 }
 
 // Close cuts the read short, and the thread's with it: the sidebar holds that
-// model and nothing else does, so a pane thrown away takes it along.
+// model and nothing else does, so a pane thrown away takes it along. A save in
+// flight is left to finish: it is a write already sent, and cutting it off here
+// would leave the pane unsure whether it landed.
 func (m *Model) Close() {
 	m.stop()
+	if m.pickCancel != nil {
+		m.pickCancel()
+	}
+	if m.meCancel != nil {
+		m.meCancel()
+	}
 	if m.thread != nil {
 		kernel.CloseView(m.thread)
 	}
@@ -385,8 +506,13 @@ func (m *Model) build() {
 	}
 	descW, sideW := m.contentWidths()
 	m.refresh(regionDetails, sideW, m.detailContent)
+	m.cursor = min(m.cursor, max(len(m.sideRows)-1, 0))
 	m.lay = newLayout(m.width, m.height, len(m.panes[regionDetails].lines), m.focus, m.split)
-	m.refresh(regionDesc, descW, m.descLines)
+	if m.stage == sideDocEdit {
+		m.panes[regionDesc] = m.docEditContent(descW, m.lay.boxes[regionDesc].h)
+	} else {
+		m.refresh(regionDesc, descW, m.descLines)
+	}
 	m.buildHeader()
 	for r := range regionCount {
 		b := m.lay.boxes[r]
@@ -399,6 +525,17 @@ func (m *Model) build() {
 		m.tops[r] = min(m.tops[r], max(total-b.h, 0))
 		m.pans[r] = min(m.pans[r], max(m.panes[r].widest-b.content(), 0))
 		m.rails[r] = railFor(b.h, total, m.tops[r], r == m.focus)
+	}
+	if cr := m.currentCursorRow(); cr != nil {
+		if m.cursor == 0 {
+			// The first row is worth showing from the very top of the region,
+			// heading and all — the same way Home does for every other one.
+			m.tops[regionDetails] = 0
+		} else {
+			m.tops[regionDetails] = followTop(
+				m.tops[regionDetails], cr.lineAt, m.lay.boxes[regionDetails].h, len(m.panes[regionDetails].lines),
+			)
+		}
 	}
 }
 
@@ -418,23 +555,30 @@ func (m *Model) contentWidths() (desc, side int) {
 // key is read again after the render rather than reused, because rendering the
 // description is what discovers the expands in it.
 func (m *Model) refresh(r region, w int, render func(int) content) {
-	if m.panes[r].built && m.panes[r].key == m.contentKey(w) {
+	if m.panes[r].built && m.panes[r].key == m.contentKey(w, r) {
 		return
 	}
 	c := render(w)
-	c.key, c.built = m.contentKey(w), true
+	c.key, c.built = m.contentKey(w, r), true
 	m.panes[r] = c
 }
 
-func (m *Model) contentKey(w int) contentKey {
-	return contentKey{
+func (m *Model) contentKey(w int, r region) contentKey {
+	k := contentKey{
 		width: w, theme: m.styles.gen, data: m.dataGen, folds: m.folded,
 		bookkeeping: showBookkeeping.Load(),
 	}
+	if r == regionDetails {
+		k.cursor, k.stage, k.edit = m.cursor, int(m.stage), m.editGen
+	}
+	return k
 }
 
 func (m *Model) buildHeader() {
-	key := contentKey{width: m.width, theme: m.styles.gen, data: m.dataGen}
+	key := contentKey{
+		width: m.width, theme: m.styles.gen, data: m.dataGen,
+		dirty: m.dirtyCount(), leaving: m.leaving,
+	}
 	if m.head != "" && key == m.headAt {
 		return
 	}
@@ -443,15 +587,34 @@ func (m *Model) buildHeader() {
 
 func (m *Model) rendered(r region) (lines []string, widths []int) {
 	if r == regionComments {
-		return m.rows, m.rowWidths
+		return m.threadLines, m.threadWidths
 	}
 	return m.panes[r].lines, m.panes[r].widths
 }
 
 // key answers one keypress. Every key belongs to this pane, whichever region has
 // the keyboard: the footer holds one set for the whole view, so a stroke cannot
-// mean one thing in the description and something else beside it.
+// mean one thing in the description and something else beside it. What a stroke
+// means is decided here first by the sidebar's own editing state — the leave
+// prompt, a row being typed into, the description textarea, a save in flight —
+// because every one of those is a state nothing else on this pane may act
+// underneath.
 func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
+	if m.leaving && m.stage != sideSaving {
+		return m.leavingKey(msg)
+	}
+	switch m.stage {
+	case sideSaving:
+		return nil
+	case sideTyping:
+		return m.typingKey(msg)
+	case sideDocEdit:
+		return m.docEditKey(msg)
+	case sidePicking:
+		return m.pickKey(msg)
+	case sideBrowse:
+	}
+
 	stroke := msg.String()
 	if m.pendingGo {
 		m.pendingGo = false
@@ -489,17 +652,45 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.resetSplit()
 	case actComments:
 		return m.openComments()
-	case actEdit, actMove:
-		cmd, _ := m.editKey(msg)
+	case actEdit:
+		if m.focus == regionDesc {
+			return m.startDescriptionEdit()
+		}
+		return m.actOnCursor()
+	case actEditor:
+		return m.handOffDescription()
+	case actSave:
+		return m.saveDirty()
+	case actUndoRow:
+		return m.undoRow()
+	case actUndoAll:
+		return m.undoAll()
+	case actAssign:
+		return m.openAssigneePicker()
+	case actMove:
+		cmd, _ := m.moveKey(msg)
 		return cmd
 	default:
 		return m.move(m.focus, steps[at], 1)
 	}
 }
 
+// startDescriptionEdit is e or enter while the description region has the
+// keyboard: the same gesture the sidebar's own Description row answers to,
+// reached from where the prose actually is rather than from a row naming it.
+func (m *Model) startDescriptionEdit() tea.Cmd {
+	row := m.rowByID("description")
+	if row == nil || !row.editable() {
+		return kernel.Warn("read-only")
+	}
+	m.saveFail, row.problem = "", ""
+	return m.startDocEdit(row)
+}
+
 // move takes one region up or down. The comments region is a view rather than a
-// list of lines, so it is handed the stroke that means the same motion in its own
-// keymap.
+// list of lines, so it is handed the stroke that means the same motion in its
+// own keymap, and the details region has a row cursor rather than a scroll
+// offset of its own — see moveCursor.
 func (m *Model) move(r region, at step, times int) tea.Cmd {
 	b := m.lay.boxes[r]
 	if !b.drawn() {
@@ -513,6 +704,9 @@ func (m *Model) move(r region, at step, times int) tea.Cmd {
 		}
 		return tea.Batch(cmds...)
 	}
+	if r == regionDetails {
+		return m.moveCursor(at, times, b.h)
+	}
 	for range times {
 		m.tops[r] = scroll(at, m.tops[r], len(m.panes[r].lines), b.h)
 	}
@@ -520,6 +714,51 @@ func (m *Model) move(r region, at step, times int) tea.Cmd {
 		m.pans[r] = 0
 	}
 	return nil
+}
+
+// moveCursor walks the sidebar's row cursor. Page and half-page reuse the
+// box's own height as one page of rows, since every row here is one line.
+func (m *Model) moveCursor(at step, times, boxH int) tea.Cmd {
+	if len(m.sideRows) == 0 {
+		return nil
+	}
+	last := len(m.sideRows) - 1
+	page := max(boxH, 1)
+	switch at {
+	case stepUp:
+		m.cursor = max(m.cursor-times, 0)
+	case stepDown:
+		m.cursor = min(m.cursor+times, last)
+	case stepPageUp:
+		m.cursor = max(m.cursor-page*times, 0)
+	case stepPageDown:
+		m.cursor = min(m.cursor+page*times, last)
+	case stepHalfUp:
+		m.cursor = max(m.cursor-max(page/2, 1)*times, 0)
+	case stepHalfDown:
+		m.cursor = min(m.cursor+max(page/2, 1)*times, last)
+	case stepTop:
+		m.cursor = 0
+	case stepBottom:
+		m.cursor = last
+	case stepCount:
+	}
+	return nil
+}
+
+// followTop keeps a line visible in a scrolled box, moving the top only as far
+// as it has to.
+func followTop(top, line, boxH, total int) int {
+	if boxH <= 0 {
+		return top
+	}
+	if line < top {
+		top = line
+	}
+	if line >= top+boxH {
+		top = line - boxH + 1
+	}
+	return min(max(top, 0), max(total-boxH, 0))
 }
 
 // pan moves a region sideways, which is what reaches a code line or a table
@@ -577,9 +816,18 @@ func (m *Model) foldAt(msg tea.MouseMsg) bool {
 	return false
 }
 
-func (m *Model) clicked(msg tea.MouseClickMsg) {
+func (m *Model) clicked(msg tea.MouseClickMsg) tea.Cmd {
+	if m.leaving {
+		return m.clickLeavePrompt(msg)
+	}
+	if m.stage == sidePicking {
+		return m.clickPicker(msg)
+	}
+	if cmd, hit := m.clickDirtyLine(msg); hit {
+		return cmd
+	}
 	if m.grabDivider(msg) {
-		return
+		return nil
 	}
 	// A press anywhere else ends a gesture whose release never arrived. The help
 	// overlay swallows everything from the mouse while it is up, so a boundary
@@ -588,15 +836,72 @@ func (m *Model) clicked(msg tea.MouseClickMsg) {
 	m.cancelDrag()
 	r, ok := m.regionAt(msg)
 	if !ok {
-		return
+		return nil
 	}
 	m.focus = r
-	if r == regionDesc {
+	switch r {
+	case regionDetails:
+		if m.leaving || m.stage != sideBrowse {
+			return nil
+		}
+		return m.clickRow(msg)
+	case regionDesc:
 		m.foldAt(msg)
 	}
+	return nil
+}
+
+// clickLeavePrompt answers a click on one of the three words the leave prompt
+// offers, the same as pressing the key it names.
+func (m *Model) clickLeavePrompt(msg tea.MouseClickMsg) tea.Cmd {
+	switch {
+	case m.zones.Hit(zoneLeaveYes, msg):
+		return m.leavingKey(press("y"))
+	case m.zones.Hit(zoneLeaveNo, msg):
+		return m.leavingKey(press("n"))
+	case m.zones.Hit(zoneLeaveStay, msg):
+		return m.leavingKey(press("esc"))
+	}
+	return nil
+}
+
+// clickDirtyLine answers a click on save or undo in the header's dirty-set
+// line, wherever the pointer happens to be — the line sits above every
+// region, so this is checked before any of them claims the click.
+func (m *Model) clickDirtyLine(msg tea.MouseClickMsg) (tea.Cmd, bool) {
+	switch {
+	case m.zones.Hit(zoneDirtySave, msg):
+		return m.saveDirty(), true
+	case m.zones.Hit(zoneDirtyUndo, msg):
+		return m.undoRow(), true
+	case m.zones.Hit(zoneDirtyUndoAll, msg):
+		return m.undoAll(), true
+	}
+	return nil, false
+}
+
+// clickRow puts the cursor on the row under the pointer, and opens it on a
+// double-click.
+func (m *Model) clickRow(msg tea.MouseClickMsg) tea.Cmd {
+	for i := range m.sideRows {
+		zone := fieldRowZone(m.sideRows[i].id)
+		if !m.zones.Hit(zone, msg) {
+			continue
+		}
+		if m.clicks.Double(zone) {
+			m.cursor = i
+			return m.actOnCursor()
+		}
+		m.cursor = i
+		return nil
+	}
+	return nil
 }
 
 func (m *Model) wheel(msg tea.MouseWheelMsg) tea.Cmd {
+	if m.stage == sidePicking && m.wheelPicker(msg) {
+		return nil
+	}
 	r, ok := m.regionAt(msg)
 	if !ok {
 		r = m.focus

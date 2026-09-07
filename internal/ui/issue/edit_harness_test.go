@@ -12,12 +12,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
-	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
-	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
 // stroke builds the key press the kernel would have delivered. The harness's
@@ -165,7 +162,7 @@ func (p *panel) zoneID(suffix string) string {
 	p.t.Helper()
 
 	switch v := p.view.(type) {
-	case *editModel:
+	case *Model:
 		return v.zones.ID(suffix)
 	case *moveModel:
 		return v.zones.ID(suffix)
@@ -181,12 +178,12 @@ func (p *panel) clickAt(at *zone.ZoneInfo) {
 	p.send(tea.MouseClickMsg{X: at.StartX + 2, Y: at.StartY, Button: tea.MouseLeft})
 }
 
-func (p *panel) editor() *editModel {
+func (p *panel) editor() *Model {
 	p.t.Helper()
 
-	m, ok := p.view.(*editModel)
+	m, ok := p.view.(*Model)
 	if !ok {
-		p.t.Fatalf("the pane is a %T, not the editor", p.view)
+		p.t.Fatalf("the pane is a %T, not the issue pane", p.view)
 	}
 	return m
 }
@@ -309,24 +306,6 @@ func patchFieldNames(in jira.IssuePatch) []string {
 	return out
 }
 
-// listSeed is the issue a row in the list hands over: identity and the fields a
-// list projection asks for, carrying the mask that says which those were. The
-// description, the labels and the due date are outside it, which is exactly the
-// state the editor has to refuse to write.
-func listSeed(t *testing.T, f *jiratest.Fake, key string) jira.Issue {
-	t.Helper()
-
-	full, err := f.Issue(t.Context(), key)
-	if err != nil {
-		t.Fatalf("Issue: %v", err)
-	}
-	return jira.Issue{
-		ID: full.ID, Key: full.Key, Summary: full.Summary, Type: full.Type,
-		Status: full.Status, Assignee: full.Assignee, Priority: full.Priority,
-		Updated: full.Updated, Requested: projectionMask(),
-	}
-}
-
 // tempDrafts is a draft store nowhere near the person running the tests.
 func tempDrafts(t *testing.T) draftStore {
 	t.Helper()
@@ -349,21 +328,6 @@ func scriptedEditor(t *testing.T, body string, exit error) editorLauncher {
 		}
 	}
 }
-
-// docWith builds a description carrying a mention, which is the node markdown
-// cannot rebuild and the reason ParseMarkdownInto exists.
-func docWith(paragraph string) adf.Doc {
-	return adf.NewDoc(
-		adf.NewNode("paragraph", adf.NewText(paragraph)),
-		adf.NewNode("paragraph",
-			adf.NewText("asked "),
-			adf.NewNode("mention").WithAttrs(adf.Attrs{"id": "acct-ada", "text": "@Ada Lovelace"}),
-			adf.NewText(" to look"),
-		),
-	)
-}
-
-func projectionMask() jira.FieldMask { return jira.NewFieldMask(app.ListProjection().IDs) }
 
 // answer is what the kernel hands a view: the command's own reply with the
 // envelope the kernel addresses it by taken off.

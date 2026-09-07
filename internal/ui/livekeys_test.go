@@ -51,7 +51,7 @@ var keyReporters = map[string]func(kernel.Deps) kernel.View{
 	form.ViewID:        form.New,
 	comment.ViewID:     comment.New,
 	onboarding.ViewID:  onboarding.New,
-	issue.EditViewID:   func(d kernel.Deps) kernel.View { return issue.NewEdit(d, seed()) },
+	issue.ViewID:       func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
 	issue.MoveViewID:   func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
 	attach.ViewID:      newAttach,
 	backlog.ViewID:     backlog.New,
@@ -71,10 +71,6 @@ var staticKeys = map[string]struct {
 	build func(kernel.Deps) kernel.View
 	why   string
 }{
-	issue.ViewID: {
-		build: func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
-		why:   "the detail pane scrolls a document and every one of its keys works whatever it is showing",
-	},
 	kernel.SettingsViewID: {
 		build: settings.New,
 		why:   "every row shape answers to the same four directions and enter; nothing about the screen's own state removes one",
@@ -157,7 +153,6 @@ func TestLiveKeys_AFreshlyBuiltViewAdvertisesSomething(t *testing.T) {
 // own states to this; what belongs here is the record of which views have one at
 // all, so that the next view cannot quietly join them.
 var actionFree = map[string]string{
-	issue.EditViewID:  "a save in flight refuses every key until the site answers",
 	issue.MoveViewID:  "a transition in flight refuses every key until the site answers",
 	onboarding.ViewID: "a step being checked against the site refuses enter and shift+tab both",
 	attach.ViewID:     "a pane with nothing attached, on a token that may not attach, has nothing to offer but the way out",
@@ -231,7 +226,6 @@ var closers = map[string]func(kernel.Deps) kernel.View{
 	form.ViewID:      form.New,
 	comment.ViewID:   comment.New,
 	issue.ViewID:     func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
-	issue.EditViewID: func(d kernel.Deps) kernel.View { return issue.NewEdit(d, seed()) },
 	issue.MoveViewID: func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
 	// Neither of these registers a view spec, so a push with the issue or the
 	// issues it is about is the only way either is ever on screen.
@@ -349,7 +343,6 @@ var answerable = map[string]func(kernel.Deps) kernel.View{
 	comment.ViewID:    comment.New,
 	onboarding.ViewID: onboarding.New,
 	issue.ViewID:      func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
-	issue.EditViewID:  func(d kernel.Deps) kernel.View { return issue.NewEdit(d, seed()) },
 	issue.MoveViewID:  func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
 	attach.ViewID:     newAttach,
 	backlog.ViewID:    backlog.New,

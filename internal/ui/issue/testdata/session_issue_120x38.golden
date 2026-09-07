@@ -3,9 +3,16 @@ PROJ-9  Rework the mobile layout
 o Story | o Triage (to do) | Urgent | Ada Lovelace | updated 03 Mar 2025 04:00                                          
 ------------------------------------------------------------------------------------------------------------------------
 |Rework the mobile layout.                                                      |Details                                
+|                                                                               |->Summary      Rework the mobile layout
+|- Filed against PROJ-9.                                                        |  Description  4 lines                 
+|- Small change, but it touches the shared client.                              |  Status       Triage                  
+|                                                                               |  Priority     Urgent                  
+|                                                                               |  Assignee     Ada Lovelace            
 |                                                                               |  Project      PROJ PROJ Project       
-|- Filed against PROJ-9.                                                        |  Reporter     Grace Hopper            
-|- Small change, but it touches the shared client.                              |  Created      02 Mar 2025 18:00       
+|                                                                               |  Reporter     Grace Hopper            
+|                                                                               |  Due          not set                 
+|                                                                               |  Created      02 Mar 2025 18:00       
+|                                                                               |  Labels       not set                 
 |                                                                               |  Time         5h estimated, 2h30m r...
 |                                                                               |  5 more, all empty                    
 |                                                                               |  1 more, hidden as Jira's own bookk...
@@ -28,11 +35,4 @@ o Story | o Triage (to do) | Urgent | Ada Lovelace | updated 03 Mar 2025 04:00
 |                                                                               |                                       
 |                                                                               |                                       
 |                                                                               |                                       
-|                                                                               |                                       
-|                                                                               |                                       
-|                                                                               |                                       
-|                                                                               |                                       
-|                                                                               |                                       
-|                                                                               |                                       
-|                                                                               |                                       
- Issues  tab pane  e edit  t status  C comment                                                                     ? esc
+ Issues  tab pane  e edit  E open in $EDITOR  t status  C comment                                                  ? esc

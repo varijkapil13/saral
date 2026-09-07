@@ -77,9 +77,9 @@ func TestSession_TheThirdRunFromThePaletteNamesTheKeyOnTheStatusLine(t *testing.
 	s := boot(t, 120, 30)
 	for run := 1; run <= 3; run++ {
 		s.press("ctrl+k")
-		s.typeText("edit this issue")
+		s.typeText("edit this field")
 		s.press("enter")
-		hinted := strings.Contains(ansi.Strip(s.m.Frame()), "e runs Edit this issue without the palette")
+		hinted := strings.Contains(ansi.Strip(s.m.Frame()), "e runs Edit this field without the palette")
 		if hinted != (run == hintAfter) {
 			t.Errorf("run %d: the status line hints %t", run, hinted)
 		}

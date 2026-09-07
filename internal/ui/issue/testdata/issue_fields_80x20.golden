@@ -2,19 +2,19 @@ PROJ-12  Retire the nightly export
 o Story | o Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00
 --------------------------------------------------------------------------------
 |Details                                                                        
+|->Summary      Retire the nightly export                                       
+|  Description  5 lines                                                         
+|  Status       Triage                                                          
+|  Priority     Urgent                                                          
+|  Assignee     unassigned                                                      
 |  Project      PROJ PROJ Project                                               
 |  Reporter     Grace Hopper                                                    
 |  Due          2025-03-16                                                      
 |  Created      02 Mar 2025 21:00                                               
+|  Labels       not set                                                         
 |  Fix versions 2.0                                                             
 |  5 more, all empty                                                            
 |  1 more, hidden as Jira's own bookkeeping                                     
-|                                                                               
-|                                                                               
-|                                                                               
-|                                                                               
-|                                                                               
-|                                                                               
 |                                                                               
 |                                                                               
 |                                                                               

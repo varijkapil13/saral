@@ -2,6 +2,11 @@ PROJ-4  pinned fields
 o Story | ~ Building (in progress) | unassigned
 ------------------------------------------------------------------------------------------
 |No description.                                       |Details                           
+|                                                      |->Summary      pinned fields      
+|                                                      |  Description  not asked for      
+|                                                      |  Status       Building           
+|                                                      |  Priority     not asked for      
+|                                                      |  Assignee     not asked for      
 |                                                      |  Project      PROJ Pinning       
 |                                                      |  Reporter     not asked for      
 |                                                      |  Resolution   not asked for      
@@ -25,11 +30,6 @@ o Story | ~ Building (in progress) | unassigned
 |                                                      |----------------------------------
 |                                                      |  Nobody has commented on PROJ-...
 |                                                      |  Press a to write the first one. 
-|                                                      |                                  
-|                                                      |                                  
-|                                                      |                                  
-|                                                      |                                  
-|                                                      |                                  
 |                                                      |                                  
 |                                                      |                                  
 |                                                      |                                  

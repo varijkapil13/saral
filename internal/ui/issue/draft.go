@@ -23,13 +23,27 @@ type draft struct {
 	SavedAt time.Time `json:"savedAt"`
 	// Values are the edited fields by field ID, in the form they were typed.
 	Values map[string]string `json:"values,omitempty"`
+	// Choices are the rkChoice and rkPerson rows' edits by field id — priority
+	// and the assignee. Values alone cannot carry them: dirty() and into() both
+	// act on the chosen identifier, and a display label is neither unique nor
+	// what a patch sends.
+	Choices map[string]namedID `json:"choices,omitempty"`
 	// Description is the document $EDITOR produced, kept as ADF because that is
 	// what was reconciled against the original and re-rendering it as markdown
 	// would put it through a second lossy trip.
 	Description json.RawMessage `json:"description,omitempty"`
 }
 
-func (d draft) isEmpty() bool { return len(d.Values) == 0 && len(d.Description) == 0 }
+// namedID is one chosen option, kept as the identifier a patch sends and the
+// label a person reads it as.
+type namedID struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+func (d draft) isEmpty() bool {
+	return len(d.Values) == 0 && len(d.Choices) == 0 && len(d.Description) == 0
+}
 
 // draftStore keeps drafts under one directory, one file per issue per site.
 //

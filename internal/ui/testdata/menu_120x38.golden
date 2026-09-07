@@ -49,18 +49,10 @@ issue
 │ What can be done here │
 │ tab  next pane        │
 │ e    edit fields      │
+│ E    open in $EDITOR  │
 │ t    change status    │
 │ C    comment          │
 └───────────────────────┘
-
-issue.edit
-┌───────────────────────────┐
-│ What can be done here     │
-│ enter   change this field │
-│ del     empty this field  │
-│ ctrl+s  save              │
-│ X       discard changes   │
-└───────────────────────────┘
 
 issue.move
 ┌───────────────────────┐

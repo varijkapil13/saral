@@ -15,6 +15,7 @@ import (
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/richtext"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -37,10 +38,14 @@ type detail struct {
 	value func(*Model) string
 }
 
-// platform is the built-in fields, in reading order. The identity header already
-// carries the type, the status, the priority, the assignee and when the issue
-// was last touched, so none of those is repeated here.
+// platform is the built-in fields, in reading order. Status, priority and
+// assignee are rows here as well as header facts, since a row is what Enter
+// and a click act on; their value funcs are the fallback when no fieldRow
+// exists for them — see editableField.
 var platform = []detail{
+	{"Status", "status", func(m *Model) string { return m.issue.Status.Name }},
+	{"Priority", "priority", func(m *Model) string { return priorityName(m.issue) }},
+	{"Assignee", "assignee", func(m *Model) string { return assigneeName(m.issue, "") }},
 	{"Project", "project", func(m *Model) string { return projectName(m.issue.Project) }},
 	{"Reporter", "reporter", func(m *Model) string { return userName(m.issue.Reporter) }},
 	{"Resolution", "resolution", func(m *Model) string { return resolutionName(&m.issue) }},
@@ -171,12 +176,33 @@ type refGroup struct {
 	refs  []jira.IssueRef
 }
 
+// cursorRow is one row the sidebar's own cursor can land on: every field-value
+// line the region draws, cursorable and read-only alike. A row that is not one
+// of the four this build knows how to edit still gets one, because Enter has to
+// answer *something* on it — "read-only" — rather than nothing at all.
+//
+// fieldRow carries the persistent state for the four this build can actually
+// change; cursorRow is the transient, rebuilt-every-frame index over every row
+// the region drew, which is what a cursor position and a click both resolve
+// through.
+type cursorRow struct {
+	id       string
+	label    string
+	kind     rowKind
+	editable bool
+	// lineAt is this row's own line in content.lines, which is what keeps the
+	// cursor's line in view as it moves and what a click resolves a coordinate
+	// back into a row through.
+	lineAt int
+}
+
 // rows builds the sidebar's lines at one width, measuring each as it goes so
 // that drawing a frame never measures anything.
 type rows struct {
 	m     *Model
 	width int
 	out   content
+	curs  []cursorRow
 }
 
 func (r *rows) line(s string) {
@@ -187,27 +213,55 @@ func (r *rows) line(s string) {
 	r.out.widest = max(r.out.widest, got)
 }
 
-// detailContent is the fields region's whole content: the platform fields, the
-// related issues, and every field this site defines that the issue carries a
-// value for.
+// fieldRowZone is the click target for one sidebar row, marked into the line
+// itself the way a description's fold markers are.
+func fieldRowZone(id string) string { return "row:" + id }
+
+// mark registers the line just drawn as one the sidebar cursor can land on,
+// and marks it as that row's own click zone.
+func (r *rows) mark(id, label string, kind rowKind, editable bool) {
+	at := len(r.out.lines) - 1
+	if at >= 0 && r.m.zones.Enabled() {
+		r.out.lines[at] = r.m.zones.Mark(fieldRowZone(id), r.out.lines[at])
+	}
+	r.curs = append(r.curs, cursorRow{id: id, label: label, kind: kind, editable: editable, lineAt: at})
+}
+
+// detailContent is the fields region's whole content: the summary and the
+// description this build can edit in place, the platform fields, the related
+// issues, and every field this site defines that the issue carries a value
+// for. It also rebuilds the sidebar's own cursor list, which is why it runs
+// again on every frame the cursor moves on, the row under it is being typed
+// into, or the description textarea is open — see contentKey.
 func (m *Model) detailContent(width int) content {
 	r := &rows{m: m, width: width, out: content{
 		lines:  make([]string, 0, 32),
 		widths: make([]int, 0, 32),
-	}}
+	}, curs: make([]cursorRow, 0, 32)}
 	r.heading("Details")
 	if !m.loadedIssue {
 		r.note("Reading the issue" + m.deps.Theme.Glyphs.Ellipsis)
 	}
+	if row := m.rowByID("summary"); row != nil {
+		r.editableField(row)
+	}
+	if row := m.rowByID("description"); row != nil {
+		r.editableField(row)
+	}
 	for _, d := range platform {
-		if m.read(d.id) {
-			r.field(d.label, d.value(m))
+		if row := m.rowByID(d.id); row != nil {
+			r.editableField(row)
 			continue
 		}
-		r.missing(d.label)
+		if m.read(d.id) {
+			r.field(d.id, d.label, d.value(m))
+			continue
+		}
+		r.missing(d.id, d.label)
 	}
 	r.related()
 	r.custom()
+	m.sideRows = r.curs
 	return r.out
 }
 
@@ -217,19 +271,175 @@ func (m *Model) detailContent(width int) content {
 func (m *Model) read(id string) bool { return !m.loadedIssue || m.issue.Requested.Has(id) }
 
 // field draws one label and its value, and draws nothing at all when there is no
-// value: a column of dashes reads as data.
-func (r *rows) field(label, value string) {
+// value: a column of dashes reads as data. editableField draws the rows that
+// can be edited.
+func (r *rows) field(id, label, value string) {
 	if strings.TrimSpace(value) == "" {
 		return
 	}
 	r.line("  " + r.m.styles.label.Render(label) + column(label, labelWidth) + value)
+	r.mark(id, label, rkStatic, false)
 }
 
 // missing says the read never asked for a field, in the space its value would
 // have had.
-func (r *rows) missing(label string) {
+func (r *rows) missing(id, label string) {
 	r.line("  " + r.m.styles.label.Render(label) + column(label, labelWidth) +
 		r.m.styles.muted.Render(absent))
+	r.mark(id, label, rkStatic, false)
+}
+
+// editableField draws one of the four rows this build can change in place: the
+// cursor's own arrow when it is the one selected, the typed value while it is
+// open, a dirty row's glyph and — clipped away like anything else too wide for
+// the sidebar — the value the site still holds beside it.
+func (r *rows) editableField(row *fieldRow) {
+	selected := len(r.curs) == r.m.cursor
+	prefix := "  "
+	if selected {
+		prefix = r.m.arrowPrefix()
+	}
+	label := r.m.styles.label.Render(row.label) + column(row.label, labelWidth)
+
+	picking := selected && r.m.stage == sidePicking && r.m.pick != nil && r.m.pick.id == row.id
+	var value string
+	switch {
+	case !row.fetched && row.kind != rkStatus:
+		value = r.m.styles.muted.Render(absent)
+	case selected && r.m.stage == sideTyping:
+		value = r.m.input.View()
+	case selected && r.m.stage == sideDocEdit:
+		value = r.m.styles.muted.Render("editing below" + r.m.deps.Theme.Glyphs.Ellipsis)
+	case picking:
+		value = r.m.pick.input.View()
+	default:
+		shown := row.display()
+		if strings.TrimSpace(shown) == "" {
+			shown = "not set"
+		}
+		style := r.m.styles.value
+		if row.problem != "" {
+			style = r.m.styles.fail
+		}
+		value = style.Render(shown)
+		if row.dirty() {
+			value = r.m.styles.selected.Render(r.m.deps.Theme.Glyphs.Bullet) + " " + value
+			if was := row.before(); strings.TrimSpace(was) != "" {
+				value += r.m.styles.muted.Render("  (was " + was + ")")
+			}
+		}
+	}
+	r.line(prefix + label + value)
+	r.mark(row.id, row.label, row.kind, row.editable())
+	if row.problem != "" {
+		r.line("  " + r.m.styles.fail.Render(row.problem))
+	}
+	if picking {
+		r.pickerLines()
+	}
+}
+
+// maxPickRows bounds the inline list a choice, person or status row opens
+// beneath itself: it scrolls with its own top rather than growing without
+// limit, the same way moveModel's own list used to.
+const maxPickRows = 8
+
+// pickZone is the click target for one candidate in an inline list, namespaced
+// by which row opened it so that an empty id — unassigned — never collides
+// with another row's own empty or repeated ids.
+func pickZone(pickID, optionID string) string { return "pick:" + pickID + ":" + optionID }
+
+// pickLine draws one line already clipped to the box and then marks it,
+// mirroring mark(): a zone is wrapped onto a line only after clipping has
+// already settled its width, never the other way round.
+func (r *rows) pickLine(s, zoneID string) {
+	r.line(s)
+	if zoneID == "" || !r.m.zones.Enabled() {
+		return
+	}
+	at := len(r.out.lines) - 1
+	r.out.lines[at] = r.m.zones.Mark(zoneID, r.out.lines[at])
+}
+
+// pickerLines draws the inline list a choice, person or status row has open
+// beneath it: the candidates ranked against what has been typed, or — once a
+// status row's candidate is a transition with a screen — the screen and the
+// confirmation moveModel used to draw as a pushed pane.
+func (r *rows) pickerLines() {
+	p := r.m.pick
+	t := r.m.deps.Theme
+	switch {
+	case p.kind == rkStatus && p.move != nil:
+		r.pickerMoveLines()
+		return
+	case p.loading:
+		r.note("reading" + t.Glyphs.Ellipsis)
+		return
+	case len(p.ranked) == 0:
+		r.note("nothing matches")
+	}
+	labels := make([]string, len(p.ranked))
+	for i, opt := range p.ranked {
+		prefix := "    "
+		style := r.m.styles.value
+		if i == p.cursor {
+			prefix = "  " + r.m.styles.selected.Render(t.Glyphs.Arrow) + " "
+			style = r.m.styles.selected
+		}
+		text := opt.label
+		if opt.id == p.currentID {
+			text += "  (current)"
+		}
+		labels[i] = prefix + style.Render(clip(text, max(r.width-4, 8), t.Glyphs.Ellipsis))
+	}
+	window, top := widget.Window(labels, p.top, maxPickRows, p.cursor)
+	p.top = top
+	for i, line := range window {
+		r.pickLine(line, pickZone(p.id, p.ranked[top+i].id))
+	}
+	if p.fail != "" {
+		r.note(p.fail)
+	}
+}
+
+// pickerMoveLines draws the transition's own screen and confirmation, the same
+// content moveModel drew full-screen, now directly beneath the status row.
+func (r *rows) pickerMoveLines() {
+	p := r.m.pick
+	t := r.m.deps.Theme
+	move := *p.move
+	r.note(move.Name + " " + t.Glyphs.Arrow + " " + move.To.Name)
+	for i := range p.fields {
+		r.moveFieldLine(i)
+	}
+	switch {
+	case p.confirming:
+		r.line("    " + r.m.styles.title.Render(clip(r.m.confirmTransitionQuestion(), max(r.width-4, 8), t.Glyphs.Ellipsis)))
+		r.note("y moves it, any other key goes back")
+	default:
+		r.note("left and right choose a value, enter continues, esc goes back")
+	}
+	if p.fail != "" {
+		r.note(p.fail)
+	}
+}
+
+func (r *rows) moveFieldLine(at int) {
+	p := r.m.pick
+	t := r.m.deps.Theme
+	f := &p.fields[at]
+	prefix := "    "
+	if at == p.field && !p.confirming {
+		prefix = "  " + r.m.styles.selected.Render(t.Glyphs.Arrow) + " "
+	}
+	label := r.m.styles.label.Render(padTo(f.name(), max(labelWidth-2, 4)))
+	if !f.fillable() {
+		r.line(prefix + label + r.m.styles.fail.Render("nothing to choose from"))
+		r.note("this move cannot be completed here: the site offered no values for " + f.name())
+		return
+	}
+	room := max(r.width-labelWidth-4, 8)
+	r.line(prefix + label + r.m.styles.value.Render(clip(pickerLine(f.value().Label, t), room, t.Glyphs.Ellipsis)))
 }
 
 func (r *rows) heading(text string) { r.line(r.m.styles.section.Render(text)) }
@@ -237,11 +447,13 @@ func (r *rows) heading(text string) { r.line(r.m.styles.section.Render(text)) }
 func (r *rows) note(text string) { r.line("  " + r.m.styles.muted.Render(text)) }
 
 // related draws the parent, the subtasks and the links, each group under what
-// relates them and each issue on a line of its own.
+// relates them and each issue on a line of its own. The issues themselves are
+// not on the sidebar's cursor: they are not a single value to edit, and what
+// can be done to one already has its own gesture — opening it.
 func (r *rows) related() {
 	for _, d := range related {
 		if !r.m.read(d.id) {
-			r.missing(d.label)
+			r.missing(d.id, d.label)
 		}
 	}
 	groups := r.m.refGroups()
@@ -282,13 +494,13 @@ func (r *rows) custom() {
 	if len(pinned) > 0 {
 		r.heading("Pinned")
 		for _, v := range pinned {
-			r.field(v.label, v.text)
+			r.field(v.id, v.label, v.text)
 		}
 	}
 	if len(rest) > 0 {
 		r.heading("Fields")
 		for _, v := range rest {
-			r.field(v.label, v.text)
+			r.field(v.id, v.label, v.text)
 		}
 	}
 	if empty > 0 {

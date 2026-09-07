@@ -9,20 +9,28 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// TestLiveKeys_EveryStateGolden holds every stage of the two panes the detail
-// view opens. A stage nothing covers is a stage whose keys can change without
-// anybody noticing.
+// TestLiveKeys_EveryStateGolden holds every state the sidebar and the
+// transition picker answer for. A state nothing covers is a state whose keys
+// can change without anybody noticing.
 func TestLiveKeys_EveryStateGolden(t *testing.T) {
 	t.Parallel()
-	editStages := []struct {
-		name  string
-		stage editStage
+	sideStates := []struct {
+		name string
+		idx  int
 	}{
-		{"the field list", stageBrowse},
-		{"a field taking typing", stageTyping},
-		{"waiting for the go-ahead to save", stageConfirm},
-		{"saving", stageSaving},
-		{"somebody else changed it first", stageConflict},
+		{"browsing, the description focused", lkBrowseDesc},
+		{"browsing, the description focused, dirty", lkBrowseDescDirty},
+		{"browsing, the fields focused", lkBrowseDetails},
+		{"browsing, the fields focused, dirty", lkBrowseDetailsDirty},
+		{"browsing, the thread focused", lkBrowseComments},
+		{"browsing, the thread focused, dirty", lkBrowseCommentsDirty},
+		{"a row taking typing", lkTyping},
+		{"the description textarea open", lkDocEdit},
+		{"an inline list open", lkPicking},
+		{"a chosen status move's required fields", lkPickFields},
+		{"waiting for the go-ahead to move, inline", lkPickConfirm},
+		{"saving", lkSaving},
+		{"the leave prompt", lkLeaving},
 	}
 	moveStages := []struct {
 		name  string
@@ -33,16 +41,16 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"waiting for the go-ahead to move", moveConfirm},
 		{"moving", moveDoing},
 	}
-	if len(editStages) != len(editLiveSets) || len(moveStages) != len(moveLiveSets) {
-		t.Fatalf("the panes have %d and %d stages; this test names %d and %d",
-			len(editLiveSets), len(moveLiveSets), len(editStages), len(moveStages))
+	if len(sideStates) != lkCount || len(moveStages) != len(moveLiveSets) {
+		t.Fatalf("the panes have %d and %d states; this test names %d and %d",
+			lkCount, len(moveLiveSets), len(sideStates), len(moveStages))
 	}
 
 	var b strings.Builder
 	b.WriteString("editing an issue's fields\n")
-	for _, s := range editStages {
+	for _, s := range sideStates {
 		fmt.Fprintf(&b, "  %s\n", s.name)
-		writeKeySet(&b, editLiveSets[s.stage])
+		writeKeySet(&b, sideLiveSets[s.idx])
 	}
 	b.WriteString("changing an issue's status\n")
 	for _, s := range moveStages {
@@ -52,34 +60,32 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 	golden(t, "keys.golden", b.String())
 }
 
-func TestLiveKeys_FollowTheStageTheEditorIsIn(t *testing.T) {
+func TestLiveKeys_FollowTheSidebarsOwnState(t *testing.T) {
 	t.Parallel()
-	m, ok := NewEdit(testDeps(nil), jira.Issue{Key: "PROJ-1"}).(*editModel)
+	m, ok := New(testDeps(nil), jira.Issue{Key: "PROJ-1"}).(*Model)
 	if !ok {
-		t.Fatal("NewEdit no longer builds an *editModel")
+		t.Fatal("New no longer builds a *Model")
 	}
 	seen := map[int]string{}
 	for _, tc := range []struct {
-		name  string
-		stage editStage
+		name    string
+		prepare func()
 	}{
-		{"browsing", stageBrowse},
-		{"typing", stageTyping},
-		{"confirming", stageConfirm},
-		{"saving", stageSaving},
-		{"conflicted", stageConflict},
+		{"browsing, description", func() { m.stage, m.leaving, m.focus = sideBrowse, false, regionDesc }},
+		{"browsing, details", func() { m.stage, m.leaving, m.focus = sideBrowse, false, regionDetails }},
+		{"typing", func() { m.stage, m.leaving = sideTyping, false }},
+		{"doc editing", func() { m.stage, m.leaving = sideDocEdit, false }},
+		{"saving", func() { m.stage, m.leaving = sideSaving, false }},
+		{"leaving", func() { m.stage, m.leaving = sideBrowse, true }},
 	} {
-		m.stage = tc.stage
+		tc.prepare()
 		set, gen := m.LiveKeys()
-		if gen != int(tc.stage) {
-			t.Errorf("%s: generation %d, want %d", tc.name, gen, tc.stage)
-		}
 		if other, clash := seen[gen]; clash {
 			t.Errorf("%s and %s share generation %d, so the footer will not repaint between them",
 				tc.name, other, gen)
 		}
 		seen[gen] = tc.name
-		if tc.stage == stageSaving && !set.IsZero() {
+		if tc.name == "saving" && !set.IsZero() {
 			t.Errorf("a save in flight advertises %s, none of which answers", actsOf(set))
 		}
 	}
@@ -120,35 +126,19 @@ func TestLiveKeys_FollowTheStageThePickerIsIn(t *testing.T) {
 	}
 }
 
-// y means go ahead with the save in one stage and re-read the issue in another.
-// The label has to come from the stage, or one of the two is a lie.
-func TestLiveKeys_YIsNamedForTheQuestionItIsAnswering(t *testing.T) {
-	t.Parallel()
-	confirm := actsOf(editLiveSets[stageConfirm])
-	conflict := actsOf(editLiveSets[stageConflict])
-	switch {
-	case !strings.Contains(confirm, "y go ahead"):
-		t.Errorf("a save waiting to be confirmed does not name y: %s", confirm)
-	case !strings.Contains(conflict, "re-read"):
-		t.Errorf("a conflict does not say what y would do: %s", conflict)
-	case confirm == conflict:
-		t.Errorf("both questions are advertised the same way: %s", confirm)
-	}
-}
-
 // AllocsPerRun measures the whole process, so this one cannot run beside
 // anything else.
 func TestLiveKeys_CostNothingToAskFor(t *testing.T) {
-	edit, ok := NewEdit(testDeps(nil), jira.Issue{Key: "PROJ-1"}).(*editModel)
+	side, ok := New(testDeps(nil), jira.Issue{Key: "PROJ-1"}).(*Model)
 	if !ok {
-		t.Fatal("NewEdit no longer builds an *editModel")
+		t.Fatal("New no longer builds a *Model")
 	}
 	move, ok := NewMove(testDeps(nil), jira.Issue{Key: "PROJ-1"}).(*moveModel)
 	if !ok {
 		t.Fatal("NewMove no longer builds a *moveModel")
 	}
 	for name, ask := range map[string]func(){
-		"the field editor":      func() { _, _ = edit.LiveKeys() },
+		"the issue pane":        func() { _, _ = side.LiveKeys() },
 		"the transition picker": func() { _, _ = move.LiveKeys() },
 	} {
 		if got := testing.AllocsPerRun(100, ask); got != 0 {

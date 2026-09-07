@@ -1,21 +1,51 @@
 editing an issue's fields
-  the field list
-    acts   enter change · del empty · ctrl+s save · X discard
-    full   [↓/j down, ↑/k up, enter change this field, del empty this field]
-    full   [←/h previous value, →/l next value]
-    full   [ctrl+s save, X discard changes]
-  a field taking typing
-    acts   enter keep this value · esc leave the value alone
-    full   [enter keep this value, esc leave the value alone]
+  browsing, the description focused
+    acts   tab pane · e edit · E open in $EDITOR · t status · C comment
+    full   [tab pane, e edit, E open in $EDITOR, t status, C comment]
+    full   [tab next pane, e edit fields, E open in $EDITOR, @ assign, t change status, C comment]
+  browsing, the description focused, dirty
+    acts   tab pane · e edit · E open in $EDITOR · s save · backspace undo · U undo all · t status · C comment
+    full   [tab pane, e edit, E open in $EDITOR, s save, backspace undo, U undo all, t status, C comment]
+    full   [tab next pane, e edit fields, E open in $EDITOR, s save changes, backspace undo this, U undo all, @ assign, t change status, C comment]
+  browsing, the fields focused
+    acts   tab pane · enter edit · t status · C comment
+    full   [tab pane, enter edit, t status, C comment]
+    full   [tab next pane, enter edit this row, e edit fields, @ assign, t change status, C comment]
+  browsing, the fields focused, dirty
+    acts   tab pane · enter edit · s save · backspace undo · U undo all · t status · C comment
+    full   [tab pane, enter edit, s save, backspace undo, U undo all, t status, C comment]
+    full   [tab next pane, enter edit this row, e edit fields, s save changes, backspace undo this, U undo all, @ assign, t change status, C comment]
+  browsing, the thread focused
+    acts   tab pane · t status · C comment
+    full   [tab pane, t status, C comment]
+    full   [tab next pane, @ assign, t change status, C comment]
+  browsing, the thread focused, dirty
+    acts   tab pane · s save · backspace undo · U undo all · t status · C comment
+    full   [tab pane, s save, backspace undo, U undo all, t status, C comment]
+    full   [tab next pane, s save changes, backspace undo this, U undo all, @ assign, t change status, C comment]
+  a row taking typing
+    acts   enter keep this value · esc leave it alone
+    full   [enter keep this value, esc leave it alone]
     full   [alt+k delete to end of line]
-  waiting for the go-ahead to save
-    acts   y go ahead · esc do not save yet
-    full   [y go ahead, esc do not save yet]
+  the description textarea open
+    acts   ctrl+s keep this description · esc leave it alone
+    full   [ctrl+s keep this description, esc leave it alone]
+    full   [alt+k delete to end of line]
+  an inline list open
+    acts   enter choose · esc cancel
+    full   [↓ down, ↑ up, enter choose, esc cancel]
+  a chosen status move's required fields
+    acts   ← previous · → next · enter continue
+    full   [↓ down, ↑ up, ← previous value, → next value]
+    full   [enter continue, esc back]
+  waiting for the go-ahead to move, inline
+    acts   y move it · esc back
+    full   [y move it, esc back]
   saving
     nothing of its own; the globals are all that answer
-  somebody else changed it first
-    acts   y re-read it and put your edits back on top · esc leave it as it is for now
-    full   [y re-read it and put your edits back on top, esc leave it as it is for now]
+  the leave prompt
+    acts   y save · n discard · esc stay
+    full   [y save, n discard, esc stay]
 changing an issue's status
   the moves this issue can make
     acts   enter choose

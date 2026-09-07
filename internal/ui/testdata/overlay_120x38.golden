@@ -53,25 +53,14 @@ enter use this issue type    ↓/j  down         1-9          saved query       
                                                R            refetch everything
 
 issue
-tab next pane        ↓/j    down         d/ctrl+d  half page down        1-9          saved query        ...
-e   edit fields      ↑/k    up           u/ctrl+u  half page up          g            where to go
-t   change status    f/pgdn page down    g g       top                   g 1-9        switch view
-C   comment          b/pgup page up      G / g e   bottom                ctrl+, / g s settings
-                     →/l    pan right    shift+tab previous pane         g i          jump to an issue
-                     ←/h    pan left     z         expand or collapse    esc          back
-                                         <         wider sidebar         r            refresh
-                                         >         wider description     R            refetch everything
-                                         =         reset the split
-
-issue.edit
-enter  change this field    ↓/j down    ←/h previous value    1-9          saved query           ctrl+k commands
-del    empty this field     ↑/k up      →/l next value        g            where to go           ?      help
-ctrl+s save                                                   g 1-9        switch view           q      quit
-X      discard changes                                        ctrl+, / g s settings
-                                                              g i          jump to an issue
-                                                              esc          back
-                                                              r            refresh
-                                                              R            refetch everything
+tab next pane          @ assign    1-9          saved query           ctrl+k commands
+e   edit fields                    g            where to go           ?      help
+E   open in $EDITOR                g 1-9        switch view           q      quit
+t   change status                  ctrl+, / g s settings
+C   comment                        g i          jump to an issue
+                                   esc          back
+                                   r            refresh
+                                   R            refetch everything
 
 issue.move
 enter choose    ↓/j down    1-9          saved query           ctrl+k commands

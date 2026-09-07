@@ -53,6 +53,22 @@ func load(ctx context.Context, search *app.Search, key string, gen int) tea.Cmd 
 	}
 }
 
+// savedMsg is one dirty-set patch that has landed, or failed to.
+type savedMsg struct {
+	gen int
+	err error
+}
+
+// saveDirtyPatch sends the whole dirty set as one request.
+func saveDirtyPatch(ctx context.Context, client jira.IssueWriter, key string, patch jira.IssuePatch, gen int) tea.Cmd {
+	return func() tea.Msg {
+		if err := client.UpdateIssue(ctx, key, patch); err != nil {
+			return savedMsg{gen: gen, err: err}
+		}
+		return savedMsg{gen: gen}
+	}
+}
+
 // loadEditMeta asks the site which fields are on this issue's screen right
 // now.
 //

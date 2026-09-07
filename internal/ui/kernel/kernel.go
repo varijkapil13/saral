@@ -65,6 +65,20 @@ type Blocker interface {
 	BlocksClose() (reason string, blocked bool)
 }
 
+// CloseAsker is the optional interface a Blocker implements when it would
+// rather ask before losing what it holds than simply refuse. The kernel calls
+// AskClose instead of refuse wherever a view that blocks also answers to this,
+// and the view is left to put its own prompt up — it answers later, once that
+// prompt is resolved, by sending the ordinary close message itself
+// (kernel.Pop(), typically): BlocksClose has nothing left to hold by then, so
+// the gesture goes through on its own the second time.
+//
+// It is additive: a Blocker that does not implement it is refused exactly as
+// before.
+type CloseAsker interface {
+	AskClose() tea.Cmd
+}
+
 // Closer is the optional interface a view implements when it starts work that
 // outlives a frame — a read, a write, a poll — and would want it stopped the
 // moment the stack lets go of it. Blocker refuses a close; this is told about
@@ -655,8 +669,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(m.stack) > 1 {
 			return m.pop()
 		}
-		if reason, blocked := m.blocked(); blocked {
-			return m.refuse(reason)
+		if v, reason, blocked := m.blockingEntry(); blocked {
+			return m.askOrRefuse(v, reason)
 		}
 		m.quitting = true
 		return m, tea.Quit
@@ -757,26 +771,29 @@ func (m Model) capturing() bool {
 	return ok && c.WantsRawKeys()
 }
 
-// blocked is the first entry anywhere on the stack that is holding something,
-// in that entry's own words. The whole stack is asked because quitting and
-// switching root view discard all of it, and the entry with the draft is often
-// not the top one — the palette is pushed over whatever it was opened from and
-// holds nothing itself.
-func (m Model) blocked() (string, bool) {
+// blockingEntry is the first entry anywhere on the stack that is holding
+// something, in that entry's own words, plus the view itself so a caller can
+// ask it rather than refuse when it knows how (see CloseAsker). The whole
+// stack is asked because quitting and switching root view discard all of it,
+// and the entry with the draft is often not the top one — the palette is
+// pushed over whatever it was opened from and holds nothing itself.
+func (m Model) blockingEntry() (View, string, bool) {
 	for _, entry := range m.stack {
 		if reason, yes := blocks(entry.view); yes {
-			return reason, true
+			return entry.view, reason, true
 		}
 	}
-	return "", false
+	return nil, "", false
 }
 
-// blockedOnTop asks only the view a pop would discard.
-func (m Model) blockedOnTop() (string, bool) {
+// blockingTop is blockingEntry narrowed to the view a pop would discard, which
+// is the only one it can be asked about.
+func (m Model) blockingTop() (View, string, bool) {
 	if len(m.stack) == 0 {
-		return "", false
+		return nil, "", false
 	}
-	return blocks(m.top().view)
+	reason, yes := blocks(m.top().view)
+	return m.top().view, reason, yes
 }
 
 func blocks(v View) (string, bool) {
@@ -788,6 +805,13 @@ func blocks(v View) (string, bool) {
 }
 
 // refuse puts the reason a view gave for staying open into the status line.
+func (m Model) askOrRefuse(v View, reason string) (tea.Model, tea.Cmd) {
+	if asker, ok := v.(CloseAsker); ok {
+		return m, asker.AskClose()
+	}
+	return m.refuse(reason)
+}
+
 func (m Model) refuse(reason string) (tea.Model, tea.Cmd) {
 	m.status, m.statusLevel = reason, LevelWarn
 	return m, nil
@@ -929,8 +953,8 @@ func (m Model) open(id string) (tea.Model, tea.Cmd) {
 	if len(m.stack) == 1 && m.stack[0].spec.ID == id {
 		return m, nil
 	}
-	if reason, blocked := m.blocked(); blocked {
-		return m.refuse(reason)
+	if v, reason, blocked := m.blockingEntry(); blocked {
+		return m.askOrRefuse(v, reason)
 	}
 	m.keepRoot()
 
@@ -1072,8 +1096,8 @@ func (m Model) pop() (tea.Model, tea.Cmd) {
 	if len(m.stack) <= 1 {
 		return m, nil
 	}
-	if reason, blocked := m.blockedOnTop(); blocked {
-		return m.refuse(reason)
+	if v, reason, blocked := m.blockingTop(); blocked {
+		return m.askOrRefuse(v, reason)
 	}
 	blurred := m.blur()
 	// Read after the blur, so this is the instance the view last handed back.

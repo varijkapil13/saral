@@ -2,115 +2,19 @@ package issue
 
 import (
 	"github.com/varijkapil13/saral/internal/ui/kernel"
-	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
-// EditViewID and MoveViewID are the scopes the two pushed panes register their
-// keys under. Neither is a footer slot: both are opened with the issue they are
-// about, and a registry constructor has no issue to open them with.
-const (
-	EditViewID = "issue.edit"
-	MoveViewID = "issue.move"
-)
+// MoveViewID is the scope the transition picker registers its keys under. It
+// is not a footer slot: it is opened with the issue it is about, and a
+// registry constructor has no issue to open it with.
+const MoveViewID = "issue.move"
 
-// editOpenKeys are the two bindings the detail pane hangs off. They live here
-// rather than in the detail pane's keymap so that everything about editing an
-// issue is in one place, and are named in that keymap so the footer and the
-// help overlay advertise them.
-func editBinding() kernel.Binding {
-	return kernel.Bind([]string{"e"}, "e", "edit fields")
-}
-
+// moveBinding is the stroke that opens the transition picker. It lives here
+// rather than in the detail pane's own keymap so that everything about it is
+// in one place, and is named in that keymap so the footer and the help
+// overlay advertise it.
 func moveBinding() kernel.Binding {
 	return kernel.Bind([]string{"t"}, "t", "change status")
-}
-
-type editKeyMap struct {
-	Up      kernel.Binding
-	Down    kernel.Binding
-	Act     kernel.Binding
-	Prev    kernel.Binding
-	Next    kernel.Binding
-	Clear   kernel.Binding
-	Save    kernel.Binding
-	Discard kernel.Binding
-	Accept  kernel.Binding
-	Cancel  kernel.Binding
-	Yes     kernel.Binding
-}
-
-func defaultEditKeys() editKeyMap {
-	return editKeyMap{
-		Up:      kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:    kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		Act:     kernel.Bind([]string{"enter"}, "enter", "change this field"),
-		Prev:    kernel.Bind([]string{"h", "left"}, "←/h", "previous value"),
-		Next:    kernel.Bind([]string{"l", "right"}, "→/l", "next value"),
-		Clear:   kernel.Bind([]string{"delete"}, "del", "empty this field"),
-		Save:    kernel.Bind([]string{"ctrl+s"}, "ctrl+s", "save"),
-		Discard: kernel.Bind([]string{"X"}, "X", "discard changes"),
-		Accept:  kernel.Bind([]string{"enter"}, "enter", "keep this value"),
-		Cancel:  kernel.Bind([]string{"esc"}, "esc", "leave the value alone"),
-		Yes:     kernel.Bind([]string{"y"}, "y", "go ahead"),
-	}
-}
-
-// keySet is the resting state: the row list with no field open and nothing
-// waiting to be answered.
-func (k editKeyMap) keySet() kernel.KeySet {
-	return kernel.KeySet{
-		Acts: []kernel.Binding{
-			kernel.Terse(k.Act, "change"),
-			kernel.Terse(k.Clear, "empty"),
-			k.Save,
-			kernel.Terse(k.Discard, "discard"),
-		},
-		Full: [][]kernel.Binding{
-			{k.Down, k.Up, k.Act, k.Clear},
-			{k.Prev, k.Next},
-			{k.Save, k.Discard},
-		},
-	}
-}
-
-// editLiveSets is one set per stage, built once at start-up. LiveKeys is called
-// on every frame, so it hands back a stored value rather than assembling one.
-var editLiveSets = func() [5]kernel.KeySet {
-	k := defaultEditKeys()
-	// esc backs out of three different things here, and what it leaves behind is
-	// different each time, so each stage names it for itself.
-	reread := kernel.Bind([]string{"y"}, "y", "re-read it and put your edits back on top")
-	notYet := kernel.Bind([]string{"esc"}, "esc", "do not save yet")
-	asItIs := kernel.Bind([]string{"esc"}, "esc", "leave it as it is for now")
-	// A prompt keeps its words. The row is over capacity when a view offers a
-	// list of things to do; two answers to one question always fit, and the
-	// wording is the whole point of asking.
-	return [5]kernel.KeySet{
-		stageBrowse: k.keySet(),
-		stageTyping: {
-			Acts: []kernel.Binding{k.Accept, k.Cancel},
-			Full: [][]kernel.Binding{{k.Accept, k.Cancel}, {widget.KillLine}},
-		},
-		stageConfirm: {
-			Acts: []kernel.Binding{k.Yes, notYet},
-			Full: [][]kernel.Binding{{k.Yes, notYet}},
-		},
-		// A save in flight answers nothing of its own, and the footer then shows
-		// the globals alone, which is the truth.
-		stageSaving: {},
-		stageConflict: {
-			Acts: []kernel.Binding{reread, asItIs},
-			Full: [][]kernel.Binding{{reread, asItIs}},
-		},
-	}
-}()
-
-// LiveKeys reports the keys that work in the stage the pane is actually in.
-// enter commits a value while a field is open and opens one when none is, and y
-// answers two different questions — go ahead with the save, and re-read after a
-// conflict — so what the footer calls it has to come from the stage.
-func (m *editModel) LiveKeys() (set kernel.KeySet, gen int) {
-	return editLiveSets[m.stage], int(m.stage)
 }
 
 type moveKeyMap struct {
@@ -174,7 +78,4 @@ func (m *moveModel) LiveKeys() (set kernel.KeySet, gen int) {
 	return moveLiveSets[m.stage], int(m.stage)
 }
 
-var (
-	_ kernel.KeyReporter = (*editModel)(nil)
-	_ kernel.KeyReporter = (*moveModel)(nil)
-)
+var _ kernel.KeyReporter = (*moveModel)(nil)

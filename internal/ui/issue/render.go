@@ -19,13 +19,19 @@ const labelWidth = 13
 // display renderer's styles are built here too: richtext holds no theme, so the
 // pane hands it tokens.
 type styles struct {
-	gen        int
-	key        lipgloss.Style
-	title      lipgloss.Style
-	muted      lipgloss.Style
-	label      lipgloss.Style
-	section    lipgloss.Style
-	rule       lipgloss.Style
+	gen     int
+	key     lipgloss.Style
+	title   lipgloss.Style
+	muted   lipgloss.Style
+	label   lipgloss.Style
+	section lipgloss.Style
+	rule    lipgloss.Style
+	// value, fail and selected are the sidebar's own row editing: a field's
+	// value, a rejected write's message on the row it is about, and the arrow in
+	// front of the row under the cursor.
+	value      lipgloss.Style
+	fail       lipgloss.Style
+	selected   lipgloss.Style
 	categories [4]lipgloss.Style
 
 	rich    richtext.Styles
@@ -40,13 +46,16 @@ type styles struct {
 
 func newStyles(t *kernel.Theme) *styles {
 	s := &styles{
-		gen:     t.Gen,
-		key:     t.Accent,
-		title:   t.Title,
-		muted:   t.Muted,
-		label:   t.Muted,
-		section: t.Title,
-		rule:    t.Muted,
+		gen:      t.Gen,
+		key:      t.Accent,
+		title:    t.Title,
+		muted:    t.Muted,
+		label:    t.Muted,
+		section:  t.Title,
+		rule:     t.Muted,
+		value:    t.Base,
+		fail:     t.Danger,
+		selected: t.Accent,
 		rich: richtext.NewStyles(richtext.Palette{
 			Base: t.Base, Muted: t.Muted, Title: t.Title, Accent: t.Accent,
 			Danger: t.Danger, Warning: t.Warning, Success: t.Success, Badge: t.Badge,
@@ -101,6 +110,18 @@ type contentKey struct {
 	// already on screen when the setting flips would otherwise keep the frame it
 	// had until something else happened to it.
 	bookkeeping bool
+	// cursor, stage and edit are what the sidebar's row editing changes from one
+	// frame to the next: which row is under the cursor, what it is doing there,
+	// and — since typing a value or a description moves neither — a counter
+	// bumped on every keystroke an open row takes. Zero for every frame nothing
+	// is being edited in, which is the steady state the budgets measure.
+	cursor int
+	stage  int
+	edit   int
+	// dirty and leaving are the header's own: how many rows are unsaved, and
+	// whether the leave prompt is standing in for the facts line.
+	dirty   int
+	leaving bool
 }
 
 // content is one region's lines at one width, with the width of each measured
@@ -126,15 +147,77 @@ func (m *Model) header() string {
 	room := max(m.width-ansi.StringWidth(m.issue.Key)-2, 1)
 	title := m.styles.title.Render(ansi.Truncate(m.issue.Summary, room, ell))
 
-	joinedSep := m.styles.muted.Render(sep)
-	meta := strings.Join(m.headerFacts(false), joinedSep)
-	if ansi.StringWidth(meta) > m.width {
-		meta = strings.Join(m.headerFacts(true), joinedSep)
+	var meta string
+	if m.leaving {
+		// The facts line stands in for the leave prompt while it is up: the
+		// question needs the reader's full attention, and there is no fourth
+		// line to spend on it without moving every region under the header.
+		meta = ansi.Truncate(m.styles.fail.Render(m.leavePrompt()), m.width, ell)
+	} else {
+		joinedSep := m.styles.muted.Render(sep)
+		facts := m.factsWithDirty(false)
+		meta = strings.Join(facts, joinedSep)
+		if ansi.StringWidth(meta) > m.width {
+			meta = strings.Join(m.factsWithDirty(true), joinedSep)
+		}
+		meta = ansi.Truncate(meta, m.width, ell)
 	}
-	meta = ansi.Truncate(meta, m.width, ell)
 
 	return key + "  " + title + "\n" + meta + "\n" +
 		m.styles.rule.Render(strings.Repeat(t.Glyphs.HLine, max(m.width, 1)))
+}
+
+// factsWithDirty is headerFacts with the dirty set's own line appended, when
+// there is one to say: the identity line is the one place this pane can put
+// "N unsaved changes" where it survives a keypress, since docs/UX.md's own
+// rule is that the status line cannot be where anything that has to persist
+// lives.
+func (m *Model) factsWithDirty(compact bool) []string {
+	facts := m.headerFacts(compact)
+	if line := m.dirtyLine(); line != "" {
+		facts = append(facts, line)
+	}
+	return facts
+}
+
+// The zones the header's own words answer to — save and undo on the dirty
+// line, and the three answers on the leave prompt — marked into those lines
+// the way a fold marker is marked into a description line, and hit-tested in
+// clicked() ahead of the three regions, since the header belongs to none of
+// them.
+const (
+	zoneDirtySave    = "dirty:save"
+	zoneDirtyUndo    = "dirty:undo"
+	zoneDirtyUndoAll = "dirty:undoall"
+	zoneLeaveYes     = "leave:y"
+	zoneLeaveNo      = "leave:n"
+	zoneLeaveStay    = "leave:stay"
+)
+
+// dirtyLine names the dirty set and what to do with it, or the fact that it
+// was picked back up from a draft — see docs/UX.md principle 6.
+func (m *Model) dirtyLine() string {
+	if m.draftRestored {
+		return m.styles.selected.Render("unsaved changes from earlier restored") + "  " +
+			m.zones.Mark(zoneDirtySave, m.styles.muted.Render("s save")) + m.styles.muted.Render(" · ") +
+			m.zones.Mark(zoneDirtyUndoAll, m.styles.muted.Render("U discard"))
+	}
+	n := m.dirtyCount()
+	if n == 0 {
+		return ""
+	}
+	return m.styles.selected.Render(pluralChanges(n)+" unsaved") + "  " +
+		m.zones.Mark(zoneDirtySave, m.styles.muted.Render("s save")) + m.styles.muted.Render(" · ") +
+		m.zones.Mark(zoneDirtyUndo, m.styles.muted.Render("backspace undo this")) + m.styles.muted.Render(" · ") +
+		m.zones.Mark(zoneDirtyUndoAll, m.styles.muted.Render("U undo all"))
+}
+
+// leavePrompt is what the header shows while AskClose is waiting on an answer.
+func (m *Model) leavePrompt() string {
+	return "Save " + pluralChanges(m.dirtyCount()) + " to " + m.issue.Key + "?  " +
+		m.zones.Mark(zoneLeaveYes, "y save") + "  " +
+		m.zones.Mark(zoneLeaveNo, "n discard") + "  " +
+		m.zones.Mark(zoneLeaveStay, "esc stay")
 }
 
 // headerFacts builds the header's summary line. compact is asked for only
@@ -226,6 +309,24 @@ func (m *Model) View() string {
 	}
 	m.buf = buf
 	return string(buf)
+}
+
+// docEditContent draws the description's inline textarea in place of the
+// rendered document, sized to exactly the box it fills — the textarea scrolls
+// itself, so there is nothing left for this region's own offset to do while it
+// is open.
+func (m *Model) docEditContent(w, h int) content {
+	m.docArea.SetWidth(max(w, 1))
+	m.docArea.SetHeight(max(h, 1))
+	text := m.docArea.View()
+	lines := strings.Split(text, "\n")
+	widths := make([]int, len(lines))
+	widest := 0
+	for i, line := range lines {
+		widths[i] = ansi.StringWidth(line)
+		widest = max(widest, widths[i])
+	}
+	return content{lines: lines, widths: widths, widest: widest}
 }
 
 // descLines renders the description through the display renderer. The markdown

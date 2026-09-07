@@ -91,7 +91,12 @@ func TestFields_ACustomFieldIsNamedTheWayThisSiteSpellsIt(t *testing.T) {
 func TestFields_AFieldOutsideTheReadSaysSoRatherThanDrawingBlank(t *testing.T) {
 	t.Parallel()
 
-	dr := fieldsPane(t, 80, 26)
+	// Tall enough that G's followTop, which only promises the cursor's own
+	// last row is on screen, still leaves room below it for the trailing
+	// counts neither row is cursorable: status, priority and assignee joined
+	// the cursor above them, and 26 rows is no longer enough to also show what
+	// follows the last one.
+	dr := fieldsPane(t, 80, 34)
 	dr.key("tab", "G")
 
 	got := dr.view()

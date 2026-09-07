@@ -1,6 +1,6 @@
  saral | Commands                                                                          PROJ | example.atlassian.net 
 > what do you want to do?                                                                                               
------------------------------------------------------------------------------------------------------------- 25 commands
+------------------------------------------------------------------------------------------------------------ 30 commands
   Go to                                                                                                                 
 > Issues                                        Go to                                                                 g1
   Switch view                                   Go to                                                              g 1-9
@@ -25,6 +25,6 @@
   Edit the comment you are on                   Comments                                                               e
   Write a comment                               Comments                                                               a
   Issue                                                                                                                 
-  Change this issue's status                    Issue                                                                  t
-  Comment on this issue                         Issue                                                                  C
+  Assign to me                                  Issue                                                                   
+  Assign to…                                    Issue                                                                  @
  Issues  enter run it  esc close                                                                                  ctrl+k

@@ -2,18 +2,22 @@
 PROJ-10  Investigate the release checklist                                                          
 o Defect | ~ Building (in progress) | Normal | Grace Hopper | updated 03 Mar 2025 06:00             
 ----------------------------------------------------------------------------------------------------
-|Investigate the release checklist.                              |Details                           
-|                                                                |  Project      PROJ PROJ Project  
-|- Filed against PROJ-10.                                        |  Reporter     Alan Turing        
-|- Reproduced on staging twice in a row.                         |  Created      02 Mar 2025 19:00  
-|                                                                |  Labels       customer           
-|                                                                |  Fix versions 1.0                
-|                                                                |Parent                            
-|                                                                |    PROJ-1  Building  Add the n...
+|Investigate the release checklist.                              #Details                           
+|                                                                #->Summary      Investigate the ...
+|- Filed against PROJ-10.                                        #  Description  4 lines            
+|- Reproduced on staging twice in a row.                         #  Status       Building           
+|                                                                #  Priority     Normal             
+|                                                                #  Assignee     Grace Hopper       
+|                                                                #  Project      PROJ PROJ Project  
+|                                                                #  Reporter     Alan Turing        
+|                                                                #  Due          not set            
+|                                                                #  Created      02 Mar 2025 19:00  
+|                                                                #  Labels       customer           
+|                                                                #  Fix versions 1.0                
+|                                                                #Parent                            
+|                                                                #    PROJ-1  Building  Add the n...
 |                                                                |Fields                            
 |                                                                |  Story Points 3                  
-|                                                                |  4 more, all empty               
-|                                                                |  1 more, hidden as Jira's own ...
 |                                                                |PROJ-10 | 1 comment               
 |                                                                |----------------------------------
 |                                                                |> Sam Tester | 02 Mar 2026 09:00  
@@ -21,8 +25,4 @@ o Defect | ~ Building (in progress) | Normal | Grace Hopper | updated 03 Mar 202
 |                                                                |    and a second sentence to wrap.
 |                                                                |                                  
 |                                                                |                                  
-|                                                                |                                  
-|                                                                |                                  
-|                                                                |                                  
-|                                                                |                                  
- Issues  tab pane  e edit  t status  C comment                                                 ? esc
+ Issues  tab pane  e edit  E open in $EDITOR  t status  C comment                              ? esc

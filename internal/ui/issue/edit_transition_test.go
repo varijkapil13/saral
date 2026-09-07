@@ -50,7 +50,7 @@ func TestMove_ListsWhatThisIssueCanDoRightNow(t *testing.T) {
 	f := newFake(6)
 	seen := map[string][]string{}
 	for _, key := range []string{"PROJ-1", "PROJ-3"} {
-		iss := fullIssue(t, f, key)
+		iss := readIssue(t, f, key)
 		p := openMover(t, f, iss, 100, 28)
 		m := p.mover()
 		if len(m.moves) == 0 {
@@ -76,7 +76,7 @@ func TestMove_AsksBeforeItMovesAndSendsTheTransitionId(t *testing.T) {
 
 	f := newFake(6)
 	client := record(f)
-	iss := fullIssue(t, f, "PROJ-3")
+	iss := readIssue(t, f, "PROJ-3")
 	p := openMover(t, client, iss, 100, 28)
 
 	want := p.mover().moves[0]
@@ -113,7 +113,7 @@ func TestMove_FillsARequiredScreenFieldFromTheValuesTheSiteOffers(t *testing.T) 
 
 	f := newFake(6)
 	client := record(f)
-	iss := fullIssue(t, f, "PROJ-3")
+	iss := readIssue(t, f, "PROJ-3")
 	p := openMover(t, client, iss, 100, 28)
 
 	m := p.mover()
@@ -226,7 +226,7 @@ func TestMove_ClickingAMovePicksItAndClickingItAgainChoosesIt(t *testing.T) {
 
 	f := newFake(8)
 	d := testDeps(f)
-	p := newPanel(t, NewMove(d, fullIssue(t, f, "PROJ-6")), 100, 28)
+	p := newPanel(t, NewMove(d, readIssue(t, f, "PROJ-6")), 100, 28)
 
 	want := p.mover().moves[1]
 	at := p.zoneAt(d, "move:"+want.ID)
@@ -249,7 +249,7 @@ func TestMove_ReportsEveryWayReadingTheMovesCanFail(t *testing.T) {
 			t.Parallel()
 
 			f := newFake(6)
-			iss := fullIssue(t, f, "PROJ-3")
+			iss := readIssue(t, f, "PROJ-3")
 			f.FailNext(tc.err)
 			p := openMover(t, f, iss, 100, 28)
 
@@ -271,7 +271,7 @@ func TestMove_ReportsEveryWayTheMoveItselfCanFail(t *testing.T) {
 			t.Parallel()
 
 			f := newFake(6)
-			iss := fullIssue(t, f, "PROJ-3")
+			iss := readIssue(t, f, "PROJ-3")
 			p := openMover(t, f, iss, 100, 28)
 
 			f.FailNext(tc.err)
@@ -283,7 +283,7 @@ func TestMove_ReportsEveryWayTheMoveItselfCanFail(t *testing.T) {
 			if p.pops != 0 {
 				t.Error("the pane closed itself over a move that did not happen")
 			}
-			after := fullIssue(t, f, "PROJ-3")
+			after := readIssue(t, f, "PROJ-3")
 			if after.Status.ID != iss.Status.ID {
 				t.Errorf("the issue is now %s; the move failed", after.Status.Name)
 			}
@@ -298,7 +298,7 @@ func TestMove_StopsReadingWhenThePaneIsClosed(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(6)
-	iss := fullIssue(t, f, "PROJ-3")
+	iss := readIssue(t, f, "PROJ-3")
 	view := NewMove(testDeps(f), iss)
 	view, _ = view.Update(kernel.SizeMsg{Width: 100, Height: 28})
 	cmd := view.Init()
@@ -324,7 +324,7 @@ func TestMove_LosingTheKeyboardDoesNotGiveUpTheRead(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(6)
-	iss := fullIssue(t, f, "PROJ-3")
+	iss := readIssue(t, f, "PROJ-3")
 	view := NewMove(testDeps(f), iss)
 	view, _ = view.Update(kernel.SizeMsg{Width: 100, Height: 28})
 	cmd := view.Init()

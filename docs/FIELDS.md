@@ -131,8 +131,62 @@ pinned = ["customfield_13401", "duedate", "customfield_13402"]
   `esc` writes the accumulated list to the profile in one save rather than one per toggle. The site's
   field catalogue comes from `SchemaReader.Fields`, wrapped in the picker's own `app.Search` the way
   every other view already caches it.
-- Pinning from the issue itself is not in this packet: the sidebar has no per-field cursor, and
-  giving it one is a bigger change than the list is worth.
+- Pinning from the issue itself was not in this packet, on the grounds that the sidebar had no
+  per-field cursor and giving it one was a bigger change than the list was worth. P8 gave it one for a
+  different reason — editing in place needs it regardless — and pinning a field from its own row is
+  still not wired to it: the cursor and the pin list exist and do not yet know about each other.
+
+## P8 — Let the site's own answer say what can be edited, and where
+
+The Details sidebar is the editing surface (`docs/UX.md` has the interaction design); what belongs
+here is which fields it will open and why.
+
+A sidebar row is one of seven kinds this build knows how to edit — text (`summary`), labels
+(`labels`), date (`duedate`), the document `description` is (opened in the description region rather
+than in the sidebar), single choice (`priority`), person (`assignee`) and status (`status`, through
+`Transitions`) — or it is `rkStatic`: read, drawn, on the cursor, and refused with one word. There is
+no eighth answer.
+
+**A row's kind is fixed by its id, not discovered from `FieldSchema`.** The seven ids above are the
+whole of `editableRowSpecs`; nothing walks the custom field catalogue looking for a `date`- or
+`option`-typed field to add an eighth one, which is a deliberate narrowing of what `docs/UX.md`'s
+design describes ("date … and any date custom field editmeta marks", "any option custom field editmeta
+gives `AllowedValues` for") — rebasing a *discovered* row's edits across a reload without a fixed id to
+key it by is real work neither packet has spent, and stays called out as left for a later one.
+
+**Editable is fetched *and* listed *and* a kind this build knows**, all three, checked in that order
+by `fieldRow.editable()` — except `status`, which answers `true` unconditionally, because a transition
+is a workflow action rather than a field a screen lists, and `moveModel`'s own list already says "no
+move available to you right now" when there is nothing to offer rather than refusing the row itself:
+
+- **fetched** is `Issue.Requested.Has(id)`, the same mask P2.3's fetch-edit-PUT cycle already refuses
+  to write outside of. A row seeded narrow — a list row's six fields, a card's fewer still — is
+  correctly read-only until the issue's own full read lands, the same first-paint-then-fill shape
+  every other read in this pane already has.
+- **listed** is editmeta naming the id, refreshed on every `editMetaMsg` (`relist`) without touching a
+  value anyone has typed, because editmeta can answer after the issue's own read already has and
+  rebuilding the rows from scratch at that point would throw typing away. Priority's own inline list is
+  read straight out of this: `editmeta.Fields[i].AllowedValues` for the id, so opening it costs no
+  request of its own — there is no `jira.FilterVocabulary.Priorities` call anywhere in this pane.
+- **the kind** is the seven above. A row failing this one is not a row editmeta forgot; it is a row
+  this build has no editor for at all, and the two read the same to a person pressing enter on it —
+  `read-only` — because a user cannot act on the difference and a false distinction there would be a
+  door with a "these three exits will open once the roof is rebuilt" sign on it.
+
+**The assignee is the one row whose dirtiness is an account id, not its display text.** `fieldRow`
+carries `chosenID`/`originalID` beside the label a person reads (`value`/`original`), because two
+options can share a label and a display name is not what a patch sends; the draft on disk carries the
+same pair, under a `choices` map beside the plain `values` one, so a priority or an assignee edit
+survives a crash exactly as a text row's does.
+
+**The seven rows persist across every reload; nothing else does.** `fieldRow` is rebuilt whenever the
+issue reloads (`rebaseRows`, run for the first read, `r`, `R`, and a conflict's own reread alike),
+capturing whatever the user had already typed and putting it back on top — the same shape P2.3's
+`rebase` had for the pushed editor, moved here rather than rewritten. Every other row the sidebar draws
+— every platform fact beyond these seven, every related issue, every custom field — is a `cursorRow`
+with no persistent state of its own: navigable, because docs/UX.md asks the cursor to reach every row
+and not only the editable ones, and re-derived on every render rather than kept, because there is
+nothing about it that could go stale between one frame and the next.
 
 ## Definition of done, beyond `docs/PARALLEL.md`
 
