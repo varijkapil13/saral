@@ -228,12 +228,23 @@ type Status struct {
 	Category StatusCategory
 }
 
-// IssueType is a project's issue type. IDs are per-site.
+// IssueType is a project's issue type. IDs are per-site; the two fields after
+// IconURL are not, and are what an icon is resolved from, because the name is
+// localised and a team-managed project mints its own.
 type IssueType struct {
 	ID      string
 	Name    string
 	Subtask bool
 	IconURL string
+	// HierarchyLevel is the site's own ladder: below zero a subtask, zero a
+	// standard type, one an epic, higher an initiative or above.
+	HierarchyLevel int
+	// AvatarID is the id in IconURL's path. A built-in type keeps its default
+	// avatar on every site, which is the only thing that tells a bug from a
+	// story once the level says both are standard; a type given its own image
+	// carries an id nothing recognises, and resolves to nothing rather than to
+	// a wrong shape.
+	AvatarID string
 }
 
 // Priority is an issue priority.

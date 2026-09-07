@@ -94,6 +94,30 @@ type styles struct {
 	danger     lipgloss.Style
 	warning    lipgloss.Style
 	categories [4]lipgloss.Style
+	// marks are the type glyphs already drawn as a resting card's first cell,
+	// muted and followed by the space that keeps them off the key. Six glyphs
+	// exist and a cursor move re-renders two cards, so rendering the style per
+	// card put a lipgloss.Render on the hot path for a string that never
+	// changes within a theme generation.
+	marks    map[string]string
+	selMark  string
+	heldMark string
+}
+
+// markCell is a card's first cell: the type glyph at rest, or the gesture's own
+// marker when the card is selected or in hand — those two invert the whole
+// card, so their mark carries no style of its own to fight it.
+func (s *styles) markCell(glyph string, selected, inHand bool) string {
+	switch {
+	case inHand:
+		return s.heldMark
+	case selected:
+		return s.selMark
+	}
+	if cell, ok := s.marks[glyph]; ok {
+		return cell
+	}
+	return s.muted.Render(glyph) + " "
 }
 
 func newStyles(t *kernel.Theme) *styles {
@@ -115,6 +139,12 @@ func newStyles(t *kernel.Theme) *styles {
 		jira.CategoryInProgress: t.Accent,
 		jira.CategoryDone:       t.Success,
 	}
+	g := t.Glyphs
+	s.marks = make(map[string]string, 6)
+	for _, glyph := range []string{g.TypeEpic, g.TypeStory, g.TypeTask, g.TypeBug, g.TypeSubtask, g.TypeOther} {
+		s.marks[glyph] = t.Muted.Render(glyph) + " "
+	}
+	s.selMark, s.heldMark = g.Collapsed+" ", g.Diamond+" "
 	return s
 }
 
@@ -327,6 +357,8 @@ func renderCard(iss *jira.Issue, cell int, selected, inHand bool, st *styles, t 
 	ell := t.Glyphs.Ellipsis
 	// Selected and held both need the marker for their own gesture and take it
 	// back from the type icon it otherwise carries at rest.
+	// The mark is a cell of its own, with a space before the key: a type shape
+	// flush against "TR-3322" made it "STR-3322", a key on another project.
 	mark := t.Glyphs.TypeGlyph(iss.Type)
 	switch {
 	case inHand:
@@ -334,7 +366,8 @@ func renderCard(iss *jira.Issue, cell int, selected, inHand bool, st *styles, t 
 	case selected:
 		mark = t.Glyphs.Collapsed
 	}
-	room := max(cell-ansi.StringWidth(mark), 0)
+	room := max(cell-ansi.StringWidth(mark)-1, 0)
+	markCell := st.markCell(t.Glyphs.TypeGlyph(iss.Type), selected, inHand)
 	estimate := ""
 	if p.estimates {
 		if n, ok := iss.Fields.Number(p.estimate); ok {
@@ -361,7 +394,7 @@ func renderCard(iss *jira.Issue, cell int, selected, inHand bool, st *styles, t 
 	if left := room - ansi.StringWidth(estimate) - ansi.StringWidth(key) - 1; left > 0 {
 		body += " " + ansi.Truncate(iss.Summary, left, ell)
 	}
-	out := mark + padTruncate(body, max(room-ansi.StringWidth(estimate), 0), ell) + estimate
+	out := markCell + padTruncate(body, max(room-ansi.StringWidth(estimate), 0), ell) + estimate
 	switch {
 	case inHand:
 		return st.held.Render(out)

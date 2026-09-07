@@ -1,10 +1,10 @@
 PROJ board                                                      5 of 16 cards | 11 hidden by filter | 3 columns | ranked
 To Do                                 5 In Progress                           0 Done                                  0
->PROJ-3 Investigate the onboarding w...                                                                                 
-SPROJ-6 Speed up session expiry                                                                                         
-SPROJ-9 Rework the mobile layout                                                                                        
-SPROJ-12 Retire the nightly export                                                                                      
-SPROJ-15 Add CSV import                                                                                                 
+> PROJ-3 Investigate the onboarding ...                                                                                 
+o PROJ-6 Speed up session expiry                                                                                        
+o PROJ-9 Rework the mobile layout                                                                                       
+o PROJ-12 Retire the nightly export                                                                                     
+o PROJ-15 Add CSV import                                                                                                
                                                                                                                         
                                                                                                                         
                                                                                                                         

@@ -487,14 +487,33 @@ type apiNamed struct {
 }
 
 type apiIssueType struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Subtask bool   `json:"subtask"`
-	IconURL string `json:"iconUrl"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Subtask        bool   `json:"subtask"`
+	IconURL        string `json:"iconUrl"`
+	HierarchyLevel int    `json:"hierarchyLevel"`
 }
 
 func (t apiIssueType) domain() jira.IssueType {
-	return jira.IssueType{ID: t.ID, Name: t.Name, Subtask: t.Subtask, IconURL: t.IconURL}
+	return jira.IssueType{
+		ID: t.ID, Name: t.Name, Subtask: t.Subtask, IconURL: t.IconURL,
+		HierarchyLevel: t.HierarchyLevel, AvatarID: avatarIDOf(t.IconURL),
+	}
+}
+
+// avatarIDOf reads the avatar id out of a type's icon URL, which Cloud spells
+// .../universal_avatar/view/type/issuetype/avatar/<id>?size=... A URL of any
+// other shape — a legacy /images/icons/... path, or nothing — answers "".
+func avatarIDOf(iconURL string) string {
+	_, rest, ok := strings.Cut(iconURL, "/avatar/")
+	if !ok {
+		return ""
+	}
+	end := 0
+	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+		end++
+	}
+	return rest[:end]
 }
 
 // apiStatus is a workflow status. Its iconUrl is deliberately not read: on a

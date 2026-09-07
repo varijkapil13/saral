@@ -114,6 +114,10 @@ type Glyphs struct {
 	TypeTask    string
 	TypeBug     string
 	TypeSubtask string
+	// TypeOther is a standard type nothing above resolves — a site's own type
+	// with its own image. One shape, the same for all of them: a letter read as
+	// part of the key beside it, which is what this replaced.
+	TypeOther string
 
 	// Keyed by jira.StatusCategory rather than by a status name.
 	CategoryToDo       string
@@ -130,7 +134,7 @@ func UnicodeGlyphs() Glyphs {
 		VLine: "│", HLine: "─", CornerTL: "╭", CornerTR: "╮", CornerBL: "╰", CornerBR: "╯",
 		Separator: "•", Collapsed: "▸", Expanded: "▾", Diamond: "◆",
 		ProgressOn: "█", ProgressNo: "░",
-		TypeEpic: "◆", TypeStory: "●", TypeTask: "■", TypeBug: "▲", TypeSubtask: "▪",
+		TypeEpic: "◆", TypeStory: "●", TypeTask: "■", TypeBug: "▲", TypeSubtask: "▪", TypeOther: "○",
 		CategoryToDo: "○", CategoryInProgress: "◐", CategoryDone: "●", CategoryUnknown: "◌",
 	}
 }
@@ -144,7 +148,7 @@ func ASCIIGlyphs() Glyphs {
 		VLine: "|", HLine: "-", CornerTL: "+", CornerTR: "+", CornerBL: "+", CornerBR: "+",
 		Separator: "|", Collapsed: ">", Expanded: "v", Diamond: "<>",
 		ProgressOn: "#", ProgressNo: "-",
-		TypeEpic: "<>", TypeStory: "*", TypeTask: "#", TypeBug: "!", TypeSubtask: "-",
+		TypeEpic: "<>", TypeStory: "*", TypeTask: "#", TypeBug: "!", TypeSubtask: "-", TypeOther: "o",
 		CategoryToDo: "o", CategoryInProgress: "~", CategoryDone: "x", CategoryUnknown: ".",
 	}
 }
@@ -166,6 +170,7 @@ func NerdGlyphs() Glyphs {
 	g.TypeTask = ""           // nf-fa-tasks
 	g.TypeBug = ""            // nf-fa-bug
 	g.TypeSubtask = ""        // nf-fa-level_down
+	g.TypeOther = ""          // nf-fa-square_o
 	g.CategoryToDo = ""       // nf-fa-circle_o
 	g.CategoryInProgress = "" // nf-fa-clock_o
 	g.CategoryDone = ""       // nf-fa-check_circle
@@ -210,10 +215,43 @@ func (g Glyphs) Tier() string {
 // only the subtask flag, so everything else falls back to the type's own
 // first letter rather than to a hardcoded guess like "Bug".
 func (g Glyphs) TypeGlyph(it jira.IssueType) string {
-	if it.Subtask {
+	switch {
+	case it.Subtask || it.HierarchyLevel < 0:
 		return g.TypeSubtask
+	case it.HierarchyLevel > 0:
+		return g.TypeEpic
 	}
-	return firstLetterGlyph(it.Name)
+	switch defaultTypeAvatars[it.AvatarID] {
+	case typeBug:
+		return g.TypeBug
+	case typeStory:
+		return g.TypeStory
+	case typeTask:
+		return g.TypeTask
+	}
+	return g.TypeOther
+}
+
+type standardType uint8
+
+// The zero value is a type the table does not know, which TypeGlyph draws as
+// TypeOther.
+const (
+	typeBug standardType = iota + 1
+	typeStory
+	typeTask
+)
+
+// defaultTypeAvatars are the avatar ids Jira Cloud gives its built-in standard
+// types, which every site keeps unless somebody uploads an image of their own.
+// They are product constants and not a site's data, the way a plugin key is
+// and a type name is not. 10318 is in this repository's own fixture, corrected
+// from a capture; the other two are Cloud's documented defaults. A miss here
+// costs one neutral shape, never a wrong one.
+var defaultTypeAvatars = map[string]standardType{
+	"10303": typeBug,
+	"10315": typeStory,
+	"10318": typeTask,
 }
 
 // CategoryGlyph resolves the icon for a status category, which is the one

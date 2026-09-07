@@ -170,23 +170,6 @@ func TestGlyphs_EveryTierDefinesEveryField(t *testing.T) {
 	}
 }
 
-func TestGlyphs_TypeGlyphFallsBackToTheLetterForAnUnresolvedType(t *testing.T) {
-	t.Parallel()
-	g := UnicodeGlyphs()
-	if got := g.TypeGlyph(jira.IssueType{Subtask: true}); got != g.TypeSubtask {
-		t.Errorf("a subtask got %q, want the subtask icon %q", got, g.TypeSubtask)
-	}
-	for name, want := range map[string]string{
-		"Bug": "B", "Story": "S", "Epic": "E", "Task": "T",
-		"böcker": "B", "": "?",
-	} {
-		if got := g.TypeGlyph(jira.IssueType{Name: name}); got != want {
-			t.Errorf("TypeGlyph(%q) = %q, want %q — pkg/jira.IssueType carries no hierarchy level, "+
-				"so nothing here may resolve by matching the name", name, got, want)
-		}
-	}
-}
-
 func TestGlyphs_CategoryGlyphIsKeyedByCategoryNotName(t *testing.T) {
 	t.Parallel()
 	g := NerdGlyphs()
@@ -538,4 +521,43 @@ func hasColour(s string) bool {
 		}
 	}
 	return false
+}
+
+// An icon is resolved from what is the same on every site — the hierarchy
+// level the payload carries and the avatar a built-in type keeps — and never
+// from the name, which is localised and minted per project. A type nothing
+// resolves gets one neutral shape. It used to get its first letter, which drawn
+// against the key beside it turned "TR-3322" into "STR-3322".
+func TestGlyphs_TypeGlyphResolvesFromHierarchyAndDefaultAvatarNeverFromTheName(t *testing.T) {
+	t.Parallel()
+	for _, tier := range []Glyphs{UnicodeGlyphs(), ASCIIGlyphs(), NerdGlyphs()} {
+		cases := []struct {
+			name string
+			it   jira.IssueType
+			want string
+		}{
+			{"a subtask by its flag", jira.IssueType{Name: "Unteraufgabe", Subtask: true}, tier.TypeSubtask},
+			{"a subtask by its level", jira.IssueType{Name: "Sub", HierarchyLevel: -1}, tier.TypeSubtask},
+			{"an epic by its level", jira.IssueType{Name: "Épopée", HierarchyLevel: 1}, tier.TypeEpic},
+			{"an initiative above an epic", jira.IssueType{Name: "Initiative", HierarchyLevel: 2}, tier.TypeEpic},
+			{"a bug by its default avatar", jira.IssueType{Name: "Fehler", AvatarID: "10303"}, tier.TypeBug},
+			{"a story by its default avatar", jira.IssueType{Name: "Historia", AvatarID: "10315"}, tier.TypeStory},
+			{"a task by its default avatar", jira.IssueType{Name: "Aufgabe", AvatarID: "10318"}, tier.TypeTask},
+			{"a standard type with its own image", jira.IssueType{Name: "Bug", AvatarID: "10999"}, tier.TypeOther},
+			{"a standard type with no avatar at all", jira.IssueType{Name: "Story"}, tier.TypeOther},
+		}
+		for _, tc := range cases {
+			if got := tier.TypeGlyph(tc.it); got != tc.want {
+				t.Errorf("%s: TypeGlyph(%+v) = %q, want %q", tc.name, tc.it, got, tc.want)
+			}
+		}
+		// The two named Bug and Story above carry no resolvable data on purpose:
+		// the name must not be what decides, so neither may come back as a letter.
+		for _, name := range []string{"Bug", "Story", "Task", "Epic", "Zebra"} {
+			got := tier.TypeGlyph(jira.IssueType{Name: name})
+			if len(got) == 1 && got[0] >= 'A' && got[0] <= 'Z' {
+				t.Errorf("TypeGlyph for a type named %q answered its letter %q", name, got)
+			}
+		}
+	}
 }

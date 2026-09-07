@@ -90,15 +90,17 @@ rows follow along. What changes is that the picker no longer sends `kernel.Pop()
 `kernel.Glyphs` gains a third constructor beside `UnicodeGlyphs` and `ASCIIGlyphs`, and gains the
 fields the icons need. `GlyphsFor` resolves `"nerd"`, `"unicode"`, `"ascii"`, defaulting to nerd.
 
-**This row's second paragraph was checked against `pkg/jira.IssueType` and was wrong.** There is no
-`Hierarchy` field on the port — the type this program actually reads carries an `ID`, a `Name`, a
-`Subtask` flag and an `IconURL`, nothing else. So the hierarchy `Subtask above story, story, task, bug
-below` this row used to describe cannot be resolved at all: **only the subtask flag is real**, and
-everything that is not a subtask falls back to its own first letter, which is always available and
-never wrong the way matching on `"Bug"` would be — that hardcoded string is the failure mode this repo
-rejects most often, and it is exactly what the letter fallback exists to make unnecessary. `TypeEpic`,
-`TypeStory`, `TypeTask` and `TypeBug` are still fields on `Glyphs`, ready for the port amendment that
-would let a caller reach them; today `TypeGlyph` can only ever return `TypeSubtask` or a letter.
+**Checked against the payload rather than the port, on the second pass.** The first pass found no
+hierarchy on `pkg/jira.IssueType` and fell back to the type's first letter — which, drawn as a board
+card's marker flush against the key, turned `TR-3322` into `STR-3322`, a key on another project. The
+port was the thing that was short, not the API: `fields.issuetype` carries `hierarchyLevel` on every
+issue, and its `iconUrl` carries the type's avatar id in its path. Both are decoded now. The level
+resolves a subtask (below zero) and an epic or anything above one (one and up); the avatar id resolves
+a bug, a story or a task, because a built-in type keeps its default avatar on every site — `10303`,
+`10315`, `10318`, product constants the way a plugin key is. A standard type with an image of its own
+resolves to `TypeOther`, one neutral shape for all of them. **Nothing resolves from the name**, and a
+test feeds the resolver types named `Bug` and `Story` with no other data to prove it answers a shape
+and never a letter.
 
 | Meaning | nerd | unicode | ascii |
 |---|---|---|---|

@@ -1,6 +1,7 @@
 package board
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -374,5 +375,22 @@ func TestRenderCard_TheKeyCarriesItsStatusCategorysColourWhileResting(t *testing
 	}
 	if held := renderCard(toDo, 30, false, true, st, th, p); held != renderCard(done, 30, false, true, st, th, p) {
 		t.Error("two held cards still differ by category, so a second colour is fighting the held style")
+	}
+}
+
+// The type mark is a cell of its own. Drawn flush against the key it read as
+// part of it — a shape before "TR-3322" made "STR-3322", a key on another
+// project — so every key on a resting card has a space in front of it, and
+// nothing else touches it.
+func TestBoardRender_TheTypeMarkNeverTouchesTheKey(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(9)), 140, 24)
+	view := dr.view()
+	glued := regexp.MustCompile(`[^\s|]PROJ-\d+`)
+	if hits := glued.FindAllString(view, -1); len(hits) > 0 {
+		t.Errorf("a key is drawn flush against what precedes it: %q\n%s", hits, view)
+	}
+	if !strings.Contains(view, " PROJ-") {
+		t.Fatalf("no card key is on screen, so this test proves nothing:\n%s", view)
 	}
 }
