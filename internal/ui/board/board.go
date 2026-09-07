@@ -237,6 +237,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case failedMsg:
 		cmd = m.failed(msg)
 
+	case moreFailedMsg:
+		cmd = m.moreFailed(msg)
+
 	case tea.KeyPressMsg:
 		// Any key ends a gesture the pointer is in the middle of, so a card is
 		// never left following a pointer nobody is watching.
@@ -415,13 +418,40 @@ func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
 		return nil
 	}
 	under := m.selectedKey()
-	m.loading, m.loaded, m.step = false, true, stepIdle
-	m.issues, m.more, m.missing = msg.issues, msg.more, msg.missing
-	m.checked = m.now()
+	var said tea.Cmd
+	if msg.first {
+		m.loading, m.loaded, m.step = false, true, stepIdle
+		m.issues, m.missing = msg.page.Items, msg.missing
+		m.checked = m.now()
+		said = m.saidMissing()
+	} else {
+		m.issues = append(m.issues, msg.page.Items...)
+	}
+	m.more = msg.page.HasMore()
 	m.place()
 	m.forget()
 	m.restore(under)
-	return m.saidMissing()
+	if !m.more {
+		return said
+	}
+	// Each page is a read of its own, under the generation the first one opened:
+	// withCancel released the context that read used the moment it answered, so
+	// the next page cannot reuse it, and a fresh one lets stop() cancel a walk
+	// still in flight the way it cancels any read. begin is not called for it,
+	// because begin marks the board loading and a board that has drawn its
+	// first page must not swap those cards for a spinner to fetch the next.
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
+	return tea.Batch(said, m.reply(moreCards(ctx, msg.page, msg.gen)))
+}
+
+// moreFailed keeps the board that is on screen. The pages that arrived are
+// real cards, and more stays true so the count keeps saying there are others.
+func (m *Model) moreFailed(msg moreFailedMsg) tea.Cmd {
+	if !m.current(msg.gen) {
+		return nil
+	}
+	return kernel.Warn("the rest of this board did not load, so the count is short: " + msg.err.Error())
 }
 
 // saidMissing reports the field the board estimates in when this site has no

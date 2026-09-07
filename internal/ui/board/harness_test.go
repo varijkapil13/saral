@@ -142,7 +142,7 @@ func stocked(t *testing.T, cfg jira.BoardConfig, issues []jira.Issue, w, h int) 
 	dr := newDriver(t, d, w, h)
 	dr.send(boardsMsg{gen: dr.m.gen, boards: []jira.Board{{ID: cfg.BoardID, Name: cfg.Name, Type: cfg.Type}}})
 	dr.send(configMsg{gen: dr.m.gen, cfg: cfg})
-	dr.send(issuesMsg{gen: dr.m.gen, issues: issues})
+	dr.send(firstPage(dr.m.gen, issues))
 	return d, dr
 }
 
@@ -151,6 +151,12 @@ func (d *driver) key(keys ...string) {
 	for _, k := range keys {
 		d.send(keyPress(k))
 	}
+}
+
+// firstPage is the answer to a read as the board receives it: one page, and
+// the first, so the board replaces what it holds rather than appending to it.
+func firstPage(gen int, issues []jira.Issue) issuesMsg {
+	return issuesMsg{gen: gen, first: true, page: jira.Page[jira.Issue]{Items: issues}}
 }
 
 func (d *driver) view() string { return ansi.Strip(d.m.View()) }

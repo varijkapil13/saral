@@ -267,7 +267,7 @@ func colouredFrame(t *testing.T, cfg jira.BoardConfig, issues []jira.Issue) stri
 	dr.send(kernel.SizeMsg{Width: 100, Height: 16})
 	dr.send(boardsMsg{gen: dr.m.gen, boards: []jira.Board{{ID: cfg.BoardID, Name: cfg.Name}}})
 	dr.send(configMsg{gen: dr.m.gen, cfg: cfg})
-	dr.send(issuesMsg{gen: dr.m.gen, issues: issues})
+	dr.send(firstPage(dr.m.gen, issues))
 	return dr.m.View()
 }
 

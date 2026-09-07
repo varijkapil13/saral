@@ -46,7 +46,7 @@ func marked(tb testing.TB, columns, cards, w, h int) *Model {
 	}
 	next, _ = m.Update(configMsg{gen: m.gen, cfg: cfg})
 	m, _ = next.(*Model)
-	next, _ = m.Update(issuesMsg{gen: m.gen, issues: manyCards(columns, cards)})
+	next, _ = m.Update(firstPage(m.gen, manyCards(columns, cards)))
 	m, _ = next.(*Model)
 	_ = m.View()
 	return m

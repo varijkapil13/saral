@@ -43,9 +43,20 @@ type configMsg struct {
 // issuesMsg carries the cards, and what this site had no field for.
 type issuesMsg struct {
 	gen     int
-	issues  []jira.Issue
-	more    bool
+	page    jira.Page[jira.Issue]
 	missing []string
+	// first is the page that answers the read; every page after it is appended
+	// to what the first drew, so a board longer than one page fills in behind
+	// an instant first paint rather than stopping at it.
+	first bool
+}
+
+// moreFailedMsg is a page past the first that did not arrive. The board keeps
+// what it has and says so: the cards on screen are real, and the count keeps
+// its plus so nothing claims they are all of them.
+type moreFailedMsg struct {
+	gen int
+	err error
 }
 
 // movesMsg carries the transitions available on one issue at the moment it was
@@ -119,7 +130,21 @@ func cards(ctx context.Context, reader jira.BoardReader, search *app.Search, p p
 		if err != nil {
 			return failedMsg{gen: gen, step: stepIssues, err: err}
 		}
-		return issuesMsg{gen: gen, issues: page.Items, more: page.HasMore(), missing: wanted.Missing}
+		return issuesMsg{gen: gen, page: page, missing: wanted.Missing, first: true}
+	}
+}
+
+// moreCards follows a page's own cursor to the next one. The board endpoint
+// answers a hundred at a time and this view used to stop there, so a board
+// with more than a hundred cards showed the first hundred for ever, and the
+// plus on the count was the only sign of the rest.
+func moreCards(ctx context.Context, page jira.Page[jira.Issue], gen int) tea.Cmd {
+	return func() tea.Msg {
+		next, err := page.Next(ctx)
+		if err != nil {
+			return moreFailedMsg{gen: gen, err: err}
+		}
+		return issuesMsg{gen: gen, page: next}
 	}
 }
 

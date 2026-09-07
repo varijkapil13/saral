@@ -1,6 +1,7 @@
 package board
 
 import (
+	"errors"
 	"regexp"
 	"slices"
 	"strconv"
@@ -302,9 +303,9 @@ func TestBoard_AnAnswerToAQuestionThatHasMovedOnIsDropped(t *testing.T) {
 	}, 100, 16)
 
 	stale := dr.m.gen - 1
-	dr.send(issuesMsg{gen: stale, issues: []jira.Issue{
+	dr.send(firstPage(stale, []jira.Issue{
 		{Key: "PROJ-9", Summary: "late", Status: jira.Status{ID: "10201"}},
-	}})
+	}))
 
 	if got := dr.column(0); !slices.Equal(got, []string{"PROJ-1"}) {
 		t.Errorf("the column holds %v; an answer to a question the board had moved on from was drawn", got)
@@ -768,4 +769,59 @@ func settle(t *testing.T, m kernel.Model, cmd tea.Cmd, depth int) kernel.Model {
 		return m
 	}
 	return settle(t, model, follow, depth+1)
+}
+
+// The board endpoint answers a hundred at a time, and this view used to stop
+// at the first page: a board with more cards than that showed the first
+// hundred for ever, and the plus on the count was the only sign of the rest.
+// The first page still paints on its own — nothing waits for the walk — and
+// the pages behind it fill in until the count can drop its plus.
+func TestBoard_ABoardLongerThanOnePageFillsInBehindItsFirstPaint(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(130)), 160, 40)
+
+	if dr.m.more {
+		t.Error("the walk ended with more still true, so the count keeps a plus it has not earned")
+	}
+	if got := len(dr.m.issues); got != 130 {
+		t.Fatalf("the board holds %d issues after the walk, want all 130", got)
+	}
+	if strings.Contains(dr.view(), "+ cards") {
+		t.Errorf("the count still carries a plus after every page arrived:\n%s", dr.view())
+	}
+	on := 0
+	for i := range dr.m.cols {
+		on += len(dr.m.cols[i])
+	}
+	if on+dr.m.unmapped != 130 {
+		t.Errorf("the columns hold %d and %d are in no column, which is not the 130 read", on, dr.m.unmapped)
+	}
+}
+
+// A later page that does not arrive is not a reason to take the board down.
+// The cards on screen are real; the count keeps its plus, so nothing claims
+// they are all of them; and the status line says why.
+func TestBoard_APageThatDoesNotArriveKeepsTheBoardAndItsPlus(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
+	before := len(dr.m.issues)
+	if before == 0 {
+		t.Fatal("the board holds nothing, so this test proves nothing")
+	}
+	dr.m.more = true
+
+	dr.send(moreFailedMsg{gen: dr.m.gen, err: errors.New("the site hung up")})
+
+	if got := len(dr.m.issues); got != before {
+		t.Errorf("a failed later page changed the cards on screen from %d to %d", before, got)
+	}
+	if !dr.m.more {
+		t.Error("a failed later page cleared more, so the count claims the cards on screen are all of them")
+	}
+	if dr.m.failure != nil {
+		t.Error("a failed later page took the whole board down into a failure screen")
+	}
+	if got := dr.lastStatus().Text; !strings.Contains(got, "rest of this board") {
+		t.Errorf("the status line said %q, want it to say the rest of the board did not load", got)
+	}
 }
