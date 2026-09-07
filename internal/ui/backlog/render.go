@@ -385,7 +385,11 @@ func (m *Model) headLine() string {
 		b.WriteString(m.styles.muted.Render(" (" + strconv.Itoa(m.boardAt+1) + " of " +
 			strconv.Itoa(len(m.boards)) + ")"))
 	}
-	b.WriteString(m.styles.muted.Render(" " + t.Glyphs.Separator + " " + count(len(m.sprints), "open sprint")))
+	sprints := count(len(m.sprints), "open sprint")
+	if m.noSprints != "" {
+		sprints = "no sprints on this board"
+	}
+	b.WriteString(m.styles.muted.Render(" " + t.Glyphs.Separator + " " + sprints))
 	shown := 0
 	for i := range m.groups {
 		shown += len(m.groups[i].issues)

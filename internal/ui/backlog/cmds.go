@@ -3,6 +3,7 @@ package backlog
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 
@@ -24,6 +25,10 @@ type loadedMsg struct {
 	field   jira.FieldRef
 	page    jira.Page[jira.Issue]
 	missing []string
+	// noSprints is the site's own sentence for a board that has none — a Kanban
+	// board answers the sprint read with a 400 — and "" for a board that has
+	// sprints, or none open. It is not a failure: the backlog is still read.
+	noSprints string
 }
 
 // pagedMsg carries the page after the one already in hand.
@@ -101,7 +106,7 @@ func read(ctx context.Context, s site, search *app.Search, project string, at, g
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
-		sprints, err := openSprints(ctx, s, boards[at].ID)
+		sprints, noSprints, err := openSprints(ctx, s, boards[at].ID)
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
@@ -109,7 +114,7 @@ func read(ctx context.Context, s site, search *app.Search, project string, at, g
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
-		out := loadedMsg{gen: gen, boards: boards, boardAt: at, config: config, sprints: sprints}
+		out := loadedMsg{gen: gen, boards: boards, boardAt: at, config: config, sprints: sprints, noSprints: noSprints}
 		field, err := jira.ResolveField(catalogue, sprintFieldName)
 		if err != nil {
 			return out
@@ -172,14 +177,29 @@ func moveInto(ctx context.Context, mgr jira.SprintManager, sprintID int64, keys 
 // first, then the future ones. The states are asked for and checked again, since
 // a board with years of history behind it is a walk nothing on this path should
 // be doing and an adapter that ignored the filter would hand back all of it.
-func openSprints(ctx context.Context, r jira.SprintReader, boardID int64) ([]jira.Sprint, error) {
+// openSprints reads the sprints a board can plan into. A board that has none
+// at all — a Kanban board — does not fail to answer; the site answers the read
+// with a 400 and its own sentence, "The board does not support sprints", and
+// that is reported as the second value rather than as an error, so the backlog
+// behind it is still read. Anything else the site says — a refusal, a rate
+// limit, a board that is not there, a transport failure — is still an error,
+// because each of those means the board could not be read, and this cannot.
+//
+// A 400 and not the board's type decides it: docs/API-NOTES.md says why nothing
+// here may branch on kanban or scrum, and a team-managed board reports neither.
+func openSprints(ctx context.Context, r jira.SprintReader, boardID int64) (sprints []jira.Sprint, noSprints string, err error) {
 	page, err := r.Sprints(ctx, boardID, jira.SprintActive, jira.SprintFuture)
+	var invalid *jira.ValidationError
+	if errors.As(err, &invalid) {
+		reason, _ := jira.Reason(err)
+		return nil, reason, nil
+	}
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	all, err := jira.Collect(ctx, page, sprintLimit)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	out := make([]jira.Sprint, 0, len(all))
 	for _, sp := range all {
@@ -190,7 +210,7 @@ func openSprints(ctx context.Context, r jira.SprintReader, boardID int64) ([]jir
 	slices.SortStableFunc(out, func(a, b jira.Sprint) int {
 		return stateOrder(a.State) - stateOrder(b.State)
 	})
-	return out, nil
+	return out, "", nil
 }
 
 func stateOrder(s jira.SprintState) int {

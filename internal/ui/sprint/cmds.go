@@ -2,6 +2,7 @@ package sprint
 
 import (
 	"context"
+	"errors"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -92,6 +93,15 @@ func load(ctx context.Context, r reader, project string, states []jira.SprintSta
 		out := make([]jira.Sprint, 0, len(boards)*8)
 		for i := range boards {
 			held, err := walkSprints(ctx, r, boards[i].ID, states, sprintCap)
+			// A board with no sprints — a Kanban board — answers this read with a
+			// 400 and its own sentence. That is the board answering, not refusing:
+			// it contributes nothing and the view goes on. Anything else the site
+			// says is still a refusal to read, and docs/API-NOTES.md says why the
+			// board's type is not what decides this.
+			var invalid *jira.ValidationError
+			if errors.As(err, &invalid) {
+				continue
+			}
 			if err != nil {
 				return failedMsg{gen: gen, op: opRead, err: err}
 			}

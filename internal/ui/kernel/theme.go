@@ -221,7 +221,7 @@ func (g Glyphs) TypeGlyph(it jira.IssueType) string {
 	case it.HierarchyLevel > 0:
 		return g.TypeEpic
 	}
-	switch defaultTypeAvatars[it.AvatarID] {
+	switch defaultTypeAvatars[it.Avatar()] {
 	case typeBug:
 		return g.TypeBug
 	case typeStory:

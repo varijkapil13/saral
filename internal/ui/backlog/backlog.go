@@ -134,11 +134,15 @@ type Model struct {
 	boardAt int
 	config  jira.BoardConfig
 	sprints []jira.Sprint
-	field   jira.FieldRef
-	issues  []jira.Issue
-	byKey   map[string]int
-	page    jira.Page[jira.Issue]
-	missing []string
+	// noSprints is the site's own sentence for a board that has none — a Kanban
+	// board — and "" otherwise. It is what the header says in place of a count,
+	// and what a move into a sprint is refused with.
+	noSprints string
+	field     jira.FieldRef
+	issues    []jira.Issue
+	byKey     map[string]int
+	page      jira.Page[jira.Issue]
+	missing   []string
 
 	groups []group
 	rows   []row
@@ -522,7 +526,7 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 	}
 	m.loading, m.loaded = false, true
 	m.boards, m.boardAt, m.config = msg.boards, msg.boardAt, msg.config
-	m.sprints, m.field = msg.sprints, msg.field
+	m.sprints, m.field, m.noSprints = msg.sprints, msg.field, msg.noSprints
 	m.issues, m.page, m.missing = msg.page.Items, msg.page, msg.missing
 	m.head = ""
 	switch {

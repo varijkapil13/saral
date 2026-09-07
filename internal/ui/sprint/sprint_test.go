@@ -642,3 +642,35 @@ func TestSprints_ADateThatIsNotOneSaysWhatShapeItShouldBe(t *testing.T) {
 	}
 	mustContain(t, dr.view(), dateShape)
 }
+
+// A Kanban board answers the sprint read with a 400. The view used to draw that
+// as the site refusing, over a board it could not name; it is a board with no
+// sprints, named, and not a refusal.
+func TestSprints_ABoardWithoutSprintsIsNotARefusal(t *testing.T) {
+	t.Parallel()
+	f := jiratest.New(jiratest.WithProject("PROJ", jiratest.Kanban), jiratest.WithIssues(jiratest.Gen(4)))
+	dr := newDriver(t, testDeps(f), 100, 16)
+	if dr.m.failure != nil {
+		t.Fatalf("a Kanban board was drawn as a refusal: %v", dr.m.failure)
+	}
+	if len(dr.m.sprints) != 0 {
+		t.Errorf("a Kanban board came back with %d sprints", len(dr.m.sprints))
+	}
+	mustContain(t, dr.view(), "PROJ board")
+	mustNotContain(t, dr.view(), "refused", "no board")
+}
+
+// A project with a Scrum board and a Kanban one reads both. The Kanban board's
+// 400 contributes nothing and must not poison the Scrum board's sprints — the
+// read used to fail whole on the first board that answered that way.
+func TestSprints_AKanbanBoardBesideAScrumOneDoesNotPoisonTheRead(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(newFake(jiratest.WithProject("PROJ", jiratest.Kanban))), 100, 16)
+	if dr.m.failure != nil {
+		t.Fatalf("a Kanban board beside a Scrum one failed the read: %v", dr.m.failure)
+	}
+	if len(dr.m.sprints) == 0 {
+		t.Error("the Scrum board's sprints were lost to the Kanban board's 400")
+	}
+	mustNotContain(t, dr.view(), "refused")
+}

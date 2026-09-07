@@ -239,12 +239,34 @@ type IssueType struct {
 	// HierarchyLevel is the site's own ladder: below zero a subtask, zero a
 	// standard type, one an epic, higher an initiative or above.
 	HierarchyLevel int
-	// AvatarID is the id in IconURL's path. A built-in type keeps its default
-	// avatar on every site, which is the only thing that tells a bug from a
-	// story once the level says both are standard; a type given its own image
-	// carries an id nothing recognises, and resolves to nothing rather than to
-	// a wrong shape.
+	// AvatarID is the id in IconURL's path, filled by an adapter that read the
+	// type off the wire. Read Avatar rather than this: a copy that went through
+	// the cache before the field existed carries the URL and not the id.
 	AvatarID string
+}
+
+// Avatar is the id of the type's avatar. A built-in type keeps its default
+// avatar on every site, which is the only thing that tells a bug from a story
+// once the level says both are standard; a type given its own image carries an
+// id nothing recognises, and resolves to nothing rather than to a wrong shape.
+//
+// It is read off IconURL when AvatarID is empty, because an issue that came
+// back from the cache was stored before AvatarID existed and still has the URL.
+// Cloud spells it .../universal_avatar/view/type/issuetype/avatar/<id>?size=…;
+// a URL of any other shape — a legacy /images/icons/... path — answers "".
+func (it IssueType) Avatar() string {
+	if it.AvatarID != "" {
+		return it.AvatarID
+	}
+	_, rest, ok := strings.Cut(it.IconURL, "/avatar/")
+	if !ok {
+		return ""
+	}
+	end := 0
+	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+		end++
+	}
+	return rest[:end]
 }
 
 // Priority is an issue priority.

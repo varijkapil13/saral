@@ -933,14 +933,4 @@ func TestIssueType_CarriesTheLevelAndTheAvatarID(t *testing.T) {
 	if got.HierarchyLevel != 0 || got.AvatarID != "10318" || got.Name != "Aufgabe" {
 		t.Errorf("domain() = %+v, want level 0, avatar 10318, name kept", got)
 	}
-	for url, want := range map[string]string{
-		"https://x.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10303?size=medium": "10303",
-		"https://x.atlassian.net/images/icons/issuetypes/bug.png":                                          "",
-		"":                                "",
-		"https://x.atlassian.net/avatar/": "",
-	} {
-		if got := avatarIDOf(url); got != want {
-			t.Errorf("avatarIDOf(%q) = %q, want %q", url, got, want)
-		}
-	}
 }

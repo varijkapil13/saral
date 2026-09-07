@@ -543,6 +543,8 @@ func TestGlyphs_TypeGlyphResolvesFromHierarchyAndDefaultAvatarNeverFromTheName(t
 			{"a bug by its default avatar", jira.IssueType{Name: "Fehler", AvatarID: "10303"}, tier.TypeBug},
 			{"a story by its default avatar", jira.IssueType{Name: "Historia", AvatarID: "10315"}, tier.TypeStory},
 			{"a task by its default avatar", jira.IssueType{Name: "Aufgabe", AvatarID: "10318"}, tier.TypeTask},
+			{"a bug that came back from the cache, URL and no id", jira.IssueType{Name: "Fehler",
+				IconURL: "https://x.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10303?size=medium"}, tier.TypeBug},
 			{"a standard type with its own image", jira.IssueType{Name: "Bug", AvatarID: "10999"}, tier.TypeOther},
 			{"a standard type with no avatar at all", jira.IssueType{Name: "Story"}, tier.TypeOther},
 		}

@@ -1005,8 +1005,15 @@ func (f *Fake) Sprints(ctx context.Context, boardID int64, states ...jira.Sprint
 		if err := fakeBoardIDCheck(boardID); err != nil {
 			return nil, 0, false, err
 		}
-		if _, ok := f.boards[boardID]; !ok {
+		board, ok := f.boards[boardID]
+		if !ok {
 			return nil, 0, false, fakeNotFound("board", strconv.FormatInt(boardID, 10))
+		}
+		// A real site answers a Kanban board's sprint read with a 400 and this
+		// sentence, observed live; it used to answer an empty page here, which
+		// let a backlog that fails on every Kanban board pass against the fake.
+		if board.Type == jira.BoardKanban {
+			return nil, 0, false, &jira.ValidationError{Messages: []string{"The board does not support sprints"}}
 		}
 		all := fakeInStates(f.fakeSprintsOn(boardID), states)
 		start := min(startAt, len(all))

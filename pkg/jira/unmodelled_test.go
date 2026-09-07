@@ -128,3 +128,26 @@ func TestFieldValueNamesLeavesTheBytesAlone(t *testing.T) {
 		t.Errorf("reading the value changed it:\n got %s\nwant %s", v.Text, sprintValue)
 	}
 }
+
+// A type read back from the cache was stored before AvatarID existed, so it
+// carries the icon URL and an empty id; Avatar reads the id off the URL so the
+// copy resolves the same shape the fresh read does. A URL of another shape
+// answers nothing rather than a wrong id.
+func TestIssueTypeAvatar(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		it   jira.IssueType
+		want string
+	}{
+		{"the id an adapter filled wins", jira.IssueType{AvatarID: "10303", IconURL: "…/avatar/10318?size=medium"}, "10303"},
+		{"a cached copy resolves off its URL", jira.IssueType{IconURL: "https://x.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10303?size=medium"}, "10303"},
+		{"a legacy icon path is no id", jira.IssueType{IconURL: "https://x.atlassian.net/images/icons/issuetypes/bug.png"}, ""},
+		{"nothing is nothing", jira.IssueType{}, ""},
+		{"a bare avatar path with no digits", jira.IssueType{IconURL: "https://x.atlassian.net/avatar/"}, ""},
+	} {
+		if got := tc.it.Avatar(); got != tc.want {
+			t.Errorf("%s: Avatar() = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
