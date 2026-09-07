@@ -159,6 +159,56 @@ backlog that fits in one page, which is most of them. `pkg/jira/jiratest/fake.go
 and `duedate`, both real JQL fields the fake had never been asked for before this packet's own tests
 needed them.
 
+## Remembering the view and the filters
+
+A session lands back where it was left: the root view it last had open, and — for `list`, `board`,
+`backlog` and `timeline` alike — the terms that were narrowing it. `board` also remembers which of a
+board's quick filters were toggled on. None of this is the pane split or the sort order: those already
+live in `config.UIState` under the cache directory because they are how *this machine* likes to look at
+things, and a pane width copied to another laptop should not carry another machine's proportions. A
+filter is a different kind of fact — `assignee = "5f2a…"` names an account only *this site* and this
+token's own visibility make sense of — so it is kept by `config.ProfileScope{Site, Account}`, the same
+pair `cmd/saral/main.go`'s `openCache` scopes the on-disk cache by, and one profile's kept state never
+answers for another's, not even a second account on the same site.
+
+**`kernel.Deps.Memory`** is the seam: a small `Recall(view, key string) (string, bool)` /
+`Keep(view, key, value string)` / `Forget()` interface, nil-safe throughout, because a session with
+nowhere to write — no profile yet — remembers nothing and says nothing about it. The kernel package
+cannot import `internal/ui/filter` (`docs/ARCHITECTURE.md`'s layering), so everything kept through it
+is opaque text a view encodes and decodes for itself: `filter.Terms.Encode()` writes a small JSON
+array, each facet spelled by `stableName()` rather than its own `iota` — a number a later build
+reordered would otherwise be read back as the wrong facet entirely — and `filter.DecodeTerms` drops
+anything it does not recognise (an older or newer build's word, hand-edited text) rather than reading
+it as `FacetNone`. `internal/config` gains `RememberedState` / `RememberState` / `ForgetRemembered`
+alongside `Split`/`SaveSplit` and `Sort`/`SaveSort`, and `cmd/saral`'s `profileMemory` is the only
+thing that implements `kernel.Memory`, because it is the only layer that knows both the site and the
+account.
+
+Each of the four views recalls its own terms in its constructor, before it reads the cache — the
+cached rows a project's last board or search left on disk are keyed by that exact narrowed query (for
+`list`, the JQL; for `board`, `backlog` and `timeline`, whatever they already held), so the remembered
+filter and the first frame agree from the start rather than painting unfiltered and then narrowing a
+frame later. Every gesture that changes the terms — the picker, a click on a chip, `ctrl+g` — keeps
+the new value in the same call, so nothing is a step behind what is on screen.
+
+`board`, `backlog` and `timeline` never send a term to the site — `terms.go`'s own doc on each already
+explains why — so a remembered id the site has since stopped knowing about is simply a term that
+matches nothing, the same as one chosen fresh. `list` does send its terms, as a JQL clause, and a
+remembered id can be one the site refuses outright: a status deleted since, an account that left the
+project. That refusal is checked once — on the very first answer after a recalled filter is put in
+force, success or failure alike — and only a `*jira.ValidationError` is read as a verdict on the ids
+themselves; a rate limit or a dropped connection is an ordinary failure and leaves the remembered
+filter standing for the next retry. A verdict drops the terms, forgets them so the next session does
+not walk into the same refusal, and falls back to the view's own default search, saying so on the
+status line.
+
+**Forgetting it.** `session.memory`, a `KindAction` setting beside `session.profile` on the Settings
+screen, calls `Memory.Forget()` and clears everything this profile has ever kept — the remembered root
+view and every view's own terms — in one write. It lives in `internal/ui/kernel` rather than in a
+view package because `Memory` itself does: the interface, the `Deps` field and the kernel's own use of
+it (remembering which root view it opens) are one small file, and a setting that undoes all of it
+belongs beside them rather than guessed at from a single view's `terms.go`.
+
 ## Consumers
 
 | Changed | Who must adopt it |
@@ -170,6 +220,9 @@ needed them.
 | `s` moves to `S` in `list` | `list/keys.go`, its key golden, `docs/UX.md`, the palette's own command id |
 | `s` sorts in `list` and `backlog` | each view's own `keys.go`, `sort.go` and key golden; `internal/ui`'s footer, `?` overlay, right-click menu and `keyOwners` sweep; `internal/ui/palette`'s session golden |
 | `config.UIState` gains `Sorts` | `internal/config/uistate.go` and its tests only — every reader goes through `Sort`/`SaveSort`, never the map |
+| `kernel.Deps` gains `Memory` | `cmd/saral` (`profileMemory`, wired alongside `openCache`); `list`, `board`, `backlog`, `timeline` (`recallTerms`/`rememberTerms` in each `terms.go`); `board`'s `quickfilter.go` besides |
+| `filter.Terms` gains `Encode`/`DecodeTerms` | every one of the above; nothing else composes `filter.Term` from stored text |
+| `kernel.startView` prefers the recalled root | `kernel.New`, `open`, `openWhenNothingCould` — every place a root is put on the stack now also remembers it |
 
 **"`s` moves to `S`" turned out to be two views' worth of key-golden fallout, not one.** `list`'s own
 `keys.golden`, `bindPrompt`/`query_test.go`'s bind gesture, `poll_test.go`'s "a number key being

@@ -202,6 +202,7 @@ type headKey struct {
 	sprints     int
 	more        bool
 	loading     bool
+	stale       bool
 	sortField   string
 	sortDesc    bool
 }
@@ -417,9 +418,18 @@ func (m *Model) headLine() string {
 		b.WriteString(m.styles.muted.Render(" " + t.Glyphs.Separator + " "))
 		b.WriteString(m.zones.Mark(sortZone, m.styles.accent.Render(m.sort.label(t.Glyphs))))
 	}
+	if m.stale {
+		b.WriteString(" ")
+		b.WriteString(t.StaleBadge.Render(staleLabel))
+	}
 	m.head = m.fit(b.String())
 	return m.head
 }
+
+// staleLabel is a word and not a glyph, the way list.staleLabel is: the glyph
+// beside the count already means a read is in flight, which is the opposite
+// state.
+const staleLabel = "stale"
 
 func (m *Model) headKey() headKey {
 	shown := 0
@@ -429,7 +439,7 @@ func (m *Model) headKey() headKey {
 	return headKey{
 		board: m.board().Name, boards: len(m.boards), width: m.width, gen: m.styles.gen,
 		issues: len(m.issues), shown: shown, filteredOut: m.filteredOut, sprints: len(m.sprints),
-		more: m.page.HasMore(), loading: m.loading,
+		more: m.page.HasMore(), loading: m.loading, stale: m.stale,
 		sortField: m.sort.field, sortDesc: m.sort.desc,
 	}
 }

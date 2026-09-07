@@ -233,6 +233,7 @@ func build(opt options) (deps kernel.Deps, kopts []kernel.Option, notice string,
 		if notice == "" {
 			notice = cacheNote
 		}
+		deps.Memory = newMemory(profile.Site, profile.Email)
 	}
 
 	list.SetPollInterval(opt.poll)

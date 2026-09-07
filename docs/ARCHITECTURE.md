@@ -622,26 +622,47 @@ Stale-while-revalidate, as it actually runs:
    failure over the top of it — is badged with `Theme.StaleBadge` rather than cleared. Seeing
    yesterday's rows beats seeing none.
 
-TTLs by kind, from `Kind.TTL()`: fields and createmeta 24h, board config and the capability probe 1h,
-versions 10m, issue 60s, search 30s. All refreshable on demand; `R` also drops the stored answer
-rather than only refetching. The probe's hour is a judgement about cost rather than about change: a
-permission scheme moves about as often as a field catalogue does, but being wrong about it offers a
-view that 403s or hides one that would have worked, which a stale field catalogue does not.
+`internal/ui/list`, `internal/ui/timeline`, `internal/ui/board` and `internal/ui/backlog` all follow
+this in full, including step 2's skip of the site entirely while a snapshot is still fresh.
+`internal/ui/issue` follows steps 1 and 4 only: a cached issue is too cheap a read, and too easy to
+have gone stale from a write made in the detail pane itself, for skipping the fetch to be worth the
+next keystroke landing on data nobody re-checked — so it always asks again once it is on screen, and
+what the cache buys it is the frame before that answer, not a skipped round trip.
 
-`app.CapsCache` is a second, smaller interface over the same file rather than two more methods on
-`Cache`, because it is optional in both directions: a session with nowhere to keep one draws from the
-probe alone, and a `Cache` that is only a map of rows stays a `Cache`. The kernel asks for it with a
-type assertion and works without it.
+TTLs by kind, from `Kind.TTL()`: fields and createmeta 24h, board config and the capability probe 1h,
+versions 10m, board and backlog 30s (a board or a backlog is a search in a column layout, and the
+cards move at a search's pace, not the configuration's), issue 60s, search 30s. All refreshable on
+demand; `R` also drops the stored answer rather than only refetching. The probe's hour is a judgement
+about cost rather than about change: a permission scheme moves about as often as a field catalogue
+does, but being wrong about it offers a view that 403s or hides one that would have worked, which a
+stale field catalogue does not.
+
+`app.CapsCache`, `app.BoardCache`, `app.BacklogCache` and `app.IssueCache` are each a second, smaller
+interface over the same file rather than more methods on `Cache`, because each is optional in both
+directions: a session with nowhere to keep one draws from a live read alone, and a `Cache` that is
+only a map of rows stays a `Cache`. A view asks for the one it needs with a type assertion and works
+without it, the way the kernel already does for `CapsCache`.
+
+A board's and a backlog's own snapshot hold their column configuration (or their sprints), their own
+quick filters, and only the *keys* of the cards or issues that landed in them — the values live once
+in the shared issue bucket below, the same as a search's rows do, so a board read and a list read of
+the same issue never disagree about what it is. Each also remembers, per project, which board it was
+last drawing (`BoardCache.LastBoard` / `BacklogCache.LastBacklogBoard`, kept apart because the two
+views flip through a project's boards independently) — the one thing a snapshot keyed by board id
+cannot answer on its own, and the one a session needs before `Boards` has said which boards a project
+has at all.
 The cache is keyed by site + account through `store.Scope`, so profiles cannot bleed into each other.
 The account is the profile's email: the Jira account ID takes a round trip to learn, and the first
 frame is drawn before one could have answered.
 
-Issues are stored once each, keyed by issue key, and a search stores the keys it matched and their
-order. That is what makes two things work. A refresh merges into the copy already held rather than
-replacing it, so a narrow read cannot blank a field it never asked for — `app.MergeIssue` over
-`Issue.Requested`, which is what that mask exists for. And the issue bucket is one corpus rather than
-one per search, bounded to `app.DefaultIssueBound` (5,000) by dropping what was stored longest ago, so
-a long session cannot grow the file without limit.
+Issues are stored once each, keyed by issue key, and a search, a board or a backlog stores the keys it
+matched and their order. That is what makes two things work. A refresh merges into the copy already
+held rather than replacing it, so a narrow read cannot blank a field it never asked for —
+`app.MergeIssue` over `Issue.Requested`, which is what that mask exists for; `PutBoard` and
+`PutBacklog` merge into it exactly as `PutRows` does, and `IssueCache.PutIssue` is the same merge for
+the one issue the detail pane read. And the issue bucket is one corpus rather than one per search,
+bounded to `app.DefaultIssueBound` (5,000) by dropping what was stored longest ago, so a long session
+cannot grow the file without limit.
 
 `Cache.Generation()` counts every write. Anything holding a derived copy of the cache — the local
 fuzzy index in P3.4 — compares one number to find out that its copy is behind, rather than walking the

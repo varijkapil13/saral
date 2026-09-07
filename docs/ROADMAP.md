@@ -1540,6 +1540,102 @@ read: there is no public API for them, only an internal route that nothing here 
   the site no longer has is dropped from the drawing and kept in the file, so a profile that has seen
   two sites does not lose its list.
 
+## Cache-first paint · the gap docs/UX.md principle 1 promised and three views did not keep
+
+The owner: *"why are tickets not cached anymore, why is everything loaded when a user switches
+view?"* `internal/ui/list` and `internal/ui/timeline` already drew their first frame from disk and
+revalidated behind it; `internal/ui/board`, `internal/ui/backlog` and `internal/ui/issue` built a
+fresh view model on every open and asked the site all three of a board's reads, a backlog's, and an
+issue's, every single time — spinner and all.
+
+- [x] **CF.1 — Board, backlog and issue read the cache before the site** · **owns**
+  `internal/app/cache.go` and its tests, `internal/ui/board/**`, `internal/ui/backlog/**`,
+  `internal/ui/issue/{issue.go,cache_test.go}`, `docs/{ARCHITECTURE,ROADMAP}.md`
+  **Two new snapshot kinds, not one per field.** `app.BoardCache` and `app.BacklogCache` each hold one
+  blob per board id — the column configuration (or the sprints), the board's own quick filters, and
+  only the *keys* of the cards or issues that landed in them, the way a search's own `wireSearch`
+  already does; the values live once in the shared issue bucket, `PutBoard`/`PutBacklog` merging into
+  it through the same `mergeIssues` a search's `PutRows` calls, so a board read and a list read of the
+  same issue never disagree about it. Both are additive interfaces beside `app.Cache`, on the pattern
+  `app.CapsCache` already set and `kernel.restoreCaps` already reaches through a type assertion — a
+  view asks for the one it needs and a `Cache` that is only rows and issues stays a `Cache`.
+  `app.IssueCache` is a third, narrower still: one issue by key, no TTL of its own, because the detail
+  pane always re-asks the site the moment it is on screen and a skip-if-fresh rule for it would be one
+  keystroke away from stale data nobody re-checked.
+  **The board and the backlog also remember which board they were drawing**, per project and kept
+  apart between the two views (`LastBoard` / `LastBacklogBoard`): the one thing a snapshot keyed by
+  board id cannot answer before `Boards` has said which boards a project even has. A revalidating load
+  resolves back to that same board rather than resetting to whichever one the site lists first —
+  `resolveBoardIndex` in the board view, a `wantID` threaded through the backlog's own `read` — which
+  matters because cycling boards, a project switch and `Init`'s own revalidation all reuse one `load`.
+  **Storing happens per page, not once a walk finishes**, so a board or a backlog cut short by closing
+  the program mid-page still has something to draw next time. A purging refresh drops the stored
+  snapshot the way it already dropped a search's rows (`ForgetBoard`/`ForgetBacklog`); a plain one
+  revalidates, and — new to this packet — a failed revalidation now badges what is already on screen
+  stale instead of taking the whole board or backlog down into a refusal screen, which is the gap that
+  would have made a badge this same packet introduces meaningless the first time the site hiccuped.
+  **The issue pane never skips its fetch — it always re-asks — but it stops showing a spinner over
+  data it already has.** A seed that was not read wide (no seed at all, or the handful of fields a
+  list row, a card or the palette's own hit carries) is enriched from `IssueCache.Issue` through
+  `app.MergeIssue`, the same merge a search's rows get, and `loadedIssue` is deliberately never set by
+  it: `fields.go`'s `read` uses that flag to tell "known empty" from "not asked for", and flipping it
+  on a copy that might still be narrow would draw a field this cache never held as confidently blank.
+  A landed fetch always replaces the merged copy outright and calls `IssueCache.PutIssue`, so the next
+  open of the same issue — even one this session's list never revisited — draws it immediately.
+  **Left for later, not done here**: `internal/ui/sprint` and `internal/ui/release` still build fresh
+  on every open. `Kind.KindVersions` has carried a TTL since Batch 0 with nothing writing to it, which
+  is the same gap one batch earlier; extending the pattern there is a follow-up rather than bundled
+  into a PR already touching three views and the cache's own interface surface. No new `TestBudget_*`
+  guard was added for a board's, a backlog's or an issue's own cache read at first paint —
+  `internal/ui/list` has one (`TestBudget_FirstPaintFromCache`) and these three do not yet, though
+  every existing guard in all three packages stayed green throughout.
+
+- [x] **M1 — Remember the last view and the filters in force** · **owns**
+  `internal/config/uistate.go` and its tests, `internal/ui/kernel/{view.go,kernel.go,memory.go,memory_test.go}`,
+  `internal/ui/filter/term.go` and its tests, `internal/ui/{list,board,backlog,timeline}/terms.go`
+  and each's `memory_test.go`, `internal/ui/board/quickfilter.go`, `internal/ui/list/{list.go,sort.go}`,
+  `internal/ui/board/board.go`, `internal/ui/backlog/backlog.go`, `internal/ui/timeline/timeline.go`,
+  `cmd/saral/{main.go,memory.go,memory_test.go}`, `docs/{FILTERS,SETTINGS,UX,ROADMAP}.md`
+  **`kernel.Deps.Memory` is the one new seam**, a `Recall`/`Keep`/`Forget` interface over opaque text —
+  the kernel cannot import `internal/ui/filter` to make sense of a term, so a view encodes and decodes
+  its own. The concrete implementation lives in `cmd/saral` rather than in `internal/config` or
+  `internal/ui/kernel`, because it is the only layer holding both the site and the account: filters
+  name people, statuses and issue types by ids one site mints, so what is remembered is kept by
+  `config.ProfileScope{Site, Account}` — the exact pair `openCache` already scopes the on-disk cache
+  by — and not by `internal/config.UIState`'s existing `Splits`/`Sorts`, which are deliberately
+  per-machine rather than per-profile.
+  **The kernel remembers every root it opens** (`New`, `open`, `openWhenNothingCould` — all three
+  places `m.stack`'s entry zero is ever built) **and only a root**: `startView` recalls one only when
+  no `WithInitialView` was named, and only if it is still registered, still a root (`Slot > 0`, never
+  a view reachable only by being pushed, such as the filter picker itself) and still available under
+  the session's own capabilities — an unregistered id, a gated one and a push-only one all fall back
+  to exactly what a fresh install already opened on.
+  **`filter.Terms` gains `Encode`/`DecodeTerms`**, a small JSON array with each facet spelled by a
+  `stableName()` rather than its own `iota` — a reordered or inserted `Facet` would otherwise read an
+  old build's number back as the wrong one entirely — and a term naming a facet this build does not
+  recognise is dropped rather than read as `FacetNone`, the same "no choice a gesture could have
+  produced" tolerance `UIState.Split`/`.Sort` already give a value nothing here would write.
+  **Every view that holds terms recalls them in its constructor, before it reads the cache** — the
+  cached rows or cards a project's last search or board left on disk are keyed by that exact query
+  (for `list`, the JQL itself), so the remembered filter and the first frame agree from the start.
+  `board`, `backlog` and `timeline` narrow locally and so tolerate a stale id doing nothing; `board`
+  additionally remembers which of a board's own quick filters were toggled on, reapplying them once
+  the live list is known and re-reading the cards under them since the very first read already ran
+  without them. `list` sends its terms as JQL and can be refused outright, so a `*jira.ValidationError`
+  answering the very first request after a recalled filter is put in force — success or failure,
+  checked once — drops the terms, forgets them, and falls back to the view's own default search; a
+  rate limit or a transport failure is an ordinary failure and leaves the filter standing.
+  **`session.memory`**, a `KindAction` setting beside `session.profile`, calls `Memory.Forget()` and
+  clears everything a profile has ever kept in one write — registered in `internal/ui/kernel` rather
+  than in `internal/ui/settings`, because `Memory` itself is a kernel-owned file and a setting that
+  undoes all of it belongs beside it rather than reconstructed from one view's own `terms.go`.
+  **What this did not touch**: the pane split and the sort order stay exactly where `docs/FILTERS.md`
+  already put them, per-machine in `ui.toml` — a filter is the only kind of state here that names
+  something a site minted, which is why it alone needed a profile scope. `sprint`, `release` and
+  `plan` hold no `filter.Terms` and remember nothing; extending this to a fifth view that gains one is
+  the same two calls (`recallTerms` in its constructor, `rememberTerms` wherever it sets `m.terms`)
+  this packet's four already show.
+
 ## Later, deliberately not now
 
 - **Confluence.** Arrives as `pkg/confluence` behind its own port. Note that Confluence storage

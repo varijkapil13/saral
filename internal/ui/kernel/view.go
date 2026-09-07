@@ -145,6 +145,10 @@ type Deps struct {
 	// no profile yet — leaves it nil, and the kernel says so rather than
 	// pretending the binding survived.
 	SaveQueries func(app.SavedQueries) error
+	// Memory is what this profile remembers between runs: the root view it last
+	// opened, and whatever a view kept for itself. A session with nowhere to
+	// write it — no profile yet — leaves it nil, and Recall/Keep cope.
+	Memory Memory
 }
 
 // KeySet is a view's keys, scoped to itself.

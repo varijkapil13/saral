@@ -203,6 +203,7 @@ func (m *Model) applySortChoice(next sortChoice) tea.Cmd {
 	terms := m.terms
 	cmd := m.setQuery(m.jql, m.title, m.defaulted)
 	m.terms, m.termsGen = terms, m.termsGen+1
+	m.rememberTerms()
 	return tea.Batch(cmd, m.keepSort())
 }
 

@@ -204,6 +204,9 @@ func New(d kernel.Deps) kernel.View {
 	m.inChart, m.inNotes = defaultKeys().tables()
 	m.cfgStart, m.cfgEnd = configuredFields(d.Site)
 	m.jql, m.title = defaultQuery(d.Project)
+	if terms, ok := m.recallTerms(); ok {
+		m.terms = terms
+	}
 	m.relayout()
 	m.fromCache()
 	return m

@@ -226,6 +226,9 @@ you could enter from an issue and not get out of. The kernel builds it through t
     Set up a profile again                                               →
       re-runs the questions onboarding asks
 
+    Forget the remembered view and filters                                →
+      the view this profile opens on next time, and every view's kept filters
+
 ────────────────────────────────────────────────────────────────────────────
  Settings  up/down choose  ←/→ pick  enter open  esc back      ? ctrl+k q
 ```
@@ -305,6 +308,18 @@ is all of it.
 catalogue (`docs/FIELDS.md` says why `filter.Model`'s was not the one reused). `enter` toggles a field
 in or out of the working list without closing the picker; `esc` writes it to the profile in one save,
 in the order things were pinned.
+
+| State | Setting | Where it is kept |
+|---|---|---|
+| `kernel.Deps.Memory`: the root view a session last opened, and the filters `list`, `board`, `backlog` and `timeline` keep for themselves | `session.memory`, a `KindAction` beside `Set up a profile again`: forgets everything at once | the cache directory's `ui.toml`, scoped by site and account — see `docs/FILTERS.md` |
+
+`session.memory` is registered in `internal/ui/kernel` rather than in this package, because
+`kernel.Memory` — the interface, the `Deps` field, and the kernel's own use of it to remember which
+root view it opens — is one small file there, and a setting that clears all of it belongs beside that
+file rather than reconstructed from what one view's `terms.go` happens to keep. `Run` calls
+`Deps.Memory.Forget()` and says so in the status line; a session with no memory to write to (no
+profile yet) is told there is nowhere for it to have kept anything, the same "remembers nothing and
+says nothing" tolerance `LoadUIState` already gives a first run.
 
 ### Stays a command *and* appears as a setting
 
@@ -398,6 +413,7 @@ The changed things and every consumer of each, by name.
 | `kernel.Commands()` order | `palette.buildRows` and its golden files; `internal/ui/menu_test.go`; `kernel/palette_test.go` |
 | `kernel.GlobalKeys` gains `Settings` | `kernel/keys.go` `KeySet()`, the `?` overlay, `internal/ui/keys_test.go`, `internal/ui/footer_test.go` |
 | `registerThemeCommands` / `registerSchemeCommands` deleted | `kernel/theme_test.go`, `kernel/scheme_test.go`, `internal/ui/menu_test.go`, any golden file naming a `theme.*` or `scheme.*` row |
+| `session.memory` setting added | `internal/ui/kernel/memory.go` and its own test only — see `docs/FILTERS.md` for `kernel.Deps.Memory`, which is what it forgets |
 
 Grep for each new symbol and expect a hit per consumer, not just at the definition and its own test.
 

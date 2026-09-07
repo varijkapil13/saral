@@ -54,6 +54,7 @@ type held struct {
 type Model struct {
 	deps   kernel.Deps
 	search *app.Search
+	cache  app.Cache
 	styles *styles
 	cards  *cardCache
 	rows   *lineCache
@@ -68,6 +69,15 @@ type Model struct {
 
 	plan  plan
 	ready bool
+	// rawConfig is the configuration plan was built from, kept only so that a
+	// snapshot written to disk can carry it: nothing in this file reads it back
+	// once plan exists.
+	rawConfig jira.BoardConfig
+	// boardIDHint is a board id this view already believes it is drawing, from a
+	// stored snapshot or a project switch, before the site has said which boards
+	// this project has. tookBoards resolves it into an index and clears it, so
+	// a revalidating load lands on the same board rather than always the first.
+	boardIDHint int64
 
 	// quickFilters is the board's own, read alongside the cards; a board with
 	// none, or a read that failed, both leave it empty rather than blocking the
@@ -125,6 +135,9 @@ type Model struct {
 	failStep step
 	missing  []string
 	checked  time.Time
+	// stale marks the board on screen as older than it should be: it came off
+	// disk past its TTL, or a revalidation that would have replaced it failed.
+	stale bool
 
 	gen      int
 	cancel   context.CancelFunc
@@ -150,7 +163,7 @@ func (m *Model) WantsRawKeys() bool { return m.pendingFilter }
 // columns a board has is an answer, and the frame before that answer says which
 // question is outstanding rather than a spinner.
 func New(d kernel.Deps) kernel.View {
-	m := &Model{deps: d, addr: kernel.NewAddr()}
+	m := &Model{deps: d, addr: kernel.NewAddr(), cache: d.Cache}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
@@ -164,7 +177,63 @@ func New(d kernel.Deps) kernel.View {
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
+	if terms, ok := m.recallTerms(); ok {
+		m.terms = terms
+	}
+	m.fromCache()
 	return m
+}
+
+// boardCache is the cache's optional board-shaped half, absent whenever the
+// session has nowhere to keep one or the cache in force is only rows and
+// issues — the same additive-interface pattern kernel.restoreCaps uses for
+// app.CapsCache.
+func (m *Model) boardCache() (app.BoardCache, bool) {
+	held, ok := m.cache.(app.BoardCache)
+	return held, ok && held != nil
+}
+
+// fromCache draws the board this project was last showing, before anything is
+// asked of the site (docs/UX.md principle 1). Which boards a project has is
+// itself an answer nobody has yet, so the one board a snapshot names stands in
+// for the whole list until Boards replaces it.
+//
+// It runs here rather than in Init because this is where a first paint
+// happens: kernel.FirstPaint builds the view and renders one frame without
+// ever calling Init, which is the thing docs/PERFORMANCE.md budgets.
+func (m *Model) fromCache() {
+	held, ok := m.boardCache()
+	if !ok {
+		return
+	}
+	boardID, ok := held.LastBoard(m.deps.Project)
+	if !ok {
+		return
+	}
+	snap, ok := held.Board(boardID)
+	if !ok {
+		return
+	}
+	m.applyBoardSnapshot(snap)
+	m.all = []jira.Board{{ID: boardID, Name: snap.Config.Name, Type: snap.Config.Type}}
+	m.at = 0
+	m.boardIDHint = boardID
+}
+
+// applyBoardSnapshot puts a stored board's shape and cards in force, without
+// touching which boards this project has or which of them is selected: New and
+// a project switch know only the one board a snapshot names, while nextBoard
+// already holds the site's own list and must not collapse it down to one.
+func (m *Model) applyBoardSnapshot(snap app.BoardSnapshot) {
+	m.rawConfig = snap.Config
+	m.plan, m.ready = newPlan(snap.Config), true
+	m.quickFilters = snap.QuickFilters
+	m.qfOn = make(map[int64]bool, len(snap.QuickFilters))
+	m.applyRecalledQuickFilters()
+	m.issues = snap.Issues
+	m.more = snap.More
+	m.loaded, m.stale, m.checked = true, snap.Stale, snap.StoredAt
+	m.place()
 }
 
 // Addr is where the kernel delivers the boards, the configuration, the cards and
@@ -173,8 +242,15 @@ func New(d kernel.Deps) kernel.View {
 func (m *Model) Addr() kernel.Addr { return m.addr }
 
 // Init asks which boards this project has, which is the first of the three
-// questions a board is.
-func (m *Model) Init() tea.Cmd { return m.load() }
+// questions a board is — unless a stored board already answered all three and
+// is still within its TTL, in which case nothing here is asked of the site at
+// all (docs/UX.md principle 1).
+func (m *Model) Init() tea.Cmd {
+	if m.loaded && !m.stale {
+		return nil
+	}
+	return m.load()
+}
 
 // Update handles one message.
 func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
@@ -217,7 +293,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.tookConfig(msg)
 
 	case quickFiltersMsg:
-		m.tookQuickFilters(msg)
+		cmd = m.tookQuickFilters(msg)
 
 	case filter.ChosenMsg:
 		cmd = m.applyFilterTerm(msg.Term)
@@ -355,19 +431,36 @@ func (m *Model) loadQuickFilters() tea.Cmd {
 }
 
 // refresh re-reads what is on screen. Purging re-reads the board's shape as
-// well, because a column an administrator added is not a change to the cards.
+// well, because a column an administrator added is not a change to the cards,
+// and it is what drops the stored snapshot the way a purging refresh of the
+// list drops its stored rows.
 func (m *Model) refresh(purge bool) tea.Cmd {
 	switch {
 	case purge:
 		if m.search != nil {
 			m.search.Invalidate()
 		}
-		return m.load()
+		return tea.Batch(m.forgetBoard(), m.load())
 	case m.ready:
 		return m.loadCards()
 	default:
 		return m.load()
 	}
+}
+
+// forgetBoard drops the stored snapshot of the board on screen, if there is
+// one and if there is a board on screen to name. The issues themselves stay:
+// they are shared with every other read that named them, and the refetch
+// overwrites what it asked for anyway.
+func (m *Model) forgetBoard() tea.Cmd {
+	held, ok := m.boardCache()
+	if !ok || m.plan.boardID == 0 {
+		return nil
+	}
+	if err := held.ForgetBoard(m.plan.boardID); err != nil {
+		return kernel.Warn("the stored copy of this board could not be dropped: " + err.Error())
+	}
+	return nil
 }
 
 func (m *Model) reproject(project string) tea.Cmd {
@@ -379,7 +472,12 @@ func (m *Model) reproject(project string) tea.Cmd {
 	m.issues, m.cols, m.unmapped = nil, nil, 0
 	m.curCol, m.curRow, m.colTop, m.rowTop = 0, 0, 0, 0
 	m.card, m.loaded, m.checked = nil, false, time.Time{}
+	m.stale, m.rawConfig, m.boardIDHint = false, jira.BoardConfig{}, 0
 	m.forget()
+	m.fromCache()
+	if m.loaded && !m.stale {
+		return nil
+	}
 	return m.load()
 }
 
@@ -388,13 +486,39 @@ func (m *Model) tookBoards(msg boardsMsg) tea.Cmd {
 		return nil
 	}
 	m.loading, m.loaded, m.step = false, true, stepIdle
-	m.all, m.at = msg.boards, 0
-	m.ready = false
+	was := m.plan.boardID
+	m.all, m.at = msg.boards, resolveBoardIndex(msg.boards, m.boardIDHint)
+	m.boardIDHint = 0
 	m.forget()
 	if len(m.all) == 0 {
+		m.ready = false
 		return nil
 	}
+	// A board already on screen — painted from a stored snapshot, or simply not
+	// yet superseded — stays drawable across this revalidation: config and
+	// cards are still one round trip away, and de-rendering down to "which of
+	// three questions" for that gap would be the flicker principle 1 exists to
+	// avoid. Only a genuine change of board clears it, the way a fresh open
+	// always has.
+	if m.all[m.at].ID != was {
+		m.ready = false
+	}
 	return m.loadConfig()
+}
+
+// resolveBoardIndex is the index of the board a snapshot or a project switch
+// already believed was on screen, so a revalidating load lands back on it
+// rather than always resetting to the first board a project has. wantID of
+// zero means nothing was hinted, which is every load that started cold.
+func resolveBoardIndex(boards []jira.Board, wantID int64) int {
+	if wantID != 0 {
+		for i := range boards {
+			if boards[i].ID == wantID {
+				return i
+			}
+		}
+	}
+	return 0
 }
 
 func (m *Model) tookConfig(msg configMsg) tea.Cmd {
@@ -402,15 +526,49 @@ func (m *Model) tookConfig(msg configMsg) tea.Cmd {
 		return nil
 	}
 	m.loading, m.step = false, stepIdle
-	m.plan, m.ready = newPlan(msg.cfg), true
+	m.rawConfig = msg.cfg
+	m.plan, m.ready, m.stale = newPlan(msg.cfg), true, false
 	m.quickFilters, m.qfOn = nil, nil
 	m.card = nil
 	m.place()
 	m.forget()
+	said := m.rememberLastBoard(msg.cfg.BoardID)
 	// loadCards first: it is what bumps the generation loadQuickFilters reads,
 	// so a quick filter answer for the board being left cannot be read as one
 	// for the board just opened.
-	return tea.Batch(m.loadCards(), m.loadQuickFilters())
+	return tea.Batch(said, m.loadCards(), m.loadQuickFilters())
+}
+
+// rememberLastBoard writes which board this project is drawing, so a session
+// opening cold knows which board's snapshot to read before the site has said
+// which boards this project has.
+func (m *Model) rememberLastBoard(boardID int64) tea.Cmd {
+	held, ok := m.boardCache()
+	if !ok {
+		return nil
+	}
+	if err := held.PutLastBoard(m.deps.Project, boardID); err != nil {
+		return kernel.Warn("this board could not be remembered for next time: " + err.Error())
+	}
+	return nil
+}
+
+// storeBoard writes this board's shape and cards, so the next time it is
+// opened draws from disk before anything is asked of the site. It runs after
+// every page rather than only once the walk over a board's cards is done, so a
+// walk cut short still leaves something to draw from.
+func (m *Model) storeBoard() tea.Cmd {
+	held, ok := m.boardCache()
+	if !ok || !m.ready {
+		return nil
+	}
+	err := held.PutBoard(m.plan.boardID, app.BoardSnapshot{
+		Config: m.rawConfig, QuickFilters: m.quickFilters, Issues: m.issues, More: m.more,
+	})
+	if err != nil {
+		return kernel.Warn("this board could not be stored for next time: " + err.Error())
+	}
+	return nil
 }
 
 func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
@@ -427,12 +585,13 @@ func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
 	} else {
 		m.issues = append(m.issues, msg.page.Items...)
 	}
-	m.more = msg.page.HasMore()
+	m.more, m.stale = msg.page.HasMore(), false
 	m.place()
 	m.forget()
 	m.restore(under)
+	stored := m.storeBoard()
 	if !m.more {
-		return said
+		return tea.Batch(said, stored)
 	}
 	// Each page is a read of its own, under the generation the first one opened:
 	// withCancel released the context that read used the moment it answered, so
@@ -442,7 +601,7 @@ func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
 	// first page must not swap those cards for a spinner to fetch the next.
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	return tea.Batch(said, m.reply(moreCards(ctx, msg.page, msg.gen)))
+	return tea.Batch(said, stored, m.reply(moreCards(ctx, msg.page, msg.gen)))
 }
 
 // moreFailed keeps the board that is on screen. The pages that arrived are
@@ -464,16 +623,23 @@ func (m *Model) saidMissing() tea.Cmd {
 	return kernel.Warn("this site has no field called " + strings.Join(m.missing, ", "))
 }
 
-// failed keeps the refusal in the pane as well as on the status line: a status
-// line is overwritten by the next thing that happens, and a board that is empty
-// because the site said no has to keep saying so.
+// failed keeps a board that is already drawn on screen, badged stale rather
+// than replaced with a refusal (docs/UX.md — stale data is badged, not
+// hidden): the shape and cards already in hand are the last true answer this
+// session had. A board with nothing to show yet has no cards to badge, so the
+// refusal is all there is and it is kept in the pane as well as on the status
+// line, which is overwritten by the next thing that happens.
 func (m *Model) failed(msg failedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
 	m.loading, m.moving, m.step = false, false, stepIdle
-	m.failure, m.failStep = msg.err, msg.step
 	m.card = nil
+	if m.ready {
+		m.stale = true
+	} else {
+		m.failure, m.failStep = msg.err, msg.step
+	}
 	m.forget()
 	return kernel.Fail(msg.err)
 }
@@ -483,11 +649,19 @@ func (m *Model) nextBoard() tea.Cmd {
 		return nil
 	}
 	m.at = (m.at + 1) % len(m.all)
-	m.ready, m.issues, m.cols, m.unmapped = false, nil, nil, 0
+	m.ready, m.issues, m.cols, m.unmapped, m.stale = false, nil, nil, 0, false
 	m.quickFilters, m.qfOn = nil, nil
 	m.curCol, m.curRow, m.colTop, m.rowTop = 0, 0, 0, 0
 	m.card = nil
 	m.forget()
+	if held, ok := m.boardCache(); ok {
+		if snap, ok := held.Board(m.all[m.at].ID); ok {
+			m.applyBoardSnapshot(snap)
+			if !m.stale {
+				return nil
+			}
+		}
+	}
 	return m.loadConfig()
 }
 

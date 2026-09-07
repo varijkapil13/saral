@@ -374,6 +374,7 @@ func New(d Deps, opts ...Option) (Model, error) {
 	root := spec.New(m.deps)
 	m.live[spec.ID] = root
 	m.stack = []stackEntry{{spec: spec, view: root}}
+	m.rememberRoot(spec.ID)
 	return m, nil
 }
 
@@ -437,6 +438,8 @@ func (m Model) startView() (ViewSpec, bool) {
 		if ok && m.available(spec) {
 			return spec, true
 		}
+	} else if spec, ok := m.recalledRoot(); ok {
+		return spec, true
 	}
 	for _, spec := range m.roots {
 		if spec.Slot > 0 && m.available(spec) {
@@ -945,6 +948,7 @@ func (m Model) open(id string) (tea.Model, tea.Cmd) {
 		dropped = m.stack[1:]
 	}
 	m.stack = []stackEntry{{spec: spec, view: view}}
+	m.rememberRoot(spec.ID)
 	for _, e := range dropped {
 		discard(e)
 	}
@@ -1392,6 +1396,7 @@ func (m Model) openWhenNothingCould(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	view := spec.New(m.deps)
 	m.live[spec.ID] = view
 	m.stack = []stackEntry{{spec: spec, view: view}}
+	m.rememberRoot(spec.ID)
 	return m, tea.Batch(cmd, view.Init(), m.focus(), m.resizeAll())
 }
 

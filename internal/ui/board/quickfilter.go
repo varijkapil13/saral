@@ -2,12 +2,19 @@ package board
 
 import (
 	"context"
+	"encoding/json"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
+
+// quickFiltersMemoryKey is where this view keeps which of a board's quick
+// filters were toggled on, under its own ViewID.
+const quickFiltersMemoryKey = "quickfilters"
 
 // quickFiltersMsg carries a board's own quick filters. An error reading them
 // answers the same shape with none: the board still draws without them, the
@@ -28,12 +35,82 @@ func quickFiltersCmd(ctx context.Context, reader jira.BoardReader, boardID int64
 	}
 }
 
-func (m *Model) tookQuickFilters(msg quickFiltersMsg) {
+func (m *Model) tookQuickFilters(msg quickFiltersMsg) tea.Cmd {
 	if !m.current(msg.gen) {
-		return
+		return nil
 	}
 	m.quickFilters = msg.filters
 	m.qfOn = make(map[int64]bool, len(msg.filters))
+	stored := m.storeBoard()
+	// loadCards already ran once in tookConfig, before this board's own live
+	// quick filters were known, so a recalled selection reaches the cards on
+	// screen only by asking again now that there is something to turn on.
+	if m.applyRecalledQuickFilters() {
+		return tea.Batch(stored, m.loadCards())
+	}
+	return stored
+}
+
+// recallQuickFilterIDs is which of a board's quick filters the last session
+// on this profile left toggled on, and whether it ever kept one at all. The
+// ids are this program's own memory rather than anything read off the
+// board's own config, so a filter this board no longer offers is simply
+// never among them.
+func (m *Model) recallQuickFilterIDs() ([]int64, bool) {
+	enc, ok := kernel.Recall(m.deps, ViewID, quickFiltersMemoryKey)
+	if !ok {
+		return nil, false
+	}
+	var ids []int64
+	if err := json.Unmarshal([]byte(enc), &ids); err != nil || len(ids) == 0 {
+		return nil, false
+	}
+	return ids, true
+}
+
+// applyRecalledQuickFilters turns on whichever of this board's own quick
+// filters were remembered, and reports whether it turned on any at all — an
+// id this board's live list has never heard of, from a filter deleted since
+// or from a different board entirely, is simply not among them rather than a
+// filter this program invents a fifth one to represent.
+func (m *Model) applyRecalledQuickFilters() bool {
+	ids, ok := m.recallQuickFilterIDs()
+	if !ok || len(m.quickFilters) == 0 {
+		return false
+	}
+	changed := false
+	for _, qf := range m.quickFilters {
+		if !slices.Contains(ids, qf.ID) {
+			continue
+		}
+		if m.qfOn == nil {
+			m.qfOn = make(map[int64]bool, len(m.quickFilters))
+		}
+		m.qfOn[qf.ID] = true
+		changed = true
+	}
+	return changed
+}
+
+// rememberQuickFilters keeps which quick filters are toggled on right now, in
+// the board's own display order, so the next session opens with the same
+// cards this one was narrowed to instead of the board's full column.
+func (m *Model) rememberQuickFilters() {
+	ids := make([]int64, 0, len(m.qfOn))
+	for _, qf := range m.quickFilters {
+		if m.qfOn[qf.ID] {
+			ids = append(ids, qf.ID)
+		}
+	}
+	if len(ids) == 0 {
+		kernel.Keep(m.deps, ViewID, quickFiltersMemoryKey, "")
+		return
+	}
+	enc, err := json.Marshal(ids)
+	if err != nil {
+		return
+	}
+	kernel.Keep(m.deps, ViewID, quickFiltersMemoryKey, string(enc))
 }
 
 // toggleQuickFilter flips the nth quick filter this board offers, 1-indexed the
@@ -47,6 +124,7 @@ func (m *Model) toggleQuickFilter(n int) bool {
 		m.qfOn = make(map[int64]bool, len(m.quickFilters))
 	}
 	m.qfOn[id] = !m.qfOn[id]
+	m.rememberQuickFilters()
 	return true
 }
 

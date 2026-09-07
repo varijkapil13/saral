@@ -106,6 +106,14 @@ type Model struct {
 	termsGen int
 	bar      *filterbar.Bar
 
+	// recalledTerms marks that the terms in force came from a previous
+	// session's memory rather than anything chosen this run, and is consumed
+	// — read once and cleared — by whichever response answers the very first
+	// search this view runs. An id the site no longer knows is only found out
+	// by asking, and only that first answer is a verdict on the ids
+	// themselves rather than an ordinary failure a retry or a poll can bring.
+	recalledTerms bool
+
 	// sort is the order this view's search is asked to run in, over and above
 	// whatever it would otherwise name for itself. A zero value is no choice
 	// made, and sorting is the picker that changes it.
@@ -231,10 +239,34 @@ func New(d kernel.Deps) kernel.View {
 	m.jql, m.title = defaultQuery(d.Project)
 	m.jql = applySort(m.jql, m.sort)
 	m.defaulted = true
+	if terms, ok := m.recallTerms(); ok {
+		jql, title := termQuery(d.Project, terms)
+		m.terms, m.jql, m.title = terms, applySort(jql, m.sort), title
+		m.defaulted, m.recalledTerms = false, true
+	}
 	m.relayout()
 	m.fromCache()
 	return m
 }
+
+// termsMemoryKey is where this view keeps the terms in force, under its own
+// ViewID, so kernel.Deps.Memory never has to know a filter.Term from a sort.
+const termsMemoryKey = "terms"
+
+// recallTerms is what the last session on this profile left the search on
+// screen narrowed by, and whether it ever narrowed one at all.
+func (m *Model) recallTerms() (filter.Terms, bool) {
+	enc, ok := kernel.Recall(m.deps, ViewID, termsMemoryKey)
+	if !ok {
+		return nil, false
+	}
+	return filter.DecodeTerms(enc)
+}
+
+// rememberTerms keeps the terms now in force, so the next session opens on
+// the same search rather than the default and a hand run through the picker
+// again. An empty encoding clears whatever was kept before.
+func (m *Model) rememberTerms() { kernel.Keep(m.deps, ViewID, termsMemoryKey, m.terms.Encode()) }
 
 // fromCache puts the rows the last session left on disk on screen, before
 // anything at all is asked of the site (docs/UX.md principle 1).
@@ -611,6 +643,7 @@ func (m *Model) setQuery(jql, title string, byDefault bool) tea.Cmd {
 	m.cachedMore, m.stale, m.failure = false, false, nil
 	m.checked = time.Time{}
 	m.terms, m.termsGen = nil, m.termsGen+1
+	m.rememberTerms()
 	m.rows.reset()
 	m.refilter()
 	m.fromCache()
@@ -633,6 +666,7 @@ func (m *Model) loadedPage(msg loadedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
+	m.recalledTerms = false
 	before := m.issues
 	m.loading, m.loaded = false, true
 	m.issues = slices.Clone(msg.page.Items)
@@ -653,6 +687,7 @@ func (m *Model) nextPage(msg pagedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
+	m.recalledTerms = false
 	m.loading = false
 	m.issues = append(m.issues, msg.page.Items...)
 	m.page = msg.page
@@ -668,6 +703,7 @@ func (m *Model) patch(msg patchedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
+	m.recalledTerms = false
 	m.loading, m.loaded = false, true
 	under, before := m.selectedKey(), m.issues
 	m.issues, m.page = msg.issues, msg.page
@@ -691,6 +727,14 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
+	recalled := m.recalledTerms
+	m.recalledTerms = false
+	if recalled && len(m.terms) > 0 {
+		var verr *jira.ValidationError
+		if errors.As(msg.err, &verr) {
+			return m.dropRecalledTerms(msg.err)
+		}
+	}
 	m.loading = false
 	if len(m.issues) > 0 {
 		m.stale = true
@@ -702,6 +746,21 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 		m.pollPaused = true
 	}
 	return tea.Batch(failure(msg.why, msg.err), m.pollTick())
+}
+
+// dropRecalledTerms is what a filter remembered from last time meets a site
+// that no longer knows one of its ids: checked once, by asking, rather than
+// guessed at from the ids themselves. It drops the terms — from the search on
+// screen and from what the next session would restore — and asks the default
+// search instead of leaving the pane on a refusal a person never chose.
+func (m *Model) dropRecalledTerms(err error) tea.Cmd {
+	m.terms, m.termsGen = nil, m.termsGen+1
+	m.rememberTerms()
+	jql, title := defaultQuery(m.deps.Project)
+	return tea.Batch(
+		kernel.Warn("the filters remembered from last time no longer work here, so they were dropped: "+err.Error()),
+		m.setQuery(jql, title, true),
+	)
 }
 
 // missingFields reports the projection fields this site has no field for, which

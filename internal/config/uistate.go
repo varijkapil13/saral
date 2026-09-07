@@ -41,6 +41,11 @@ type UIState struct {
 	// Beside Splits for the same reason: how this machine likes to look at a
 	// view is not a Jira account's business.
 	Sorts map[string]SortSpec `toml:"sorts"`
+
+	// Remembered maps a site to an account on it to what that profile scope
+	// was last left showing — see ProfileScope and Remembered's own doc for
+	// why this half of the file is keyed by profile rather than by view alone.
+	Remembered map[string]map[string]Remembered `toml:"remembered"`
 }
 
 // SortSpec is the order one view reads its rows in: a field it named for
@@ -48,6 +53,132 @@ type UIState struct {
 type SortSpec struct {
 	Field string `toml:"field"`
 	Desc  bool   `toml:"desc"`
+}
+
+// ProfileScope is whose remembered view and filters a Remembered entry is: the
+// same site-and-account pair cmd/saral/main.go's openCache scopes the cache
+// by. Unlike Splits and Sorts, a filter names a person, a status or an issue
+// type by an id the site minted, which means nothing to any other site and
+// can mean a different thing to another account's project visibility — so
+// this half of UIState is kept by profile scope and never by view alone.
+type ProfileScope struct {
+	Site    string
+	Account string
+}
+
+// Remembered is what one profile scope was left showing: state a view kept
+// for itself under a key of its own naming — a filter's encoding, a board's
+// active quick filters, the id of the root view a session last had open.
+type Remembered struct {
+	State map[string]string `toml:"state"`
+}
+
+// stateKey is how a view and a key of its own naming become one map key. A
+// view never sees another's: the kernel scopes every read and write to the
+// view name it was called with.
+func stateKey(view, key string) string { return view + "." + key }
+
+// remembered finds one profile scope's entry, and whether it has ever kept
+// anything at all.
+func (s UIState) remembered(scope ProfileScope) (Remembered, bool) {
+	bySite, ok := s.Remembered[scope.Site]
+	if !ok {
+		return Remembered{}, false
+	}
+	r, ok := bySite[scope.Account]
+	return r, ok
+}
+
+// RememberedState is what a view kept for itself under a key of its own
+// naming, the last time this profile scope wrote one, and whether it ever
+// did. A blank value is read as never having chosen one, the same "no choice
+// a gesture could have produced" reading Split and Sort already give.
+func (s UIState) RememberedState(scope ProfileScope, view, key string) (string, bool) {
+	r, ok := s.remembered(scope)
+	if !ok {
+		return "", false
+	}
+	v, ok := r.State[stateKey(view, key)]
+	if !ok || v == "" {
+		return "", false
+	}
+	return v, true
+}
+
+// RememberedState reads one profile scope's kept value straight off disk,
+// remembering nothing when it cannot read the file for any of the reasons
+// LoadUIState already tolerates.
+func RememberedState(scope ProfileScope, view, key string) (string, bool) {
+	return LoadUIState().RememberedState(scope, view, key)
+}
+
+// RememberState writes one profile scope's kept value and the file, keeping
+// every other scope's and every other key of this one's — the same
+// read-merge-write SaveSplit and SaveSort already do. An empty value is a view
+// that has gone back to having chosen nothing, and is removed rather than
+// written as a choice nothing would produce.
+func RememberState(scope ProfileScope, view, key, value string) error {
+	return mutateRemembered(scope, func(r *Remembered) {
+		k := stateKey(view, key)
+		if strings.TrimSpace(value) == "" {
+			delete(r.State, k)
+			return
+		}
+		if r.State == nil {
+			r.State = make(map[string]string, 1)
+		}
+		r.State[k] = value
+	})
+}
+
+// ForgetRemembered drops everything one profile scope has ever kept — every
+// view's state and the root view it last opened — which is what a session
+// asking to forget its remembered view and filters means.
+func ForgetRemembered(scope ProfileScope) error {
+	return mutateRemembered(scope, func(r *Remembered) { *r = Remembered{} })
+}
+
+// mutateRemembered is RememberState's and ForgetRemembered's shared
+// read-merge-write, pruning a scope back out of the file the moment it has
+// nothing left to say — the same discipline SaveSplit and SaveSort hold a
+// zero share and a blank field to.
+func mutateRemembered(scope ProfileScope, fn func(*Remembered)) error {
+	path, err := UIStatePath()
+	if err != nil {
+		return err
+	}
+	uiWrite.Lock()
+	defer uiWrite.Unlock()
+
+	state := LoadUIState()
+	bySite := state.Remembered[scope.Site]
+	r := bySite[scope.Account]
+	fn(&r)
+
+	if len(r.State) == 0 {
+		delete(bySite, scope.Account)
+	} else {
+		if bySite == nil {
+			bySite = make(map[string]Remembered, 1)
+		}
+		bySite[scope.Account] = r
+	}
+	if len(bySite) == 0 {
+		if state.Remembered != nil {
+			delete(state.Remembered, scope.Site)
+		}
+	} else {
+		if state.Remembered == nil {
+			state.Remembered = make(map[string]map[string]Remembered, 1)
+		}
+		state.Remembered[scope.Site] = bySite
+	}
+
+	var b strings.Builder
+	if err := toml.NewEncoder(&b).Encode(state); err != nil {
+		return fmt.Errorf("encoding %s: %w", path, err)
+	}
+	return writeAtomic(path, []byte(b.String()))
 }
 
 // UIStatePath is the file the arrangement is kept in.

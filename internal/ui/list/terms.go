@@ -78,7 +78,11 @@ func (m *Model) applyTerm(term filter.Term) tea.Cmd {
 func (m *Model) applyTerms(next filter.Terms) tea.Cmd {
 	jql, title := termQuery(m.deps.Project, next)
 	cmd := m.setQuery(jql, title, false)
+	// setQuery clears the terms as part of retargeting the search, and its own
+	// rememberTerms call persists that; the ones actually in force are these,
+	// which is what the next session has to be told instead.
 	m.terms, m.termsGen = next, m.termsGen+1
+	m.rememberTerms()
 	return cmd
 }
 

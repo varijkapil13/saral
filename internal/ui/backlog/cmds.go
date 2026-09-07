@@ -92,7 +92,13 @@ const sprintFieldName = "Sprint"
 // It is one command because each step decides the next: the rank field comes out
 // of the board configuration and the projection comes out of that, so a fan-out
 // would only be four requests waiting on each other anyway.
-func read(ctx context.Context, s site, search *app.Search, project string, at, gen int) tea.Cmd {
+//
+// wantID is a board id this view already believes it is drawing — from a
+// stored snapshot or a board a project switch carried over — resolved against
+// the boards this read answers with so a revalidation lands on the same board
+// rather than always the first one the site lists. Zero means nothing was
+// hinted, and at is used as it always was.
+func read(ctx context.Context, s site, search *app.Search, project string, at int, wantID int64, gen int) tea.Cmd {
 	return func() tea.Msg {
 		boards, err := s.Boards(ctx, project)
 		if err != nil {
@@ -100,6 +106,11 @@ func read(ctx context.Context, s site, search *app.Search, project string, at, g
 		}
 		if len(boards) == 0 {
 			return loadedMsg{gen: gen}
+		}
+		if wantID != 0 {
+			if idx, found := indexOfBoard(boards, wantID); found {
+				at = idx
+			}
 		}
 		at = min(max(at, 0), len(boards)-1)
 		config, err := s.BoardConfig(ctx, boards[at].ID)
@@ -144,6 +155,17 @@ func read(ctx context.Context, s site, search *app.Search, project string, at, g
 		out.page, out.missing = page, wanted.Missing
 		return out
 	}
+}
+
+// indexOfBoard is the position of a board id in a list the site just answered
+// with.
+func indexOfBoard(boards []jira.Board, id int64) (int, bool) {
+	for i := range boards {
+		if boards[i].ID == id {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 func nextPage(ctx context.Context, page jira.Page[jira.Issue], gen int) tea.Cmd {

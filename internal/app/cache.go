@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,6 +31,9 @@ const (
 	KindBoardConfig Kind = "boardconfig"
 	KindVersions    Kind = "versions"
 	KindCaps        Kind = "caps"
+	KindBoard       Kind = "board"
+	KindBacklog     Kind = "backlog"
+	KindLastBoard   Kind = "lastboard"
 )
 
 // TTL is how long an entry of this kind counts as current. Past it the entry is
@@ -54,7 +58,11 @@ func (k Kind) TTL() time.Duration {
 		return 10 * time.Minute
 	case KindIssue:
 		return 60 * time.Second
-	case KindSearch:
+	// A board or a backlog is a search in a column layout: what changes fastest
+	// about either is which cards are in which, so both move at a search's pace
+	// rather than the config's, even though the same entry also carries the
+	// column mapping and the quick filters.
+	case KindSearch, KindBoard, KindBacklog:
 		return 30 * time.Second
 	default:
 		return 0
@@ -166,6 +174,106 @@ type CapsCache interface {
 	PutCaps(project string, caps jira.Capabilities) error
 }
 
+// BoardSnapshot is a board's shape and cards as the last read left them: its
+// column configuration, its own quick filters, the cards that landed in them in
+// the order the board answered, when it was written, and whether that was long
+// enough ago to badge.
+type BoardSnapshot struct {
+	Config       jira.BoardConfig
+	QuickFilters []jira.QuickFilter
+	Issues       []jira.Issue
+	// More records that the board had another page when it was stored. The
+	// cards carry no cursor across a restart, so a caller that reaches the end
+	// of them has to ask the board again rather than page on from here.
+	More     bool
+	StoredAt time.Time
+	Stale    bool
+}
+
+// BoardCache is the part of the cache that keeps a board's own shape and cards,
+// so that the first frame is drawn from it instead of the three round trips a
+// board otherwise opens on (Boards, BoardConfig, BoardIssues).
+//
+// It is a second interface for the reason CapsCache is: it is optional in both
+// directions, and a Cache that is only rows and issues stays a Cache.
+type BoardCache interface {
+	// Board returns a board's stored shape and cards by id, whatever their age.
+	Board(boardID int64) (BoardSnapshot, bool)
+	// PutBoard stores a board's shape and cards. Each issue is merged into the
+	// copy already held, the same way PutRows merges a search's rows.
+	PutBoard(boardID int64, snap BoardSnapshot) error
+	// ForgetBoard drops a board's stored shape and cards, which is what a
+	// purging refresh asks for beyond a refetch. The issues themselves stay:
+	// they are shared with every other read that named them.
+	ForgetBoard(boardID int64) error
+	// LastBoard returns the board a project was last drawing, so a session
+	// opening cold knows which board's snapshot to read before the site has
+	// said which boards this project has.
+	LastBoard(project string) (boardID int64, ok bool)
+	// PutLastBoard remembers which board a project was last drawing.
+	PutLastBoard(project string, boardID int64) error
+}
+
+// BacklogSnapshot is a board's backlog as the last read left it: its column
+// configuration, its open sprints, the field its sprint value lives under, the
+// site's own sentence for a board with no sprints, the issues in the order the
+// read answered, when it was written, and whether that was long enough ago to
+// badge.
+type BacklogSnapshot struct {
+	Config    jira.BoardConfig
+	Sprints   []jira.Sprint
+	Field     jira.FieldRef
+	NoSprints string
+	Issues    []jira.Issue
+	// More records that the backlog had another page when it was stored.
+	More     bool
+	StoredAt time.Time
+	Stale    bool
+}
+
+// BacklogCache is the part of the cache that keeps a backlog's own shape and
+// issues, for the reason BoardCache exists: so the first frame is drawn from it
+// instead of the board, its sprints and its issues all being read again.
+type BacklogCache interface {
+	// Backlog returns a board's stored backlog by board id, whatever its age.
+	Backlog(boardID int64) (BacklogSnapshot, bool)
+	// PutBacklog stores a board's backlog. Each issue is merged into the copy
+	// already held, the same way PutRows merges a search's rows.
+	PutBacklog(boardID int64, snap BacklogSnapshot) error
+	// ForgetBacklog drops a board's stored backlog, which is what a purging
+	// refresh asks for beyond a refetch.
+	ForgetBacklog(boardID int64) error
+	// LastBacklogBoard returns the board a project's backlog was last drawing.
+	// It is kept apart from LastBoard: the board view and the backlog view flip
+	// through a project's boards independently, and a session that left the
+	// board view on one and the backlog on another has two different answers to
+	// "which board", both true.
+	LastBacklogBoard(project string) (boardID int64, ok bool)
+	// PutLastBacklogBoard remembers which board a project's backlog was last
+	// drawing.
+	PutLastBacklogBoard(project string, boardID int64) error
+}
+
+// IssueSnapshot is one issue as a previous read left it on disk, together with
+// when that read happened.
+type IssueSnapshot struct {
+	Issue    jira.Issue
+	StoredAt time.Time
+}
+
+// IssueCache is the part of the cache that answers a read of one issue by key
+// on its own, without a search's rows having named it.
+type IssueCache interface {
+	// Issue returns a previously read issue by key, whatever its age. The issue
+	// detail pane has no TTL of its own — it always asks the site again once it
+	// is on screen — so there is no Stale here for it to badge.
+	Issue(key string) (IssueSnapshot, bool)
+	// PutIssue merges a freshly read issue into what is already held, the way
+	// MergeIssue does for a search's own rows: a field this read did not ask
+	// for is left as it was.
+	PutIssue(issue jira.Issue) error
+}
+
 // DefaultIssueBound is how many issues the cache keeps before it starts dropping
 // the ones stored longest ago. A session that scrolls all day would otherwise
 // grow the file without limit.
@@ -182,8 +290,11 @@ type DiskCache struct {
 }
 
 var (
-	_ Cache     = (*DiskCache)(nil)
-	_ CapsCache = (*DiskCache)(nil)
+	_ Cache        = (*DiskCache)(nil)
+	_ CapsCache    = (*DiskCache)(nil)
+	_ BoardCache   = (*DiskCache)(nil)
+	_ BacklogCache = (*DiskCache)(nil)
+	_ IssueCache   = (*DiskCache)(nil)
 )
 
 // CacheOption adjusts a DiskCache at construction.
@@ -417,6 +528,259 @@ func (c *DiskCache) PutCaps(project string, caps jira.Capabilities) error {
 	if err := c.db.Put(c.scope, string(KindCaps), store.Record{
 		Key: capsKey(project), Value: value, StoredAt: c.now(),
 	}); err != nil {
+		return err
+	}
+	c.gen.Add(1)
+	return nil
+}
+
+// Board implements BoardCache.
+func (c *DiskCache) Board(boardID int64) (BoardSnapshot, bool) {
+	if c == nil || c.db == nil {
+		return BoardSnapshot{}, false
+	}
+	rec, ok, err := c.db.Get(c.scope, string(KindBoard), boardKey(boardID))
+	if err != nil || !ok {
+		return BoardSnapshot{}, false
+	}
+	var entry wireBoard
+	if err := json.Unmarshal(rec.Value, &entry); err != nil || len(entry.Config.Columns) == 0 {
+		return BoardSnapshot{}, false
+	}
+	held, err := c.db.GetAll(c.scope, string(KindIssue), entry.Keys)
+	if err != nil {
+		return BoardSnapshot{}, false
+	}
+	issues := make([]jira.Issue, 0, len(held))
+	for i := range held {
+		if iss, decErr := decodeIssue(held[i].Value); decErr == nil {
+			issues = append(issues, iss)
+		}
+	}
+	return BoardSnapshot{
+		Config: entry.Config, QuickFilters: entry.QuickFilters, Issues: issues,
+		More: entry.More, StoredAt: rec.StoredAt, Stale: c.now().Sub(rec.StoredAt) > KindBoard.TTL(),
+	}, true
+}
+
+// PutBoard implements BoardCache.
+func (c *DiskCache) PutBoard(boardID int64, snap BoardSnapshot) error {
+	if c == nil || c.db == nil {
+		return nil
+	}
+	keys := make([]string, 0, len(snap.Issues))
+	for i := range snap.Issues {
+		if snap.Issues[i].Key != "" {
+			keys = append(keys, snap.Issues[i].Key)
+		}
+	}
+	if err := c.mergeIssues(snap.Issues, keys); err != nil {
+		return err
+	}
+	entry, err := json.Marshal(wireBoard{Config: snap.Config, QuickFilters: snap.QuickFilters, Keys: keys, More: snap.More})
+	if err != nil {
+		return fmt.Errorf("encoding a board's shape and cards: %w", err)
+	}
+	if err := c.db.Put(c.scope, string(KindBoard), store.Record{
+		Key: boardKey(boardID), Value: entry, StoredAt: c.now(),
+	}); err != nil {
+		return err
+	}
+	c.gen.Add(1)
+	return nil
+}
+
+// ForgetBoard implements BoardCache.
+func (c *DiskCache) ForgetBoard(boardID int64) error {
+	if c == nil || c.db == nil {
+		return nil
+	}
+	if err := c.db.Delete(c.scope, string(KindBoard), boardKey(boardID)); err != nil {
+		return err
+	}
+	c.gen.Add(1)
+	return nil
+}
+
+// LastBoard implements BoardCache.
+func (c *DiskCache) LastBoard(project string) (int64, bool) {
+	return c.lastBoard(lastBoardScope, project)
+}
+
+// PutLastBoard implements BoardCache.
+func (c *DiskCache) PutLastBoard(project string, boardID int64) error {
+	return c.putLastBoard(lastBoardScope, project, boardID)
+}
+
+// Backlog implements BacklogCache.
+func (c *DiskCache) Backlog(boardID int64) (BacklogSnapshot, bool) {
+	if c == nil || c.db == nil {
+		return BacklogSnapshot{}, false
+	}
+	rec, ok, err := c.db.Get(c.scope, string(KindBacklog), boardKey(boardID))
+	if err != nil || !ok {
+		return BacklogSnapshot{}, false
+	}
+	var entry wireBacklog
+	if err := json.Unmarshal(rec.Value, &entry); err != nil || len(entry.Config.Columns) == 0 {
+		return BacklogSnapshot{}, false
+	}
+	held, err := c.db.GetAll(c.scope, string(KindIssue), entry.Keys)
+	if err != nil {
+		return BacklogSnapshot{}, false
+	}
+	issues := make([]jira.Issue, 0, len(held))
+	for i := range held {
+		if iss, decErr := decodeIssue(held[i].Value); decErr == nil {
+			issues = append(issues, iss)
+		}
+	}
+	return BacklogSnapshot{
+		Config: entry.Config, Sprints: entry.Sprints, Field: entry.Field, NoSprints: entry.NoSprints,
+		Issues: issues, More: entry.More, StoredAt: rec.StoredAt,
+		Stale: c.now().Sub(rec.StoredAt) > KindBacklog.TTL(),
+	}, true
+}
+
+// PutBacklog implements BacklogCache.
+func (c *DiskCache) PutBacklog(boardID int64, snap BacklogSnapshot) error {
+	if c == nil || c.db == nil {
+		return nil
+	}
+	keys := make([]string, 0, len(snap.Issues))
+	for i := range snap.Issues {
+		if snap.Issues[i].Key != "" {
+			keys = append(keys, snap.Issues[i].Key)
+		}
+	}
+	if err := c.mergeIssues(snap.Issues, keys); err != nil {
+		return err
+	}
+	entry, err := json.Marshal(wireBacklog{
+		Config: snap.Config, Sprints: snap.Sprints, Field: snap.Field, NoSprints: snap.NoSprints,
+		Keys: keys, More: snap.More,
+	})
+	if err != nil {
+		return fmt.Errorf("encoding a backlog: %w", err)
+	}
+	if err := c.db.Put(c.scope, string(KindBacklog), store.Record{
+		Key: boardKey(boardID), Value: entry, StoredAt: c.now(),
+	}); err != nil {
+		return err
+	}
+	c.gen.Add(1)
+	return nil
+}
+
+// ForgetBacklog implements BacklogCache.
+func (c *DiskCache) ForgetBacklog(boardID int64) error {
+	if c == nil || c.db == nil {
+		return nil
+	}
+	if err := c.db.Delete(c.scope, string(KindBacklog), boardKey(boardID)); err != nil {
+		return err
+	}
+	c.gen.Add(1)
+	return nil
+}
+
+// LastBacklogBoard implements BacklogCache.
+func (c *DiskCache) LastBacklogBoard(project string) (int64, bool) {
+	return c.lastBoard(lastBacklogScope, project)
+}
+
+// PutLastBacklogBoard implements BacklogCache.
+func (c *DiskCache) PutLastBacklogBoard(project string, boardID int64) error {
+	return c.putLastBoard(lastBacklogScope, project, boardID)
+}
+
+// lastBoardScope and lastBacklogScope keep the board view's and the backlog
+// view's pointers apart in the one bucket both share: the two flip through a
+// project's boards independently, so "which board" has two true answers.
+const (
+	lastBoardScope   = "board"
+	lastBacklogScope = "backlog"
+)
+
+func (c *DiskCache) lastBoard(scope, project string) (int64, bool) {
+	if c == nil || c.db == nil {
+		return 0, false
+	}
+	rec, ok, err := c.db.Get(c.scope, string(KindLastBoard), lastBoardKey(scope, project))
+	if err != nil || !ok {
+		return 0, false
+	}
+	id, err := strconv.ParseInt(string(rec.Value), 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return id, true
+}
+
+func (c *DiskCache) putLastBoard(scope, project string, boardID int64) error {
+	if c == nil || c.db == nil {
+		return nil
+	}
+	if err := c.db.Put(c.scope, string(KindLastBoard), store.Record{
+		Key: lastBoardKey(scope, project), Value: []byte(strconv.FormatInt(boardID, 10)), StoredAt: c.now(),
+	}); err != nil {
+		return err
+	}
+	c.gen.Add(1)
+	return nil
+}
+
+func lastBoardKey(scope, project string) string {
+	return scope + ":" + strings.TrimSpace(project)
+}
+
+func boardKey(boardID int64) string { return strconv.FormatInt(boardID, 10) }
+
+// wireBoard is how a BoardSnapshot is encoded. jira.BoardConfig and
+// jira.QuickFilter round-trip through encoding/json on their own — neither
+// carries the unexported state jira.FieldSet and jira.FieldMask do — so this
+// wraps them rather than re-declaring their fields.
+type wireBoard struct {
+	Config       jira.BoardConfig   `json:"config"`
+	QuickFilters []jira.QuickFilter `json:"quickFilters,omitempty"`
+	Keys         []string           `json:"keys,omitempty"`
+	More         bool               `json:"more,omitempty"`
+}
+
+// wireBacklog is how a BacklogSnapshot is encoded, for the reason wireBoard
+// exists.
+type wireBacklog struct {
+	Config    jira.BoardConfig `json:"config"`
+	Sprints   []jira.Sprint    `json:"sprints,omitempty"`
+	Field     jira.FieldRef    `json:"field,omitzero"`
+	NoSprints string           `json:"noSprints,omitempty"`
+	Keys      []string         `json:"keys,omitempty"`
+	More      bool             `json:"more,omitempty"`
+}
+
+// Issue implements IssueCache.
+func (c *DiskCache) Issue(key string) (IssueSnapshot, bool) {
+	key = strings.TrimSpace(key)
+	if c == nil || c.db == nil || key == "" {
+		return IssueSnapshot{}, false
+	}
+	rec, ok, err := c.db.Get(c.scope, string(KindIssue), key)
+	if err != nil || !ok {
+		return IssueSnapshot{}, false
+	}
+	iss, err := decodeIssue(rec.Value)
+	if err != nil {
+		return IssueSnapshot{}, false
+	}
+	return IssueSnapshot{Issue: iss, StoredAt: rec.StoredAt}, true
+}
+
+// PutIssue implements IssueCache.
+func (c *DiskCache) PutIssue(iss jira.Issue) error {
+	if c == nil || c.db == nil || iss.Key == "" {
+		return nil
+	}
+	if err := c.mergeIssues([]jira.Issue{iss}, []string{iss.Key}); err != nil {
 		return err
 	}
 	c.gen.Add(1)

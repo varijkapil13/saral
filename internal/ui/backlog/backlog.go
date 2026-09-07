@@ -108,6 +108,7 @@ type Model struct {
 	search *app.Search
 	site   site
 	mover  jira.SprintManager
+	cache  app.Cache
 	addr   kernel.Addr
 
 	styles *styles
@@ -187,6 +188,14 @@ type Model struct {
 	// load still running: no project, no board on it, or no sprint field to tell
 	// a scheduled issue from an unscheduled one.
 	absent string
+	// stale marks the backlog on screen as older than it should be: it came off
+	// disk past its TTL, or a revalidation that would have replaced it failed.
+	stale bool
+	// boardIDHint is a board id this view already believes it is drawing, from a
+	// stored snapshot or a project switch, before the site has said which
+	// boards this project has. took resolves it into an index and clears it, so
+	// a revalidating load lands on the same board rather than always the first.
+	boardIDHint int64
 
 	mode     mode
 	destAt   int
@@ -204,13 +213,16 @@ type Model struct {
 	focused bool
 }
 
-// New builds the backlog. It draws its first frame from nothing but the size it
-// is given: which board, which sprints and which issues are all answers, and it
-// has not asked for them yet.
+// New builds the backlog. Which board, which sprints and which issues are all
+// answers, but a stored one may already have them: fromCache draws it before
+// anything at all is asked of the site (docs/UX.md principle 1), and a session
+// with nothing stored draws from nothing but the size it is given, the way it
+// always has.
 func New(d kernel.Deps) kernel.View {
 	m := &Model{
 		deps:   d,
 		addr:   kernel.NewAddr(),
+		cache:  d.Cache,
 		picked: make(map[string]bool),
 		byKey:  make(map[string]int),
 	}
@@ -229,8 +241,62 @@ func New(d kernel.Deps) kernel.View {
 		m.site = d.Jira
 		m.mover = d.Jira
 	}
+	if terms, ok := m.recallTerms(); ok {
+		m.terms = terms
+	}
 	m.relayout()
+	m.fromCache()
 	return m
+}
+
+// backlogCache is the cache's optional backlog-shaped half, absent whenever
+// the session has nowhere to keep one or the cache in force is only rows and
+// issues — the same additive-interface pattern kernel.restoreCaps uses for
+// app.CapsCache.
+func (m *Model) backlogCache() (app.BacklogCache, bool) {
+	held, ok := m.cache.(app.BacklogCache)
+	return held, ok && held != nil
+}
+
+// fromCache draws the backlog this project was last showing, before anything
+// is asked of the site. Which boards a project has is itself an answer nobody
+// has yet, so the one board a snapshot names stands in for the whole list
+// until Boards replaces it.
+//
+// It runs here rather than in Init because this is where a first paint
+// happens: kernel.FirstPaint builds the view and renders one frame without
+// ever calling Init, which is the thing docs/PERFORMANCE.md budgets.
+func (m *Model) fromCache() {
+	held, ok := m.backlogCache()
+	if !ok {
+		return
+	}
+	boardID, ok := held.LastBacklogBoard(m.deps.Project)
+	if !ok {
+		return
+	}
+	snap, ok := held.Backlog(boardID)
+	if !ok {
+		return
+	}
+	m.applyBacklogSnapshot(snap)
+	m.boards = []jira.Board{{ID: boardID, Name: snap.Config.Name, Type: snap.Config.Type}}
+	m.boardAt = 0
+	m.boardIDHint = boardID
+}
+
+// applyBacklogSnapshot puts a stored backlog in force, without touching which
+// boards this project has or which of them is selected: New and a project
+// switch know only the one board a snapshot names, while nextBoard already
+// holds the site's own list and must not collapse it down to one.
+func (m *Model) applyBacklogSnapshot(snap app.BacklogSnapshot) {
+	m.config = snap.Config
+	m.sprints, m.field, m.noSprints = snap.Sprints, snap.Field, snap.NoSprints
+	m.issues, m.page, m.missing = snap.Issues, jira.Page[jira.Issue]{}, nil
+	m.loaded, m.stale, m.absent = true, snap.Stale, ""
+	m.reindex()
+	m.relayout()
+	m.regroup()
 }
 
 // WantsRawKeys is true while a destination is being chosen and while a move is
@@ -257,10 +323,16 @@ func (m *Model) BlocksClose() (string, bool) {
 // whichever root is on screen.
 func (m *Model) Addr() kernel.Addr { return m.addr }
 
-// Init reads the board the backlog belongs to. There is nothing on disk to draw
-// first: the cache holds rows against a JQL, and which JQL this is depends on
-// the board's rank field, which is itself an answer.
-func (m *Model) Init() tea.Cmd { return m.load() }
+// Init reads the board the backlog belongs to — unless a stored backlog
+// already answered every question it asks and is still within its TTL, in
+// which case nothing here is asked of the site at all (docs/UX.md principle
+// 1).
+func (m *Model) Init() tea.Cmd {
+	if m.loaded && !m.stale {
+		return nil
+	}
+	return m.load()
+}
 
 // Update handles one message.
 func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
@@ -459,18 +531,39 @@ func (m *Model) load() tea.Cmd {
 	}
 	m.absent = ""
 	ctx, gen := m.begin()
-	return m.reply(read(ctx, m.site, m.search, m.deps.Project, m.boardAt, gen))
+	return m.reply(read(ctx, m.site, m.search, m.deps.Project, m.boardAt, m.boardIDHint, gen))
 }
 
+// refresh re-reads the board this backlog belongs to. Purging also drops the
+// stored snapshot, the way a purging refresh of the list drops its stored
+// rows.
 func (m *Model) refresh(purge bool) tea.Cmd {
 	if m.busy() {
 		return kernel.Warn("this move is still going; the board is re-read once it has finished")
 	}
-	if purge && m.search != nil {
-		m.search.Invalidate()
+	var said tea.Cmd
+	if purge {
+		if m.search != nil {
+			m.search.Invalidate()
+		}
+		said = m.forgetBacklog()
 	}
 	m.said = ""
-	return m.load()
+	return tea.Batch(said, m.load())
+}
+
+// forgetBacklog drops the stored snapshot of the backlog on screen, if there is
+// one and if there is a board on screen to name. The issues themselves stay:
+// they are shared with every other read that named them.
+func (m *Model) forgetBacklog() tea.Cmd {
+	held, ok := m.backlogCache()
+	if !ok || m.config.BoardID == 0 {
+		return nil
+	}
+	if err := held.ForgetBacklog(m.config.BoardID); err != nil {
+		return kernel.Warn("the stored copy of this backlog could not be dropped: " + err.Error())
+	}
+	return nil
 }
 
 func (m *Model) reproject(project string) tea.Cmd {
@@ -486,6 +579,10 @@ func (m *Model) reproject(project string) tea.Cmd {
 	m.boardAt = 0
 	m.forget()
 	m.said = abandoned
+	m.fromCache()
+	if m.loaded && !m.stale {
+		return nil
+	}
 	return m.load()
 }
 
@@ -500,7 +597,7 @@ func (m *Model) forget() {
 	m.page, m.missing = jira.Page[jira.Issue]{}, nil
 	m.config, m.field = jira.BoardConfig{}, jira.FieldRef{}
 	m.cursor, m.top = 0, 0
-	m.loaded, m.failure, m.absent, m.said = false, nil, "", ""
+	m.loaded, m.stale, m.failure, m.absent, m.said = false, false, nil, "", ""
 	m.mode = browsing
 	m.endMove()
 	m.memo.reset()
@@ -515,8 +612,17 @@ func (m *Model) nextBoard() tea.Cmd {
 		return nil
 	}
 	at := (m.boardAt + 1) % len(m.boards)
+	boards, boardID := m.boards, m.boards[at].ID
 	m.forget()
-	m.boardAt = at
+	m.boards, m.boardAt = boards, at
+	if held, ok := m.backlogCache(); ok {
+		if snap, ok := held.Backlog(boardID); ok {
+			m.applyBacklogSnapshot(snap)
+			if !m.stale {
+				return nil
+			}
+		}
+	}
 	return m.load()
 }
 
@@ -524,7 +630,7 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
-	m.loading, m.loaded = false, true
+	m.loading, m.loaded, m.stale, m.boardIDHint = false, true, false, 0
 	m.boards, m.boardAt, m.config = msg.boards, msg.boardAt, msg.config
 	m.sprints, m.field, m.noSprints = msg.sprints, msg.field, msg.noSprints
 	m.issues, m.page, m.missing = msg.page.Items, msg.page, msg.missing
@@ -541,7 +647,40 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 	m.reindex()
 	m.relayout()
 	m.regroup()
-	return m.pageAheadIfNeeded()
+	return tea.Batch(m.rememberLastBacklogBoard(), m.storeBacklog(), m.pageAheadIfNeeded())
+}
+
+// rememberLastBacklogBoard writes which board this project's backlog is
+// drawing, so a session opening cold knows which board's snapshot to read
+// before the site has said which boards this project has.
+func (m *Model) rememberLastBacklogBoard() tea.Cmd {
+	held, ok := m.backlogCache()
+	if !ok || len(m.boards) == 0 {
+		return nil
+	}
+	if err := held.PutLastBacklogBoard(m.deps.Project, m.config.BoardID); err != nil {
+		return kernel.Warn("this backlog could not be remembered for next time: " + err.Error())
+	}
+	return nil
+}
+
+// storeBacklog writes this backlog's shape and issues, so the next time it is
+// opened draws from disk before anything is asked of the site. It runs after
+// every page rather than only once the walk over a backlog's issues is done,
+// so a walk cut short still leaves something to draw from.
+func (m *Model) storeBacklog() tea.Cmd {
+	held, ok := m.backlogCache()
+	if !ok || len(m.boards) == 0 {
+		return nil
+	}
+	err := held.PutBacklog(m.config.BoardID, app.BacklogSnapshot{
+		Config: m.config, Sprints: m.sprints, Field: m.field, NoSprints: m.noSprints,
+		Issues: m.issues, More: m.page.HasMore(),
+	})
+	if err != nil {
+		return kernel.Warn("this backlog could not be stored for next time: " + err.Error())
+	}
+	return nil
 }
 
 func (m *Model) boardsReason() string {
@@ -555,16 +694,17 @@ func (m *Model) tookPage(msg pagedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
-	m.loading = false
+	m.loading, m.stale = false, false
 	m.issues = append(m.issues, msg.page.Items...)
 	m.page = msg.page
 	m.reindex()
 	m.relayout()
 	m.regroup()
+	stored := m.storeBacklog()
 	if m.reading {
-		return m.readRest()
+		return tea.Batch(stored, m.readRest())
 	}
-	return m.pageAheadIfNeeded()
+	return tea.Batch(stored, m.pageAheadIfNeeded())
 }
 
 // readRest walks what is left of the backlog for a sort that has been chosen
@@ -583,12 +723,22 @@ func (m *Model) readRest() tea.Cmd {
 	return m.setSort(m.pendingSort)
 }
 
+// failed keeps a backlog that is already drawn on screen, badged stale rather
+// than replaced with a refusal (docs/UX.md — stale data is badged, not
+// hidden): the rows already in hand are the last true answer this session had.
+// A backlog with no rows to badge has no cards on screen either way, so the
+// refusal is what appendEmpty draws and it is kept for the pane the way it
+// always was.
 func (m *Model) failed(msg failedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
 	m.loading = false
-	m.failure = msg.err
+	if len(m.rows) > 0 {
+		m.stale = true
+	} else {
+		m.failure = msg.err
+	}
 	m.head = ""
 	return kernel.Fail(msg.err)
 }

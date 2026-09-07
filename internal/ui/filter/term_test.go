@@ -222,3 +222,100 @@ func TestFacets_AllNameAFieldAndAWord(t *testing.T) {
 		t.Error("the empty facet names a field or a word, so it could compose a clause")
 	}
 }
+
+// Every facet the picker offers has to round-trip through a stable name too,
+// or Encode would silently drop every term of that facet.
+func TestFacets_AllHaveAStableName(t *testing.T) {
+	t.Parallel()
+
+	for _, f := range Facets {
+		name := f.stableName()
+		if name == "" {
+			t.Errorf("facet %d has no stable name", f)
+			continue
+		}
+		got, ok := facetByName(name)
+		if !ok || got != f {
+			t.Errorf("facetByName(%q) = %v, %v, want %v, true", name, got, ok, f)
+		}
+	}
+	if FacetNone.stableName() != "" {
+		t.Error("the empty facet has a stable name, so it could be written down")
+	}
+}
+
+func TestTerms_EncodeDecodeRoundTripsIncludingQuotesAndCommas(t *testing.T) {
+	t.Parallel()
+
+	terms := Terms{
+		{Facet: FacetAssignee, ID: "acct:with:colons", Label: `Ada "The Enchantress" Lovelace`},
+		{Facet: FacetLabel, ID: "needs-triage, urgent", Label: "needs-triage, urgent"},
+		{Facet: FacetAssignee, Label: "unassigned"},
+		{Facet: FacetStatus, ID: "10203", Label: "In Progress"},
+	}
+
+	enc := terms.Encode()
+	if enc == "" {
+		t.Fatal("Encode of non-empty terms answered the empty string")
+	}
+	got, ok := DecodeTerms(enc)
+	if !ok {
+		t.Fatalf("DecodeTerms(%q) = _, false", enc)
+	}
+	if len(got) != len(terms) {
+		t.Fatalf("got %d terms, want %d: %+v", len(got), len(terms), got)
+	}
+	for i, want := range terms {
+		if got[i] != want {
+			t.Errorf("term %d = %+v, want %+v", i, got[i], want)
+		}
+	}
+}
+
+func TestTerms_EncodeOfNoTermsIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	if got := Terms(nil).Encode(); got != "" {
+		t.Errorf("Encode(nil) = %q, want empty", got)
+	}
+	if got := (Terms{}).Encode(); got != "" {
+		t.Errorf("Encode(empty) = %q, want empty", got)
+	}
+}
+
+func TestDecodeTerms_RejectsWhatEncodeWouldNeverHaveWritten(t *testing.T) {
+	t.Parallel()
+
+	for name, s := range map[string]string{
+		"empty string":                     "",
+		"blank":                            "   ",
+		"not JSON at all":                  "assignee=acct-ada",
+		"a JSON object, not list":          `{"facet":"status","id":"1","label":"Done"}`,
+		"a facet this build does not name": `[{"facet":"sprint","id":"7","label":"Sprint 7"}]`,
+		"an empty list":                    `[]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got, ok := DecodeTerms(s); ok {
+				t.Errorf("DecodeTerms(%q) = %+v, true, want false", s, got)
+			}
+		})
+	}
+}
+
+// One term this build does not recognise must not cost the others: a build
+// downgrade, or a future facet an older client cannot yet name, should still
+// restore whatever it does.
+func TestDecodeTerms_DropsAnUnknownFacetAndKeepsTheRest(t *testing.T) {
+	t.Parallel()
+
+	enc := `[{"facet":"sprint","id":"7","label":"Sprint 7"},{"facet":"status","id":"1","label":"Done"}]`
+	got, ok := DecodeTerms(enc)
+	if !ok {
+		t.Fatalf("DecodeTerms(%q) = _, false", enc)
+	}
+	want := Terms{{Facet: FacetStatus, ID: "1", Label: "Done"}}
+	if len(got) != 1 || got[0] != want[0] {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}

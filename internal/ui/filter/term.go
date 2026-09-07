@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 )
@@ -288,6 +289,103 @@ func (t Terms) namesOf(f Facet) []string {
 		}
 	}
 	return out
+}
+
+// stableName is the spelling a Facet is written to disk under, between one
+// run of this program and the next. Never its own int: Facet is an iota, and
+// a build that ever reorders or inserts one would read a number an older
+// build wrote as the wrong facet entirely.
+func (f Facet) stableName() string {
+	switch f {
+	case FacetAssignee:
+		return "assignee"
+	case FacetReporter:
+		return "reporter"
+	case FacetStatus:
+		return "status"
+	case FacetType:
+		return "type"
+	case FacetPriority:
+		return "priority"
+	case FacetLabel:
+		return "label"
+	case FacetNone:
+	}
+	return ""
+}
+
+// facetByName is stableName's inverse, and false for a word this build does
+// not name — an older or newer build's spelling, or a file edited by hand.
+func facetByName(name string) (Facet, bool) {
+	for _, f := range Facets {
+		if f.stableName() == name {
+			return f, true
+		}
+	}
+	return FacetNone, false
+}
+
+// wireTerm is Term's shape in the small text Encode writes: the facet spelled
+// by stableName rather than carried as Term itself, whose Facet field would
+// otherwise round-trip through encoding/json as the bare int this package
+// works to avoid writing down anywhere.
+type wireTerm struct {
+	Facet string `json:"facet"`
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// Encode is the text form Terms is kept in between runs of this program —
+// what a view hands kernel.Keep and gets back from kernel.Recall. It answers
+// "" for no terms, which is also what clears whatever was kept before.
+func (t Terms) Encode() string {
+	if len(t) == 0 {
+		return ""
+	}
+	wire := make([]wireTerm, 0, len(t))
+	for _, term := range t {
+		name := term.Facet.stableName()
+		if name == "" {
+			continue
+		}
+		wire = append(wire, wireTerm{Facet: name, ID: term.ID, Label: term.Label})
+	}
+	if len(wire) == 0 {
+		return ""
+	}
+	enc, err := json.Marshal(wire)
+	if err != nil {
+		return ""
+	}
+	return string(enc)
+}
+
+// DecodeTerms reads what Encode wrote. Anything Encode would not have
+// written — text that is not this shape, or a facet this build does not
+// name — is dropped rather than kept as FacetNone: the same "no choice a
+// gesture could have produced" reading config.UIState already gives a split
+// or a sort nothing here would have written.
+func DecodeTerms(s string) (Terms, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, false
+	}
+	var wire []wireTerm
+	if err := json.Unmarshal([]byte(s), &wire); err != nil {
+		return nil, false
+	}
+	out := make(Terms, 0, len(wire))
+	for _, w := range wire {
+		facet, ok := facetByName(w.Facet)
+		if !ok {
+			continue
+		}
+		out = append(out, Term{Facet: facet, ID: w.ID, Label: w.Label})
+	}
+	if len(out) == 0 {
+		return nil, false
+	}
+	return out, true
 }
 
 // quote spells a value as a JQL string literal. The quotes are not decoration:

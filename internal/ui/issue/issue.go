@@ -105,6 +105,7 @@ type Model struct {
 	zones         widget.Zoner
 
 	search *app.Search
+	cache  app.Cache
 	gen    int
 	cancel context.CancelFunc
 
@@ -130,6 +131,7 @@ func New(d kernel.Deps, seed jira.Issue) kernel.View {
 		deps:  d,
 		keys:  defaultKeys(),
 		issue: seed,
+		cache: d.Cache,
 		open:  map[int]bool{},
 		addr:  kernel.NewAddr(),
 	}
@@ -149,7 +151,52 @@ func New(d kernel.Deps, seed jira.Issue) kernel.View {
 		m.search = app.NewSearch(d.Jira)
 	}
 	m.thread = comment.Thread(m.deps, seed.Key, m.addr)
+	m.fromCache()
 	return m
+}
+
+// fromCache enriches a seed that was not read wide — no seed at all, or the
+// few fields a list row or a card carries — with whatever this issue's key
+// already has on disk, before anything is asked of the site (docs/UX.md
+// principle 1).
+//
+// It runs here rather than in Init because this is where a first paint
+// happens: kernel.FirstPaint builds the view and renders one frame without
+// ever calling Init, which is the thing docs/PERFORMANCE.md budgets.
+//
+// It never sets loadedIssue: a cached copy answers for the fields it was
+// itself read with and says nothing about the rest, exactly as a freshly
+// seeded row does, and fields.go's read reads loadedIssue to tell "known
+// empty" from "not asked for" — flipping it here on a copy that might still be
+// narrow would draw a field this cache never held as confidently blank.
+func (m *Model) fromCache() {
+	if m.issue.Key == "" || m.issue.Requested.Wide() {
+		return
+	}
+	held, ok := m.cache.(app.IssueCache)
+	if !ok || held == nil {
+		return
+	}
+	snap, ok := held.Issue(m.issue.Key)
+	if !ok {
+		return
+	}
+	m.issue = app.MergeIssue(snap.Issue, m.issue)
+}
+
+// keepIssue stores a freshly read issue so this pane's next open draws it
+// immediately. It merges into the same shared issue records a search's own
+// rows do, so a field this pane never asked about — one a list row or a board
+// card happened to carry — is left as it was.
+func (m *Model) keepIssue(iss jira.Issue) tea.Cmd {
+	held, ok := m.cache.(app.IssueCache)
+	if !ok || held == nil {
+		return nil
+	}
+	if err := held.PutIssue(iss); err != nil {
+		return kernel.Warn("this issue could not be stored for next time: " + err.Error())
+	}
+	return nil
 }
 
 // Init reads the issue, and lets the thread read its own.
@@ -190,6 +237,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		if m.current(msg.gen) {
 			m.issue, m.labels, m.loadedIssue = msg.issue, msg.labels, true
 			m.dataGen++
+			cmd = m.keepIssue(msg.issue)
 		}
 
 	case editMetaMsg:

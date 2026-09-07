@@ -508,6 +508,7 @@ type summaryKey struct {
 	loading     bool
 	loaded      bool
 	failed      bool
+	stale       bool
 	ordering    jira.Ordering
 	estimates   bool
 	checked     int64
@@ -519,7 +520,7 @@ func (m *Model) summaryKey() summaryKey {
 		board: m.boardName(), width: m.width, gen: m.styles.gen,
 		columns: len(m.plan.columns), cards: len(m.issues), unmapped: m.unmapped,
 		filteredOut: m.filteredOut, shown: m.lay.cols, boards: len(m.all), more: m.more,
-		loading: m.loading, loaded: m.loaded, failed: m.failure != nil,
+		loading: m.loading, loaded: m.loaded, failed: m.failure != nil, stale: m.stale,
 		ordering: m.plan.ordering, estimates: m.plan.estimates,
 		checked: m.checked.UnixNano(), filters: m.quickFilterLine(),
 	}
@@ -622,8 +623,17 @@ func (m *Model) counts() string {
 	for len(parts) > 1 && ansi.StringWidth(strings.Join(parts, sep)) > room {
 		parts = parts[:len(parts)-1]
 	}
-	return strings.Join(parts, sep)
+	line := strings.Join(parts, sep)
+	if m.stale {
+		line += " " + m.deps.Theme.StaleBadge.Render(staleLabel)
+	}
+	return line
 }
+
+// staleLabel is a word and not a glyph, the way list.staleLabel is: the glyph
+// beside the count already means a read is in flight, which is the opposite
+// state.
+const staleLabel = "stale"
 
 // prompt is the line a gesture in progress puts under the grid: which issue is
 // in hand, where it is going and what the two keys do, or which quick filters

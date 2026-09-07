@@ -259,6 +259,173 @@ func TestLoadUIState_RemembersNoSortRatherThanFailing(t *testing.T) {
 
 // And it is not in config.toml at all, which is the other half of the same
 // decision: that file has to stay safe to hand somebody and readable by hand.
+func TestRememberState_ComesBackAsTheValueItWasGiven(t *testing.T) {
+	ownCache(t)
+
+	scope := ProfileScope{Site: "example.atlassian.net", Account: "you@example.com"}
+	if _, kept := RememberedState(scope, "list", "terms"); kept {
+		t.Fatal("a profile that has never kept anything remembers something")
+	}
+	if err := RememberState(scope, "list", "terms", `[{"facet":"status","id":"1","label":"Done"}]`); err != nil {
+		t.Fatalf("RememberState: %v", err)
+	}
+	got, kept := RememberedState(scope, "list", "terms")
+	if !kept || got != `[{"facet":"status","id":"1","label":"Done"}]` {
+		t.Errorf("RememberedState = %q, kept=%v", got, kept)
+	}
+}
+
+// A filter's ids only mean something to the token that could resolve them, so
+// one profile's kept state must never answer for another's — not even for a
+// different account on the very same site.
+func TestRememberState_DoesNotLeakBetweenProfileScopes(t *testing.T) {
+	ownCache(t)
+
+	mine := ProfileScope{Site: "example.atlassian.net", Account: "you@example.com"}
+	other := ProfileScope{Site: "example.atlassian.net", Account: "someone.else@example.com"}
+	otherSite := ProfileScope{Site: "other.atlassian.net", Account: "you@example.com"}
+
+	if err := RememberState(mine, "board", "view", "board"); err != nil {
+		t.Fatalf("RememberState: %v", err)
+	}
+	for _, scope := range []ProfileScope{other, otherSite} {
+		if v, kept := RememberedState(scope, "board", "view"); kept {
+			t.Errorf("scope %+v answered %q for another profile's kept state", scope, v)
+		}
+	}
+	if v, kept := RememberedState(mine, "board", "view"); !kept || v != "board" {
+		t.Errorf("the owning scope's own state was lost: %q, kept=%v", v, kept)
+	}
+}
+
+// One key of one view must not cost another its own — the same read-merge-write
+// property SaveSplit and SaveSort already hold, extended to a scope holding
+// several views' worth of kept state at once.
+func TestRememberState_KeepsEveryOtherKeyAndView(t *testing.T) {
+	ownCache(t)
+
+	scope := ProfileScope{Site: "example.atlassian.net", Account: "you@example.com"}
+	writes := map[[2]string]string{
+		{"list", "terms"}:         `[{"facet":"type","id":"10001","label":"Bug"}]`,
+		{"board", "terms"}:        `[{"facet":"assignee","id":"","label":"unassigned"}]`,
+		{"board", "quickfilters"}: `[10,20]`,
+		{"kernel", "view"}:        "board",
+	}
+	for k, v := range writes {
+		if err := RememberState(scope, k[0], k[1], v); err != nil {
+			t.Fatalf("RememberState(%v): %v", k, err)
+		}
+	}
+	for k, want := range writes {
+		if got, kept := RememberedState(scope, k[0], k[1]); !kept || got != want {
+			t.Errorf("RememberedState(%v) = %q kept=%v, want %q", k, got, kept, want)
+		}
+	}
+}
+
+// Going back to nothing kept is not a value, so it is removed rather than
+// written as an empty string nothing would produce.
+func TestRememberState_EmptyValueForgetsTheKeyRatherThanRecordingIt(t *testing.T) {
+	dir := ownCache(t)
+
+	scope := ProfileScope{Site: "example.atlassian.net", Account: "you@example.com"}
+	if err := RememberState(scope, "list", "terms", `[{"facet":"label","id":"urgent","label":"urgent"}]`); err != nil {
+		t.Fatalf("RememberState: %v", err)
+	}
+	if err := RememberState(scope, "list", "terms", ""); err != nil {
+		t.Fatalf("RememberState(\"\"): %v", err)
+	}
+	if v, kept := RememberedState(scope, "list", "terms"); kept {
+		t.Errorf("the scope still remembers %q", v)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, uiStateFile))
+	if err != nil {
+		t.Fatalf("reading the state file: %v", err)
+	}
+	if strings.Contains(string(data), "urgent") {
+		t.Errorf("the forgotten value is still in the file:\n%s", data)
+	}
+}
+
+func TestForgetRemembered_DropsTheWholeScopeAndLeavesOthersAlone(t *testing.T) {
+	ownCache(t)
+
+	mine := ProfileScope{Site: "example.atlassian.net", Account: "you@example.com"}
+	other := ProfileScope{Site: "example.atlassian.net", Account: "someone.else@example.com"}
+	if err := RememberState(mine, "list", "terms", `[{"facet":"status","id":"1","label":"Done"}]`); err != nil {
+		t.Fatalf("RememberState(mine): %v", err)
+	}
+	if err := RememberState(mine, "kernel", "view", "board"); err != nil {
+		t.Fatalf("RememberState(mine root): %v", err)
+	}
+	if err := RememberState(other, "list", "terms", `[{"facet":"status","id":"2","label":"Open"}]`); err != nil {
+		t.Fatalf("RememberState(other): %v", err)
+	}
+	if err := ForgetRemembered(mine); err != nil {
+		t.Fatalf("ForgetRemembered: %v", err)
+	}
+	if _, kept := RememberedState(mine, "list", "terms"); kept {
+		t.Error("the filter survived forgetting the scope")
+	}
+	if _, kept := RememberedState(mine, "kernel", "view"); kept {
+		t.Error("the root view survived forgetting the scope")
+	}
+	if v, kept := RememberedState(other, "list", "terms"); !kept || v != `[{"facet":"status","id":"2","label":"Open"}]` {
+		t.Errorf("forgetting one scope disturbed another: %q kept=%v", v, kept)
+	}
+}
+
+// The file is the program's own record, so anything it cannot read is worth
+// ignoring rather than refusing to open an issue over — the same tolerance
+// LoadUIState already gives Splits and Sorts.
+func TestLoadUIState_RemembersNoStateRatherThanFailing(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		file string
+	}{
+		{name: "a file TOML cannot parse", file: "remembered = [[[["},
+		{name: "a scope with an empty value", file: "[remembered.\"example.atlassian.net\".\"you@example.com\".state]\nlist.terms = \"\"\n"},
+		{name: "a site with no accounts", file: "[remembered.\"example.atlassian.net\"]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := ownCache(t)
+			if err := os.WriteFile(filepath.Join(dir, uiStateFile), []byte(tc.file), 0o600); err != nil {
+				t.Fatalf("seeding: %v", err)
+			}
+			scope := ProfileScope{Site: "example.atlassian.net", Account: "you@example.com"}
+			if v, kept := RememberedState(scope, "list", "terms"); kept {
+				t.Errorf("%s was read as a kept value of %q", tc.name, v)
+			}
+		})
+	}
+}
+
+// Neither half of this — the site the token belongs to nor the profile it
+// last opened on — belongs in config.toml, which people hand-edit and hand to
+// each other.
+func TestSave_WritesNoRememberedStateIntoTheConfigFile(t *testing.T) {
+	dir := ownCache(t)
+
+	scope := ProfileScope{Site: "example.atlassian.net", Account: "you@example.com"}
+	if err := RememberState(scope, "board", "quickfilters", "[10,20]"); err != nil {
+		t.Fatalf("RememberState: %v", err)
+	}
+	path := filepath.Join(dir, fileName)
+	cfg := Config{Active: "work", Mouse: true, Profiles: map[string]Profile{
+		"work": {Site: "example.atlassian.net", Email: "you@example.com", Token: TokenSource{Env: "T"}},
+	}}
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // the path is this test's own temporary directory
+	if err != nil {
+		t.Fatalf("reading the config: %v", err)
+	}
+	if strings.Contains(string(data), "quickfilters") {
+		t.Errorf("config.toml carries the remembered state:\n%s", data)
+	}
+}
+
 func TestSave_WritesNoSplitIntoTheConfigFile(t *testing.T) {
 	dir := ownCache(t)
 
