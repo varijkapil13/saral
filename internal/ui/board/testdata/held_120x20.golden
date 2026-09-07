@@ -1,4 +1,4 @@
-PROJ board                                                                 3 columns | 24 cards | ranked | checked 09:00
+PROJ board                                                                 24 cards | 3 columns | ranked | checked 09:00
 To Do                                 8 In Progress                           8 Done                                  8
 <>PROJ-3 Investigate the onboarding ... EPROJ-1 Add the nightly export        2 CPROJ-2 Rework webhook retries          
 SPROJ-6 Speed up session expiry         DPROJ-4 Document CSV import           5 CPROJ-5 Retire the audit trail          

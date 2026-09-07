@@ -543,24 +543,44 @@ func (m *Model) counts() string {
 	if !m.ready {
 		return ""
 	}
-	cards := strconv.Itoa(len(m.issues))
+	// The count is what the board holds, not what the read brought back: place
+	// drops an issue whose status the board maps to no column and one a filter
+	// excludes, and both are reported beside this. Counting the read here made
+	// the line contradict the screen — "78 cards" over seven of them — which is
+	// the number somebody checks first when a board looks wrong.
+	on := 0
+	for i := range m.cols {
+		on += len(m.cols[i])
+	}
+	cards := strconv.Itoa(on)
+	if read := len(m.issues); read != on {
+		cards = strconv.Itoa(on) + " of " + strconv.Itoa(read)
+	}
 	if m.more {
 		cards += "+"
 	}
+	cards += " cards"
 	// The order is what is given up first: the stamp goes before the count of
 	// what is on the board, because a board with no cards on it is the question
 	// and when it was last read is the footnote.
-	parts := []string{strconv.Itoa(len(m.plan.columns)) + " columns", cards + " cards"}
+	// Ordered by what a reader gives up last, because the line is trimmed from
+	// the end: the count leads, then why it is not the number that was read,
+	// then the shape of the board. A count short of what came back with no
+	// reason beside it is the one thing this line must never fold down to, and
+	// it did — at 80 columns "11 hidden by filter" was dropped while "3 columns"
+	// stayed.
+	columns := strconv.Itoa(len(m.plan.columns)) + " columns"
 	if m.lay.cols > 0 && m.lay.cols < len(m.plan.columns) {
-		parts[0] += " (" + strconv.Itoa(m.lay.cols) + " shown)"
+		columns += " (" + strconv.Itoa(m.lay.cols) + " shown)"
 	}
+	parts := []string{cards}
 	if m.unmapped > 0 {
 		parts = append(parts, strconv.Itoa(m.unmapped)+" in no column")
 	}
 	if m.filteredOut > 0 {
 		parts = append(parts, strconv.Itoa(m.filteredOut)+" hidden by filter")
 	}
-	parts = append(parts, m.plan.orderWords())
+	parts = append(parts, columns, m.plan.orderWords())
 	if !m.checked.IsZero() {
 		parts = append(parts, "checked "+m.checked.In(m.deps.Caps.Location()).Format("15:04"))
 	}
