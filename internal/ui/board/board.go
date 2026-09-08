@@ -27,11 +27,6 @@ const ViewID = "board"
 // both selected and unselected forms, a few relayouts deep.
 const cardCacheLimit = 1024
 
-// lineCacheLimit is how many composed grid lines are kept. A line is one row
-// across every visible column, so a screen is at most a few dozen of them and
-// this holds several screens of scrolling.
-const lineCacheLimit = 512
-
 var (
 	_ kernel.View        = (*Model)(nil)
 	_ kernel.Addressed   = (*Model)(nil)
@@ -57,7 +52,6 @@ type Model struct {
 	cache  app.Cache
 	styles *styles
 	cards  *cardCache
-	rows   *lineCache
 
 	browsing map[string]action
 	holding  map[string]action
@@ -109,8 +103,12 @@ type Model struct {
 	dataGen int
 
 	curCol, curRow int
-	colTop, rowTop int
-	pendingGo      bool
+	colTop         int
+	// rowTop is each column's own scroll offset, parallel to cols: a card moving
+	// down a long column must not change what a short one shows, so there is no
+	// grid-wide scroll position any more, only one per column.
+	rowTop    []int
+	pendingGo bool
 
 	width, height int
 	lay           layout
@@ -118,12 +116,25 @@ type Model struct {
 
 	// lines is the frame under construction, kept between frames so that drawing
 	// a screen does not allocate one slice per frame.
-	lines    []string
+	lines []string
+	// rowCells is scratch storage for one row's cell strings while composeRow
+	// builds it, reused across rows and frames so composing a row does not
+	// allocate a slice of its own on top of the string it returns.
+	rowCells []string
 	summary  string
 	sumKey   summaryKey
 	head     string
 	rule     string
 	chromeAt chromeKey
+
+	// gridCache is the composed window of rows, valid for gridAt and the rowTop
+	// gridRowTop was taken from — see grid() in render.go for why a column
+	// scrolling on its own means the whole window is what has to be compared for
+	// reuse, rather than one row at a time the way a shared scroll position let it.
+	gridCache  []string
+	gridValid  bool
+	gridAt     gridState
+	gridRowTop []int
 
 	card   *held
 	moving bool
@@ -169,7 +180,6 @@ func New(d kernel.Deps) kernel.View {
 	}
 	m.styles = newStyles(m.deps.Theme)
 	m.cards = newCardCache(cardCacheLimit)
-	m.rows = newLineCache(lineCacheLimit)
 	m.browsing, m.holding = defaultKeys().tables()
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
@@ -470,7 +480,7 @@ func (m *Model) reproject(project string) tea.Cmd {
 	m.deps.Project = project
 	m.all, m.at, m.ready = nil, 0, false
 	m.issues, m.cols, m.unmapped = nil, nil, 0
-	m.curCol, m.curRow, m.colTop, m.rowTop = 0, 0, 0, 0
+	m.curCol, m.curRow, m.colTop, m.rowTop = 0, 0, 0, nil
 	m.card, m.loaded, m.checked = nil, false, time.Time{}
 	m.stale, m.rawConfig, m.boardIDHint = false, jira.BoardConfig{}, 0
 	m.forget()
@@ -651,7 +661,7 @@ func (m *Model) nextBoard() tea.Cmd {
 	m.at = (m.at + 1) % len(m.all)
 	m.ready, m.issues, m.cols, m.unmapped, m.stale = false, nil, nil, 0, false
 	m.quickFilters, m.qfOn = nil, nil
-	m.curCol, m.curRow, m.colTop, m.rowTop = 0, 0, 0, 0
+	m.curCol, m.curRow, m.colTop, m.rowTop = 0, 0, 0, nil
 	m.card = nil
 	m.forget()
 	if held, ok := m.boardCache(); ok {
@@ -674,11 +684,16 @@ func (m *Model) place() {
 	m.dataGen++
 	m.unmapped, m.filteredOut = 0, 0
 	if !m.ready {
-		m.cols = nil
+		m.cols, m.rowTop = nil, nil
 		return
 	}
 	if len(m.cols) != len(m.plan.columns) {
 		m.cols = make([][]int, len(m.plan.columns))
+	}
+	if len(m.rowTop) != len(m.plan.columns) {
+		grown := make([]int, len(m.plan.columns))
+		copy(grown, m.rowTop)
+		m.rowTop = grown
 	}
 	for i := range m.cols {
 		m.cols[i] = m.cols[i][:0]
@@ -754,8 +769,10 @@ func (m *Model) clamp() {
 	m.follow()
 }
 
-// follow moves the two offsets as little as it takes to keep the cursor on
-// screen, which is how a wheel and a keypress agree about where the board is.
+// follow moves the column offset and the focused column's own row offset as
+// little as it takes to keep the cursor on screen, which is how a wheel and a
+// keypress agree about where the board is. A column nothing moved the cursor
+// into keeps whatever offset it already had.
 func (m *Model) follow() {
 	if m.lay.cols > 0 {
 		switch {
@@ -767,17 +784,43 @@ func (m *Model) follow() {
 		m.colTop = min(max(m.colTop, 0), max(len(m.cols)-m.lay.cols, 0))
 	}
 	h := m.rowsHeight()
+	top := m.rowTopAt(m.curCol)
 	switch {
-	case m.curRow < m.rowTop:
-		m.rowTop = m.curRow
-	case m.curRow >= m.rowTop+h:
-		m.rowTop = m.curRow - h + 1
+	case m.curRow < top:
+		top = m.curRow
+	case m.curRow >= top+h:
+		top = m.curRow - h + 1
 	}
+	m.setRowTop(m.curCol, top)
 	m.clampScroll()
 }
 
+// clampScroll clamps every column's own offset against its own current
+// length, because place can shrink any column — a filter narrowing it, a card
+// moving out of it — whether or not it is the one focused, and a stale offset
+// must never be left pointing past a column's new end.
 func (m *Model) clampScroll() {
-	m.rowTop = min(max(m.rowTop, 0), max(m.gridRows()-m.rowsHeight(), 0))
+	h := m.rowsHeight()
+	for c := range m.rowTop {
+		m.rowTop[c] = min(max(m.rowTop[c], 0), max(m.columnLen(c)-h, 0))
+	}
+}
+
+// rowTopAt is one column's own scroll offset. A column index out of range —
+// including one a board with no columns yet has none of — reads as the top,
+// which is what a fresh column starts at anyway.
+func (m *Model) rowTopAt(col int) int {
+	if col < 0 || col >= len(m.rowTop) {
+		return 0
+	}
+	return m.rowTop[col]
+}
+
+func (m *Model) setRowTop(col, top int) {
+	if col < 0 || col >= len(m.rowTop) {
+		return
+	}
+	m.rowTop[col] = top
 }
 
 func (m *Model) moveTo(col, row int) {
@@ -1109,14 +1152,20 @@ func (m *Model) released(msg tea.MouseReleaseMsg) tea.Cmd {
 	return m.drop()
 }
 
-// wheel scrolls the grid without moving the selection, which is what a wheel
-// does everywhere else.
+// wheel scrolls the column under the pointer without moving the selection,
+// which is what a wheel does everywhere else. Off any column — the caption
+// row, outside the grid — it falls back to the focused one, the same column a
+// keypress would scroll.
 func (m *Model) wheel(msg tea.MouseWheelMsg) {
+	col, ok := m.columnUnder(msg)
+	if !ok {
+		col = m.curCol
+	}
 	switch msg.Button {
 	case tea.MouseWheelUp:
-		m.rowTop -= widget.WheelStep
+		m.setRowTop(col, m.rowTopAt(col)-widget.WheelStep)
 	case tea.MouseWheelDown:
-		m.rowTop += widget.WheelStep
+		m.setRowTop(col, m.rowTopAt(col)+widget.WheelStep)
 	default:
 		return
 	}
@@ -1128,7 +1177,8 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 func (m *Model) cardUnder(msg tea.MouseMsg) (col, row int, ok bool) {
 	h := m.rowsHeight()
 	for c := m.colTop; c < min(m.colTop+m.lay.cols, len(m.cols)); c++ {
-		for r := m.rowTop; r < min(m.rowTop+h, m.columnLen(c)); r++ {
+		top := m.rowTopAt(c)
+		for r := top; r < min(top+h, m.columnLen(c)); r++ {
 			iss := m.issueAt(c, r)
 			if iss != nil && m.zones.Hit(cardZone(iss.Key), msg) {
 				return c, r, true
@@ -1175,7 +1225,7 @@ func (m *Model) relayout() {
 // can never be redrawn.
 func (m *Model) forget() {
 	m.cards.reset()
-	m.rows.reset()
+	m.gridValid = false
 	m.summary, m.head, m.rule = "", "", ""
 }
 

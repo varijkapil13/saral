@@ -117,7 +117,7 @@ func TestBoardMouse_TheWheelScrollsWithoutMovingTheSelection(t *testing.T) {
 	under := dr.m.selectedKey()
 
 	dr.send(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
-	if dr.m.rowTop == 0 {
+	if dr.m.rowTopAt(dr.m.curCol) == 0 {
 		t.Error("the wheel scrolled nothing")
 	}
 	if got := dr.m.selectedKey(); got != under {
@@ -125,8 +125,8 @@ func TestBoardMouse_TheWheelScrollsWithoutMovingTheSelection(t *testing.T) {
 	}
 
 	dr.send(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
-	if dr.m.rowTop != 0 {
-		t.Errorf("the grid is at row %d after going down and back up, want 0", dr.m.rowTop)
+	if got := dr.m.rowTopAt(dr.m.curCol); got != 0 {
+		t.Errorf("the grid is at row %d after going down and back up, want 0", got)
 	}
 }
 

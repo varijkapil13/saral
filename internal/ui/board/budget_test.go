@@ -63,14 +63,23 @@ func TestBudget_BoardColumnsAreVirtualizedAsWellAsItsRows(t *testing.T) {
 	}
 }
 
-// Walking a fresh card into view on every frame misses both memos by
-// construction, which is what says the miss itself is bounded: two lines are
-// rebuilt and two cards with them, not a screen of either.
+// Walking a fresh card into view on every frame misses the grid's own memo by
+// construction, since the column being walked scrolls on every step — see
+// grid in render.go for why the whole window is what gets rebuilt rather than
+// the one row that would have sufficed before a column could scroll on its
+// own. The miss is still bounded: every card behind the rebuilt window is a
+// cardCache lookup by issue identity, reusable at any screen position, so a
+// rebuild is a window of string concatenations rather than a window of card
+// renders — 83 on an M2 Pro, well inside "not a screen" even though it is no
+// longer "two lines".
 //
-// 93 on an M2 Pro, every run: the ceiling moved from 72 when a card's key
-// picked up the status category colour a column caption already carries —
-// one more Style.Render per resting card, the same call list.go's own status
-// cell already makes and already budgets for.
+// 93 on an M2 Pro when this ceiling was set, measured against a per-row memo
+// keyed by absolute position rather than the whole-window one grid now uses;
+// the ceiling did not move when the window replaced it. It moved from 72
+// before that, when a card's key picked up the status category colour a
+// column caption already carries — one more Style.Render per resting card,
+// the same call list.go's own status cell already makes and already budgets
+// for.
 func TestBudget_ABoardMemoMissCostsTwoLinesAndNotAScreen(t *testing.T) {
 	got := testing.Benchmark(BenchmarkBoardWalk10k).AllocsPerOp()
 	t.Logf("a frame that moves the cursor one card: %d allocations, ceiling 105", got)

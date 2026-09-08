@@ -374,6 +374,30 @@ needlessly.
   that outlive their view.
 - The optional poller is off by default, scoped to the focused view, and backs off on the first 429.
 
+### The one view without a shared row window
+
+Every other scrolling view keys its row memo by an absolute index into its own data, so scrolling
+never invalidates a row that stays on screen — only the one row entering it is a genuine miss, which
+is what `TestBudget_AMemoMissCostsOneRowAndNotAWindow` and its siblings hold each of them to.
+`internal/ui/board` cannot: it draws several columns side by side, each scrolling on its own offset so
+that moving the cursor down a long column does not move what a short column beside it shows, and once
+columns can be at different offsets there is no longer one absolute row that means the same thing in
+every column's slice of a composed line. Keying a composed line by absolute row would silently reuse
+the wrong combination; keying it any other way that still spans every column invalidates the whole
+visible window the moment any one column scrolls, which is the same cost as not caching the line at
+all.
+
+So the board caches its visible window as one unit (`Model.grid`, `internal/ui/board/render.go`),
+valid for the layout, the data generation, the cursor and the held card, and separately for the exact
+per-column offsets (a `[]int`, compared by value) it was built from — a slice cannot sit in the
+comparable key the rest of that state does. A column scrolling still costs rebuilding the whole
+window rather than the one row an absolute-index memo would have, but composing a row stays cheap:
+every cell in it is a `cardCache` lookup by issue identity, already reusable at any screen position,
+so the rebuild is a window of string concatenation rather than a window of card rendering — 83
+allocations measured against `TestBudget_ABoardMemoMissCostsTwoLinesAndNotAScreen`'s ceiling of 105,
+comfortably short of the "a screen" a card re-render of the same window would cost. The ceiling was
+not moved for this: see that test's own comment for the numbers it replaced.
+
 The `--bench-first-paint` flag used above is built in P0.1: it starts the program, renders the first
 frame from cache, prints elapsed microseconds and exits. Without it the two start-up budgets are
 unmeasurable, so it is part of the kernel rather than a later addition.

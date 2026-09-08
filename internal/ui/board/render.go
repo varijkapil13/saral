@@ -1,6 +1,7 @@
 package board
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -184,41 +185,36 @@ func (c *cardCache) put(k cardKey, s string) {
 
 func (c *cardCache) reset() { clear(c.cards) }
 
-// lineKey is what makes two renderings of a grid line the same rendering. The
-// cursor and the card in hand are held as the column they are in on this line,
-// or -1, so that moving the cursor rebuilds the two lines it moved between and
-// not the screen.
-type lineKey struct {
-	row    int
-	lay    layout
-	colTop int
-	sel    int
-	held   int
-	gen    int
+// gridState is everything the composed window of rows depends on, apart from
+// each column's own scroll offset — which cannot be part of a comparable key,
+// since a board's column count varies, and is compared separately against
+// gridRowTop instead. Moving the cursor is in here rather than left to cell's
+// own memo, because the window is cached as one unit and a row's card being
+// newly selected or newly held is exactly the kind of change that unit has to
+// notice on its own.
+type gridState struct {
+	lay      layout
+	colTop   int
+	gen      int
+	dataGen  int
+	h        int
+	curCol   int
+	curRow   int
+	holding  bool
+	heldFrom int
+	heldRow  int
 }
 
-type lineCache struct {
-	lines map[lineKey]string
-	limit int
-}
-
-func newLineCache(limit int) *lineCache {
-	return &lineCache{lines: make(map[lineKey]string, limit), limit: limit}
-}
-
-func (c *lineCache) get(k lineKey) (string, bool) {
-	s, ok := c.lines[k]
-	return s, ok
-}
-
-func (c *lineCache) put(k lineKey, s string) {
-	if len(c.lines) >= c.limit {
-		clear(c.lines)
+func (m *Model) gridState(h int) gridState {
+	st := gridState{
+		lay: m.lay, colTop: m.colTop, gen: m.styles.gen, dataGen: m.dataGen, h: h,
+		curCol: m.curCol, curRow: m.curRow,
 	}
-	c.lines[k] = s
+	if m.card != nil {
+		st.holding, st.heldFrom, st.heldRow = true, m.card.from, m.card.row
+	}
+	return st
 }
-
-func (c *lineCache) reset() { clear(c.lines) }
 
 // chromeKey is everything the caption row and the rule are built from, so that
 // both are rebuilt when one of them moves and never otherwise.
@@ -260,13 +256,7 @@ func (m *Model) View() string {
 	if m.gridRows() == 0 {
 		lines = m.appendEmpty(lines, h)
 	} else {
-		end := min(m.rowTop+h, m.gridRows())
-		for row := m.rowTop; row < end; row++ {
-			lines = append(lines, m.line(row))
-		}
-		for i := end - m.rowTop; i < h; i++ {
-			lines = append(lines, m.line(-1))
-		}
+		lines = append(lines, m.grid(h)...)
 	}
 	lines = append(lines, rule)
 	if barred {
@@ -299,34 +289,87 @@ func (m *Model) drawable() bool {
 	return m.ready && len(m.plan.columns) > 0 && m.failure == nil && m.lay.cols > 0
 }
 
-// line is one row of the grid across every visible column, memoized so that a
+// grid is the whole window of composed rows, memoized as one unit so that a
 // frame nothing has changed on costs the frame string and nothing behind it.
-// A row of -1 is the padding under a short grid.
+//
+// It is one unit and not a cache per row keyed by absolute position, the way
+// it was before a column could scroll on its own: with one shared scroll
+// position, an absolute row's identity never changes, so the rows a scroll
+// keeps on screen are simply not asked for again and only the one entering is
+// a genuine miss. Once every column keeps its own offset there is no longer
+// one absolute row that means the same thing in every column's part of a
+// composed line, so a row's whole identity changes the moment any column
+// behind it scrolls — the saving a per-row cache bought is gone regardless of
+// how the key is shaped, and the unit that is actually reusable across frames
+// is the window as a whole, which is exactly what this compares for.
+func (m *Model) grid(h int) []string {
+	st := m.gridState(h)
+	if m.gridValid && st == m.gridAt && slices.Equal(m.gridRowTop, m.rowTop) {
+		return m.gridCache
+	}
+	lines := m.gridCache[:0]
+	for row := range h {
+		lines = append(lines, m.composeRow(row))
+	}
+	m.gridCache = lines
+	m.gridAt = st
+	m.gridRowTop = append(m.gridRowTop[:0], m.rowTop...)
+	m.gridValid = true
+	return m.gridCache
+}
+
+// line is one row of the grid, by its position on screen rather than an
+// absolute index shared across columns. It is what the card memo budget test
+// calls directly: once grid has built the window for the state on screen, a
+// row already in it costs nothing but the slice index.
 func (m *Model) line(row int) string {
-	k := lineKey{row: row, lay: m.lay, colTop: m.colTop, sel: -1, held: -1, gen: m.styles.gen}
-	if row >= 0 && row == m.curRow {
-		k.sel = m.curCol
+	lines := m.grid(m.rowsHeight())
+	if row >= 0 && row < len(lines) {
+		return lines[row]
 	}
-	if m.card != nil && row == m.card.row {
-		k.held = m.card.from
+	return m.composeRow(row)
+}
+
+// composeRow is one row across every visible column at the given position on
+// screen: each column's own offset says which of its cards, if any, belongs
+// there, so a short column runs out and blanks while a long one beside it
+// keeps going.
+//
+// It gathers the cells before building the line so the builder can be grown
+// to the bytes they actually need rather than to the visual width: a styled
+// cell's escape sequences make it wider in bytes than in columns, and growing
+// by columns alone under-sizes the buffer and forces a second allocation
+// mid-write for every rebuilt row rather than the one this returns.
+func (m *Model) composeRow(row int) string {
+	end := min(m.colTop+m.lay.cols, len(m.cols))
+	n := max(end-m.colTop, 0)
+	cells := m.rowCells[:0]
+	total := 0
+	for c := m.colTop; c < end; c++ {
+		s := m.cell(c, m.rowTopAt(c)+row)
+		cells = append(cells, s)
+		total += len(s)
 	}
-	if s, ok := m.rows.get(k); ok {
-		return s
+	m.rowCells = cells
+	if n > 1 {
+		total += gap * (n - 1)
 	}
+	// Every cell — a card or the blank — is padTruncate'd to exactly lay.cell
+	// columns, so the row's visual width is arithmetic and never needs
+	// measuring the string that carries it.
+	pad := max(m.lay.width-n*m.lay.cell-max(n-1, 0)*gap, 0)
 	var b strings.Builder
-	b.Grow(m.lay.width + 32)
-	for c := m.colTop; c < min(m.colTop+m.lay.cols, len(m.cols)); c++ {
-		if c > m.colTop {
+	b.Grow(total + pad)
+	for i, s := range cells {
+		if i > 0 {
 			b.WriteString(strings.Repeat(" ", gap))
 		}
-		b.WriteString(m.cell(c, row))
+		b.WriteString(s)
 	}
-	s := b.String()
-	if pad := m.lay.width - ansi.StringWidth(s); pad > 0 {
-		s += strings.Repeat(" ", pad)
+	for range pad {
+		b.WriteByte(' ')
 	}
-	m.rows.put(k, s)
-	return s
+	return b.String()
 }
 
 // cell is one column's part of one grid line: the card there, or the blank that
