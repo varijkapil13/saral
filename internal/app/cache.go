@@ -34,6 +34,7 @@ const (
 	KindBoard       Kind = "board"
 	KindBacklog     Kind = "backlog"
 	KindLastBoard   Kind = "lastboard"
+	KindSprints     Kind = "sprints"
 )
 
 // TTL is how long an entry of this kind counts as current. Past it the entry is
@@ -56,6 +57,11 @@ func (k Kind) TTL() time.Duration {
 		return time.Hour
 	case KindVersions:
 		return 10 * time.Minute
+	// A sprint list moves when somebody plans, starts or closes one, which is a
+	// team's pace and not a search's; a minute keeps a started sprint from
+	// reading as planned for long.
+	case KindSprints:
+		return time.Minute
 	case KindIssue:
 		return 60 * time.Second
 	// A board or a backlog is a search in a column layout: what changes fastest
@@ -104,7 +110,7 @@ func (k Kind) Retention() Retention {
 // kinds is every kind a sweep walks.
 var kinds = []Kind{
 	KindIssue, KindSearch, KindFields, KindCreateMeta, KindBoardConfig,
-	KindVersions, KindCaps, KindBoard, KindBacklog, KindLastBoard,
+	KindVersions, KindCaps, KindBoard, KindBacklog, KindLastBoard, KindSprints,
 }
 
 // Snapshot is what a search left on disk the last time it ran: its rows, when
@@ -368,6 +374,8 @@ var (
 	_ BoardPageCache   = (*DiskCache)(nil)
 	_ BacklogPageCache = (*DiskCache)(nil)
 	_ CacheClearer     = (*DiskCache)(nil)
+	_ SprintsCache     = (*DiskCache)(nil)
+	_ VersionsCache    = (*DiskCache)(nil)
 )
 
 // CacheOption adjusts a DiskCache at construction.
