@@ -39,9 +39,8 @@ func (o pickOption) commitAs() string {
 	return o.label
 }
 
-// picker is the inline list open beneath a choice, person or status row — the
-// same thing moveModel used to push as its own screen, drawn in place instead.
-// Only one is ever open at a time, on the row id kept.
+// picker is the inline list open beneath a choice, person or status row. Only
+// one is ever open at a time, on the row id kept.
 type picker struct {
 	id   string
 	kind rowKind
@@ -69,8 +68,8 @@ type picker struct {
 	// The status picker's own sub-state once a transition has been chosen:
 	// moves is every transition offered, kept so a chosen id can be resolved
 	// back to the jira.Transition requiredFields needs; move, fields, field and
-	// confirming are exactly moveModel's own required-fields screen and
-	// confirmation, drawn beneath the row instead of on a pushed pane.
+	// confirming are its required-fields screen and confirmation, drawn beneath
+	// the row.
 	moves      []jira.Transition
 	move       *jira.Transition
 	fields     []moveField
@@ -382,6 +381,14 @@ func (m *Model) movesLoaded(msg movesLoadedMsg) {
 	m.pick.all = all
 	m.rerankPick(m.pick.input.Value(), under)
 	m.editGen++
+	if want := m.openMove; want != "" {
+		m.openMove = ""
+		if !slices.ContainsFunc(msg.moves, func(tr jira.Transition) bool { return tr.ID == want }) {
+			m.pick.fail = "the move this pane was opened for is no longer offered; pick another"
+			return
+		}
+		m.chooseTransition(want)
+	}
 }
 
 // chooseTransition picks one move off the list: straight to the confirmation
@@ -660,9 +667,6 @@ func (m *Model) pickConfirmKey(msg tea.KeyPressMsg) tea.Cmd {
 	return m.applyTransition()
 }
 
-// cyclePickField and unfillablePickField are moveModel's own cycleField and
-// unfillable, kept apart rather than shared: both act on a []moveField that
-// moveModel and this picker each hold their own copy of.
 func cyclePickField(fields []moveField, at, by int) {
 	if at < 0 || at >= len(fields) {
 		return
@@ -685,9 +689,8 @@ func unfillablePickField(fields []moveField) (string, bool) {
 	return "", false
 }
 
-// screenPatchFields is moveModel's own screenPatch, over a []moveField rather
-// than a receiver, so applyTransition can merge it into the dirty set's own
-// patch rather than sending it alone.
+// screenPatchFields is what a transition screen writes, so applyTransition can
+// merge it into the dirty set's own patch rather than sending it alone.
 func screenPatchFields(fields []moveField) jira.IssuePatch {
 	values := make(map[string]jira.FieldValue, len(fields))
 	for i := range fields {
@@ -704,8 +707,7 @@ func screenPatchFields(fields []moveField) jira.IssuePatch {
 }
 
 // clickPicker answers a click while the inline list, or a chosen status
-// move's screen, is open. The screen itself marks no zones, the same as
-// moveModel's own never did.
+// move's screen, is open. The screen itself marks no zones.
 func (m *Model) clickPicker(msg tea.MouseClickMsg) tea.Cmd {
 	p := m.pick
 	if p == nil || (p.kind == rkStatus && p.move != nil) {

@@ -285,7 +285,7 @@ func (m *Model) applySortChoice(next sortChoice) tea.Cmd {
 		return nil
 	}
 	if _, orders := sortFieldByID(next.field); orders && m.page.HasMore() {
-		m.pendingSort, m.reading = next, true
+		m.pendingSort, m.reading, m.sortAfterRead = next, true, true
 		return tea.Batch(kernel.Status(sortNeedsTheRest), m.readRest())
 	}
 	return m.setSort(next)

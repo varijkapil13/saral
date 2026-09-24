@@ -7,6 +7,9 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
+// termsMemoryKey is where the terms are kept for the project testDeps names.
+const termsMemoryKey = "terms:PROJ"
+
 // fakeMemory is a kernel.Memory in a map — the real one is a profile-scoped
 // file below internal/config, which a view may not import.
 type fakeMemory struct{ state map[string]string }

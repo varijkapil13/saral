@@ -30,6 +30,14 @@ func (a *asked) BoardIssues(ctx context.Context, boardID int64, q jira.BoardQuer
 	return a.Fake.BoardIssues(ctx, boardID, q)
 }
 
+func (a *asked) SprintIssues(ctx context.Context, boardID, sprintID int64, q jira.BoardQuery) (jira.Page[jira.Issue], error) {
+	a.mu.Lock()
+	a.queries = append(a.queries, q)
+	a.boards = append(a.boards, boardID)
+	a.mu.Unlock()
+	return a.Fake.SprintIssues(ctx, boardID, sprintID, q)
+}
+
 func (a *asked) last() (q jira.BoardQuery, boardID int64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

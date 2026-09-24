@@ -7,6 +7,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -46,23 +47,9 @@ func (m *Model) clearFilter() tea.Cmd {
 	return m.setTerms(nil)
 }
 
-// termsMemoryKey is where this view keeps the terms in force, under its own
-// ViewID.
-const termsMemoryKey = "terms"
+func (m *Model) recallTerms() (filter.Terms, bool) { return filterbar.Recall(m.deps, ViewID) }
 
-// recallTerms is what the last session on this profile left this chart
-// narrowed by, and whether it ever narrowed one at all.
-func (m *Model) recallTerms() (filter.Terms, bool) {
-	enc, ok := kernel.Recall(m.deps, ViewID, termsMemoryKey)
-	if !ok {
-		return nil, false
-	}
-	return filter.DecodeTerms(enc)
-}
-
-// rememberTerms keeps the terms now in force, so the next session opens on
-// the same narrowing. An empty encoding clears whatever was kept before.
-func (m *Model) rememberTerms() { kernel.Keep(m.deps, ViewID, termsMemoryKey, m.terms.Encode()) }
+func (m *Model) rememberTerms() { filterbar.Keep(m.deps, ViewID, m.terms) }
 
 func (m *Model) setTerms(next filter.Terms) tea.Cmd {
 	m.terms, m.termsGen = next, m.termsGen+1

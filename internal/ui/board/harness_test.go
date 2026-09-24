@@ -1,11 +1,13 @@
 package board
 
 import (
+	"context"
 	"flag"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -42,11 +44,61 @@ func testDeps(client jira.SessionClient) kernel.Deps {
 	}
 }
 
+// newFake is a Scrum board whose running sprint holds every issue, which is
+// what a board that shows its active sprint and nothing else needs to draw
+// them all.
 func newFake(issues int, opts ...jiratest.Option) *jiratest.Fake {
-	return jiratest.New(append([]jiratest.Option{
+	gen := jiratest.Gen(issues)
+	f := jiratest.New(append([]jiratest.Option{
 		jiratest.WithProject("PROJ", jiratest.Scrum),
-		jiratest.WithIssues(jiratest.Gen(issues)),
+		jiratest.WithIssues(gen),
 	}, opts...)...)
+	scheduleAll(f, "PROJ", keysOf(gen))
+	return f
+}
+
+// scheduleAll puts issues into a project's running sprint, straight through
+// the fake, and records how many calls that took so none of them is counted
+// as the view's.
+func scheduleAll(f *jiratest.Fake, project string, keys []string) {
+	ctx := context.Background()
+	defer func() { setupCalls.Store(f, len(f.Calls())) }()
+	boards, err := f.Boards(ctx, project)
+	if err != nil || len(boards) == 0 {
+		return
+	}
+	page, err := f.Sprints(ctx, boards[0].ID, jira.SprintActive)
+	if err != nil || len(page.Items) == 0 {
+		return
+	}
+	for len(keys) > 0 {
+		n := min(len(keys), 50)
+		_ = f.MoveToSprint(ctx, page.Items[0].ID, keys[:n])
+		keys = keys[n:]
+	}
+}
+
+func keysOf(issues []jira.Issue) []string {
+	keys := make([]string, 0, len(issues))
+	for i := range issues {
+		keys = append(keys, issues[i].Key)
+	}
+	return keys
+}
+
+// setupCalls is how many calls a test's own setup made of a fake, which is
+// not the view's to answer for.
+var setupCalls sync.Map
+
+// viewCalls is the calls a fake answered after its setup was done.
+func viewCalls(f *jiratest.Fake) []string {
+	calls := f.Calls()
+	if n, ok := setupCalls.Load(f); ok {
+		if skip, isInt := n.(int); isInt {
+			return calls[min(skip, len(calls)):]
+		}
+	}
+	return calls
 }
 
 // driver runs the board the way the kernel would, but keeps the messages it
@@ -59,6 +111,23 @@ type driver struct {
 	pushes     []kernel.PushMsg
 	pops       int
 	broadcasts []tea.Msg
+	// holdPages keeps every page after the first out of the board once it has
+	// been read, the way a page still in flight is, until release hands them
+	// over.
+	holdPages bool
+	heldPages []tea.Msg
+}
+
+// release delivers the pages holdPages kept back, and lets every page after
+// them through as it arrives.
+func (d *driver) release() {
+	d.t.Helper()
+	d.holdPages = false
+	held := d.heldPages
+	d.heldPages = nil
+	for _, msg := range held {
+		d.send(msg)
+	}
 }
 
 func newDriver(t *testing.T, d kernel.Deps, w, h int) *driver {
@@ -111,6 +180,10 @@ func (d *driver) run(cmd tea.Cmd) {
 		// message inside to the view the address names. There is one view here.
 		if reply, addressed := msg.(kernel.ReplyMsg); addressed {
 			msg = reply.Msg
+		}
+		if page, isPage := msg.(issuesMsg); isPage && d.holdPages && !page.first {
+			d.heldPages = append(d.heldPages, msg)
+			continue
 		}
 		switch msg := msg.(type) {
 		case kernel.StatusMsg:
@@ -264,7 +337,7 @@ func mustNotContain(t *testing.T, got string, unwanted ...string) {
 
 func countCalls(f *jiratest.Fake, name string) int {
 	n := 0
-	for _, call := range f.Calls() {
+	for _, call := range viewCalls(f) {
 		if call == name {
 			n++
 		}

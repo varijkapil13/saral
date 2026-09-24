@@ -223,9 +223,13 @@ type BoardSnapshot struct {
 	// More records that the board had another page when it was stored. The
 	// cards carry no cursor across a restart, so a caller that reaches the end
 	// of them has to ask the board again rather than page on from here.
-	More     bool
-	StoredAt time.Time
-	Stale    bool
+	More bool
+	// Sprints are the ones running, Sprint the one drawn.
+	Sprints   []jira.Sprint
+	Sprint    int64
+	NoSprints bool
+	StoredAt  time.Time
+	Stale     bool
 }
 
 // BoardCache is the part of the cache that keeps a board's own shape and cards,
@@ -696,7 +700,8 @@ func (c *DiskCache) Board(boardID int64) (BoardSnapshot, bool) {
 	}
 	return BoardSnapshot{
 		Config: entry.Config, QuickFilters: entry.QuickFilters, Issues: issues,
-		More: entry.More, StoredAt: rec.StoredAt, Stale: c.now().Sub(rec.StoredAt) > KindBoard.TTL(),
+		More: entry.More, Sprints: entry.Sprints, Sprint: entry.Sprint, NoSprints: entry.NoSprints,
+		StoredAt: rec.StoredAt, Stale: c.now().Sub(rec.StoredAt) > KindBoard.TTL(),
 	}, true
 }
 
@@ -710,7 +715,10 @@ func (c *DiskCache) PutBoard(boardID int64, snap BoardSnapshot) error {
 	if err != nil {
 		return err
 	}
-	entry, err := json.Marshal(wireBoard{Config: snap.Config, QuickFilters: snap.QuickFilters, Keys: keys, More: snap.More})
+	entry, err := json.Marshal(wireBoard{
+		Config: snap.Config, QuickFilters: snap.QuickFilters, Keys: keys, More: snap.More,
+		Sprints: snap.Sprints, Sprint: snap.Sprint, NoSprints: snap.NoSprints,
+	})
 	if err != nil {
 		return fmt.Errorf("encoding a board's shape and cards: %w", err)
 	}
@@ -749,6 +757,7 @@ func (c *DiskCache) PutBoardPage(boardID int64, page BoardSnapshot, first bool) 
 	}
 	entry, err := json.Marshal(wireBoard{
 		Config: page.Config, QuickFilters: page.QuickFilters, Keys: appendNew(keys, fresh), More: page.More,
+		Sprints: page.Sprints, Sprint: page.Sprint, NoSprints: page.NoSprints,
 	})
 	if err != nil {
 		return fmt.Errorf("encoding a board's shape and cards: %w", err)
@@ -951,6 +960,9 @@ type wireBoard struct {
 	QuickFilters []jira.QuickFilter `json:"quickFilters,omitempty"`
 	Keys         []string           `json:"keys,omitempty"`
 	More         bool               `json:"more,omitempty"`
+	Sprints      []jira.Sprint      `json:"sprints,omitempty"`
+	Sprint       int64              `json:"sprint,omitempty"`
+	NoSprints    bool               `json:"noSprints,omitempty"`
 }
 
 // wireBacklog is how a BacklogSnapshot is encoded, for the reason wireBoard

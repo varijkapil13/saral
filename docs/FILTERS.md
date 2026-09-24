@@ -191,6 +191,14 @@ filter and the first frame agree from the start rather than painting unfiltered 
 frame later. Every gesture that changes the terms — the picker, a click on a chip, `ctrl+g` — keeps
 the new value in the same call, so nothing is a step behind what is on screen.
 
+`board`, `backlog` and `timeline` keep their terms per project, under `terms:<project key>`, through
+`filterbar.Recall`/`Keep`: a status and an issue type are minted per project, so terms kept for one
+project name values another has never heard of. A project switch takes them off and says so — *"the
+filters were about PROJ, so they came off with it"*, the sentence `list` uses — and puts on whatever was
+last kept for the project switched to (`filterbar.Reproject`); coming back finds the first project's
+terms where they were left. `board` keeps the sprint it was left on the same way, under
+`sprint:<board id>`, for a board running more than one at once.
+
 `board`, `backlog` and `timeline` never send a term to the site — `terms.go`'s own doc on each already
 explains why — so a remembered id the site has since stopped knowing about is simply a term that
 matches nothing, the same as one chosen fresh. `list` does send its terms, as a JQL clause, and a

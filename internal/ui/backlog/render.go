@@ -157,6 +157,7 @@ type rowKey struct {
 	name     string
 	updated  int64
 	count    int
+	more     bool
 	state    string
 	lay      layout
 	selected bool
@@ -249,6 +250,7 @@ func (m *Model) line(at int) string {
 	if r.head {
 		g := &m.groups[r.group]
 		k.head, k.name, k.count, k.state = true, g.name, len(g.issues), string(g.state)
+		k.more = m.page.HasMore()
 	} else {
 		iss := &m.issues[r.issue]
 		k.name, k.updated = iss.Key, iss.Updated.UnixNano()
@@ -259,7 +261,7 @@ func (m *Model) line(at int) string {
 	}
 	var s string
 	if r.head {
-		s = m.renderHead(&m.groups[r.group], k.selected)
+		s = m.renderHead(&m.groups[r.group], k.selected, k.more)
 	} else {
 		s = m.renderRow(&m.issues[r.issue], k.selected, k.picked)
 	}
@@ -271,7 +273,7 @@ func (m *Model) line(at int) string {
 // renderHead draws one section head: the sprint, its state and how many issues
 // are in it. A sprint with none still has a head, because it is a place issues
 // can be dragged into.
-func (m *Model) renderHead(g *group, sel bool) string {
+func (m *Model) renderHead(g *group, sel, more bool) string {
 	t := m.deps.Theme
 	var b strings.Builder
 	b.Grow(m.lay.width + 32)
@@ -292,7 +294,11 @@ func (m *Model) renderHead(g *group, sel bool) string {
 	b.WriteString(" ")
 	b.WriteString(t.Glyphs.Separator)
 	b.WriteString(" ")
-	b.WriteString(count(len(g.issues), "issue"))
+	if more {
+		b.WriteString(strconv.Itoa(len(g.issues)) + "+ issues")
+	} else {
+		b.WriteString(count(len(g.issues), "issue"))
+	}
 	line := widget.PadTruncate(b.String(), m.lay.width, t.Glyphs.Ellipsis)
 	if sel {
 		return m.styles.selected.Render(line)

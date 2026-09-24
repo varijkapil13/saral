@@ -182,8 +182,6 @@ func (p *panel) zoneID(suffix string) string {
 	switch v := p.view.(type) {
 	case *Model:
 		return v.zones.ID(suffix)
-	case *moveModel:
-		return v.zones.ID(suffix)
 	default:
 		p.t.Fatalf("a %T marks no zones", p.view)
 		return ""
@@ -202,16 +200,6 @@ func (p *panel) editor() *Model {
 	m, ok := p.view.(*Model)
 	if !ok {
 		p.t.Fatalf("the pane is a %T, not the issue pane", p.view)
-	}
-	return m
-}
-
-func (p *panel) mover() *moveModel {
-	p.t.Helper()
-
-	m, ok := p.view.(*moveModel)
-	if !ok {
-		p.t.Fatalf("the pane is a %T, not the transition picker", p.view)
 	}
 	return m
 }
@@ -345,14 +333,4 @@ func scriptedEditor(t *testing.T, body string, exit error) editorLauncher {
 			return done(exit)
 		}
 	}
-}
-
-// answer is what the kernel hands a view: the command's own reply with the
-// envelope the kernel addresses it by taken off.
-func answer(cmd tea.Cmd) tea.Msg {
-	msg := cmd()
-	if reply, addressed := msg.(kernel.ReplyMsg); addressed {
-		return reply.Msg
-	}
-	return msg
 }

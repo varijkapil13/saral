@@ -147,7 +147,8 @@ The listing is a summary; `pkg/jira/port.go` is the contract. The methods added 
 worklogs, watchers and `ServerInfo` each sit behind a role of their own in `pkg/jira/roles.go` —
 `IssueReader`, `SprintIssueReader`, `Ranker`, `Linker`, `Worklogger`, `WatcherManager`,
 `ServerInfoReader` — and none is in `SessionClient` until a view calls it: the packet that lands that
-view widens the composite. `*cloud.Client` and `*jiratest.Fake` both implement the whole port.
+view widens the composite. The board brought in `SprintIssueReader` (a Scrum board shows its running
+sprint) and `IssueReader` (a moved card is read back by key rather than through a search). `*cloud.Client` and `*jiratest.Fake` both implement the whole port.
 
 ### Filtering by a person, and by the site's own words
 
@@ -703,7 +704,9 @@ keep, which is exact for the reason `Generation` is. A search, a board or a back
 and the issues it names in one transaction (`store.DB.PutAll`). `app.BoardPageCache` and
 `app.BacklogPageCache` store a walk one page at a time — only that page's issues are merged, and the
 key list is replaced by the first page and appended to by the rest — which is what a view calls per
-page; `PutBoard` and `PutBacklog` still store a whole snapshot.
+page, from a command rather than inside `Update`; `PutBoard` and `PutBacklog` still store a whole
+snapshot, which the board and backlog fall back to on a cache that keeps no pages, once on the first
+page and once when the walk ends.
 
 Opening the file is when it is kept in bounds between sessions (`openCache` in `cmd/saral`): every
 scope no profile in `config.toml` names is dropped (`store.DB.DropScope`), so removing a profile or

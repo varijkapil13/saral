@@ -46,16 +46,3 @@ editing an issue's fields
   the leave prompt
     acts   y save · n discard · esc stay
     full   [y save, n discard, esc stay]
-changing an issue's status
-  the moves this issue can make
-    acts   enter choose
-    full   [↓/j down, ↑/k up, enter choose]
-  the transition screen
-    acts   ←/h previous · →/l next · enter use these values
-    full   [↓/j down, ↑/k up, ←/h previous value, →/l next value]
-    full   [enter use these values, esc back]
-  waiting for the go-ahead to move
-    acts   y go ahead · esc back
-    full   [y go ahead, esc back]
-  moving
-    nothing of its own; the globals are all that answer

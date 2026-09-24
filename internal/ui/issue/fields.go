@@ -341,7 +341,7 @@ func (r *rows) editableField(row *fieldRow) {
 
 // maxPickRows bounds the inline list a choice, person or status row opens
 // beneath itself: it scrolls with its own top rather than growing without
-// limit, the same way moveModel's own list used to.
+// limit.
 const maxPickRows = 8
 
 // pickZone is the click target for one candidate in an inline list, namespaced
@@ -364,7 +364,7 @@ func (r *rows) pickLine(s, zoneID string) {
 // pickerLines draws the inline list a choice, person or status row has open
 // beneath it: the candidates ranked against what has been typed, or — once a
 // status row's candidate is a transition with a screen — the screen and the
-// confirmation moveModel used to draw as a pushed pane.
+// confirmation.
 func (r *rows) pickerLines() {
 	p := r.m.pick
 	t := r.m.deps.Theme
@@ -402,8 +402,8 @@ func (r *rows) pickerLines() {
 	}
 }
 
-// pickerMoveLines draws the transition's own screen and confirmation, the same
-// content moveModel drew full-screen, now directly beneath the status row.
+// pickerMoveLines draws the transition's own screen and confirmation directly
+// beneath the status row.
 func (r *rows) pickerMoveLines() {
 	p := r.m.pick
 	t := r.m.deps.Theme

@@ -41,14 +41,14 @@ func (m *Model) tookQuickFilters(msg quickFiltersMsg) tea.Cmd {
 	}
 	m.quickFilters = msg.filters
 	m.qfOn = make(map[int64]bool, len(msg.filters))
-	stored := m.storeBoard()
+	kept := stored(m.pagePut(nil, false))
 	// loadCards already ran once in tookConfig, before this board's own live
 	// quick filters were known, so a recalled selection reaches the cards on
 	// screen only by asking again now that there is something to turn on.
 	if m.applyRecalledQuickFilters() {
-		return tea.Batch(stored, m.loadCards())
+		return tea.Batch(kept, m.readCards(false))
 	}
-	return stored
+	return kept
 }
 
 // recallQuickFilterIDs is which of a board's quick filters the last session

@@ -12,8 +12,6 @@ form
  Issues  enter use this issue type                                                                          ? ctrl+k esc
 issue
  Issues  tab pane  e edit  E open in $EDITOR  t status  C comment                                           ? ctrl+k esc
-issue.move
- Issues  enter choose                                                                                       ? ctrl+k esc
 list
  Issues  enter open  f filter by  / filter  a all  e search  s sort  S save                                   ? ctrl+k q
 move

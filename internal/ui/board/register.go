@@ -17,6 +17,9 @@ type MoveIssueMsg struct{}
 // NextBoardMsg asks the board to draw the next of the boards this project has.
 type NextBoardMsg struct{}
 
+// NextSprintMsg asks the board to draw the next of the sprints it is running.
+type NextSprintMsg struct{}
+
 // ClearFilterMsg drops every term the filter picker put in force. It is
 // exported so the palette reaches the gesture ctrl+g does rather than a second
 // implementation of it.
@@ -63,6 +66,16 @@ func init() {
 		Keys:     []string{keys.Board.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
 			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(NextBoardMsg{}))
+		},
+	})
+	kernel.RegisterCommand(kernel.Command{
+		ID:       "board.next-sprint",
+		Title:    "Show another sprint running on this board",
+		Group:    "Board",
+		Requires: jira.CapBoards,
+		Keys:     []string{keys.Sprint.Help().Key},
+		Run: func(kernel.Deps) tea.Cmd {
+			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(NextSprintMsg{}))
 		},
 	})
 	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that

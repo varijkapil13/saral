@@ -24,6 +24,9 @@ type keyMap struct {
 	// stroke that never arrives.
 	Cancel kernel.Binding
 	Board  kernel.Binding
+	// Sprint shows the next of the sprints a board is running, when it runs
+	// more than one at once.
+	Sprint kernel.Binding
 	// Filters buffers, the way Go does: the digit it takes next is the
 	// 1-indexed position of one of this board's own quick filters, toggling it
 	// on or off and re-reading the board with the result. Capitalised because
@@ -54,6 +57,7 @@ func defaultKeys() keyMap {
 		Drop:     kernel.Bind([]string{"enter"}, "enter", "move it to this column"),
 		Cancel:   kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "put it back"),
 		Board:    kernel.Bind([]string{"b"}, "b", "another board of this project"),
+		Sprint:   kernel.Bind([]string{"s"}, "s", "another sprint running on this board"),
 		Filters:  kernel.Bind([]string{"F"}, "F 1-9", "quick filters"),
 		FilterBy: kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),
 		Unfilter: kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter"),
@@ -70,7 +74,7 @@ func (k keyMap) browsing(narrowed bool) kernel.KeySet {
 		k.Open, kernel.Terse(k.Pick, "move"), kernel.Terse(k.Board, "board"),
 		kernel.Terse(k.FilterBy, "filter by"), kernel.Terse(k.Filters, "quick filters"),
 	}
-	actions := []kernel.Binding{k.Open, k.Pick, k.Board, k.FilterBy, k.Filters}
+	actions := []kernel.Binding{k.Open, k.Pick, k.Board, k.Sprint, k.FilterBy, k.Filters}
 	if narrowed {
 		acts = append(acts, kernel.Terse(k.Unfilter, "clear"))
 		actions = append(actions, k.Unfilter)
@@ -174,6 +178,7 @@ const (
 	actDrop
 	actCancel
 	actBoard
+	actSprint
 	actFilter
 	actFilterBy
 	actUnfilter
@@ -190,6 +195,7 @@ func (k keyMap) tables() (browsing, holding map[string]action) {
 		binding{k.PageUp, actPageUp}, binding{k.PageDown, actPageDown},
 		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
 		binding{k.Open, actOpen}, binding{k.Pick, actPick}, binding{k.Board, actBoard},
+		binding{k.Sprint, actSprint},
 		binding{k.Filters, actFilter}, binding{k.FilterBy, actFilterBy},
 		binding{k.Unfilter, actUnfilter},
 	)

@@ -174,7 +174,7 @@ func TestBoard_DrawsTheStoredBoardBeforeAnythingIsAskedOfTheSite(t *testing.T) {
 	for _, iss := range issues {
 		mustContain(t, frame, iss.Key)
 	}
-	if calls := fake.Calls(); len(calls) != 0 {
+	if calls := viewCalls(fake); len(calls) != 0 {
 		t.Errorf("the first frame made %v; nothing may be asked of the site before it is drawn", calls)
 	}
 }
@@ -223,10 +223,12 @@ func TestBoard_RevalidatesAStoredBoardThatIsPastItsTTL(t *testing.T) {
 func TestBoard_RevalidationLandsOnTheSameBoardTheSnapshotNamed(t *testing.T) {
 	t.Parallel()
 
+	gen := jiratest.Gen(4)
 	fake := jiratest.New(
 		jiratest.WithProject("PROJ", jiratest.Scrum),
-		jiratest.WithIssues(jiratest.Gen(4)),
+		jiratest.WithIssues(gen),
 	)
+	scheduleAll(fake, "PROJ", keysOf(gen))
 	boardID, cfg, qf, issues := primed(t, testDeps(fake))
 	if len(issues) == 0 {
 		t.Fatal("nothing was primed, so this test proves nothing")

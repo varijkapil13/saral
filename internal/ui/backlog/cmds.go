@@ -33,8 +33,9 @@ type loadedMsg struct {
 
 // pagedMsg carries the page after the one already in hand.
 type pagedMsg struct {
-	gen  int
-	page jira.Page[jira.Issue]
+	gen    int
+	page   jira.Page[jira.Issue]
+	stored error
 }
 
 // movedMsg is one chunk of a move the site accepted.
@@ -168,13 +169,17 @@ func indexOfBoard(boards []jira.Board, id int64) (int, bool) {
 	return 0, false
 }
 
-func nextPage(ctx context.Context, page jira.Page[jira.Issue], gen int) tea.Cmd {
+func nextPage(ctx context.Context, page jira.Page[jira.Issue], gen int, put func() error) tea.Cmd {
 	return func() tea.Msg {
+		var stored error
+		if put != nil {
+			stored = put()
+		}
 		next, err := page.Next(ctx)
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
-		return pagedMsg{gen: gen, page: next}
+		return pagedMsg{gen: gen, page: next, stored: stored}
 	}
 }
 
