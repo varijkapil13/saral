@@ -1,6 +1,8 @@
 package kernel
 
 import (
+	"reflect"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
@@ -23,8 +25,16 @@ type PushMsg struct {
 // PopMsg takes the top view off the stack.
 type PopMsg struct{}
 
-// OpenMsg switches to a registered root view by ID.
-type OpenMsg struct{ ID string }
+// OpenMsg switches to a registered root view by ID. Then, when set, is handed
+// to that view once the switch has landed, and to nothing if it did not.
+type OpenMsg struct {
+	ID   string
+	Then tea.Msg
+}
+
+// ProceedMsg is a CloseAsker's answer once its own prompt is resolved: the
+// kernel replays whichever gesture it asked about.
+type ProceedMsg struct{}
 
 // BroadcastMsg carries a message to every view on the stack, which is how one
 // view tells another that something changed without holding a pointer to it.
@@ -155,11 +165,41 @@ func Reply(cmd tea.Cmd, to ...Addr) tea.Cmd {
 // wraps a callback's answer in where Reply cannot reach — the editor handoff
 // hands tea.ExecProcess a function rather than a command, and wrapping the
 // command itself would put an envelope round the exec the runtime has to see.
+//
+// A batch or a sequence is addressed command by command. Wrapped whole, the
+// runtime would never see it to run, and the view would be handed a list of
+// commands nothing executes.
 func ReplyTo(msg tea.Msg, to ...Addr) tea.Msg {
 	if msg == nil {
 		return nil
 	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		return tea.BatchMsg(replyEach(batch, to))
+	}
+	if seq, ok := commandList(msg); ok {
+		return tea.Sequence(replyEach(seq, to)...)()
+	}
 	return ReplyMsg{To: to, Msg: msg}
+}
+
+var cmdsType = reflect.TypeFor[[]tea.Cmd]()
+
+// commandList recognises tea.Sequence's message by its shape, since its type is
+// unexported.
+func commandList(msg tea.Msg) ([]tea.Cmd, bool) {
+	v := reflect.ValueOf(msg)
+	if v.Kind() != reflect.Slice || !v.Type().ConvertibleTo(cmdsType) {
+		return nil, false
+	}
+	return v.Convert(cmdsType).Interface().([]tea.Cmd), true
+}
+
+func replyEach(cmds []tea.Cmd, to []Addr) []tea.Cmd {
+	out := make([]tea.Cmd, len(cmds))
+	for i, c := range cmds {
+		out[i] = Reply(c, to...)
+	}
+	return out
 }
 
 // Pop returns a command that goes back one view.
@@ -167,6 +207,17 @@ func Pop() tea.Cmd { return func() tea.Msg { return PopMsg{} } }
 
 // Open returns a command that switches to a registered root view.
 func Open(id string) tea.Cmd { return func() tea.Msg { return OpenMsg{ID: id} } }
+
+// OpenThen returns a command that switches to a registered root view and hands
+// it msg once it is on screen. Unlike a Sequence of Open and Broadcast, a
+// switch that is refused delivers msg to nobody.
+func OpenThen(id string, msg tea.Msg) tea.Cmd {
+	return func() tea.Msg { return OpenMsg{ID: id, Then: msg} }
+}
+
+// Proceed returns the command a CloseAsker answers with once its prompt is
+// resolved, which carries on with the gesture it was asked about.
+func Proceed() tea.Cmd { return func() tea.Msg { return ProceedMsg{} } }
 
 // SetMouse returns a command that turns mouse reporting on or off.
 func SetMouse(enabled bool) tea.Cmd { return func() tea.Msg { return SetMouseMsg{Enabled: enabled} } }

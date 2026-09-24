@@ -31,9 +31,9 @@ type keyMap struct {
 	Save   kernel.Binding
 	Accept kernel.Binding
 	Clear  kernel.Binding
-	// Unfilter takes an accepted filter off from the browsing state. esc is not
-	// one of its keys: the kernel keeps that for itself in a root view, so naming
-	// it here would advertise a stroke that never arrives.
+	// Unfilter takes an accepted filter off from the browsing state. esc reaches
+	// it too, because the view claims esc from the kernel while something is
+	// narrowing the rows (see WantsBack).
 	Unfilter kernel.Binding
 	// Run and Keep answer the prompt that shows the search on screen: one runs
 	// what has been typed into it, the other leaves the search alone.
@@ -75,7 +75,7 @@ func defaultKeys() keyMap {
 		Save:       kernel.Bind([]string{"S"}, "S", "save this query to a key"),
 		Accept:     kernel.Bind([]string{"enter"}, "enter", "keep filter"),
 		Clear:      kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "clear filter"),
-		Unfilter:   kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear everything narrowing these rows"),
+		Unfilter:   kernel.Bind([]string{"ctrl+g", "esc"}, "ctrl+g", "clear everything narrowing these rows"),
 		Run:        kernel.Bind([]string{"enter"}, "enter", "run this search"),
 		Keep:       kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "keep the one on screen"),
 		Slot:       kernel.Bind(digits, "1-9", "the key to bind it to"),
@@ -189,7 +189,7 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysPickingSlot
 	case m.bind == bindConfirm:
 		state = keysConfirmingSlot
-	case m.keptFilter() || len(m.terms) > 0:
+	case m.narrowed():
 		state = keysNarrowed
 	}
 	return liveSets[state], int(state)

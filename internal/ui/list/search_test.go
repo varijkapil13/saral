@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -89,8 +89,8 @@ func TestList_TheWholeProjectSearchIsReachableFromThePaletteToo(t *testing.T) {
 
 	var query QueryMsg
 	for _, msg := range collect(all.Run(kernel.Deps{Project: "PROJ"})) {
-		if got, ok := msg.(kernel.BroadcastMsg); ok {
-			query, _ = got.Msg.(QueryMsg)
+		if got, ok := msg.(kernel.OpenMsg); ok && got.ID == ViewID {
+			query, _ = got.Then.(QueryMsg)
 		}
 	}
 	if !strings.Contains(query.JQL, `project = "PROJ"`) || strings.Contains(query.JQL, "currentUser()") {
@@ -417,33 +417,13 @@ func TestList_TheSearchIsAlsoEditableFromThePaletteAndByPointer(t *testing.T) {
 	mustContain(t, frame(m), "enter runs it")
 
 	m = keys(t, m, "esc")
-	_ = m.Frame() // registering the zones is a side effect of drawing them
-
-	var id string
-	eventually(t, func() bool {
-		id = zoneNamed(d, "title")
-		return id != ""
-	})
-	at := d.Zones.Get(id)
+	lm := m.Top().(*Model)
+	at := uitest.ZoneDrawn(t, d.Zones, func() { _ = m.Frame() }, lm.zones.ID(titleZone))
 	m = send(t, m, tea.MouseClickMsg{X: at.StartX + 1, Y: at.StartY, Button: tea.MouseLeft})
 
 	if got := frame(m); !strings.Contains(got, "enter runs it") {
 		t.Errorf("clicking the line that names the search did not offer to change it:\n%s", got)
 	}
-}
-
-// zoneNamed finds a zone id the list marked. The prefix is handed out by the
-// manager per component, so it is discovered rather than assumed, and the
-// manager records a zone on its own goroutine, so it is looked for until it
-// appears.
-func zoneNamed(d kernel.Deps, name string) string {
-	for i := 1; i < 4096; i++ {
-		id := "zone_" + strconv.Itoa(i) + "__" + name
-		if !d.Zones.Get(id).IsZero() {
-			return id
-		}
-	}
-	return ""
 }
 
 func TestList_TheTitleAlwaysNamesWhatIsOnScreen(t *testing.T) {

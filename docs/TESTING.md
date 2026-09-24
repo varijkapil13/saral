@@ -117,6 +117,11 @@ Bubble Tea's `teatest` drives full programs where an interaction sequence matter
   one on loopback with `httptest`, which is what `jiratest.Server` does; `internal/arch` asserts that
   the workflow still runs the suite that way.
 - Test names describe behaviour: `TestReleaseVersion_RefusesWhenUnresolvedIssuesExist`.
+- A click is aimed through `internal/ui/uitest`: `uitest.Zone` for a view's own frame and
+  `uitest.ZoneDrawn` for a draw that scans itself, such as `kernel.Model.Frame`. Both clear the ids
+  first and name every zone the click resolves through. The id is the view's own —
+  `m.Top().(*Model).zones.ID(name)` — never a guessed prefix: bubblezone's prefix counter is
+  process-global, so an id spelt out by number drifts with `-count` and with every test added.
 
 ## Import boundaries
 

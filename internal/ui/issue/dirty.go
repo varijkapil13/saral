@@ -118,11 +118,12 @@ func (m *Model) BlocksClose() (string, bool) {
 }
 
 // AskClose puts the pane into the leave prompt instead of refusing outright.
-// It answers later by sending kernel.Pop() itself, once the prompt is
-// resolved — see leavingKey.
+// It answers later with kernel.Proceed(), once the prompt is resolved, so
+// the kernel carries on with whichever gesture it asked about — see
+// leavingKey.
 func (m *Model) AskClose() tea.Cmd {
 	if !m.anyDirty() {
-		return kernel.Pop()
+		return kernel.Proceed()
 	}
 	m.leaving = true
 	return nil
@@ -354,7 +355,7 @@ func (m *Model) saveResult(msg savedMsg) tea.Cmd {
 	key := m.issue.Key
 	if m.leaving {
 		m.leaving = false
-		return tea.Sequence(discardCmd, kernel.Pop(), kernel.Broadcast(kernel.RefreshMsg{}), kernel.Status(key+" saved"))
+		return tea.Sequence(discardCmd, kernel.Proceed(), kernel.Broadcast(kernel.RefreshMsg{}), kernel.Status(key+" saved"))
 	}
 	return join(discardCmd, join(m.fetch(), kernel.Status(key+" saved")))
 }
@@ -435,7 +436,7 @@ func (m *Model) leavingKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "n":
 		m.leaving = false
 		cmd := m.discardAll()
-		return tea.Sequence(cmd, kernel.Pop(), kernel.Status(m.issue.Key+": the changes were thrown away"))
+		return tea.Sequence(cmd, kernel.Proceed(), kernel.Status(m.issue.Key+": the changes were thrown away"))
 	case "esc":
 		m.leaving = false
 		return nil

@@ -146,7 +146,7 @@ settings               ctrl+, / g s   opens over what you were in, esc returns �
                                       used to carry as nine rows, now one. docs/SETTINGS.md.
                                       g s reaches it the way g i reaches the palette
 search in view         /              filter rows live
-clear everything       ctrl+g         a term the picker set and a typed filter both, from the browsing
+clear everything       ctrl+g / esc   a term the picker set and a typed filter both, from the browsing
                                       state; esc clears the typed one while still typing
 filter by a value      f              pick a facet, then one of the values this site holds
 every issue here       a              widen the search to the whole of the session's project;
@@ -425,11 +425,12 @@ carry. It composes with `/`: a term is what the site was asked and the filter is
 answer, so a row has to survive both.
 
 **And `/`'s own filter is named the same way once it has been accepted.** `esc` closes the prompt and
-keeps the filter, and after that `esc` belongs to the kernel, so the count reading `1 of 3` was the
-only trace a filter was on at all and the only way off it was to open it again. So a kept filter gets
-its own line under the rows too. `ctrl+g` clears both it and any terms in force — one key rather than
-two to learn — and the palette carries *clear the filter on these rows*. The footer offers `ctrl+g`
-whenever there is a term or a filter to clear.
+keeps the filter, so a kept filter gets its own line under the rows. `ctrl+g` clears both it and any
+terms in force — one key rather than two to learn — and the palette carries *clear the filter on these
+rows*. The footer offers `ctrl+g` whenever there is a term or a filter to clear. `esc` does the same:
+in a root view it is the kernel's, and clears only the status line, unless the view implements
+`kernel.BackClaimer` and its `WantsBack()` says yes — which the list does exactly while something is
+narrowing its rows.
 
 **The divider is a column of blank, and it is deliberate that it stays blank.** The boundary between
 the issue pane's description and its sidebar is one column wide and carries no rule, because the
@@ -482,8 +483,12 @@ label the way the list marks its cells.
 Mouse mode must be disableable (`mouse = false` in config) for people who rely on terminal text
 selection. Off means off all the way down: the zone manager is disabled with it, so a view's markers
 are never written into the frame in the first place and there is nothing left for a selection to
-pick up — and a view asks `Zones.Enabled()` before telling anybody to click something. Nothing from
-the mouse — click, wheel, drag or release — reaches the view while the help overlay is covering it.
+pick up — and a view asks `Zones.Enabled()` before telling anybody to click something. The kernel
+scans every frame either way, because a disabled manager strips the markers a row memoized while the
+mouse was on, and it broadcasts `kernel.SetMouseMsg` when the setting flips so that a view whose memo
+key does not already carry the mouse bit can drop what it drew. Nothing from the mouse — click, wheel,
+drag or release — reaches the view while the help overlay is covering it, or at all below the minimum
+size, where the frame is a sentence and every zone belongs to one no longer on screen.
 
 ## Filtering by a person, without writing JQL
 
@@ -604,13 +609,13 @@ once.
 **Leaving with dirty rows asks, everywhere the kernel would otherwise refuse.** `kernel.CloseAsker` is
 the additive interface that makes this possible: a `Blocker` that also answers to it is asked instead
 of refused, at every one of the three places a view is discarded — a pop, a root switch, and quitting
-from a lone root. The issue pane answers by putting up its own named prompt in place of the identity
-line's facts — `Save N changes to PROJ-12?  y save · n discard · esc stay`, each word a zone too — and
-resolves it itself: `y` saves and then sends the pop the kernel would have sent in the first place, `n`
-discards and sends it straight away, `esc` puts the prompt away and changes nothing. The mechanism does
-not know *which* gesture triggered it, so a root switch asked this way is answered by leaving the issue
-pane, not by completing the switch — the reader repeats the gesture once they are back at rest, which
-is the trade this packet makes rather than teaching every blocked gesture how to resume itself.
+from a lone root — as long as it is the view on screen. The issue pane answers by putting up its own
+named prompt in place of the identity line's facts — `Save N changes to PROJ-12?  y save · n discard ·
+esc stay`, each word a zone too — and resolves it itself: `y` saves and then sends `kernel.Proceed()`,
+`n` discards and sends it straight away, `esc` puts the prompt away and changes nothing. The kernel
+holds the gesture it asked about and `Proceed` replays it, so `g2` over a dirty pane answered `n` lands
+on the second root rather than only leaving the pane. With a thread lent over the dirty pane, the pane
+is not on screen to ask, so the switch is refused with its reason instead.
 
 **The dirty set survives a crash.** Every commit to a row writes the whole set through the same
 `draftStore` P2.3 built — one file per issue per site, replaced atomically — and it is picked back up
@@ -702,6 +707,9 @@ the same gesture now draws it in place instead of pushing it.
   screen is comes back.
 - Errors state what failed and what to do. `403` becomes "You need the Bulk Change permission to move
   issues between projects", which is the capability `Reason` verbatim.
+- **A warning and a failure differ by more than colour.** The status line prefixes the tier's `Warn`
+  glyph to a warning and its `Cross` to a failure, so `NO_COLOR`, which draws both in the same bold,
+  still tells them apart.
 - **The status line is transient, so nothing that has to persist may live only there.** It is one
   line, it is overwritten by the next thing that happens, and a keypress clears it. Anything that is
   still true after that keypress belongs in the pane as well: a stale badge, a refusal, a count.

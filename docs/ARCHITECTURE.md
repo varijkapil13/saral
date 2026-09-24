@@ -393,9 +393,16 @@ holds the next field to both halves of that: built through the widget, and adver
 own overlay entry is not by itself how a user finds the stroke. The keymap table in `docs/UX.md` is.
 
 A view holding something unsaved implements `kernel.Blocker`. Going back asks the view being popped;
-quitting and switching root view ask **every** entry on the stack, because both throw all of it away
-and the entry holding the draft is usually not the top one — the palette is pushed over whatever it
-was opened from and holds nothing itself.
+quitting asks **every** entry on the stack, because it throws all of it away and the entry holding the
+draft is usually not the top one — the palette is pushed over whatever it was opened from and holds
+nothing itself. Switching root view asks every entry *above* the root, because the root is parked
+rather than discarded: a backlog mid-move does not refuse `g1`.
+
+A `Blocker` that also implements `kernel.CloseAsker` is asked instead of refused, but only when it is
+the view on top — one underneath cannot be seen putting a prompt up, so it is refused in its own words.
+The kernel holds the gesture it asked about, and the view answers with `kernel.Proceed()` once its
+prompt is resolved, which replays that gesture: the pop, the root switch (with whatever it was carrying)
+or the quit. An answer arriving after the stack has moved on replays nothing.
 
 A view that starts work outliving a frame implements `kernel.Closer`, and is told once, when the
 kernel throws it away:
@@ -616,7 +623,11 @@ Conventions:
   lifetime, and a view wraps its own in `kernel.Reply` with its address so that the answer comes back
   to it rather than to whatever the stack has on top when it lands.
 - Cross-view effects go through `kernel.Broadcast` (e.g. an issue edited in the detail view tells
-  the board to refresh that one row) — not by holding a pointer to another model.
+  the board to refresh that one row) — not by holding a pointer to another model. A command that
+  opens a root view to act on it uses `kernel.OpenThen(id, msg)` rather than a `Sequence` of `Open`
+  and `Broadcast`: the message goes to the view that opened, and to nobody when the open is refused.
+- `kernel.Reply` addresses each command of a `tea.Batch` or `tea.Sequence` on its own; wrapped whole,
+  the runtime would never see the commands to run them.
 - **Request coalescing:** identical in-flight requests are deduplicated in `internal/app` with a
   singleflight keyed on the request signature, and again in `pkg/jira/cloud`, whose key also counts
   the client's finished writes so a read after a write never joins one from before it. Rapid cursor

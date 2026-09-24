@@ -83,6 +83,8 @@ func msgName(msg tea.Msg) string {
 		return "motion"
 	case tea.MouseReleaseMsg:
 		return "release"
+	case SetMouseMsg:
+		return "mouse:" + strconv.FormatBool(m.Enabled)
 	default:
 		return "other"
 	}

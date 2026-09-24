@@ -218,3 +218,38 @@ func TestReply_EveryAddressIsItsOwn(t *testing.T) {
 		seen[at] = true
 	}
 }
+
+// A batch wrapped whole would reach the view as a list of commands that nothing
+// runs; each command in it is addressed instead, and a sequence keeps its order.
+func TestReply_AddressesEachCommandOfABatchOrASequence(t *testing.T) {
+	to := NewAddr()
+	one := func() tea.Msg { return privMsg{n: 1} }
+	two := func() tea.Msg { return privMsg{n: 2} }
+
+	for name, cmd := range map[string]tea.Cmd{
+		"batch":    tea.Batch(one, two),
+		"sequence": tea.Sequence(one, two),
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := Reply(cmd, to)()
+			if _, whole := got.(ReplyMsg); whole {
+				t.Fatalf("the %s was wrapped whole, so its commands never run", name)
+			}
+			inner, ok := commandList(got)
+			if !ok {
+				t.Fatalf("the %s came back as %T, not as a list of commands the runtime runs", name, got)
+			}
+			var ns []int
+			for _, c := range inner {
+				reply, addressed := c().(ReplyMsg)
+				if !addressed || len(reply.To) != 1 || reply.To[0] != to {
+					t.Fatalf("a command inside the %s was not addressed: %#v", name, reply)
+				}
+				ns = append(ns, reply.Msg.(privMsg).n)
+			}
+			if len(ns) != 2 || ns[0] != 1 || ns[1] != 2 {
+				t.Errorf("the %s answered %v, want [1 2] in order", name, ns)
+			}
+		})
+	}
+}

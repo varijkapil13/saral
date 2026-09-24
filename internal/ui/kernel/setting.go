@@ -262,17 +262,11 @@ func saveMouse(enabled bool) tea.Cmd {
 }
 
 func writeMouse(enabled bool) error {
-	path, err := config.Path()
-	if err != nil {
-		return err
-	}
-	cfg, err := config.LoadFile(path)
-	if err != nil {
-		return err
-	}
-	if cfg.Mouse == enabled {
+	return updateConfig(func(cfg *config.Config) error {
+		if cfg.Mouse == enabled {
+			return errUnchanged
+		}
+		cfg.Mouse = enabled
 		return nil
-	}
-	cfg.Mouse = enabled
-	return cfg.Save(path)
+	})
 }
