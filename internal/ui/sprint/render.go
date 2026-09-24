@@ -37,6 +37,11 @@ const (
 	// after it.
 	formLabel  = 7
 	formGutter = 2
+	// detailHeight is the block under the rows that describes the sprint under
+	// the cursor, and detailMinBody the body it needs before it is drawn at all.
+	detailHeight    = 3
+	detailMinBody   = 8
+	detailMemoLimit = 64
 	// rowMemoLimit holds the visible window and its overscan several relayouts
 	// deep, in both selected and unselected forms. Past it the map is cleared
 	// rather than evicted one row at a time, because a scroll invalidates a
@@ -53,7 +58,10 @@ const (
 	zoneCancel  = "cancel"
 	zoneSprint  = "sprint:"
 	zoneField   = "field:"
+	zoneDest    = "dest:"
 )
+
+func destZone(at int) string { return zoneDest + strconv.Itoa(at) }
 
 func (m *Model) zoneOf(at int) string {
 	if at < 0 || at >= len(m.sprints) {
@@ -283,6 +291,7 @@ type chromeKey struct {
 	failed   bool
 	state    state
 	inflight op
+	stale    bool
 }
 
 func (m *Model) chromeKey() chromeKey {
@@ -294,7 +303,7 @@ func (m *Model) chromeKey() chromeKey {
 		board: board, boards: len(m.boards), more: m.more, showAll: m.showAll,
 		rows: m.rowCount(), width: m.width, gen: m.styles.gen,
 		loading: m.loading, loaded: m.loaded, failed: m.failure != nil,
-		state: m.state, inflight: m.inflight,
+		state: m.state, inflight: m.inflight, stale: m.stale,
 	}
 }
 
@@ -307,6 +316,9 @@ func (m *Model) chromeLines() (head, rule string) {
 	}
 	ell := m.deps.Theme.Glyphs.Ellipsis
 	head = m.styles.muted.Render(ansi.Truncate("  "+headWords(key), max(m.width, 8), ell))
+	if key.stale {
+		head = ansi.Truncate(head+" "+m.deps.Theme.StaleBadge.Render(staleLabel), max(m.width, 8), ell)
+	}
 	count := countLabel(key)
 	dashes := max(m.width-ansi.StringWidth(count)-1, 0)
 	rule = m.styles.rule.Render(strings.Repeat(m.deps.Theme.Glyphs.HLine, dashes)) +
@@ -362,13 +374,24 @@ func countLabel(key chromeKey) string {
 // is up.
 func (m *Model) bodyHeight() int { return max(m.height-headHeight, 1) }
 
-// rowsHeight is how many rows fit, less the line a refusal keeps under them.
+// staleLabel is a word and not a glyph, the way the list's is.
+const staleLabel = "stale"
+
+// rowsHeight is how many rows fit, less the line a refusal keeps under them and
+// the block that describes the sprint under the cursor.
 func (m *Model) rowsHeight() int {
 	h := m.bodyHeight()
 	if m.refused() {
 		h--
 	}
+	if m.showsDetail() {
+		h -= detailHeight
+	}
 	return max(h, 1)
+}
+
+func (m *Model) showsDetail() bool {
+	return m.state == browsing && m.rowCount() > 0 && m.bodyHeight() >= detailMinBody
 }
 
 // refused reports that the site said no and there are still rows to draw, which
@@ -413,6 +436,9 @@ func (m *Model) appendRows(lines []string, h int) []string {
 	}
 	if m.refused() {
 		lines = append(lines, m.refusalLine())
+	}
+	if m.showsDetail() {
+		lines = append(lines, m.detailLines()...)
 	}
 	for len(lines)-at < h {
 		lines = append(lines, "")
@@ -554,6 +580,9 @@ func (m *Model) confirmLines() []string {
 			out = append(out, m.styles.muted.Render("  "+wrapped))
 		}
 	}
+	if dests := m.destLines(room); len(dests) > 0 {
+		out = append(append(out, ""), dests...)
+	}
 	return append(out, "", "  "+m.styles.base.Render(m.zones.Mark(zoneConfirm, m.keys.Yes.Help().Key+" goes ahead"))+
 		m.styles.muted.Render(" · ")+
 		m.styles.muted.Render(m.zones.Mark(zoneRefuse, m.keys.No.Help().Key+" leaves it alone")))
@@ -567,10 +596,9 @@ func (m *Model) confirmQuestion() string {
 	return "Complete " + named(sp) + "?"
 }
 
-// confirmProse is what the move does, in sentences. The count of what is still
-// open is deliberately absent and said to be absent: the port has no read for
-// the issues in a sprint, and a number this program cannot get is not one it
-// may imply.
+// confirmProse is what the move does, in sentences. A completion also says how
+// many issues are still open, when the running sprint's count is in, and lists
+// where they can go.
 func (m *Model) confirmProse(sp jira.Sprint) []string {
 	board := m.pending.board
 	where := ""
@@ -584,10 +612,58 @@ func (m *Model) confirmProse(sp jira.Sprint) []string {
 				"everyone looking at the board.",
 		}
 	}
+	if m.nothingOpen(sp) {
+		return []string{"Closing a sprint" + where + " cannot be undone.", m.openWords(sp)}
+	}
 	return []string{
 		"Closing a sprint" + where + " cannot be undone.",
-		"Every issue in it that is not done leaves the sprint: Jira puts them back in the backlog.",
-		"This session cannot say how many that is — nothing in the port reads the issues in a sprint — " +
-			"so check the board first if it matters.",
+		m.openWords(sp),
+		"Jira sends what is open to the backlog. Anywhere else, it is moved there first, and the sprint is " +
+			"closed only once all of it has moved.",
 	}
+}
+
+// nothingOpen is a count that is in and says there is nothing to send anywhere.
+func (m *Model) nothingOpen(sp jira.Sprint) bool {
+	p, ok := m.progress[sp.ID]
+	return ok && p.err == nil && p.total == p.done
+}
+
+// openWords is how much of the sprint is still open, from its progress when
+// that has been read.
+func (m *Model) openWords(sp jira.Sprint) string {
+	p, ok := m.progress[sp.ID]
+	switch {
+	case ok && p.err == nil && p.total == 0:
+		return "There is nothing in it."
+	case ok && p.err == nil && p.total-p.done == 0:
+		return "Every issue in it is done."
+	case ok && p.err == nil && p.total-p.done == 1:
+		return "1 issue in it is not done."
+	case ok && p.err == nil:
+		return strconv.Itoa(p.total-p.done) + " issues in it are not done."
+	case m.counting:
+		return "The issues in it are still being counted."
+	}
+	return "Every issue in it that is not done leaves the sprint."
+}
+
+// destLines are the places the open issues can go, the chosen one marked, each
+// line a click target.
+func (m *Model) destLines(room int) []string {
+	if m.pending.op != opComplete || m.nothingOpen(m.pending.sprint) {
+		return nil
+	}
+	ell := m.deps.Theme.Glyphs.Ellipsis
+	out := make([]string, 0, len(m.pending.dests)+1)
+	out = append(out, m.styles.base.Render(ansi.Truncate("  The open issues go to:", room, ell)))
+	for i, d := range m.pending.dests {
+		mark := "( ) "
+		style := m.styles.muted
+		if i == m.pending.at {
+			mark, style = "(*) ", m.styles.accent
+		}
+		out = append(out, "    "+m.zones.Mark(destZone(i), style.Render(ansi.Truncate(mark+widget.Sanitize(d.words()), room-4, ell))))
+	}
+	return out
 }

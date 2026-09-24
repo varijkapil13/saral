@@ -24,5 +24,9 @@ filling a sprint in
 answering the confirm
   acts   y go ahead · esc leave it alone
   full   [y go ahead, esc leave it alone]
+choosing where a completion sends the open issues
+  acts   y go ahead · tab where the open issues go · esc leave it alone
+  full   [tab where the open issues go, shift+tab back a choice]
+  full   [y go ahead, esc leave it alone]
 a write in flight
   acts   

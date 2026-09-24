@@ -14,6 +14,7 @@ package sprint
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,11 +75,21 @@ type (
 	ClosedMsg struct{}
 )
 
-// pending is the move a confirm is standing in front of.
+// pending is the move a confirm is standing in front of. A completion also
+// carries where the open issues can go and which of those is chosen.
 type pending struct {
 	op     op
 	sprint jira.Sprint
 	board  string
+	dests  []destination
+	at     int
+}
+
+func (p pending) dest() destination {
+	if p.at < 0 || p.at >= len(p.dests) {
+		return destination{kind: destBacklog}
+	}
+	return p.dests[p.at]
 }
 
 // Model is the sprints view.
@@ -102,13 +113,25 @@ type Model struct {
 	width, height int
 
 	loading, loaded bool
-	inflight        op
-	failure         error
-	failedOp        op
+	// stale is a list drawn from the cache that no read has confirmed yet, or
+	// one a read failed over the top of.
+	stale    bool
+	inflight op
+	failure  error
+	failedOp op
 
 	gen    int
 	cancel context.CancelFunc
 	addr   kernel.Addr
+
+	// progress is each running sprint's count, read on its own context so a
+	// write does not cut it short. pver moves whenever it does, which is what
+	// the memoized detail repaints on.
+	progress map[int64]progress
+	counting bool
+	pver     int
+	pgen     int
+	pcancel  context.CancelFunc
 
 	styles *styles
 	memo   *widget.RowCache[rowKey, string]
@@ -117,6 +140,7 @@ type Model struct {
 
 	chrome   [2]string
 	chromeAt chromeKey
+	details  *widget.RowCache[detailKey, []string]
 
 	zones  widget.Zoner
 	clicks *widget.Clicks
@@ -132,10 +156,13 @@ func New(d kernel.Deps) kernel.View {
 	m.acts, m.inForm, m.inConf = m.keys.tables()
 	m.styles = newStyles(m.deps.Theme)
 	m.memo = widget.NewRowCache[rowKey, string](rowMemoLimit)
+	m.details = widget.NewRowCache[detailKey, []string](detailMemoLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.form = newForm()
 	m.lay = planLayout(m.width, 1)
+	m.progress = make(map[int64]progress)
+	m.fromCache()
 	return m
 }
 
@@ -160,8 +187,15 @@ func (m *Model) BlocksClose() (string, bool) {
 // been pushed over it.
 func (m *Model) Addr() kernel.Addr { return m.addr }
 
-// Init reads the boards this project has and the sprints on them.
-func (m *Model) Init() tea.Cmd { return m.load() }
+// Init reads the boards this project has and the sprints on them, unless a
+// stored list is still inside its TTL. The running sprints' progress is read
+// either way: it is issue data, and nothing stores it.
+func (m *Model) Init() tea.Cmd {
+	if m.loaded && !m.stale {
+		return m.readProgress()
+	}
+	return m.load()
+}
 
 // Update handles one message.
 func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
@@ -182,6 +216,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.memo.Reset()
+		m.details.Reset()
 		m.chrome = [2]string{}
 
 	case kernel.ProjectMsg:
@@ -190,13 +225,22 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.load()
 
 	case kernel.RefreshMsg:
-		cmd = m.load()
+		cmd = m.refresh(msg.Purge)
 
 	case loadedMsg:
-		m.took(msg)
+		cmd = m.took(msg)
+
+	case progressMsg:
+		m.tookProgress(msg)
 
 	case wroteMsg:
 		cmd = m.wrote(msg)
+
+	case completedMsg:
+		cmd = m.completed(msg)
+
+	case completeFailedMsg:
+		cmd = m.completeFailed(msg)
 
 	case failedMsg:
 		cmd = m.failed(msg)
@@ -251,14 +295,26 @@ func (m *Model) focus(on bool) {
 	m.form.blur()
 }
 
-// forget drops what was read for another project.
+// forget drops what was read for another project, and draws what is stored
+// for the new one.
 func (m *Model) forget() {
+	m.stopProgress()
 	m.boards, m.sprints, m.more = nil, nil, 0
 	m.cursor, m.top = 0, 0
-	m.loaded = false
+	m.loaded, m.stale = false, false
+	m.progress = make(map[int64]progress)
+	m.pver++
 	m.state = browsing
 	m.memo.Reset()
 	m.chrome = [2]string{}
+	m.fromCache()
+}
+
+func (m *Model) refresh(purge bool) tea.Cmd {
+	if !purge {
+		return m.load()
+	}
+	return tea.Batch(m.purge(), m.load())
 }
 
 // --- reading ----------------------------------------------------------------
@@ -315,11 +371,11 @@ func withCancel(cancel context.CancelFunc, cmd tea.Cmd) tea.Cmd {
 	}
 }
 
-func (m *Model) took(msg loadedMsg) {
+func (m *Model) took(msg loadedMsg) tea.Cmd {
 	if msg.gen != m.gen {
-		return
+		return nil
 	}
-	m.loading, m.loaded, m.failure = false, true, nil
+	m.loading, m.loaded, m.failure, m.stale = false, true, nil, false
 	under := m.underCursor()
 	m.boards, m.more = msg.boards, msg.more
 	m.sprints = sortSprints(msg.sprints)
@@ -327,6 +383,45 @@ func (m *Model) took(msg loadedMsg) {
 	m.memo.Reset()
 	m.chrome = [2]string{}
 	m.restore(under)
+	return tea.Batch(m.keep(), m.readProgress())
+}
+
+// readProgress counts what is done in every running sprint on the list. It is
+// the one read a running sprint's detail line needs, so a list with none
+// running asks nothing.
+func (m *Model) readProgress() tea.Cmd {
+	m.stopProgress()
+	running := make([]jira.Sprint, 0, 2)
+	for i := range m.sprints {
+		if m.sprints[i].State == jira.SprintActive {
+			running = append(running, m.sprints[i])
+		}
+	}
+	if len(running) == 0 || m.deps.Jira == nil {
+		return nil
+	}
+	m.pgen++
+	ctx, cancel := context.WithCancel(context.Background())
+	m.pcancel, m.counting = cancel, true
+	m.pver++
+	return kernel.Reply(withCancel(cancel, readAllProgress(ctx, m.deps.Jira, running, m.pgen)), m.addr)
+}
+
+func (m *Model) stopProgress() {
+	if m.pcancel != nil {
+		m.pcancel()
+		m.pcancel = nil
+	}
+	m.counting = false
+}
+
+func (m *Model) tookProgress(msg progressMsg) {
+	if msg.gen != m.pgen {
+		return
+	}
+	m.pcancel, m.counting = nil, false
+	m.progress = msg.of
+	m.pver++
 }
 
 // wrote puts the site's answer in place of what was held. A sprint that has
@@ -350,7 +445,66 @@ func (m *Model) wrote(msg wroteMsg) tea.Cmd {
 	m.state = browsing
 	m.form.close()
 	m.restore(msg.sprint.ID)
-	return kernel.Status(said(msg.op, msg.sprint))
+	cmds := []tea.Cmd{kernel.Status(said(msg.op, msg.sprint)), m.keep()}
+	if msg.op == opStart || msg.op == opComplete {
+		cmds = append(cmds, m.readProgress())
+	}
+	return tea.Batch(cmds...)
+}
+
+// put replaces a sprint by id or adds it, and keeps the list in order.
+func (m *Model) put(sp jira.Sprint) {
+	at := slices.IndexFunc(m.sprints, func(held jira.Sprint) bool { return held.ID == sp.ID })
+	if at < 0 {
+		m.sprints = append(m.sprints, sp)
+	} else {
+		m.sprints[at] = sp
+	}
+	m.sprints = sortSprints(m.sprints)
+}
+
+// completed is a sprint closed after its open issues moved into another one.
+func (m *Model) completed(msg completedMsg) tea.Cmd {
+	if msg.gen != m.gen {
+		return nil
+	}
+	m.inflight, m.loading, m.failure = opNone, false, nil
+	m.put(msg.target)
+	m.put(msg.sprint)
+	m.memo.Reset()
+	m.chrome = [2]string{}
+	m.restore(msg.sprint.ID)
+	words := named(msg.sprint) + " is closed"
+	switch msg.moved {
+	case 0:
+		words += ", and nothing in it was left open"
+	case 1:
+		words += ", and its 1 open issue moved into " + named(msg.target)
+	default:
+		words += ", and its " + strconv.Itoa(msg.moved) + " open issues moved into " + named(msg.target)
+	}
+	if msg.created {
+		words += ", which is new and planned"
+	}
+	return tea.Batch(kernel.Status(words), m.keep(), m.readProgress())
+}
+
+// completeFailed keeps what a completion did before it stopped: a sprint it
+// created is on the list, and the sentence says how far the move got and that
+// the sprint is still running.
+func (m *Model) completeFailed(msg completeFailedMsg) tea.Cmd {
+	if msg.gen != m.gen {
+		return nil
+	}
+	m.loading, m.inflight = false, opNone
+	if msg.err.created {
+		m.put(msg.err.target)
+		m.restore(msg.err.sprint.ID)
+	}
+	m.failure, m.failedOp = msg.err, opComplete
+	m.memo.Reset()
+	m.chrome = [2]string{}
+	return tea.Batch(kernel.Fail(msg.err), m.keep(), m.readProgress())
 }
 
 // said is what the status line reports. A write whose answer did not move
@@ -394,6 +548,9 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	}
 	if m.state == confirming {
 		m.state = browsing
+	}
+	if msg.op == opRead && m.rowCount() > 0 {
+		m.stale = true
 	}
 	m.memo.Reset()
 	m.chrome = [2]string{}
@@ -558,7 +715,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.ask(opComplete)
 	case actClosed:
 		return m.toggleClosed()
-	case actNone, actNextField, actPrevField, actSave, actDiscard, actYes, actNo:
+	case actNone, actNextField, actPrevField, actSave, actDiscard, actYes, actNo, actNextDest, actPrevDest:
 	}
 	return nil
 }
@@ -569,9 +726,22 @@ func (m *Model) confirmKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.goAhead()
 	case actNo:
 		return m.refuse()
+	case actNextDest:
+		m.chooseDest(m.pending.at + 1)
+	case actPrevDest:
+		m.chooseDest(m.pending.at - 1)
 	default:
-		return nil
 	}
+	return nil
+}
+
+// chooseDest moves the choice of where the open issues go, round the ends.
+func (m *Model) chooseDest(at int) {
+	n := len(m.pending.dests)
+	if n == 0 {
+		return
+	}
+	m.pending.at = (at%n + n) % n
 }
 
 func (m *Model) toggleClosed() tea.Cmd {
@@ -605,6 +775,9 @@ func (m *Model) ask(o op) tea.Cmd {
 		return kernel.Warn(reason)
 	}
 	m.state, m.pending = confirming, pending{op: o, sprint: sp, board: m.boardOf(sp)}
+	if o == opComplete {
+		m.pending.dests = m.destinations(sp)
+	}
 	m.chrome = [2]string{}
 	m.clicks.Forget()
 	return nil
@@ -672,7 +845,7 @@ func (m *Model) goAhead() tea.Cmd {
 	if m.state != confirming || m.deps.Jira == nil {
 		return nil
 	}
-	sp, o := m.pending.sprint, m.pending.op
+	sp, o, d := m.pending.sprint, m.pending.op, m.pending.dest()
 	if reason := refusal(o, sp); reason != "" {
 		m.state, m.pending = browsing, pending{}
 		return kernel.Warn(reason)
@@ -685,7 +858,10 @@ func (m *Model) goAhead() tea.Cmd {
 	case opStart:
 		return m.reply(startSprint(ctx, m.deps.Jira, sp.ID, gen))
 	case opComplete:
-		return m.reply(completeSprint(ctx, m.deps.Jira, sp.ID, gen))
+		if d.kind == destBacklog {
+			return m.reply(completeSprint(ctx, m.deps.Jira, sp.ID, gen))
+		}
+		return m.reply(completeInto(ctx, m.deps.Jira, sp, d, gen))
 	case opNone, opRead, opCreate, opUpdate:
 	}
 	m.inflight = opNone
@@ -708,6 +884,12 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 			return m.goAhead()
 		case m.zones.Hit(zoneRefuse, msg):
 			return m.refuse()
+		}
+		for i := range m.pending.dests {
+			if m.zones.Hit(destZone(i), msg) {
+				m.chooseDest(i)
+				return nil
+			}
 		}
 		return nil
 	case filling:

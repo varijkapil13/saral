@@ -26,6 +26,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"a closed sprint", keysClosed},
 		{"filling a sprint in", keysForm},
 		{"answering the confirm", keysConfirm},
+		{"choosing where a completion sends the open issues", keysConfirmComplete},
 		{"a write in flight", keysWorking},
 	}
 	if len(named) != int(keyStates) {
@@ -62,7 +63,7 @@ func TestLiveKeys_FollowTheSprintUnderTheCursor(t *testing.T) {
 			dr.key("esc")
 			dr.onSprint("Sprint 2")
 			dr.key("c")
-		}, keysConfirm, "y"},
+		}, keysConfirmComplete, "y"},
 	} {
 		tc.enter()
 		set, gen := dr.m.LiveKeys()

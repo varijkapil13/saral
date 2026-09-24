@@ -209,12 +209,19 @@ func TestSprints_NeitherMoveReachesTheSiteWithoutTheConfirm(t *testing.T) {
 }
 
 // What completing a sprint does to the issues left open in it is the fact the
-// question turns on, and the count is not available through the port — so the
-// confirm says both, rather than implying a number nothing can get.
+// question turns on, so the confirm says how many there are once the running
+// sprint's count is in, and names every place they can go.
 func TestSprints_TheCompleteConfirmSaysWhatHappensToTheIssuesLeftOpen(t *testing.T) {
 	t.Parallel()
 
-	dr := newDriver(t, testDeps(newFake()), 100, 16)
+	f := newFake()
+	dr := newDriver(t, testDeps(f), 100, 20)
+	dr.onSprint("Sprint 2")
+	sp := dr.m.selected()
+	if err := f.MoveToSprint(t.Context(), sp.ID, []string{"PROJ-1", "PROJ-2", "PROJ-3"}); err != nil {
+		t.Fatalf("seeding the sprint: %v", err)
+	}
+	dr.send(kernel.RefreshMsg{})
 	dr.onSprint("Sprint 2")
 	dr.key("c")
 
@@ -222,12 +229,14 @@ func TestSprints_TheCompleteConfirmSaysWhatHappensToTheIssuesLeftOpen(t *testing
 	mustContain(t, frame,
 		"Complete Sprint 2?",
 		"cannot be undone",
-		"leaves the sprint",
-		"backlog",
-		"cannot say how many",
+		"issues in it are not done",
+		"the backlog",
+		"Sprint 3, the next planned sprint",
+		"a new sprint, Sprint 4",
 		"y goes ahead",
 		"esc leaves it alone",
 	)
+	mustNotContain(t, frame, "cannot say how many")
 }
 
 // future to active to closed is the whole of the state machine, so the move that

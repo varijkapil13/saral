@@ -127,11 +127,40 @@ func TestSprints_Golden(t *testing.T) {
 			},
 		},
 		"the confirm in front of a completion": {
-			width: 100, height: 16, golden: "complete_100x16.golden",
+			width: 100, height: 20, golden: "complete_100x20.golden",
+			build: func(t *testing.T, w, h int) *driver {
+				f := newFake()
+				dr := newDriver(t, testDeps(f), w, h)
+				dr.onSprint("Sprint 2")
+				if err := f.MoveToSprint(t.Context(), dr.m.selected().ID, []string{"PROJ-1", "PROJ-2"}); err != nil {
+					t.Fatalf("seeding the sprint: %v", err)
+				}
+				dr.send(kernel.RefreshMsg{})
+				dr.onSprint("Sprint 2")
+				dr.key("c", "tab")
+				return dr
+			},
+		},
+		"the confirm in front of completing an empty sprint": {
+			width: 100, height: 16, golden: "complete_empty_100x16.golden",
 			build: func(t *testing.T, w, h int) *driver {
 				dr := newDriver(t, testDeps(newFake()), w, h)
 				dr.onSprint("Sprint 2")
 				dr.key("c")
+				return dr
+			},
+		},
+		"a running sprint's progress": {
+			width: 100, height: 14, golden: "progress_100x14.golden",
+			build: func(t *testing.T, w, h int) *driver {
+				f := newFake()
+				dr := newDriver(t, testDeps(f), w, h)
+				dr.onSprint("Sprint 2")
+				if err := f.MoveToSprint(t.Context(), dr.m.selected().ID, []string{"PROJ-1", "PROJ-2", "PROJ-3", "PROJ-4"}); err != nil {
+					t.Fatalf("seeding the sprint: %v", err)
+				}
+				dr.send(kernel.RefreshMsg{})
+				dr.onSprint("Sprint 2")
 				return dr
 			},
 		},
@@ -207,8 +236,11 @@ func TestSprints_OnlyTheRowsThatFitAreRendered(t *testing.T) {
 	if got, want := dr.m.memo.Len(), dr.m.rowsHeight(); got > want {
 		t.Errorf("a frame rendered %d rows into the memo with room for %d", got, want)
 	}
-	frame := dr.view()
-	if drawn := strings.Count(frame, "Sprint "); drawn > dr.m.rowsHeight() {
+	lines := strings.Split(dr.view(), "\n")
+	if dr.m.showsDetail() {
+		lines = lines[:len(lines)-detailHeight]
+	}
+	if drawn := strings.Count(strings.Join(lines, "\n"), "Sprint "); drawn > dr.m.rowsHeight() {
 		t.Errorf("the frame names %d sprints with room for %d", drawn, dr.m.rowsHeight())
 	}
 }
