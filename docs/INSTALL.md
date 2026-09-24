@@ -28,6 +28,19 @@ against the release's `checksums.txt` before unpacking anything**, and moves the
 one step. A failed download, a checksum that does not match, or a directory it cannot write to all
 stop it before anything is installed; it never leaves a partial binary behind.
 
+Beyond the checksum, it verifies where `checksums.txt` came from with whichever of these it finds on
+your machine, in order:
+
+1. **[cosign](https://docs.sigstore.dev/cosign/installation/)** — verifies `checksums.txt`'s keyless
+   signature against this repository's GitHub Actions identity.
+2. **`gh attestation verify`** (part of the [GitHub CLI](https://cli.github.com/)) — confirms the
+   downloaded archive against the build provenance attestation the release workflow published for it.
+
+If neither is installed, or a release predates this pair (nothing older than the release that added
+it carries the signature or the attestation), it says so and still installs on the checksum alone —
+the same as it always has. See `docs/RELEASING.md` for what publishes the signature and the
+attestation.
+
 Where it installs, in order of preference:
 
 1. `$SARAL_INSTALL_DIR`, if you set it
@@ -69,17 +82,24 @@ version, commit and date are stamped in by the release build's linker flags.
 
 ## By hand
 
-Every release has four archives and a `checksums.txt`:
+Every release has six archives and a `checksums.txt`:
 
 ```
 saral_<version>_darwin_amd64.tar.gz
 saral_<version>_darwin_arm64.tar.gz
 saral_<version>_linux_amd64.tar.gz
 saral_<version>_linux_arm64.tar.gz
+saral_<version>_windows_amd64.zip
+saral_<version>_windows_arm64.zip
 ```
 
-Each contains the `saral` binary, `README.md`, `LICENSE` and the `docs/` directory. Verify before you
-unpack:
+Each contains the `saral` binary (`saral.exe` in the Windows archives), `README.md`, `LICENSE` and the
+user-facing docs (`INSTALL.md`, `SETTINGS.md`, `UX.md`, `FIELDS.md`, `FILTERS.md`) — not the whole
+`docs/` directory, which also holds this project's internal roadmap. `.deb`, `.rpm` and `.apk`
+packages for Linux ship too, for amd64 and arm64, if your distribution's package manager is a better
+fit than the archive.
+
+Verify before you unpack:
 
 ```sh
 grep " saral_0.1.0_darwin_arm64.tar.gz$" checksums.txt | shasum -a 256 -c -
@@ -89,8 +109,10 @@ install -m 0755 saral /usr/local/bin/saral
 
 ## Supported platforms
 
-macOS and Linux, on x86-64 and arm64. That is what the release builds cover and what the install
-script will accept; anything else needs `go install`.
+macOS and Linux, on x86-64 and arm64, are what the install script and the Homebrew cask accept;
+anything else needs `go install`. The release also builds Windows (amd64 and arm64) as a zip archive
+with `saral.exe` inside, downloadable by hand from the release page — there is no install script or
+package manager route for it yet.
 
 A shell running under Rosetta on an Apple Silicon Mac reports `x86_64`. The install script notices and
 fetches the arm64 build anyway, so you do not silently end up with a translated binary.

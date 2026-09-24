@@ -79,8 +79,9 @@ brew install varijkapil13/tap/saral
 go install github.com/varijkapil13/saral/cmd/saral@latest
 ```
 
-Each release also carries `saral_<version>_<os>_<arch>.tar.gz` for darwin and linux on amd64 and
-arm64, with a `checksums.txt` beside them. Building from a clone needs only Go:
+Each release also carries `saral_<version>_<os>_<arch>.tar.gz` for darwin and linux, a `.zip` for
+windows, and `.deb`/`.rpm`/`.apk` packages, all on amd64 and arm64, with a `checksums.txt` beside them.
+Building from a clone needs only Go:
 
 ```sh
 git clone https://github.com/varijkapil13/saral && cd saral
