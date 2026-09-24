@@ -208,6 +208,7 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"field.json",
 		"field_localised.json",
 		"forbidden_browse_users.json",
+		"issue_link_types.json",
 		"issue_rich_adf.json",
 		"labels.json",
 		"labels_page2.json",
@@ -221,9 +222,12 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"problem_method_not_allowed.json",
 		"problem_no_endpoint.json",
 		"project_statuses.json",
+		"rank_partial.json",
 		"rate_limited.json",
 		"search_page1.json",
 		"search_page2.json",
+		"server_info.json",
+		"server_info_server.json",
 		"sprint_created.json",
 		"sprint_one.json",
 		"sprint_page.json",
@@ -244,6 +248,12 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"version_released.json",
 		"version_unresolved_count.json",
 		"versions.json",
+		"watchers.json",
+		"watchers_hidden.json",
+		"worklog_created.json",
+		"worklogs.json",
+		"worklogs_empty.json",
+		"worklogs_page2.json",
 	}
 	got := slices.Sorted(maps.Keys(srvJSONFixtures(t)))
 	if !slices.Equal(got, want) {

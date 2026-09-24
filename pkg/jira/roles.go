@@ -231,6 +231,56 @@ type PlanReader interface {
 	Plans(ctx context.Context) ([]Plan, error)
 }
 
+// IssueReader reads one issue: whole, or narrowed to the fields named. The
+// narrow read is the one to make after a write, because Search answers from an
+// index that trails it.
+type IssueReader interface {
+	Issue(ctx context.Context, key string) (Issue, error)
+	IssueFields(ctx context.Context, key string, fields []string) (Issue, error)
+}
+
+// SprintIssueReader lists what a board shows of one of its sprints. A Scrum
+// board's own view is its active sprint, which BoardIssues cannot narrow to.
+type SprintIssueReader interface {
+	SprintIssues(ctx context.Context, boardID, sprintID int64, q BoardQuery) (Page[Issue], error)
+}
+
+// Ranker reorders issues. It is separate from BoardReader because ranking is
+// the Schedule Issues permission, which a token that reads a board may lack.
+type Ranker interface {
+	RankIssues(ctx context.Context, keys []string, at RankPosition) error
+}
+
+// Linker reads the kinds of link a site has and adds and removes links. Issue
+// linking can be switched off site-wide, and a site that has done so refuses
+// all three.
+type Linker interface {
+	IssueLinkTypes(ctx context.Context) ([]LinkType, error)
+	LinkIssues(ctx context.Context, in LinkInput) error
+	DeleteLink(ctx context.Context, linkID string) error
+}
+
+// Worklogger reads and logs time on an issue. Time tracking can be switched
+// off site-wide, which refuses both.
+type Worklogger interface {
+	Worklogs(ctx context.Context, key string) (Page[Worklog], error)
+	AddWorklog(ctx context.Context, key string, in WorklogInput) (Worklog, error)
+}
+
+// WatcherManager reads and changes who watches an issue. Adding or removing
+// anyone but the authenticated account is the Manage Watchers permission.
+type WatcherManager interface {
+	Watchers(ctx context.Context, key string) (WatcherList, error)
+	Watch(ctx context.Context, key, accountID string) error
+	Unwatch(ctx context.Context, key, accountID string) error
+}
+
+// ServerInfoReader reports what a site is. Onboarding holds one to refuse a
+// site that is not Jira Cloud rather than fail against it later.
+type ServerInfoReader interface {
+	ServerInfo(ctx context.Context) (ServerInfo, error)
+}
+
 // Every role is a subset of Client, and this is what says so.
 //
 // The assertions in pkg/jira/jiratest point the other way: they prove the fake
@@ -263,4 +313,12 @@ var (
 	_ TaskWatcher      = Client(nil)
 	_ Relocator        = Client(nil)
 	_ PlanReader       = Client(nil)
+
+	_ IssueReader       = Client(nil)
+	_ SprintIssueReader = Client(nil)
+	_ Ranker            = Client(nil)
+	_ Linker            = Client(nil)
+	_ Worklogger        = Client(nil)
+	_ WatcherManager    = Client(nil)
+	_ ServerInfoReader  = Client(nil)
 )

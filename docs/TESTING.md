@@ -169,7 +169,7 @@ that names the method — `jira.Identifier` for `Me`. Each case builds a site in
 terms (a replay server for `cloud`, an option for `jiratest`) and then asserts the same thing about
 the answer, so a divergence fails on the adapter that has it.
 
-Eleven files of tables stand beside each other today, covering 30 of the port's 42 methods. Some are
+Nineteen files of tables stand beside each other today, covering 47 of the port's 56 methods. Some are
 there because a divergence was found the hard way: `conformance_search_test.go` exists because the
 adapter dropped `accountType` from an issue read while the picker badged app accounts by it, so one
 screen said an account was an app and the next said nothing. `conformance_meta_test.go` exists because

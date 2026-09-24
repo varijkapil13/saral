@@ -1,12 +1,10 @@
 package cloud
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -37,9 +35,6 @@ const (
 	attachmentLimitUnknown = 0
 	// attachmentMediaOp names the redirected-to host without naming its URL.
 	attachmentMediaOp = "GET the media host an attachment download is redirected to"
-	// attachmentBufferCeiling is the most of one upload this client will hold:
-	// the whole multipart body is built in memory before a byte is sent.
-	attachmentBufferCeiling = 64 << 20
 	// attachmentsOff is caps.go's sentence for the same setting, read there from
 	// /configuration.
 	attachmentsOff = "Attachments are switched off for this site, which only a Jira administrator can change"
@@ -153,8 +148,8 @@ func (c *Client) Attachments(ctx context.Context, key string) ([]jira.Attachment
 // Upload attaches files to an issue.
 //
 // The site's own cap is read first, so a file this site will not take is refused
-// with that number rather than sent, and the whole body is held in memory, so
-// what this client will hold bounds the request as well.
+// with that number rather than sent. The body is streamed rather than built, so
+// no size of file costs this client more than a copy buffer: see uploadStream.
 func (c *Client) Upload(ctx context.Context, key string, files []jira.FileRef) ([]jira.Attachment, error) {
 	id, err := issueKey(key)
 	if err != nil {
@@ -167,24 +162,25 @@ func (c *Client) Upload(ctx context.Context, key string, files []jira.FileRef) (
 	if err != nil {
 		return nil, err
 	}
-	body, contentType, err := attachmentBody(files, limit, attachmentBufferCeiling)
-	if err != nil {
-		return nil, err
+	for i := range files {
+		if limit > attachmentLimitUnknown && files[i].Size > limit {
+			return nil, attachmentTooBig(filepath.Base(files[i].Name), files[i].Size, limit)
+		}
 	}
 	r := request{
 		method: http.MethodPost,
 		path:   issueAttachmentPath(id),
-		body:   body,
-		header: http.Header{
-			"Content-Type":       {contentType},
-			attachmentXSRFHeader: {attachmentXSRF},
-		},
-		kind: "issue",
-		id:   id,
+		header: http.Header{attachmentXSRFHeader: {attachmentXSRF}},
+		kind:   "issue",
+		id:     id,
+	}
+	resp, err := c.uploadStream(ctx, r, files, limit)
+	if err != nil {
+		return nil, uploadRefusal(r.op(), err)
 	}
 	var stored []apiAttachment
-	if err := c.doJSON(ctx, r, &stored); err != nil {
-		return nil, uploadRefusal(r.op(), err)
+	if err := resp.decode(r.op(), &stored); err != nil {
+		return nil, err
 	}
 	out := make([]jira.Attachment, 0, len(stored))
 	for i := range stored {
@@ -404,66 +400,10 @@ func attachmentCap(meta apiAttachmentMeta) (int64, error) {
 	return meta.UploadLimit, nil
 }
 
-// attachmentBody builds the multipart body of an upload, refusing a file the site
-// will not take and a request this client will not hold. Each file is opened once.
-func attachmentBody(files []jira.FileRef, limit, ceiling int64) (body []byte, contentType string, err error) {
-	var buf bytes.Buffer
-	form := multipart.NewWriter(&buf)
-	room := ceiling
-	for i := range files {
-		read, err := attachmentAppend(form, files[i], limit, room)
-		if err != nil {
-			return nil, "", err
-		}
-		room -= read
-	}
-	if err := form.Close(); err != nil {
-		return nil, "", fmt.Errorf("cloud: finishing the upload body: %w", err)
-	}
-	return buf.Bytes(), form.FormDataContentType(), nil
-}
-
-// attachmentAppend writes one file into the body and reports how many bytes it
-// took. It reads one byte past the lower bound and no further, so a file too
-// large to send costs a refusal rather than the memory to hold it.
-func attachmentAppend(form *multipart.Writer, file jira.FileRef, limit, room int64) (int64, error) {
-	name := filepath.Base(file.Name)
-	allowed := room
-	if limit > attachmentLimitUnknown && limit < allowed {
-		allowed = limit
-	}
-	if file.Size > allowed {
-		return 0, attachmentTooBig(name, file.Size, limit, room)
-	}
-	part, err := form.CreateFormFile(attachmentPart, name)
-	if err != nil {
-		return 0, fmt.Errorf("cloud: building the upload body for %s: %w", file.Name, err)
-	}
-	source, err := file.Open()
-	if err != nil {
-		return 0, fmt.Errorf("cloud: opening %s to upload it: %w", file.Name, err)
-	}
-	defer func() { _ = source.Close() }()
-
-	read, err := io.CopyN(part, source, allowed+1)
-	if err != nil && !errors.Is(err, io.EOF) {
-		return 0, fmt.Errorf("cloud: reading %s to upload it: %w", file.Name, err)
-	}
-	if read > allowed {
-		return 0, attachmentTooBig(name, read, limit, room)
-	}
-	return read, nil
-}
-
-// attachmentTooBig names whichever bound the file did not fit in, because only
-// one of the two is the site's to raise.
-func attachmentTooBig(name string, size, limit, room int64) error {
-	if limit > attachmentLimitUnknown && size > limit {
-		return invalidField(attachmentPart, name+" is larger than the "+
-			strconv.FormatInt(limit, 10)+" bytes this site accepts")
-	}
-	return invalidField(attachmentPart, name+" does not fit in the "+strconv.FormatInt(room, 10)+
-		" bytes this client has left to hold one upload in: send fewer files, or smaller ones")
+// attachmentTooBig names the site's cap, which is the one bound an upload has.
+func attachmentTooBig(name string, size, limit int64) error {
+	return invalidField(attachmentPart, name+" is larger than the "+
+		strconv.FormatInt(limit, 10)+" bytes this site accepts (it is "+strconv.FormatInt(size, 10)+" bytes or more)")
 }
 
 func attachmentFiles(files []jira.FileRef) error {
