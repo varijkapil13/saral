@@ -137,6 +137,10 @@ type apiCommentBody struct {
 // created order explicitly: the default is documented nowhere and the port
 // promises oldest first.
 func (c *Client) Comments(ctx context.Context, key string) (jira.Page[jira.Comment], error) {
+	key, err := issueKey(key)
+	if err != nil {
+		return jira.Page[jira.Comment]{}, err
+	}
 	path := commentsPath(key)
 	query := url.Values{"orderBy": []string{"created"}}
 	build := func(startAt int) request {
@@ -168,6 +172,10 @@ func (c *Client) Comments(ctx context.Context, key string) (jira.Page[jira.Comme
 // "everyone who can see the issue", which is what somebody writing a comment
 // with no further ceremony means.
 func (c *Client) AddComment(ctx context.Context, key string, body adf.Doc) (jira.Comment, error) {
+	key, err := issueKey(key)
+	if err != nil {
+		return jira.Comment{}, err
+	}
 	encoded, err := encodeCommentBody(body)
 	if err != nil {
 		return jira.Comment{}, err
@@ -195,6 +203,10 @@ func (c *Client) AddComment(ctx context.Context, key string, body adf.Doc) (jira
 // site sent, so the comment is read back first and its visibility echoed
 // verbatim, identifier included.
 func (c *Client) EditComment(ctx context.Context, key, id string, body adf.Doc) (jira.Comment, error) {
+	key, id, err := commentRef(key, id)
+	if err != nil {
+		return jira.Comment{}, err
+	}
 	encoded, err := encodeCommentBody(body)
 	if err != nil {
 		return jira.Comment{}, err
@@ -223,14 +235,28 @@ func (c *Client) EditComment(ctx context.Context, key, id string, body adf.Doc) 
 
 // DeleteComment removes a comment.
 func (c *Client) DeleteComment(ctx context.Context, key, id string) error {
+	key, id, err := commentRef(key, id)
+	if err != nil {
+		return err
+	}
 	r := request{
 		method: http.MethodDelete,
 		path:   commentPath(key, id),
 		kind:   "comment",
 		id:     id,
 	}
-	_, err := c.do(ctx, r)
+	_, err = c.do(ctx, r)
 	return err
+}
+
+func commentRef(key, id string) (issue, comment string, err error) {
+	if issue, err = issueKey(key); err != nil {
+		return "", "", err
+	}
+	if comment, err = numericID("id", "comment", id); err != nil {
+		return "", "", err
+	}
+	return issue, comment, nil
 }
 
 // comment reads one comment, which is how an edit learns what it must not

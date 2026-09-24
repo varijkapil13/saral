@@ -597,7 +597,9 @@ Conventions:
 - Cross-view effects go through `kernel.Broadcast` (e.g. an issue edited in the detail view tells
   the board to refresh that one row) — not by holding a pointer to another model.
 - **Request coalescing:** identical in-flight requests are deduplicated in `internal/app` with a
-  singleflight keyed on the request signature. Rapid cursor movement must not fan out N fetches.
+  singleflight keyed on the request signature, and again in `pkg/jira/cloud`, whose key also counts
+  the client's finished writes so a read after a write never joins one from before it. Rapid cursor
+  movement must not fan out N fetches.
 
 ## Caching
 

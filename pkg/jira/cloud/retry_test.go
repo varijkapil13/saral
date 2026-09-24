@@ -220,12 +220,12 @@ func TestRetryPolicy_NormaliseFillsInOnlyWhatWasLeftZero(t *testing.T) {
 		{
 			name: "turning retrying off leaves the rest alone",
 			in:   RetryPolicy{Attempts: 1},
-			want: RetryPolicy{Attempts: 1, Base: defaults.Base, Max: defaults.Max},
+			want: RetryPolicy{Attempts: 1, Base: defaults.Base, Max: defaults.Max, MaxRetryAfter: defaults.MaxRetryAfter},
 		},
 		{
 			name: "a cap below the base is raised to it",
 			in:   RetryPolicy{Attempts: 2, Base: time.Minute, Max: time.Second},
-			want: RetryPolicy{Attempts: 2, Base: time.Minute, Max: time.Minute},
+			want: RetryPolicy{Attempts: 2, Base: time.Minute, Max: time.Minute, MaxRetryAfter: defaults.MaxRetryAfter},
 		},
 		{
 			name: "a negative attempt count is not an infinite loop",
@@ -333,15 +333,18 @@ func TestWaitFor_PrefersTheSitesOwnIntervalOverAGuess(t *testing.T) {
 	c, _ := testClient(t, "example.atlassian.net", WithRetry(RetryPolicy{Attempts: 4, Base: time.Second, Max: time.Minute}))
 
 	limited := &jira.RateLimitError{RetryAfter: 17 * time.Second}
-	if got := c.waitFor(limited, 3); got != 17*time.Second {
-		t.Errorf("waitFor(rate limit) = %s, want the 17s the site named", got)
+	if got, ok := c.waitFor(limited, 3); got != 17*time.Second || !ok {
+		t.Errorf("waitFor(rate limit) = %s, %t, want the 17s the site named", got, ok)
 	}
 	silent := &jira.RateLimitError{}
-	if got := c.waitFor(silent, 3); got != 4*time.Second {
-		t.Errorf("waitFor(rate limit with no interval) = %s, want the backoff for attempt 3", got)
+	if got, ok := c.waitFor(silent, 3); got != 4*time.Second || !ok {
+		t.Errorf("waitFor(rate limit with no interval) = %s, %t, want the backoff for attempt 3", got, ok)
 	}
-	if got := c.waitFor(&jira.TransportError{Op: "GET /x"}, 1); got != time.Second {
-		t.Errorf("waitFor(transport failure) = %s, want the base backoff", got)
+	if got, ok := c.waitFor(&jira.TransportError{Op: "GET /x"}, 1); got != time.Second || !ok {
+		t.Errorf("waitFor(transport failure) = %s, %t, want the base backoff", got, ok)
+	}
+	if got, ok := c.waitFor(&jira.RateLimitError{RetryAfter: 61 * time.Second}, 1); ok {
+		t.Errorf("waitFor(rate limit past MaxRetryAfter) = %s, true, want it handed back rather than waited out", got)
 	}
 }
 

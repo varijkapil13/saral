@@ -308,6 +308,23 @@ func TestField_ReportsNothingForAFieldNobodyFilledIn(t *testing.T) {
 	}
 }
 
+func TestField_ReportsNothingForANumberThatIsNotFinite(t *testing.T) {
+	t.Parallel()
+
+	for _, text := range []string{"NaN", "nan", "Inf", "+Infinity", "-inf", "1e400"} {
+		f := newField(meta("c", "Points", jira.FieldSchema{Type: "number"}), time.UTC)
+		f.text = text
+		if got, ok := f.value(); ok {
+			t.Errorf("%q produced %v, which Jira receives as null and empties the field with", text, got)
+		}
+	}
+	f := newField(meta("c", "Points", jira.FieldSchema{Type: "number"}), time.UTC)
+	f.text = "-2.5e3"
+	if got, ok := f.value(); !ok || got.Number != -2500 {
+		t.Errorf("-2.5e3 = %v, %t, want -2500", got, ok)
+	}
+}
+
 // richDoc is a document carrying the two things markdown has no spelling for:
 // a mention's account id and a lozenge's colour.
 func richDoc() adf.Doc {

@@ -18,11 +18,14 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -60,6 +63,12 @@ type Client struct {
 	gate        chan struct{}
 	flight      *singleflight.Group
 	attachMeta  *attachmentMetaCache
+
+	// Finished writes, in every coalescing key: a read after a write must not join one from before it.
+	epoch *atomic.Uint64
+
+	readIdle     time.Duration
+	responseCeil int64
 
 	// joined, when set, is called once per caller that has been registered with
 	// the flight for a key. A test coalescing N callers cannot otherwise know
@@ -100,6 +109,10 @@ func New(site, email, token string, opts ...Option) (*Client, error) {
 		concurrency: DefaultMaxConcurrent,
 		flight:      &singleflight.Group{},
 		attachMeta:  &attachmentMetaCache{},
+		epoch:       &atomic.Uint64{},
+
+		readIdle:     defaultReadIdle,
+		responseCeil: maxResponseBody,
 	}
 	for _, o := range opts {
 		if o != nil {
@@ -198,7 +211,8 @@ func defaultHTTPClient(concurrency int) *http.Client {
 
 // parseSite reads what a profile calls a site — "example.atlassian.net",
 // "https://example.atlassian.net/", or an http://127.0.0.1 address in a test —
-// into the base every request is built on.
+// into the base every request is built on. Plain http is refused for anything
+// but loopback: the token travels as basic auth on every request.
 func parseSite(site string) (*url.URL, error) {
 	trimmed := strings.TrimSpace(site)
 	if trimmed == "" {
@@ -219,17 +233,29 @@ func parseSite(site string) (*url.URL, error) {
 	if parsed.Host == "" {
 		return nil, fmt.Errorf("cloud: the site %q names no host", site)
 	}
+	if parsed.Scheme == "http" && !isLoopback(parsed.Hostname()) {
+		return nil, fmt.Errorf("cloud: the site %q must be an https address; plain http would send the API token in the clear", site)
+	}
 	if parsed.User != nil {
 		return nil, errors.New("cloud: the site must not carry credentials; the email and token are given separately")
 	}
 	return &url.URL{Scheme: parsed.Scheme, Host: parsed.Host, Path: strings.TrimSuffix(parsed.Path, "/")}, nil
 }
 
+func isLoopback(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 // request describes one call to Jira. It is a value the retry loop can replay.
 type request struct {
 	method string
-	path   string
-	query  url.Values
+	// path is held escaped; endpoint sends it as the raw path.
+	path  string
+	query url.Values
 	// body is marshalled to JSON, unless it is already a []byte, which is sent
 	// as it stands with whatever Content-Type the caller's header carries.
 	body   any
@@ -245,6 +271,18 @@ type request struct {
 }
 
 func (r request) op() string { return r.method + " " + r.path }
+
+func (r request) isWrite() bool {
+	if r.repeatable {
+		return false
+	}
+	switch r.method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return false
+	default:
+		return true
+	}
+}
 
 func (r request) canRepeat() bool {
 	if r.repeatable {
@@ -312,17 +350,37 @@ func (r *response) decode(op string, out any) error {
 // do sends a request and returns the response the site answered 2xx with,
 // having retried whatever was safe to retry.
 func (c *Client) do(ctx context.Context, r request) (*response, error) {
+	if err := checkPath(r); err != nil {
+		return nil, err
+	}
 	encoded, contentType, err := encodeBody(r)
 	if err != nil {
 		return nil, err
 	}
 	pending := call{request: r, encoded: encoded, contentType: contentType}
+	if r.isWrite() {
+		defer c.epoch.Add(1)
+	}
 	if !r.canRepeat() {
 		return c.send(ctx, pending)
 	}
-	return c.coalesce(ctx, signature(pending), func(ctx context.Context) (*response, error) {
+	return c.coalesce(ctx, signature(pending, c.epoch.Load()), func(ctx context.Context) (*response, error) {
 		return c.send(ctx, pending)
 	})
+}
+
+// checkPath refuses a path a server would resolve somewhere other than where it was built to go.
+func checkPath(r request) error {
+	decoded, err := url.PathUnescape(r.path)
+	if err != nil {
+		return fmt.Errorf("cloud: refusing to send %s: the path is not escaped correctly: %w", r.op(), err)
+	}
+	for part := range strings.SplitSeq(decoded, "/") {
+		if part == "." || part == ".." {
+			return fmt.Errorf("cloud: refusing to send %s: the path has a dot segment", r.op())
+		}
+	}
+	return nil
 }
 
 // doJSON sends a request and decodes its response body into out.
@@ -352,9 +410,11 @@ func encodeBody(r request) (encoded []byte, contentType string, err error) {
 
 // signature is what makes two requests the same request. It is only ever built
 // for a repeatable one, so no write is ever collapsed into another write.
-func signature(pending call) string {
+func signature(pending call, epoch uint64) string {
 	var b strings.Builder
-	b.Grow(len(pending.method) + len(pending.path) + len(pending.encoded) + 8)
+	b.Grow(len(pending.method) + len(pending.path) + len(pending.encoded) + 28)
+	b.WriteString(strconv.FormatUint(epoch, 10))
+	b.WriteByte(' ')
 	b.WriteString(pending.method)
 	b.WriteByte(' ')
 	b.WriteString(pending.path)
@@ -378,6 +438,7 @@ func signature(pending call) string {
 }
 
 func (c *Client) send(ctx context.Context, pending call) (*response, error) {
+	mayHaveRun := false
 	for attempt := 1; ; attempt++ {
 		resp, err := c.attempt(ctx, pending)
 		if err == nil && resp.ok() {
@@ -388,11 +449,21 @@ func (c *Client) send(ctx context.Context, pending call) (*response, error) {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
+		// A replayed delete that finds nothing is the earlier attempt having
+		// done the work before its answer was lost.
+		if mayHaveRun && err == nil && pending.method == http.MethodDelete && resp.status == http.StatusNotFound {
+			return &response{status: http.StatusNoContent, header: resp.header}, nil
+		}
 		failure := c.failure(pending.request, resp, err)
 		if attempt >= c.retry.Attempts || !retryable(pending.request, resp, err) {
 			return nil, failure
 		}
-		if waitErr := c.clock.Wait(ctx, c.waitFor(failure, attempt)); waitErr != nil {
+		wait, ok := c.waitFor(failure, attempt)
+		if !ok {
+			return nil, failure
+		}
+		mayHaveRun = mayHaveRun || err != nil || resp.status != http.StatusTooManyRequests
+		if waitErr := c.clock.Wait(ctx, wait); waitErr != nil {
 			return nil, waitErr
 		}
 	}
@@ -404,7 +475,10 @@ func (c *Client) attempt(ctx context.Context, pending call) (*response, error) {
 	}
 	defer c.release()
 
-	req, err := c.newRequest(ctx, pending)
+	attemptCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+
+	req, err := c.newRequest(attemptCtx, pending)
 	if err != nil {
 		return nil, err
 	}
@@ -413,11 +487,49 @@ func (c *Client) attempt(ctx context.Context, pending call) (*response, error) {
 		return nil, err
 	}
 	defer func() { _ = res.Body.Close() }()
-	payload, err := io.ReadAll(res.Body)
+	// The clock starts at the headers: before them an upload may still be
+	// sending, and the transport's ResponseHeaderTimeout covers the wait.
+	idle := time.AfterFunc(c.readIdle, func() { cancel(errReadIdle) })
+	defer idle.Stop()
+	payload, err := io.ReadAll(io.LimitReader(&idleReader{r: res.Body, timer: idle, idle: c.readIdle}, c.responseCeil+1))
 	if err != nil {
-		return nil, err
+		return nil, stalled(attemptCtx, err)
+	}
+	if int64(len(payload)) > c.responseCeil {
+		return nil, errResponseTooLarge
 	}
 	return &response{status: res.StatusCode, header: res.Header, body: payload}, nil
+}
+
+const (
+	maxResponseBody = 64 << 20
+	defaultReadIdle = 30 * time.Second
+)
+
+var (
+	errResponseTooLarge = fmt.Errorf("the response is larger than the %d MiB this client reads", maxResponseBody>>20)
+	errReadIdle         = errors.New("the site stopped sending the response")
+)
+
+func stalled(ctx context.Context, err error) error {
+	if errors.Is(context.Cause(ctx), errReadIdle) {
+		return errReadIdle
+	}
+	return err
+}
+
+type idleReader struct {
+	r     io.Reader
+	timer *time.Timer
+	idle  time.Duration
+}
+
+func (r *idleReader) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	if n > 0 {
+		r.timer.Reset(r.idle)
+	}
+	return n, err
 }
 
 // newRequest builds the HTTP request one attempt sends. The credential is
@@ -489,6 +601,9 @@ func (s *stream) close() {
 // One body cannot be read twice, so a stream is neither coalesced nor retried
 // once its first byte is out.
 func (c *Client) doStream(ctx context.Context, r request, answered func(status int) bool) (*stream, error) {
+	if err := checkPath(r); err != nil {
+		return nil, err
+	}
 	encoded, contentType, err := encodeBody(r)
 	if err != nil {
 		return nil, err
@@ -506,7 +621,11 @@ func (c *Client) doStream(ctx context.Context, r request, answered func(status i
 		if attempt >= c.retry.Attempts || !retryable(pending.request, resp, err) {
 			return nil, failure
 		}
-		if waitErr := c.clock.Wait(ctx, c.waitFor(failure, attempt)); waitErr != nil {
+		wait, ok := c.waitFor(failure, attempt)
+		if !ok {
+			return nil, failure
+		}
+		if waitErr := c.clock.Wait(ctx, wait); waitErr != nil {
 			return nil, waitErr
 		}
 	}
@@ -552,7 +671,11 @@ func (c *Client) streamAttempt(ctx context.Context, pending call, answered func(
 }
 
 func (c *Client) endpoint(r request) string {
-	target := url.URL{Scheme: c.base.Scheme, Host: c.base.Host, Path: c.base.Path + r.path}
+	escaped := c.base.EscapedPath() + r.path
+	target := url.URL{Scheme: c.base.Scheme, Host: c.base.Host, Path: escaped}
+	if decoded, err := url.PathUnescape(escaped); err == nil {
+		target.Path, target.RawPath = decoded, escaped
+	}
 	if len(r.query) > 0 {
 		target.RawQuery = r.query.Encode()
 	}

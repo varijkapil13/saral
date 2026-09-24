@@ -219,6 +219,11 @@ func (c *Client) Download(ctx context.Context, id string, w io.Writer, opt jira.
 	}
 	defer open.close()
 
+	if open.status == http.StatusPartialContent {
+		if err := attachmentRangeStart(open, opt.From); err != nil {
+			return err
+		}
+	}
 	if opt.From > 0 && open.status == http.StatusOK {
 		// A 200 to a ranged request is the whole file, so the caller's own bytes
 		// are dropped rather than written over the top of them.
@@ -301,10 +306,16 @@ func (c *Client) attachmentContent(ctx context.Context, id string, from int64) (
 // URL is the credential there, so nothing of this client's own goes with it.
 func (c *Client) attachmentMedia(ctx context.Context, location string, from int64) (*stream, error) {
 	target, err := url.Parse(location)
-	if err != nil || !target.IsAbs() {
+	if err != nil || !target.IsAbs() || target.Host == "" {
 		return nil, &jira.TransportError{
 			Op:  attachmentMediaOp,
 			Err: errors.New("the site redirected this download to an address this client cannot use"),
+		}
+	}
+	if !attachmentSchemeHolds(c.base.Scheme, target.Scheme) {
+		return nil, &jira.TransportError{
+			Op:  attachmentMediaOp,
+			Err: errors.New("the site redirected this download away from https, and the signed address it carries would travel in the clear"),
 		}
 	}
 	if err := c.acquire(ctx); err != nil {
@@ -471,11 +482,7 @@ func attachmentFiles(files []jira.FileRef) error {
 }
 
 func attachmentID(id string) (string, error) {
-	trimmed := strings.TrimSpace(id)
-	if trimmed == "" {
-		return "", invalidField("id", "an attachment id is required")
-	}
-	return trimmed, nil
+	return numericID("id", "attachment", id)
 }
 
 // attachmentRange asks for the rest of the file from one byte on, and reaches the
@@ -485,6 +492,41 @@ func attachmentRange(from int64) http.Header {
 		return nil
 	}
 	return http.Header{"Range": {"bytes=" + strconv.FormatInt(from, 10) + "-"}}
+}
+
+// A plain-http base exists only on loopback, so only there may a redirect stay on http.
+func attachmentSchemeHolds(from, to string) bool {
+	switch strings.ToLower(to) {
+	case "https":
+		return true
+	case "http":
+		return from == "http"
+	default:
+		return false
+	}
+}
+
+// A 206 from anywhere but the byte asked for, appended to what the caller holds, reads as whole and is not.
+func attachmentRangeStart(open *stream, from int64) error {
+	spec, ok := strings.CutPrefix(strings.TrimSpace(open.header.Get("Content-Range")), "bytes ")
+	start, _, dash := strings.Cut(spec, "-")
+	got, err := strconv.ParseInt(strings.TrimSpace(start), 10, 64)
+	if !ok || !dash || err != nil {
+		return &jira.TransportError{
+			Op:     open.op,
+			Status: open.status,
+			Err:    errors.New("the site answered part of this attachment and did not say which part"),
+		}
+	}
+	if got != from {
+		return &jira.TransportError{
+			Op:     open.op,
+			Status: open.status,
+			Err: fmt.Errorf("the site answered this attachment from byte %d when the download asked for byte %d",
+				got, from),
+		}
+	}
+	return nil
 }
 
 // attachmentAnswered is every status a download reads something out of: the

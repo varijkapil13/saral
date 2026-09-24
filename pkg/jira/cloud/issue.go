@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -79,7 +80,7 @@ func (c *Client) Issue(ctx context.Context, key string) (jira.Issue, error) {
 	}
 	r := request{
 		method: http.MethodGet,
-		path:   issuePath + "/" + id,
+		path:   issuePath + "/" + url.PathEscape(id),
 		query:  url.Values{"expand": {issueDetailExpand}},
 		kind:   "issue",
 		id:     id,
@@ -151,7 +152,7 @@ func (c *Client) UpdateIssue(ctx context.Context, key string, in jira.IssuePatch
 	}
 	r := request{
 		method: http.MethodPut,
-		path:   issuePath + "/" + id,
+		path:   issuePath + "/" + url.PathEscape(id),
 		body:   apiIssueWrite{Fields: fields},
 		kind:   "issue",
 		id:     id,
@@ -177,7 +178,7 @@ func (c *Client) Transitions(ctx context.Context, key string) ([]jira.Transition
 	}
 	r := request{
 		method: http.MethodGet,
-		path:   issuePath + "/" + id + "/transitions",
+		path:   issuePath + "/" + url.PathEscape(id) + "/transitions",
 		query:  url.Values{"expand": {transitionFieldExpand}},
 		kind:   "issue",
 		id:     id,
@@ -221,7 +222,7 @@ func (c *Client) Transition(ctx context.Context, key, transitionID string, in ji
 	}
 	r := request{
 		method: http.MethodPost,
-		path:   issuePath + "/" + id + "/transitions",
+		path:   issuePath + "/" + url.PathEscape(id) + "/transitions",
 		body:   apiIssueWrite{Fields: fields, Transition: &apiTransitionRef{ID: move}},
 		kind:   "issue",
 		id:     id,
@@ -326,11 +327,34 @@ func firstNonEmpty(values ...string) string {
 
 func issueKey(key string) (string, error) {
 	trimmed := strings.TrimSpace(key)
-	if trimmed == "" {
-		return "", &jira.ValidationError{Fields: []jira.FieldError{{
-			Field:   "issueIdOrKey",
-			Message: "an issue key or id is required",
-		}}}
+	switch {
+	case trimmed == "":
+		return "", invalidField("issueIdOrKey", "an issue key or id is required")
+	case !jira.IsIssueRef(trimmed):
+		return "", invalidField("issueIdOrKey", strconv.Quote(trimmed)+" is neither an issue key nor an issue id")
+	}
+	return trimmed, nil
+}
+
+func numericID(field, what, id string) (string, error) {
+	trimmed := strings.TrimSpace(id)
+	switch {
+	case trimmed == "":
+		return "", invalidField(field, "a "+what+" id is required")
+	case !jira.IsID(trimmed):
+		return "", invalidField(field, strconv.Quote(trimmed)+" is not a "+what+" id, which Jira writes as a number")
+	}
+	return trimmed, nil
+}
+
+// A project key's format is the site's, so the only check is that it stays one path segment.
+func projectRef(field, key string) (string, error) {
+	trimmed := strings.TrimSpace(key)
+	switch {
+	case trimmed == "":
+		return "", invalidField(field, "a project key is required")
+	case !jira.IsPathSegment(trimmed):
+		return "", invalidField(field, strconv.Quote(trimmed)+" is not a project key")
 	}
 	return trimmed, nil
 }
@@ -486,7 +510,14 @@ func fieldJSON(id string, v jira.FieldValue) (json.RawMessage, error) {
 	case jira.KindText:
 		return mustJSON(v.Text), nil
 	case jira.KindNumber:
-		return mustJSON(v.Number), nil
+		if math.IsNaN(v.Number) || math.IsInf(v.Number, 0) {
+			return nil, invalidField(id, "a number field holds a finite number, and JSON cannot carry this one")
+		}
+		raw, err := json.Marshal(v.Number)
+		if err != nil {
+			return nil, fmt.Errorf("cloud: encoding %s: %w", id, err)
+		}
+		return raw, nil
 	case jira.KindBool:
 		return mustJSON(v.Bool), nil
 	case jira.KindDate:
@@ -509,7 +540,7 @@ func fieldJSON(id string, v jira.FieldValue) (json.RawMessage, error) {
 		for _, option := range v.Options {
 			out = append(out, optionJSON(option))
 		}
-		return mustJSON(out), nil
+		return jsonArray(out), nil
 	case jira.KindUser:
 		if len(v.Users) == 0 {
 			return json.RawMessage("null"), nil
@@ -520,7 +551,7 @@ func fieldJSON(id string, v jira.FieldValue) (json.RawMessage, error) {
 		for _, user := range v.Users {
 			out = append(out, jsonObject("accountId", user.AccountID))
 		}
-		return mustJSON(out), nil
+		return jsonArray(out), nil
 	case jira.KindUnknown:
 		// The bytes this client could not type are the bytes it was given, and
 		// sending them back is the only faithful thing to do with them. One
@@ -542,7 +573,7 @@ func optionJSON(o jira.Option) json.RawMessage {
 		return mustJSON(o.Label)
 	}
 	if len(o.Children) > 0 && o.Children[0].ID != "" {
-		return mustJSON(map[string]any{"id": o.ID, "child": map[string]string{"id": o.Children[0].ID}})
+		return mustJSON(map[string]json.RawMessage{"id": mustJSON(o.ID), "child": jsonObject("id", o.Children[0].ID)})
 	}
 	return jsonObject("id", o.ID)
 }
@@ -568,13 +599,27 @@ func jsonObject(key, value string) json.RawMessage {
 	return mustJSON(map[string]string{key: value})
 }
 
-// mustJSON encodes a value that cannot fail to encode: a string, a number, a
-// bool, a slice of those, or a map of raw messages this package built itself.
-// Anything that could fail goes through a path that returns an error instead.
-func mustJSON(v any) json.RawMessage {
+// No float: NaN has no JSON. On failure the empty message fails the body's encoding, never reaching Jira as null.
+func mustJSON[T string | bool | []string | map[string]string | map[string]json.RawMessage](v T) json.RawMessage {
 	raw, err := json.Marshal(v)
 	if err != nil {
-		return json.RawMessage("null")
+		return json.RawMessage{}
 	}
 	return raw
+}
+
+// An empty member failed to encode, and empties the array so the body fails too.
+func jsonArray(items []json.RawMessage) json.RawMessage {
+	out := make([]byte, 0, 2+len(items)*16)
+	out = append(out, '[')
+	for i, item := range items {
+		if len(item) == 0 {
+			return json.RawMessage{}
+		}
+		if i > 0 {
+			out = append(out, ',')
+		}
+		out = append(out, item...)
+	}
+	return append(out, ']')
 }

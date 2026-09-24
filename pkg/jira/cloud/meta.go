@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -71,14 +72,14 @@ func createMetaCheck(project, typeID string) error {
 	switch {
 	case project == "":
 		bad = append(bad, jira.FieldError{Field: "project", Message: "a create screen belongs to a project, so one has to be named"})
-	case strings.Contains(project, "/"):
-		bad = append(bad, jira.FieldError{Field: "project", Message: "a project key cannot contain a slash"})
+	case !jira.IsPathSegment(project):
+		bad = append(bad, jira.FieldError{Field: "project", Message: "a project key cannot contain a slash, a space or a percent sign, or be a dot"})
 	}
 	switch {
 	case typeID == "":
 		bad = append(bad, jira.FieldError{Field: "issuetype", Message: "a create screen belongs to one issue type, so one has to be named by id"})
-	case strings.Contains(typeID, "/"):
-		bad = append(bad, jira.FieldError{Field: "issuetype", Message: "an issue type id cannot contain a slash"})
+	case !jira.IsID(typeID):
+		bad = append(bad, jira.FieldError{Field: "issuetype", Message: "an issue type id is a number; resolve it from the project's issue types rather than by name"})
 	}
 	if len(bad) == 0 {
 		return nil
@@ -89,7 +90,7 @@ func createMetaCheck(project, typeID string) error {
 // createMetaIssueType finds one issue type among those the project offers,
 // stopping at the page that carries it rather than walking the rest.
 func (c *Client) createMetaIssueType(ctx context.Context, project, typeID string) (jira.IssueType, error) {
-	path := createMetaPrefix + project + createMetaTypes
+	path := createMetaPrefix + url.PathEscape(project) + createMetaTypes
 	op := http.MethodGet + " " + path
 	build := func(startAt int) request {
 		return request{
@@ -131,7 +132,7 @@ func (c *Client) createMetaIssueType(ctx context.Context, project, typeID string
 
 // createMetaFields reads every page of one issue type's create screen.
 func (c *Client) createMetaFields(ctx context.Context, project, typeID string) ([]createMetaField, error) {
-	path := createMetaPrefix + project + createMetaTypes + "/" + typeID
+	path := createMetaPrefix + url.PathEscape(project) + createMetaTypes + "/" + url.PathEscape(typeID)
 	op := http.MethodGet + " " + path
 	build := func(startAt int) request {
 		return request{
