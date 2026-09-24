@@ -97,6 +97,9 @@ func (c *Client) Versions(ctx context.Context, projectKey string) ([]jira.Versio
 	if key == "" {
 		return nil, invalidField("projectKey", "a project key is required to list versions")
 	}
+	if _, err := projectRef("projectKey", key); err != nil {
+		return nil, err
+	}
 	path := projectVersionsPath(key)
 	query := url.Values{"orderBy": {versionOrder}}
 	build := func(startAt int) request {
@@ -150,6 +153,9 @@ func (c *Client) SaveVersion(ctx context.Context, v jira.VersionInput) (jira.Ver
 		return jira.Version{}, invalidField("name", "a version needs a name")
 	}
 	if id := strings.TrimSpace(v.ID); id != "" {
+		if _, err := numericID("id", "version", id); err != nil {
+			return jira.Version{}, err
+		}
 		return c.updateVersion(ctx, id, name, v)
 	}
 	return c.createVersion(ctx, name, v)
@@ -159,6 +165,9 @@ func (c *Client) createVersion(ctx context.Context, name string, v jira.VersionI
 	key := strings.TrimSpace(v.ProjectKey)
 	if key == "" {
 		return jira.Version{}, invalidField("projectKey", "a new version needs the project to put it in")
+	}
+	if _, err := projectRef("projectKey", key); err != nil {
+		return jira.Version{}, err
 	}
 	projectID, err := c.projectID(ctx, key)
 	if err != nil {
@@ -222,6 +231,9 @@ func (c *Client) UnresolvedCount(ctx context.Context, versionID string) (int, er
 	id := strings.TrimSpace(versionID)
 	if id == "" {
 		return 0, invalidField("versionId", "a version id is required to count what is open on it")
+	}
+	if _, err := numericID("versionId", "version", id); err != nil {
+		return 0, err
 	}
 	r := request{
 		method: http.MethodGet,
@@ -338,7 +350,7 @@ func releaseTarget(version string, in jira.ReleaseInput) (string, error) {
 		case version:
 			return "", invalidField("moveToVersionId", "the open issues cannot be moved onto the version being released")
 		}
-		return target, nil
+		return numericID("moveToVersionId", "version", target)
 	default:
 		return "", invalidField("unresolved", "say what happens to the issues still open: release anyway, move them to another version, or strip this one from them")
 	}

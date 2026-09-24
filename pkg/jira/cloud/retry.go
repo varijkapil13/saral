@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"context"
+	"errors"
 	"math/rand/v2"
 	"net/http"
 	"strconv"
@@ -57,16 +58,19 @@ func fullJitter(d time.Duration) time.Duration {
 }
 
 // RetryPolicy bounds how hard a client tries. Attempts counts the first try, so
-// an Attempts of 1 never retries.
+// an Attempts of 1 never retries. Max caps the client's own backoff; a
+// Retry-After longer than MaxRetryAfter is not waited out, and the rate limit
+// goes back to the caller with the interval on it.
 type RetryPolicy struct {
-	Attempts int
-	Base     time.Duration
-	Max      time.Duration
+	Attempts      int
+	Base          time.Duration
+	Max           time.Duration
+	MaxRetryAfter time.Duration
 }
 
 // DefaultRetry is the policy a client gets when the caller does not give one.
 func DefaultRetry() RetryPolicy {
-	return RetryPolicy{Attempts: 4, Base: 250 * time.Millisecond, Max: 10 * time.Second}
+	return RetryPolicy{Attempts: 4, Base: 250 * time.Millisecond, Max: 10 * time.Second, MaxRetryAfter: time.Minute}
 }
 
 // normalise fills in whatever the caller left zero, so that setting one field
@@ -84,6 +88,9 @@ func (p RetryPolicy) normalise() RetryPolicy {
 	}
 	if p.Max < p.Base {
 		p.Max = p.Base
+	}
+	if p.MaxRetryAfter <= 0 {
+		p.MaxRetryAfter = defaults.MaxRetryAfter
 	}
 	return p
 }
@@ -109,6 +116,9 @@ func (p RetryPolicy) backoff(attempt int) time.Duration {
 // enough to change something, so those are replayed only when the request says
 // replaying it is safe.
 func retryable(r request, resp *response, err error) bool {
+	if errors.Is(err, errResponseTooLarge) {
+		return false
+	}
 	if err != nil {
 		return r.canRepeat()
 	}
@@ -120,12 +130,14 @@ func retryable(r request, resp *response, err error) bool {
 
 // waitFor is how long to hold off before the next attempt. A Retry-After is
 // honoured exactly: the site has said when it will answer again, and guessing
-// anything shorter is how a client gets itself throttled harder.
-func (c *Client) waitFor(failure error, attempt int) time.Duration {
-	if after, ok := jira.RetryAfter(failure); ok && after > 0 {
-		return after
+// anything shorter is how a client gets itself throttled harder. One longer
+// than MaxRetryAfter is not waited out: ok is false and the caller gets the
+// rate limit now.
+func (c *Client) waitFor(failure error, attempt int) (wait time.Duration, ok bool) {
+	if after, limited := jira.RetryAfter(failure); limited && after > 0 {
+		return after, after <= c.retry.MaxRetryAfter
 	}
-	return c.jitter(c.retry.backoff(attempt))
+	return c.jitter(c.retry.backoff(attempt)), true
 }
 
 // acquire takes one of the client's concurrency slots, or gives up when the

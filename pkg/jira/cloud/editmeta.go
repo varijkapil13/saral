@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -28,7 +29,7 @@ func (c *Client) EditMeta(ctx context.Context, key string) (jira.EditMeta, error
 	}
 	r := request{
 		method: http.MethodGet,
-		path:   issuePath + "/" + id + editMetaSuffix,
+		path:   issuePath + "/" + url.PathEscape(id) + editMetaSuffix,
 		kind:   "issue",
 		id:     id,
 	}

@@ -58,6 +58,33 @@ func TestValidate_AnswersWhatIsWrongWithAValue(t *testing.T) {
 			wants: "is not a number",
 		},
 		{
+			name: "a number JSON cannot carry",
+			build: func() *field {
+				f := newField(meta("c", "Points", jira.FieldSchema{Type: "number"}), time.UTC)
+				f.text = "NaN"
+				return f
+			},
+			wants: "is not a number",
+		},
+		{
+			name: "an infinity",
+			build: func() *field {
+				f := newField(meta("c", "Points", jira.FieldSchema{Type: "number"}), time.UTC)
+				f.text = "-Inf"
+				return f
+			},
+			wants: "is not a number",
+		},
+		{
+			name: "a number too large to hold",
+			build: func() *field {
+				f := newField(meta("c", "Points", jira.FieldSchema{Type: "number"}), time.UTC)
+				f.text = "1e400"
+				return f
+			},
+			wants: "is not a number",
+		},
+		{
 			name: "a number that is one",
 			build: func() *field {
 				f := newField(meta("c", "Points", jira.FieldSchema{Type: "number"}), time.UTC)

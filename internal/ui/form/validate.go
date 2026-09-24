@@ -3,6 +3,7 @@ package form
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -64,7 +65,7 @@ func (f *field) validate() string {
 	text := strings.TrimSpace(f.text)
 	switch f.kind {
 	case kindNumber:
-		if _, err := strconv.ParseFloat(text, 64); err != nil {
+		if _, err := parseNumber(text); err != nil {
 			return strconv.Quote(text) + " is not a number"
 		}
 	case kindDate:
@@ -209,4 +210,18 @@ func (m *Model) fieldFor(name string) *field {
 		}
 	}
 	return nil
+}
+
+var errNotFinite = errors.New("not a finite number")
+
+// ParseFloat also takes NaN and Inf, which JSON cannot carry.
+func parseNumber(text string) (float64, error) {
+	number, err := strconv.ParseFloat(text, 64)
+	if err != nil {
+		return 0, err
+	}
+	if math.IsNaN(number) || math.IsInf(number, 0) {
+		return 0, errNotFinite
+	}
+	return number, nil
 }

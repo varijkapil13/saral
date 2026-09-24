@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/varijkapil13/saral/pkg/adf"
@@ -557,11 +558,24 @@ func (u apiUser) domain() jira.User {
 	// A zone this machine has no database for is a rendering detail, never a
 	// reason to fail an issue.
 	if u.TimeZone != "" {
-		if loc, err := time.LoadLocation(u.TimeZone); err == nil {
-			out.TimeZone = loc
-		}
+		out.TimeZone = userLocation(u.TimeZone)
 	}
 	return out
+}
+
+// Only zones that load are kept, so what a site sends cannot grow this past the zone database.
+var locations sync.Map
+
+func userLocation(name string) *time.Location {
+	if loc, ok := locations.Load(name); ok {
+		return loc.(*time.Location)
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return nil
+	}
+	actual, _ := locations.LoadOrStore(name, loc)
+	return actual.(*time.Location)
 }
 
 func readUser(raw json.RawMessage) (jira.User, bool) {

@@ -360,7 +360,7 @@ func (f *field) value() (jira.FieldValue, bool) {
 	text := strings.TrimSpace(f.text)
 	switch f.kind {
 	case kindNumber:
-		number, err := strconv.ParseFloat(text, 64)
+		number, err := parseNumber(text)
 		if err != nil {
 			return jira.FieldValue{}, false
 		}
