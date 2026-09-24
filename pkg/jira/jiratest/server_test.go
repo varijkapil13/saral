@@ -33,7 +33,7 @@ func srvDo(t *testing.T, s *jiratest.Server, method, target, body string) srvRep
 	if err != nil {
 		t.Fatalf("building %s %s: %v", method, target, err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.Client().Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, target, err)
 	}
@@ -405,7 +405,7 @@ func srvPostFile(t *testing.T, s *jiratest.Server, target, part, xsrf string) sr
 	if xsrf != "" {
 		req.Header.Set("X-Atlassian-Token", xsrf)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.Client().Do(req)
 	if err != nil {
 		t.Fatalf("posting the upload: %v", err)
 	}
@@ -669,7 +669,7 @@ func TestServer_RecordsMethodPathQueryBodyAndHeaders(t *testing.T) {
 		t.Fatalf("building the request: %v", err)
 	}
 	req.Header.Set("X-Atlassian-Token", "no-check")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.Client().Do(req)
 	if err != nil {
 		t.Fatalf("posting the search: %v", err)
 	}

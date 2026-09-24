@@ -132,6 +132,11 @@ func NewServer(opts ...ServerOption) *Server {
 // URL is the base URL to point a client at, with no trailing slash.
 func (s *Server) URL() string { return s.ts.URL }
 
+// Client is an HTTP client of this server's own. Closing another server drops
+// the idle connections of http.DefaultTransport, which breaks a request in flight
+// on it.
+func (s *Server) Client() *http.Client { return s.ts.Client() }
+
 // Close shuts the server down. It is safe to call more than once.
 func (s *Server) Close() { s.once.Do(s.ts.Close) }
 
