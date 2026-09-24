@@ -133,6 +133,7 @@ type SessionClient interface {
 	SprintManager
 	Relocator
 	PlanReader
+	ServerInfoReader
 }
 
 // AttachmentReader lists an issue's attachments and streams one out. It is

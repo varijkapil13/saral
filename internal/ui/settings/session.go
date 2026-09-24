@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"errors"
 	"sort"
 
 	tea "charm.land/bubbletea/v2"
@@ -123,18 +124,20 @@ func writeActiveProfile(name string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := config.LoadFile(path)
-	if err != nil {
-		return err
-	}
-	if _, err := cfg.Get(name); err != nil {
-		return err
-	}
-	if cfg.Active == name {
+	err = config.UpdateFile(path, func(cfg *config.Config) error {
+		if _, err := cfg.Get(name); err != nil {
+			return err
+		}
+		if cfg.Active == name {
+			return errUnchanged
+		}
+		cfg.Active = name
+		return nil
+	})
+	if errors.Is(err, errUnchanged) {
 		return nil
 	}
-	cfg.Active = name
-	return cfg.Save(path)
+	return err
 }
 
 // onboardingSetting is a KindAction: a verb, but one that belongs on the

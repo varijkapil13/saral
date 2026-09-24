@@ -305,7 +305,10 @@ func (m Model) messages() []string {
 		rows = append(rows, indent(m.styles.muted.Render(m.lookup)))
 	}
 	if m.note != "" {
-		rows = append(rows, indent(m.styles.muted.Render(m.note)))
+		width := max(m.width-2*inputIndent, 20)
+		for line := range strings.SplitSeq(ansi.Wordwrap(m.note, width, ""), "\n") {
+			rows = append(rows, indent(m.styles.muted.Render(line)))
+		}
 	}
 	if len(rows) == 0 {
 		rows = append(rows, "")

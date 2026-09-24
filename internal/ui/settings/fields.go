@@ -90,28 +90,33 @@ func writePinned(site string, ids []string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := config.LoadFile(path)
-	if err != nil {
-		return err
-	}
-	profile, err := cfg.Current()
-	if err != nil {
-		return err
-	}
-	// The kernel is told which site it is talking to and never which profile
-	// was named on the command line, so a session started with --profile would
-	// otherwise write the choice onto whichever profile is active instead.
-	if site != "" && profile.Site != site {
-		return fmt.Errorf("this session is on %s and the active profile %q is on %s, so nothing was written",
-			site, profile.Name, profile.Site)
-	}
-	if slices.Equal(profile.Pinned, ids) {
+	err = config.UpdateFile(path, func(cfg *config.Config) error {
+		profile, err := cfg.Current()
+		if err != nil {
+			return err
+		}
+		// The kernel is told which site it is talking to and never which profile
+		// was named on the command line, so a session started with --profile would
+		// otherwise write the choice onto whichever profile is active instead.
+		if site != "" && profile.Site != site {
+			return fmt.Errorf("this session is on %s and the active profile %q is on %s, so nothing was written",
+				site, profile.Name, profile.Site)
+		}
+		if slices.Equal(profile.Pinned, ids) {
+			return errUnchanged
+		}
+		profile.Pinned = ids
+		cfg.Profiles[profile.Name] = profile
+		return nil
+	})
+	if errors.Is(err, errUnchanged) {
 		return nil
 	}
-	profile.Pinned = ids
-	cfg.Profiles[profile.Name] = profile
-	return cfg.Save(path)
+	return err
 }
+
+// errUnchanged is how an edit that changes nothing skips the write.
+var errUnchanged = errors.New("nothing to write")
 
 // fieldPickerViewID scopes the picker's click zones.
 const fieldPickerViewID = "settings.fields"

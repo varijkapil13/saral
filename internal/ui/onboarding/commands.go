@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -148,7 +149,7 @@ func (m *Model) start(kind busy, run func(context.Context, int) tea.Msg) tea.Cmd
 
 func (m *Model) verify() tea.Cmd {
 	site, email := m.value(fieldSite), m.value(fieldEmail)
-	token := m.input[fieldToken].Value()
+	token := m.value(fieldToken)
 	connect := m.connect
 	return m.start(busyConnect, func(ctx context.Context, seq int) tea.Msg {
 		client, err := connect(site, email, token)
@@ -159,8 +160,42 @@ func (m *Model) verify() tea.Cmd {
 		if err != nil {
 			return connectFailedMsg{seq: seq, err: err}
 		}
+		if err := refuseNonCloud(ctx, client); err != nil {
+			return connectFailedMsg{seq: seq, err: err}
+		}
 		return connectedMsg{seq: seq, client: client, account: account}
 	})
+}
+
+var errNotCloud = errors.New("this site is Jira Data Center or Server, which is not supported yet")
+
+// refuseNonCloud turns away a site that says it is not Jira Cloud. A site that
+// will not say is let through: the identity check has already answered on the
+// Cloud API, which is better evidence than a probe that failed.
+func refuseNonCloud(ctx context.Context, client jira.ServerInfoReader) error {
+	info, err := client.ServerInfo(ctx)
+	if err == nil && info.DeploymentType != "" && !info.Cloud() {
+		return errNotCloud
+	}
+	return nil
+}
+
+// refused names what a 401 on a token that has just been typed in comes down
+// to, since Jira's own answer does not say which.
+func (m *Model) refused() {
+	m.problem = "Jira refused this token for " + m.value(fieldEmail)
+	m.note = "Either it was created under a different account, it has been revoked or has expired, " +
+		"or the organisation's policy blocks API tokens for managed accounts."
+}
+
+// missingDomain is the site the user most likely meant when what they typed
+// has no domain in it and could not be reached.
+func missingDomain(site string, err error) string {
+	var unreachable *jira.TransportError
+	if strings.Contains(site, ".") || !errors.As(err, &unreachable) || unreachable.Status != 0 {
+		return ""
+	}
+	return site + " has no domain in it; a Jira Cloud site is named like " + site + ".atlassian.net.\n"
 }
 
 func (m *Model) connected(msg connectedMsg) tea.Cmd {
@@ -188,10 +223,15 @@ func (m *Model) connectFailed(msg connectFailedMsg) tea.Cmd {
 	var rejected *jira.AuthError
 	var unreachable *jira.TransportError
 	switch {
+	case errors.Is(msg.err, errNotCloud):
+		m.note = "Only Jira Cloud sites can be set up. Nothing was written."
+		return m.stay(stepSite)
 	case errors.As(msg.err, &rejected):
+		m.refused()
 		return m.stay(stepToken)
 	case errors.As(msg.err, &unreachable):
-		m.note = "Nothing was written. The site, the email and the token are all still here."
+		m.note = missingDomain(m.value(fieldSite), msg.err) +
+			"Nothing was written. The site, the email and the token are all still here."
 		return m.stay(stepSite)
 	}
 	return m.stay(stepToken)
@@ -300,6 +340,7 @@ func (m *Model) probeFailed(msg probeFailedMsg) tea.Cmd {
 
 	var rejected *jira.AuthError
 	if errors.As(msg.err, &rejected) {
+		m.refused()
 		return m.stay(stepToken)
 	}
 	return nil
@@ -320,10 +361,8 @@ func (m *Model) save() tea.Cmd {
 		return nil
 	}
 	path := m.cfgPath
-	token := m.input[fieldToken].Value()
-	cfg := config.Config{Active: profile.Name, Mouse: m.cfg.Mouse, Profiles: map[string]config.Profile{}}
-	maps.Copy(cfg.Profiles, m.cfg.Profiles)
-	cfg.Profiles[profile.Name] = profile
+	token := m.value(fieldToken)
+	loaded := config.Config{Mouse: m.cfg.Mouse, Profiles: maps.Clone(m.cfg.Profiles)}
 
 	return m.start(busySave, func(ctx context.Context, seq int) tea.Msg {
 		// The keychain goes first: a config file naming an entry that was never
@@ -334,11 +373,31 @@ func (m *Model) save() tea.Cmd {
 				return saveFailedMsg{seq: seq, err: err}
 			}
 		}
-		if err := cfg.Save(path); err != nil {
+		if err := writeProfile(path, loaded, profile); err != nil {
 			return saveFailedMsg{seq: seq, err: err}
 		}
 		return savedMsg{seq: seq, path: path, stored: profile.Token.String(), warning: checkResolves(ctx, profile, token)}
 	})
+}
+
+// writeProfile adds the profile to the file as it is now, not as it was when
+// this view read it, so that whatever was written since survives. A file that is
+// not there yet starts from what was read, which on a first run is the defaults.
+func writeProfile(path string, loaded config.Config, profile config.Profile) error {
+	add := func(cfg *config.Config) error {
+		if cfg.Profiles == nil {
+			cfg.Profiles = map[string]config.Profile{}
+		}
+		cfg.Profiles[profile.Name] = profile
+		cfg.Active = profile.Name
+		return nil
+	}
+	err := config.UpdateFile(path, add)
+	if !errors.Is(err, config.ErrNoConfig) {
+		return err
+	}
+	_ = add(&loaded)
+	return loaded.Save(path)
 }
 
 // checkResolves reads the token back the way the next start will, so that a

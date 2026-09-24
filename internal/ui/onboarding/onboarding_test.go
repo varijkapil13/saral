@@ -90,7 +90,13 @@ func TestFlow_ARejectedTokenReturnsToTheTokenFieldWithEverythingStillThere(t *te
 	d.credentials()
 
 	d.atStep(stepToken)
-	d.mustContain("the token is not valid for you@example.com")
+	d.mustContain("Jira refused this token for you@example.com")
+	for _, cause := range []string{"different account", "revoked or has expired", "blocks API tokens for managed"} {
+		d.mustContain(cause)
+	}
+	if strings.Contains(d.frame(), "the token is not valid") {
+		t.Errorf("the frame shows Jira's own words rather than the causes:\n%s", d.frame())
+	}
 	if got := d.model().value(fieldSite); got != testSite {
 		t.Errorf("the site was lost: %q", got)
 	}
