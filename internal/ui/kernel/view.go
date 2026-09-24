@@ -149,6 +149,9 @@ type Deps struct {
 	// opened, and whatever a view kept for itself. A session with nowhere to
 	// write it — no profile yet — leaves it nil, and Recall/Keep cope.
 	Memory Memory
+	// DraftsDir is where unsent text is kept; empty means the drafts directory
+	// beside the profile. See DraftRoot.
+	DraftsDir string
 }
 
 // KeySet is a view's keys, scoped to itself.
