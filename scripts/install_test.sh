@@ -70,7 +70,11 @@ fi
 # --- a tampered archive is refused before unpacking ----------------------------
 mkdir -p "$ws/bent"
 cp "$release"/*.tar.gz "$ws/bent/"
-sed 's/^[0-9a-f]/f/' "$release/checksums.txt" >"$ws/bent/checksums.txt"
+# Flips the last hex digit rather than the first: a first-digit substitution
+# that lands on the same digit it started as (one time in sixteen) leaves the
+# checksum unchanged and the "mismatch" this is supposed to cause never happens.
+awk '{ last = substr($1, 64, 1); $1 = substr($1, 1, 63) (last == "0" ? "1" : "0"); print }' \
+	"$release/checksums.txt" >"$ws/bent/checksums.txt"
 dir="$ws/bin-bent"
 if install "$dir" SARAL_DOWNLOAD_BASE="file://$ws/bent"; then
 	bad 'a checksum mismatch fails the install'
@@ -231,6 +235,91 @@ if command -v wget >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
 	wait "$httpd" 2>/dev/null || true
 else
 	printf 'skip the wget path (needs wget and python3)\n'
+fi
+
+# --- signature and provenance verification -------------------------------------
+# A curated PATH, so a real cosign or gh on the machine running these tests
+# cannot make a test pass (or hide a failure) that a bare install.sh would not.
+bare_tools() {
+	for tool in sh uname sysctl mktemp mkdir tar cp chmod mv rm sed awk cut head cat \
+		curl sha256sum shasum openssl; do
+		path=$(command -v "$tool" 2>/dev/null) || continue
+		ln -sf "$path" "$1/$tool"
+	done
+}
+
+mkdir -p "$ws/bare"
+bare_tools "$ws/bare"
+
+signed="$ws/signed"
+mkdir -p "$signed"
+cp "$release"/*.tar.gz "$release/checksums.txt" "$signed/"
+echo dummy-signature >"$signed/checksums.txt.sig"
+echo dummy-certificate >"$signed/checksums.txt.pem"
+
+stub_cosign_ok="$ws/stub-cosign-ok"
+mkdir -p "$stub_cosign_ok"
+bare_tools "$stub_cosign_ok"
+cat >"$stub_cosign_ok/cosign" <<'EOF'
+#!/bin/sh
+[ "$1" = verify-blob ]
+EOF
+chmod 0755 "$stub_cosign_ok/cosign"
+
+stub_cosign_bad="$ws/stub-cosign-bad"
+mkdir -p "$stub_cosign_bad"
+bare_tools "$stub_cosign_bad"
+cat >"$stub_cosign_bad/cosign" <<'EOF'
+#!/bin/sh
+[ "$1" = verify-blob ] && exit 1
+exit 1
+EOF
+chmod 0755 "$stub_cosign_bad/cosign"
+
+stub_gh_ok="$ws/stub-gh-ok"
+mkdir -p "$stub_gh_ok"
+bare_tools "$stub_gh_ok"
+cat >"$stub_gh_ok/gh" <<'EOF'
+#!/bin/sh
+[ "$1" = attestation ] && [ "$2" = verify ]
+EOF
+chmod 0755 "$stub_gh_ok/gh"
+
+dir="$ws/bin-cosign-ok"
+if env SARAL_VERSION=v9.9.9 SARAL_DOWNLOAD_BASE="file://$signed" SARAL_INSTALL_DIR="$dir" \
+	PATH="$stub_cosign_ok" sh "$script" >"$ws/out" 2>&1 &&
+	[ -x "$dir/saral" ] && grep -q 'signature verified with cosign' "$ws/out"; then
+	ok 'cosign, when installed and the release is signed, verifies the signature'
+else
+	bad 'cosign, when installed and the release is signed, verifies the signature'
+fi
+
+dir="$ws/bin-cosign-bad"
+if env SARAL_VERSION=v9.9.9 SARAL_DOWNLOAD_BASE="file://$signed" SARAL_INSTALL_DIR="$dir" \
+	PATH="$stub_cosign_bad" sh "$script" >"$ws/out" 2>&1; then
+	bad 'cosign rejecting the signature fails the install and leaves nothing behind'
+elif grep -q 'could not verify' "$ws/out" && no_leftovers "$dir"; then
+	ok 'cosign rejecting the signature fails the install and leaves nothing behind'
+else
+	bad 'cosign rejecting the signature fails the install and leaves nothing behind'
+fi
+
+dir="$ws/bin-gh-ok"
+if env SARAL_VERSION=v9.9.9 SARAL_DOWNLOAD_BASE="file://$release" SARAL_INSTALL_DIR="$dir" \
+	PATH="$stub_gh_ok" sh "$script" >"$ws/out" 2>&1 &&
+	[ -x "$dir/saral" ] && grep -q 'provenance verified with gh attestation' "$ws/out"; then
+	ok 'gh attestation verify, when cosign is absent, confirms provenance'
+else
+	bad 'gh attestation verify, when cosign is absent, confirms provenance'
+fi
+
+dir="$ws/bin-unverified"
+if env SARAL_VERSION=v9.9.9 SARAL_DOWNLOAD_BASE="file://$release" SARAL_INSTALL_DIR="$dir" \
+	PATH="$ws/bare" sh "$script" >"$ws/out" 2>&1 &&
+	[ -x "$dir/saral" ] && grep -q 'neither cosign nor gh' "$ws/out"; then
+	ok 'with neither cosign nor gh, install still succeeds and says so plainly'
+else
+	bad 'with neither cosign nor gh, install still succeeds and says so plainly'
 fi
 
 if [ "$fails" -ne 0 ]; then
