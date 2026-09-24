@@ -70,7 +70,11 @@ fi
 # --- a tampered archive is refused before unpacking ----------------------------
 mkdir -p "$ws/bent"
 cp "$release"/*.tar.gz "$ws/bent/"
-sed 's/^[0-9a-f]/f/' "$release/checksums.txt" >"$ws/bent/checksums.txt"
+# Flips the last hex digit rather than the first: a first-digit substitution
+# that lands on the same digit it started as (one time in sixteen) leaves the
+# checksum unchanged and the "mismatch" this is supposed to cause never happens.
+awk '{ last = substr($1, 64, 1); $1 = substr($1, 1, 63) (last == "0" ? "1" : "0"); print }' \
+	"$release/checksums.txt" >"$ws/bent/checksums.txt"
 dir="$ws/bin-bent"
 if install "$dir" SARAL_DOWNLOAD_BASE="file://$ws/bent"; then
 	bad 'a checksum mismatch fails the install'
