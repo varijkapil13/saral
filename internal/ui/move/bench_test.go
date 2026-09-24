@@ -138,3 +138,27 @@ func BenchmarkMoveRemapKeystroke(b *testing.B) {
 		_ = m.View()
 	}
 }
+
+// BenchmarkMoveConfirmScrollWithDrops is the confirm screen carrying the list of
+// fields the target has no place for, which is drawn in the memoized head.
+func BenchmarkMoveConfirmScrollWithDrops(b *testing.B) {
+	m := stocked(b, 1000, 120, 40)
+	m.drop, m.leaving = dropDone, 1000
+	for i := range 8 {
+		m.drops = append(m.drops, dropped{id: "customfield_" + strconv.Itoa(i), name: "Feld " + strconv.Itoa(i), count: 1000 - i})
+	}
+	m.planGen++
+	m.forget()
+	_ = m.View()
+	down := tea.KeyPressMsg{Code: 'j', Text: "j"}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		next, _ := m.Update(down)
+		m, _ = next.(*Model)
+		if m.top >= max(m.rowCount()-m.rowsHeight(), 0) {
+			m.top = 0
+		}
+		_ = m.View()
+	}
+}

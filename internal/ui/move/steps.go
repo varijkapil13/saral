@@ -143,7 +143,8 @@ func (m *Model) chooseType() tea.Cmd {
 	m.typeAt = m.cursor
 	m.remaps = defaultRemap(sourceStatuses(m.issues), m.targetStatuses())
 	m.step, m.cursor, m.top = stepStatus, 0, 0
-	m.schema, m.fields, m.warned = false, nil, ""
+	m.schema, m.schemaErr, m.fields, m.warned = false, nil, nil, ""
+	m.resetDrops()
 	m.planGen++
 	m.forget()
 	ctx, gen := m.begin()
@@ -307,6 +308,10 @@ func (m *Model) confirmed() tea.Cmd {
 	}
 	if m.targetType().ID == "" {
 		m.warned = "no issue type has been chosen in " + m.target
+		return kernel.Warn(m.warned)
+	}
+	if m.drop == dropPending {
+		m.warned = "still checking which fields " + m.target + " has no place for; y again once it has answered"
 		return kernel.Warn(m.warned)
 	}
 	in := m.request()

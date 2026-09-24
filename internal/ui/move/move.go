@@ -101,9 +101,22 @@ type Model struct {
 
 	remaps []remap
 	fields []pending
-	// schema records that the target has answered what it insists on. Nothing
-	// asks a user to confirm a move whose mandatory fields are still unknown.
-	schema bool
+	// schema records that the target has answered what it insists on, or has
+	// refused to, in which case schemaErr says why and every mandatory field is
+	// kept from the source. Nothing asks a user to confirm a move whose target
+	// has not answered at all.
+	schema       bool
+	schemaErr    error
+	targetSchema jira.Schema
+
+	drop       dropState
+	drops      []dropped
+	leaving    int
+	dropErr    error
+	dropGen    int
+	dropCancel context.CancelFunc
+	sources    map[pair]jira.Schema
+
 	notify bool
 	// planGen counts the changes to the resolved mapping, which is what the
 	// memoized head repaints on: the mapping is built from slices and a key
@@ -235,6 +248,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case schemaMsg:
 		cmd = m.tookSchema(msg)
 
+	case droppedMsg:
+		m.tookDrops(msg)
+
 	case submittedMsg:
 		cmd = m.tookRef(msg)
 
@@ -304,7 +320,14 @@ func (m *Model) reread() tea.Cmd {
 	case stepTarget, stepTyping:
 		m.looked = false
 		return m.Init()
-	case stepType, stepStatus, stepFields, stepConfirm:
+	case stepStatus, stepFields, stepConfirm:
+		if m.drop == dropFailed && m.schemaErr == nil {
+			return m.startDrops()
+		}
+		m.sources = nil
+		return m.lookUp(m.target)
+	case stepType:
+		m.sources = nil
 		return m.lookUp(m.target)
 	case stepRunning, stepDone:
 	}
@@ -346,7 +369,10 @@ func (m *Model) stop() {
 // task. The move itself is not stopped by this and cannot be: it belongs to
 // Jira's queue once it has been submitted, which is what the confirm screen says
 // before anybody agrees to it.
-func (m *Model) Close() { m.stop() }
+func (m *Model) Close() {
+	m.stop()
+	m.resetDrops()
+}
 
 func (m *Model) current(gen int) bool { return gen == m.gen }
 
@@ -386,8 +412,9 @@ func (m *Model) tookVocabulary(msg vocabularyMsg) tea.Cmd {
 	}
 	m.stop()
 	m.failure = nil
-	m.vocab, m.schema = msg.types, false
+	m.vocab, m.schema, m.schemaErr = msg.types, false, nil
 	m.remaps, m.fields = nil, nil
+	m.resetDrops()
 	m.cursor, m.top = 0, 0
 	m.planGen++
 	m.forget()
@@ -406,10 +433,59 @@ func (m *Model) tookSchema(msg schemaMsg) tea.Cmd {
 	}
 	m.stop()
 	m.failure = nil
-	m.fields, m.schema = mandatory(msg.schema), true
 	m.planGen++
 	m.forget()
-	return nil
+	if msg.err != nil {
+		m.fields, m.schema, m.schemaErr = nil, true, msg.err
+		m.targetSchema = jira.Schema{}
+		m.resetDrops()
+		m.drop, m.dropErr = dropFailed, msg.err
+		return kernel.Fail(msg.err)
+	}
+	m.fields, m.schema, m.schemaErr = mandatory(msg.schema), true, nil
+	m.targetSchema = msg.schema
+	return m.startDrops()
+}
+
+// startDrops asks what the move would drop. It runs beside the steps rather
+// than holding them up, and only the submit waits for it.
+func (m *Model) startDrops() tea.Cmd {
+	m.resetDrops()
+	leaving := leavingIssues(m.issues, m.target)
+	if len(leaving) == 0 || m.deps.Jira == nil {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.dropCancel, m.drop = cancel, dropPending
+	return m.reply(checkDrops(ctx, m.deps.Jira, leaving, m.targetSchema, m.sources, m.dropGen))
+}
+
+func (m *Model) resetDrops() {
+	if m.dropCancel != nil {
+		m.dropCancel()
+		m.dropCancel = nil
+	}
+	m.dropGen++
+	m.drop, m.drops, m.leaving, m.dropErr = dropNone, nil, 0, nil
+	m.planGen++
+	m.head, m.tail = nil, nil
+}
+
+func (m *Model) tookDrops(msg droppedMsg) {
+	if msg.gen != m.dropGen {
+		return
+	}
+	if m.dropCancel != nil {
+		m.dropCancel()
+		m.dropCancel = nil
+	}
+	m.planGen++
+	m.head, m.tail = nil, nil
+	if msg.err != nil {
+		m.drop, m.dropErr = dropFailed, msg.err
+		return
+	}
+	m.drop, m.drops, m.leaving, m.sources = dropDone, msg.fields, msg.leaving, msg.sources
 }
 
 func (m *Model) tookRef(msg submittedMsg) tea.Cmd {

@@ -35,9 +35,13 @@ type vocabularyMsg struct {
 	types   []jira.IssueTypeStatuses
 }
 
+// schemaMsg is the target's create screen, or why it could not be read. A
+// refusal is carried here rather than as a failedMsg because the wizard goes on
+// without it.
 type schemaMsg struct {
 	gen    int
 	schema jira.Schema
+	err    error
 }
 
 // submittedMsg carries the task the queue took the move under. The ref is
@@ -122,10 +126,7 @@ func vocabulary(ctx context.Context, vocab jira.FilterVocabulary, project string
 func schemaOf(ctx context.Context, reader jira.SchemaReader, project, typeID string, gen int) tea.Cmd {
 	return func() tea.Msg {
 		schema, err := reader.CreateMeta(ctx, project, typeID)
-		if err != nil {
-			return failedMsg{gen: gen, at: stepType, err: err}
-		}
-		return schemaMsg{gen: gen, schema: schema}
+		return schemaMsg{gen: gen, schema: schema, err: err}
 	}
 }
 
