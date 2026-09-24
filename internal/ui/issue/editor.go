@@ -142,31 +142,13 @@ func handoffError(err error, path string) error {
 func remove(path string) { _ = os.Remove(path) }
 
 // riskyEdits names what editing this document as markdown costs, narrowed to
-// the constructs it actually contains. ParseMarkdownInto restores every block
-// the author leaves alone; these are what the blocks they do touch lose.
+// the constructs it actually contains. ParseMarkdownInto restores everything
+// the author leaves alone; these are what the parts they do touch lose.
 func riskyEdits(d adf.Doc) []string {
-	if d.IsZero() || d.IsEmpty() {
-		return nil
-	}
-	present := d.NodeTypes()
-	var out []string
-	for _, entry := range adf.ParseMarkdownDropsOnly() {
-		kind, _, ok := strings.Cut(entry, ":")
-		if !ok {
-			continue
-		}
-		if _, there := present[kind]; there && !containsEntry(out, entry) {
-			out = append(out, entry)
-		}
+	losses := adf.LossyConstructs(d, adf.Options{})
+	out := make([]string, 0, len(losses))
+	for _, l := range losses {
+		out = append(out, l.String())
 	}
 	return out
-}
-
-func containsEntry(out []string, entry string) bool {
-	for _, got := range out {
-		if got == entry {
-			return true
-		}
-	}
-	return false
 }

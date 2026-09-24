@@ -582,28 +582,18 @@ func (m *Model) composerKeys() string {
 	return m.mark(zoneSend, f.left) + "  " + m.mark(zoneCancel, f.right)
 }
 
-// alwaysPresent are the entries in pkg/adf's list that name prose details
-// rather than a construct anybody would recognise on screen, and that every
-// document has. Warning about them would mean warning about every comment.
-var alwaysPresent = map[string]bool{"text": true, "marks": true}
-
 // oneWay names the constructs in a document that markdown alone cannot carry,
-// read out of pkg/adf's own list so that this view cannot end up warning about
-// something the parser has since learned to keep.
+// read out of pkg/adf so that this view cannot end up warning about something
+// the parser has since learned to keep.
 func oneWay(d adf.Doc) []string {
-	types := d.NodeTypes()
-	if len(types) == 0 {
-		return nil
-	}
-	seen := make(map[string]bool, len(types))
-	out := make([]string, 0, 4)
-	for _, entry := range adf.ParseMarkdownDropsOnly() {
-		name, _, ok := strings.Cut(entry, ":")
-		if !ok || seen[name] || alwaysPresent[name] || types[name] == 0 {
-			continue
+	losses := adf.LossyConstructs(d, editorOptions)
+	seen := make(map[string]bool, len(losses))
+	out := make([]string, 0, len(losses))
+	for _, l := range losses {
+		if !seen[l.Construct] {
+			seen[l.Construct] = true
+			out = append(out, l.Construct)
 		}
-		seen[name] = true
-		out = append(out, name)
 	}
 	return out
 }

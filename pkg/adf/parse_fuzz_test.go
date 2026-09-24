@@ -14,9 +14,9 @@ import (
 // would accept, and rendering and re-parsing it settles.
 //
 // Settling is what stops a save from eating text. The first render is allowed
-// to change the markdown, because the renderer does not escape prose — a
-// paragraph that reads "0)" is spelled exactly like an ordered list, and one
-// pass through markdown makes it one. What must not happen is drift: a document
+// to change the markdown, because input nobody rendered can say one thing two
+// ways — "\." and "." — or spell a list that ADF cannot hold, and one pass
+// through markdown picks one. What must not happen is drift: a document
 // that grows a marker, or loses a character, every time it is opened and saved.
 // TestParseMarkdown_HoldsBothPropertiesOverGeneratedDocuments asserts the
 // stronger one-pass version over documents that started life as ADF.
@@ -74,6 +74,74 @@ func FuzzParseMarkdown(f *testing.F) {
 	})
 }
 
+// FuzzRoundTrip starts from ADF, where every real document starts.
+func FuzzRoundTrip(f *testing.F) {
+	for _, d := range corpus(f) {
+		b, err := adf.Marshal(d)
+		if err != nil {
+			f.Fatal(err)
+		}
+		f.Add(b)
+	}
+	for seed := range uint64(40) {
+		f.Add([]byte(generated(rand.New(rand.NewPCG(seed, 0x5a4a1)))))
+	}
+	for _, s := range []string{"a *b* c", "~~x~~", "[x](http://evil.test)", "- not a list", "1. no", "\\*", "▾ x", "v x", "@[x](accountid:y)", "a|b", "Look!"} {
+		f.Add([]byte(wrap(para(text(s)))))
+	}
+
+	f.Fuzz(func(t *testing.T, in []byte) {
+		d, err := adf.Unmarshal(in)
+		if err != nil || !wellFormed(d) {
+			return
+		}
+		want, err := adf.Marshal(d)
+		if err != nil {
+			return
+		}
+		for _, opt := range editOptions() {
+			md := adf.MarkdownWith(d, opt)
+			into, err := adf.ParseMarkdownInto(d, md, opt)
+			if err != nil {
+				t.Fatalf("%+v: an untouched document does not parse into itself: %v\n%s", opt, err, md)
+			}
+			if got := encoded(t, into); got != string(want) {
+				t.Fatalf("%+v: an untouched document did not come back\n--- want ---\n%s\n--- got ---\n%s", opt, want, got)
+			}
+
+			if first, rest, _ := strings.Cut(md, "\n"); first != "" {
+				if out, err := adf.ParseMarkdownInto(d, first+" edited\n"+rest, opt); err == nil {
+					mustBeValid(t, out, md)
+				}
+			}
+
+			fresh, err := adf.ParseMarkdownWith(md, opt)
+			if err != nil {
+				continue
+			}
+			mustBeValid(t, fresh, md)
+			once := adf.MarkdownWith(fresh, opt)
+			again, err := adf.ParseMarkdownWith(once, opt)
+			if err != nil {
+				t.Fatalf("%+v: the markdown of a parsed document does not parse: %v\n%q", opt, err, once)
+			}
+			if twice := adf.MarkdownWith(again, opt); twice != once {
+				t.Fatalf("%+v: parse(render(doc)) is not stable\n--- once ---\n%q\n--- twice ---\n%q", opt, once, twice)
+			}
+		}
+	})
+}
+
+// wellFormed skips fuzzed JSON that is not ADF, which Jira refuses anyway.
+func wellFormed(d adf.Doc) bool {
+	ok := d.Type == "doc"
+	d.Walk(func(n adf.Node) bool {
+		ok = ok && n.Type != "" && (n.Type == "text") == (n.Text != "")
+		return ok
+	})
+	return ok
+}
+
 // mustBeValid checks the rules a document has to obey before Jira will look at
 // what is in it.
 func mustBeValid(tb testing.TB, d adf.Doc, from string) {
@@ -103,7 +171,9 @@ func mustBeValid(tb testing.TB, d adf.Doc, from string) {
 //
 // Byte-stability is asserted for every option set. The fixed point is asserted
 // only where the markdown is what a caller would hand to an editor: bounding a
-// table's width truncates its cells, and truncation is not a round trip.
+// table's width truncates its cells, and truncation is not a round trip. Where
+// it does not hold after one render, it must after two, and LossyConstructs
+// must have named something in the document that made the difference.
 func TestParseMarkdown_HoldsBothPropertiesOverGeneratedDocuments(t *testing.T) {
 	t.Parallel()
 	for seed := range seeds() {
@@ -134,9 +204,21 @@ func TestParseMarkdown_HoldsBothPropertiesOverGeneratedDocuments(t *testing.T) {
 				t.Fatalf("seed %d %+v: %v\n%s", seed, opt, err, md)
 			}
 			mustBeValid(t, fresh, md)
-			if twice := adf.MarkdownWith(fresh, opt); twice != md {
-				t.Fatalf("seed %d %+v: the render does not settle\n--- once ---\n%q\n--- twice ---\n%q",
+			twice := adf.MarkdownWith(fresh, opt)
+			if twice == md {
+				continue
+			}
+			if len(adf.LossyConstructs(d, opt)) == 0 {
+				t.Fatalf("seed %d %+v: the render does not settle and nothing warned about it\n--- once ---\n%q\n--- twice ---\n%q",
 					seed, opt, md, twice)
+			}
+			again, err := adf.ParseMarkdownWith(twice, opt)
+			if err != nil {
+				t.Fatalf("seed %d %+v: %v\n%s", seed, opt, err, twice)
+			}
+			if thrice := adf.MarkdownWith(again, opt); thrice != twice {
+				t.Fatalf("seed %d %+v: the render drifts\n--- twice ---\n%q\n--- thrice ---\n%q",
+					seed, opt, twice, thrice)
 			}
 		}
 	}
@@ -243,10 +325,8 @@ func genTable(rng *rand.Rand) string {
 	return node("table", `"attrs":{"layout":"default"},"content":[`+strings.Join(rows, ",")+`]`)
 }
 
-// genInline builds a run of inline nodes. Its words start with a letter on
-// purpose: the renderer does not escape prose, so text that begins a line with
-// a bullet or a hash reads back as the block it looks like, which is the one
-// ambiguity this dialect cannot resolve and which has its own test.
+// genInline builds a run of inline nodes, whose words can begin a line with
+// anything that would read as a block marker if the renderer did not escape it.
 func genInline(rng *rand.Rand) string {
 	out := make([]string, 0, 4)
 	for range rng.IntN(4) + 1 {
@@ -281,7 +361,8 @@ func genInline(rng *rand.Rand) string {
 
 func genWords(rng *rand.Rand) string {
 	words := make([]string, 0, 4)
-	words = append(words, pick(rng, "basket", "checkout", "order", "retry", "staging"))
+	words = append(words, pick(rng, "basket", "checkout", "order", "retry", "staging",
+		"-", "- item", "#", "## x", "1.", "2) x", "> q", "| t", "+ p", "[ ]", "[x] done", "---", "▾", "v", "◇ d", "*"))
 	for range rng.IntN(4) {
 		words = append(words, pick(rng,
 			"total", "empty", "日本語", "e\\u0301cole", "snake_case", "a|b", "x(y)",

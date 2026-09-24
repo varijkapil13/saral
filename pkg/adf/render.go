@@ -33,8 +33,10 @@ type Options struct {
 // to undo anything first. It is markdown by shape rather than by standard —
 // tables are padded to align in a monospaced pager, a panel becomes a marked
 // blockquote and a status lozenge becomes bracketed text, none of which have a
-// markdown spelling that survives a pager. Prose is not backslash-escaped
-// either, because a reader should see the characters the author typed.
+// markdown spelling that survives a pager. Prose is backslash-escaped only
+// where the parser would otherwise read it as markup — "a \*b\* c", "\- not a
+// list" — so that what an author typed comes back as the characters it was,
+// and a reader sees as few backslashes as that allows.
 //
 // A node type this package does not know is rendered rather than dropped: its
 // type is shown and its text content is rendered below it. ADF gains node
@@ -84,10 +86,13 @@ type writer struct {
 	marker string // carried by the next line only, in place of prefix
 
 	lineAt   int  // where the current line starts in buf
+	textAt   int  // where the current line's content starts, after its prefix
 	open     bool // a line is being written
 	written  bool // a line has been written
 	blank    bool // a blank line is owed before the next line
 	verbatim bool // keep trailing whitespace, for code
+
+	noBlocks bool // a heading or a cell, where nothing at a line's start can open a block
 
 	// blankPrefix is the prefix that was in force when the blank line was
 	// owed, which is the one it must carry: a blank line between two blocks of
@@ -95,7 +100,12 @@ type writer struct {
 	blankPrefix string
 }
 
+// separate keeps a blank line already owed: it separates two outer blocks the
+// second of which has written nothing yet, and carries the outer prefix.
 func (w *writer) separate(on bool) {
+	if w.blank {
+		return
+	}
 	w.blank, w.blankPrefix = on, w.prefix
 }
 
@@ -115,10 +125,13 @@ func (w *writer) startLine() {
 	if w.marker != "" {
 		w.buf = append(w.buf, w.marker...)
 		w.marker = ""
-		return
+	} else {
+		w.buf = append(w.buf, w.prefix...)
 	}
-	w.buf = append(w.buf, w.prefix...)
+	w.textAt = len(w.buf)
 }
+
+func (w *writer) atLineStart() bool { return !w.open || len(w.buf) == w.textAt }
 
 func (w *writer) endLine() {
 	if !w.open {
@@ -247,8 +260,11 @@ func (w *writer) heading(n Node) {
 		level = 6
 	}
 	pop := w.push(headingMarks[level], "")
+	noBlocks := w.noBlocks
+	w.noBlocks = true
 	w.inline(n.Content)
 	w.endLine()
+	w.noBlocks = noBlocks
 	pop()
 }
 

@@ -35,20 +35,62 @@ func glyphsFor(ascii bool) glyphs {
 }
 
 func (w *writer) inline(nodes []Node) {
-	for i := range nodes {
-		w.inlineNode(nodes[i])
+	opener := -1
+	for i := 0; i < len(nodes); {
+		at := len(w.buf)
+		next := i + 1
+		for next < len(nodes) && plainRun(nodes[i]) && plainRun(nodes[next]) {
+			next++
+		}
+		if next > i+1 {
+			w.plainText(nodes[i:next])
+		} else {
+			w.inlineNode(nodes[i])
+		}
+		// A bang or an at sign ending one run turns a link that opens the next
+		// into an image or a mention.
+		if opener >= 0 && at == opener+1 && at < len(w.buf) && w.buf[at] == '[' {
+			w.buf = append(w.buf, 0)
+			copy(w.buf[opener+1:], w.buf[opener:])
+			w.buf[opener] = '\\'
+		}
+		opener = -1
+		if n := len(w.buf); nodes[next-1].Type == "text" && w.open && n > w.textAt &&
+			(w.buf[n-1] == '!' || w.buf[n-1] == '@') {
+			opener = n - 1
+		}
+		i = next
 	}
+}
+
+// plainRun nodes are escaped together, as the one run the parser will read.
+func plainRun(n Node) bool { return n.Type == "text" && !wraps(n.Marks) }
+
+func (w *writer) plainText(nodes []Node) {
+	var b strings.Builder
+	for i := range nodes {
+		b.WriteString(sanitize(nodes[i].Text))
+	}
+	w.text(b.String(), nil)
+}
+
+func (w *writer) text(text string, marks []Mark) {
+	start := !w.noBlocks && !wraps(marks) && w.atLineStart()
+	if !hasMark(marks, "code") {
+		text = escapeText(text, escaping{lineStart: start, glyph: start, link: linked(marks)}, w.gl)
+	}
+	w.emit(marked(text, marks))
 }
 
 func (w *writer) inlineNode(n Node) {
 	switch n.Type {
 	case "text":
-		w.emit(marked(sanitize(n.Text), n.Marks))
+		w.text(sanitize(n.Text), n.Marks)
 	case "hardBreak":
 		w.startLine()
 		w.endLine()
 	case "mention":
-		w.emit(mentionText(n.Attrs))
+		w.emit(w.mentionText(n.Attrs))
 	case "status":
 		w.emit(statusText(n.Attrs))
 	case "emoji":
@@ -80,15 +122,12 @@ func (w *writer) unknownInline(n Node) {
 	w.emit("]")
 }
 
-// mentionText renders a mention from the display text the editor stored with
-// it. The account id behind it means nothing to a reader.
-func mentionText(a Attrs) string {
+func (w *writer) mentionText(a Attrs) string {
 	text, _ := attrString(a, "text")
 	text = sanitize(strings.TrimSpace(text))
-	if text == "" {
-		if id, ok := attrString(a, "id"); ok {
-			text = sanitize(id)
-		}
+	id, _ := attrString(a, "id")
+	if id = strings.TrimSpace(id); id != "" {
+		return MentionMarkdown(text, id)
 	}
 	if text == "" {
 		return "@?"
@@ -164,7 +203,7 @@ func (w *writer) cardText(n Node) string {
 	case name == "" || name == url:
 		return "<" + url + ">"
 	default:
-		return link(name, url)
+		return link(escapeText(name, escaping{link: true}, w.gl), url)
 	}
 }
 
@@ -199,6 +238,40 @@ func link(text, url string) string {
 		return "[" + text + "](<" + angles.Replace(url) + ">)"
 	}
 	return "[" + text + "](" + url + ")"
+}
+
+func wraps(marks []Mark) bool {
+	for i := range marks {
+		switch marks[i].Type {
+		case "code", "underline", "strike", "em", "strong":
+			return true
+		case "link":
+			if href, _ := attrString(marks[i].Attrs, "href"); strings.TrimSpace(href) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func linked(marks []Mark) bool {
+	for i := range marks {
+		if marks[i].Type == "link" {
+			if href, _ := attrString(marks[i].Attrs, "href"); strings.TrimSpace(href) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasMark(marks []Mark, typ string) bool {
+	for i := range marks {
+		if marks[i].Type == typ {
+			return true
+		}
+	}
+	return false
 }
 
 // marked wraps text in its marks in a fixed order, innermost first. Marks come

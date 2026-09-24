@@ -65,6 +65,12 @@ func corpus(tb testing.TB) map[string]adf.Doc {
 			node("caption", `"content":[`+text("Figure 1")+`]`)+`]`)),
 		"a group of images": wrap(node("mediaGroup", `"content":[`+
 			`{"type":"media","attrs":{"id":"a","type":"file"}},{"type":"media","attrs":{"id":"b","type":"file"}}]`)),
+		"a quote that opens with an empty paragraph": wrap(para(`{"type":"text","text":"above","marks":[{"type":"textColor","attrs":{"color":"#ff5630"}}]}`) + "," +
+			node("blockquote", `"content":[`+para("")+`,`+para(text("inside"))+`]`)),
+		"literal markup in prose": wrap(para(text("a *b* c, ~~x~~, _x_, "+bt+"x"+bt+", [link](http://evil.test), <https://x.test> and C:\\\\*")) + "," +
+			para(text("- not a list")) + "," + para(text("1. not a list")) + "," + para(text("> not a quote"))),
+		"a mention in a list item and a table cell": wrap(node("bulletList", `"content":[`+node("listItem", `"content":[`+para(`{"type":"mention","attrs":{"id":"5b10ac8d","text":"@Someone","accessLevel":""}}`)+`]`)+`]`) + "," +
+			node("table", `"content":[`+row(node("tableCell", `"attrs":{"background":"#deebff"},"content":[`+para(`{"type":"mention","attrs":{"id":"5b10ac8d","text":"@Someone"}}`)+`]`))+`]`)),
 		"a rule between paragraphs":    wrap(para(text("above")) + "," + node("rule", "") + "," + para(text("below"))),
 		"a code block":                 wrap(node("codeBlock", `"attrs":{"language":"go"},"content":[`+text("x := 1\\ny := 2")+`]`)),
 		"a code block holding a fence": wrap(node("codeBlock", `"content":[`+text("a\\n"+bt+bt+bt+"\\nb")+`]`)),
