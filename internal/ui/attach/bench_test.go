@@ -95,7 +95,7 @@ func BenchmarkRowRender(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		m.memo.reset()
+		m.memo.Reset()
 		_ = m.row(0)
 	}
 }

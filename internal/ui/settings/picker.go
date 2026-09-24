@@ -55,7 +55,7 @@ type pickerModel struct {
 	width, height int
 
 	styles     *pickerStyles
-	memo       *rowCache
+	memo       *widget.RowCache[rowKey, renderedRow]
 	lay        layout
 	lines      []string
 	head       string
@@ -71,7 +71,7 @@ func newPicker(d kernel.Deps, opts []kernel.SettingOption, current string, apply
 		opts:    opts,
 		current: current,
 		apply:   apply,
-		memo:    newRowCache(rowMemoLimit),
+		memo:    widget.NewRowCache[rowKey, renderedRow](rowMemoLimit),
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
@@ -111,7 +111,7 @@ func (m *pickerModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newPickerStyles(msg.Theme)
-		m.memo.reset()
+		m.memo.Reset()
 		m.head = ""
 	case tea.KeyPressMsg:
 		cmd = m.key(msg)
@@ -130,7 +130,7 @@ func (m *pickerModel) resize(w, h int) {
 	m.width, m.height = w, h
 	m.lay = planLayout(w)
 	m.input.SetWidth(max(w-2, 8))
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 	m.clampScroll()
 }
@@ -287,13 +287,13 @@ func (m *pickerModel) row(at int) string {
 	sel := at == m.cursor
 	o := &m.opts[m.shown[at]]
 	key := rowKey{id: o.ID, value: o.Label, sel: sel, gen: m.styles.gen, width: m.lay.width}
-	s, ok := m.memo.get(key)
+	s, ok := m.memo.Get(key)
 	var text string
 	if ok {
 		text = s.ctrl
 	} else {
 		text = renderOption(o, o.ID == m.current, m.lay, sel, m.styles, m.deps.Theme)
-		m.memo.put(key, renderedRow{ctrl: text})
+		m.memo.Put(key, renderedRow{ctrl: text})
 	}
 	if m.deps.Zones != nil {
 		text = m.deps.Zones.Mark(m.zone(m.shown[at]), text)
@@ -312,7 +312,7 @@ func renderOption(o *kernel.SettingOption, current bool, lay layout, sel bool, s
 	if o.Style != nil {
 		style = o.Style(t)
 	}
-	label := padTruncate(mark+o.Label, lay.width-marker-8, t.Glyphs.Ellipsis)
+	label := widget.PadTruncate(mark+o.Label, lay.width-marker-8, t.Glyphs.Ellipsis)
 	if sel {
 		b.WriteString(label)
 	} else {
@@ -320,7 +320,7 @@ func renderOption(o *kernel.SettingOption, current bool, lay layout, sel bool, s
 	}
 	if o.Note != "" {
 		b.WriteString("  ")
-		note := padTruncate(o.Note, 8, t.Glyphs.Ellipsis)
+		note := widget.PadTruncate(o.Note, 8, t.Glyphs.Ellipsis)
 		if sel {
 			b.WriteString(note)
 		} else {

@@ -78,7 +78,7 @@ type Model struct {
 	addr   kernel.Addr
 
 	styles *styles
-	rows   *memo[rowKey]
+	rows   *widget.RowCache[rowKey, string]
 	lay    layout
 	head   string
 	sum    string
@@ -98,7 +98,7 @@ func New(d kernel.Deps) kernel.View {
 	}
 	m.acts, m.inEdit = defaultKeys().tables()
 	m.styles = newStyles(m.deps.Theme)
-	m.rows = newMemo[rowKey](rowCacheLimit)
+	m.rows = widget.NewRowCache[rowKey, string](rowCacheLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.form = newForm()
@@ -147,13 +147,13 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.rows.reset()
+		m.rows.Reset()
 		m.head, m.sum = "", ""
 		m.relayout()
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
-		m.rows.reset()
+		m.rows.Reset()
 		m.sum = ""
 
 	case kernel.ProjectMsg:
@@ -206,7 +206,7 @@ func (m *Model) resize(w, h int) {
 		return
 	}
 	m.width, m.height = w, h
-	m.rows.reset()
+	m.rows.Reset()
 	m.sum = ""
 	m.relayout()
 	m.form.resize(w)

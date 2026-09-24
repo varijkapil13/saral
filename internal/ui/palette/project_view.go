@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
 // currentBadge marks the scope the session is already on.
@@ -144,11 +145,11 @@ func renderProject(r *projectRow, lay layout, sel bool, st *styles, t *kernel.Th
 	b.Grow(lay.width + 32)
 
 	writeMarker(&b, sel, t)
-	label := r.label
+	label := widget.Sanitize(r.label)
 	if r.current {
 		label += currentBadge
 	}
-	text := padTruncate(label, lay.title, ell)
+	text := widget.PadTruncate(label, lay.title, ell)
 	if sel {
 		b.WriteString(text)
 	} else {
@@ -156,7 +157,7 @@ func renderProject(r *projectRow, lay layout, sel bool, st *styles, t *kernel.Th
 	}
 	if lay.group > 0 {
 		b.WriteString(strings.Repeat(" ", gap))
-		cell := padTruncate(r.note, lay.group, ell)
+		cell := widget.PadTruncate(widget.Sanitize(r.note), lay.group, ell)
 		if sel {
 			b.WriteString(cell)
 		} else {
@@ -180,14 +181,14 @@ func (m *projectModel) row(at int) string {
 	sel := at == m.cursor
 	r := &m.rows[m.shown[at]]
 	k := rowKey{id: r.key, text: r.label, age: r.note, lay: m.lay, selected: sel, gen: m.styles.gen}
-	if s, ok := m.memo.get(k); ok {
+	if s, ok := m.memo.Get(k); ok {
 		return s
 	}
 	s := renderProject(r, m.lay, sel, m.styles, m.deps.Theme)
 	if m.deps.Zones != nil {
 		s = m.deps.Zones.Mark(m.zone(m.shown[at]), s)
 	}
-	m.memo.put(k, s)
+	m.memo.Put(k, s)
 	return s
 }
 

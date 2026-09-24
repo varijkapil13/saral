@@ -183,22 +183,22 @@ func TestRowMemo_ForgetsARowWhoseSelectionOrThemeMoved(t *testing.T) {
 
 	p := fly(t, paletteDeps(), sample(), memoryTable(), 120, 28)
 	drawn := p.frame()
-	held := len(p.m.memo.rows)
+	held := p.m.memo.Len()
 	if held == 0 {
 		t.Fatal("drawing the palette memoized nothing")
 	}
-	if again := p.frame(); again != drawn || len(p.m.memo.rows) != held {
+	if again := p.frame(); again != drawn || p.m.memo.Len() != held {
 		t.Error("a second frame rebuilt rows nothing had changed")
 	}
 
 	p.press("down")
 	_ = p.frame()
-	if got := len(p.m.memo.rows); got <= held {
+	if got := p.m.memo.Len(); got <= held {
 		t.Error("moving the selection hit the memo for both rows, so the arrow is drawn on the wrong one")
 	}
 
 	p.send(kernel.ThemeMsg{Theme: kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs())})
-	if len(p.m.memo.rows) != 0 {
+	if p.m.memo.Len() != 0 {
 		t.Error("a theme change left the rows it was drawn in behind")
 	}
 }

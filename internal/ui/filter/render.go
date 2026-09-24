@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -110,32 +111,6 @@ type rowKey struct {
 	gen      int
 }
 
-// rowCache is a bounded memo of rendered rows. Past its limit it is emptied
-// rather than evicted one at a time, because a scroll invalidates a screenful
-// at once anyway and clearing keeps the map's capacity.
-type rowCache struct {
-	rows  map[rowKey]string
-	limit int
-}
-
-func newRowCache(limit int) *rowCache {
-	return &rowCache{rows: make(map[rowKey]string, limit), limit: limit}
-}
-
-func (c *rowCache) get(k rowKey) (string, bool) {
-	s, ok := c.rows[k]
-	return s, ok
-}
-
-func (c *rowCache) put(k rowKey, s string) {
-	if len(c.rows) >= c.limit {
-		clear(c.rows)
-	}
-	c.rows[k] = s
-}
-
-func (c *rowCache) reset() { clear(c.rows) }
-
 // zoneOf is the click target one row is marked with. A facet is named by its
 // own label and a value by the id it is held under, both stable for the life of
 // the picker.
@@ -162,11 +137,11 @@ func (m *Model) row(at int) string {
 			lay: m.lay, selected: sel, inForce: m.terms.Count(row.facet) > 0,
 			refused: row.reason != "", gen: m.styles.gen,
 		}
-		if s, ok := m.memo.get(k); ok {
+		if s, ok := m.memo.Get(k); ok {
 			return s
 		}
 		s := m.zones.Mark(m.zoneOf(at), renderRow(k, m.styles, m.deps.Theme))
-		m.memo.put(k, s)
+		m.memo.Put(k, s)
 		return s
 	}
 	v := &m.all[m.shown[at]]
@@ -174,11 +149,11 @@ func (m *Model) row(at int) string {
 		id: v.term.ID, name: v.term.Label, note: v.note, lay: m.lay,
 		selected: sel, inForce: m.terms.Has(v.term), gen: m.styles.gen,
 	}
-	if s, ok := m.memo.get(k); ok {
+	if s, ok := m.memo.Get(k); ok {
 		return s
 	}
 	s := m.zones.Mark(m.zoneOf(at), renderRow(k, m.styles, m.deps.Theme))
-	m.memo.put(k, s)
+	m.memo.Put(k, s)
 	return s
 }
 
@@ -214,12 +189,12 @@ func renderRow(k rowKey, st *styles, t *kernel.Theme) string {
 	case !k.inForce:
 		b.WriteString(strings.Repeat(" ", chosen))
 	case k.selected:
-		b.WriteString(padTruncate(t.Glyphs.Check, chosen, ell))
+		b.WriteString(widget.PadTruncate(t.Glyphs.Check, chosen, ell))
 	default:
-		b.WriteString(st.mark.Render(padTruncate(t.Glyphs.Check, chosen, ell)))
+		b.WriteString(st.mark.Render(widget.PadTruncate(t.Glyphs.Check, chosen, ell)))
 	}
 
-	name := padTruncate(k.name, k.lay.name, ell)
+	name := widget.PadTruncate(widget.Sanitize(k.name), k.lay.name, ell)
 	switch {
 	case k.selected:
 		b.WriteString(name)
@@ -236,7 +211,7 @@ func renderRow(k rowKey, st *styles, t *kernel.Theme) string {
 		if k.refused {
 			room += k.lay.pad
 		}
-		note := padTruncate(k.note, room, ell)
+		note := widget.PadTruncate(widget.Sanitize(k.note), room, ell)
 		if k.selected {
 			b.WriteString(note)
 		} else {
@@ -397,27 +372,6 @@ func (m *Model) hatch() string {
 		return ""
 	}
 	return m.editKey + " on the list edits the search by hand."
-}
-
-// padTruncate makes a string exactly width columns wide, counting grapheme
-// clusters rather than bytes: a person's name is exactly the string that is not
-// ASCII, and a label is whatever anybody typed.
-func padTruncate(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if pad := width - ansi.StringWidth(out); pad > 0 {
-		out += strings.Repeat(" ", pad)
-	}
-	return out
 }
 
 // View draws the head, the rule and the window of rows under it. Only the

@@ -56,7 +56,7 @@ type Model struct {
 	inAsk    map[string]action
 	inSort   map[string]action
 	styles   *styles
-	rows     *rowCache
+	rows     *widget.RowCache[rowKey, string]
 
 	jql   string
 	title string
@@ -218,7 +218,7 @@ func New(d kernel.Deps) kernel.View {
 		addr:   kernel.NewAddr(),
 		cache:  d.Cache,
 		styles: newStyles(d.Theme),
-		rows:   newRowCache(rowCacheLimit),
+		rows:   widget.NewRowCache[rowKey, string](rowCacheLimit),
 		filter: newFilterInput(),
 		ask:    newAskInput(),
 		saved:  d.Saved,
@@ -286,7 +286,7 @@ func (m *Model) fromCache() {
 	m.page, m.missing = jira.Page[jira.Issue]{}, nil
 	m.cachedMore, m.stale = snap.More, snap.Stale
 	m.loaded, m.cursor, m.top = true, 0, 0
-	m.rows.reset()
+	m.rows.Reset()
 	m.relayout()
 	m.refilter()
 }
@@ -371,12 +371,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.styles = newStyles(msg.Theme)
 		m.deps.Theme = msg.Theme
-		m.rows.reset()
+		m.rows.Reset()
 		m.relayout()
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
-		m.rows.reset()
+		m.rows.Reset()
 
 	case kernel.ProjectMsg:
 		cmd = m.reproject(msg.Project)
@@ -644,7 +644,7 @@ func (m *Model) setQuery(jql, title string, byDefault bool) tea.Cmd {
 	m.checked = time.Time{}
 	m.terms, m.termsGen = nil, m.termsGen+1
 	m.rememberTerms()
-	m.rows.reset()
+	m.rows.Reset()
 	m.refilter()
 	m.fromCache()
 	if m.loaded {
@@ -672,7 +672,7 @@ func (m *Model) loadedPage(msg loadedMsg) tea.Cmd {
 	m.issues = slices.Clone(msg.page.Items)
 	m.page, m.missing = msg.page, msg.missing
 	m.cachedMore, m.stale, m.checked = false, false, m.now()
-	m.rows.reset()
+	m.rows.Reset()
 	m.relayout()
 	m.refilter()
 	m.cursor, m.top = 0, 0
@@ -708,7 +708,7 @@ func (m *Model) patch(msg patchedMsg) tea.Cmd {
 	under, before := m.selectedKey(), m.issues
 	m.issues, m.page = msg.issues, msg.page
 	m.cachedMore, m.stale, m.checked = false, false, m.now()
-	m.rows.reset()
+	m.rows.Reset()
 	m.relayout()
 	m.refilter()
 	m.restore(under)
@@ -1251,12 +1251,12 @@ func (m *Model) warm(end int) {
 func (m *Model) row(at int, selected bool) string {
 	iss := &m.issues[at]
 	k := rowKey{key: iss.Key, updated: iss.Updated.UnixNano(), lay: m.lay, selected: selected, gen: m.styles.gen}
-	if s, ok := m.rows.get(k); ok {
+	if s, ok := m.rows.Get(k); ok {
 		return s
 	}
 	s := renderRow(iss, m.lay, selected, m.styles, m.deps.Theme, m.deps.Caps.Location(), m.now(), m.zones)
 	s = m.zones.Mark(rowZone(iss.Key), s)
-	m.rows.put(k, s)
+	m.rows.Put(k, s)
 	return s
 }
 

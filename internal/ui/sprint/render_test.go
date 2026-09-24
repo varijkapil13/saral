@@ -204,7 +204,7 @@ func TestSprints_OnlyTheRowsThatFitAreRendered(t *testing.T) {
 
 	dr := stock(t, 120, 12, 200)
 	_ = dr.m.View()
-	if got, want := len(dr.m.memo.rows), dr.m.rowsHeight(); got > want {
+	if got, want := dr.m.memo.Len(), dr.m.rowsHeight(); got > want {
 		t.Errorf("a frame rendered %d rows into the memo with room for %d", got, want)
 	}
 	frame := dr.view()
@@ -230,7 +230,7 @@ func TestSprints_TheMemoIsEmptiedByWhatChangesHowARowLooks(t *testing.T) {
 			t.Parallel()
 			dr := stock(t, 120, 20, 12)
 			_ = dr.m.View()
-			if len(dr.m.memo.rows) == 0 {
+			if dr.m.memo.Len() == 0 {
 				t.Fatal("nothing was memoized at all")
 			}
 			if held, ok := msg.(loadedMsg); ok {
@@ -238,7 +238,7 @@ func TestSprints_TheMemoIsEmptiedByWhatChangesHowARowLooks(t *testing.T) {
 				msg = held
 			}
 			dr.send(msg)
-			if got := len(dr.m.memo.rows); got != 0 {
+			if got := dr.m.memo.Len(); got != 0 {
 				t.Errorf("%d rows survived %s, so a frame after it is drawn from the old one", got, name)
 			}
 		})

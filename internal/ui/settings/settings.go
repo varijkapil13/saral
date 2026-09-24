@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
 var (
@@ -59,7 +60,7 @@ type Model struct {
 	top           int
 
 	styles  *styles
-	memo    *rowCache
+	memo    *widget.RowCache[rowKey, renderedRow]
 	lay     layout
 	profile profileState
 
@@ -76,7 +77,7 @@ func build(d kernel.Deps, all []kernel.Setting, sections []string) *Model {
 		keys:     defaultKeys(),
 		all:      all,
 		sections: sections,
-		memo:     newRowCache(rowMemoLimit),
+		memo:     widget.NewRowCache[rowKey, renderedRow](rowMemoLimit),
 		profile:  readProfile(),
 	}
 	if m.deps.Theme == nil {
@@ -158,20 +159,20 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.memo.reset()
+		m.memo.Reset()
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.rebuildRows()
-		m.memo.reset()
+		m.memo.Reset()
 
 	case kernel.ProjectMsg:
 		m.deps.Project = msg.Project
-		m.memo.reset()
+		m.memo.Reset()
 
 	case kernel.RefreshMsg:
 		m.profile = readProfile()
-		m.memo.reset()
+		m.memo.Reset()
 
 	case tea.KeyPressMsg:
 		cmd = m.key(msg)
@@ -191,7 +192,7 @@ func (m *Model) resize(w, h int) {
 	}
 	m.width, m.height = w, h
 	m.lay = planLayout(w)
-	m.memo.reset()
+	m.memo.Reset()
 	m.clampScroll()
 }
 
@@ -448,7 +449,7 @@ func (m *Model) renderRow(i int, s kernel.Setting) (ctrl, detail string) {
 		unavailable = s.Unavailable(m.deps)
 	}
 	key := rowKey{id: s.ID, value: value, unavailable: unavailable, sel: sel, gen: m.styles.gen, width: m.lay.width}
-	r, ok := m.memo.get(key)
+	r, ok := m.memo.Get(key)
 	if !ok {
 		sp := shapeOf(s, m.deps)
 		ctrlLine := renderControl(s, sp, m.deps, value, sel, m.lay, m.styles)
@@ -464,7 +465,7 @@ func (m *Model) renderRow(i int, s kernel.Setting) (ctrl, detail string) {
 		if sp == shapeRadios {
 			r.radioOpts = s.Options(m.deps)
 		}
-		m.memo.put(key, r)
+		m.memo.Put(key, r)
 	}
 	return m.markRow(s, r)
 }
@@ -515,7 +516,7 @@ func (m *Model) renderHeader(section string) string {
 	note := m.sectionScope(section)
 	left := "  " + section
 	if note == "" {
-		return m.styles.header.Render(padTruncate(left, m.lay.width, m.deps.Theme.Glyphs.Ellipsis))
+		return m.styles.header.Render(widget.PadTruncate(left, m.lay.width, m.deps.Theme.Glyphs.Ellipsis))
 	}
 	right := m.styles.note.Render(note)
 	pad := m.lay.width - ansi.StringWidth(left) - ansi.StringWidth(note)

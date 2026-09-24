@@ -110,14 +110,14 @@ func TestRender_ReusesARowItHasAlreadyDrawn(t *testing.T) {
 	t.Parallel()
 
 	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
-	dr.m.rows.reset()
+	dr.m.rows.Reset()
 	_ = dr.m.View()
-	drawn := len(dr.m.rows.rows)
+	drawn := dr.m.rows.Len()
 	if drawn == 0 {
 		t.Fatal("nothing was memoized at all")
 	}
 	_ = dr.m.View()
-	if got := len(dr.m.rows.rows); got != drawn {
+	if got := dr.m.rows.Len(); got != drawn {
 		t.Errorf("a second frame built %d more rows, want every one to be a cache hit", got-drawn)
 	}
 
@@ -126,7 +126,7 @@ func TestRender_ReusesARowItHasAlreadyDrawn(t *testing.T) {
 	dr.typeText("x")
 	dr.key("enter")
 	_ = dr.m.View()
-	if got := len(dr.m.rows.rows); got <= drawn {
+	if got := dr.m.rows.Len(); got <= drawn {
 		t.Error("a changed field did not invalidate its memoized row")
 	}
 }

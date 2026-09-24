@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
 const (
@@ -88,29 +89,6 @@ type rowKey struct {
 	gen      int
 }
 
-type rowCache struct {
-	rows  map[rowKey]string
-	limit int
-}
-
-func newRowCache(limit int) *rowCache {
-	return &rowCache{rows: make(map[rowKey]string, limit), limit: limit}
-}
-
-func (c *rowCache) get(k rowKey) (string, bool) {
-	s, ok := c.rows[k]
-	return s, ok
-}
-
-func (c *rowCache) put(k rowKey, s string) {
-	if len(c.rows) >= c.limit {
-		clear(c.rows)
-	}
-	c.rows[k] = s
-}
-
-func (c *rowCache) reset() { clear(c.rows) }
-
 func labelWidth(f *field) int {
 	n := ansi.StringWidth(f.meta.Name)
 	if f.meta.Required {
@@ -160,7 +138,7 @@ func (m *Model) viewTypes() string {
 
 func (m *Model) typeRow(i int) string {
 	typ := m.types[i]
-	label := typ.Name
+	label := widget.Sanitize(typ.Name)
 	if typ.Subtask {
 		label += "  " + m.styles.glyphs.Bullet + " subtask"
 	}
@@ -168,7 +146,7 @@ func (m *Model) typeRow(i int) string {
 	if i == m.typeCursor {
 		prefix = m.styles.glyphs.Collapsed + strings.Repeat(" ", max(marker-ansi.StringWidth(m.styles.glyphs.Collapsed), 0))
 	}
-	line := padTruncate(prefix+label, m.width, m.styles.glyphs.Ellipsis)
+	line := widget.PadTruncate(prefix+label, m.width, m.styles.glyphs.Ellipsis)
 	if i == m.typeCursor {
 		line = m.styles.selected.Render(line)
 	}
@@ -255,11 +233,11 @@ func (m *Model) row(i int) string {
 	if at.kind == rowNotes && m.shown {
 		k.rev = 1
 	}
-	if s, ok := m.rows.get(k); ok {
+	if s, ok := m.rows.Get(k); ok {
 		return s
 	}
 	s := m.mark(m.rowZone(i), m.buildRow(at, selected))
-	m.rows.put(k, s)
+	m.rows.Put(k, s)
 	return s
 }
 
@@ -286,7 +264,7 @@ func (m *Model) buildRow(at row, selected bool) string {
 }
 
 func (m *Model) plain(text string, selected bool, style lipgloss.Style) string {
-	line := padTruncate(strings.Repeat(" ", marker)+text, m.lay.width, m.styles.glyphs.Ellipsis)
+	line := widget.PadTruncate(strings.Repeat(" ", marker)+widget.Sanitize(text), m.lay.width, m.styles.glyphs.Ellipsis)
 	if selected {
 		return m.styles.selected.Render(line)
 	}
@@ -306,18 +284,18 @@ func renderField(f *field, lay layout, selected bool, st *styles) string {
 		b.WriteString(strings.Repeat(" ", marker))
 	}
 
-	label := f.meta.Name
+	label := widget.Sanitize(f.meta.Name)
 	if f.meta.Required {
 		label += requiredMK
 	}
-	b.WriteString(padTruncate(label, lay.label, st.glyphs.Ellipsis))
+	b.WriteString(widget.PadTruncate(label, lay.label, st.glyphs.Ellipsis))
 	b.WriteString(strings.Repeat(" ", gap))
 
-	value, style := f.display(), st.value
+	value, style := widget.Sanitize(f.display()), st.value
 	if value == "" {
 		value, style = placeholder(f, st.glyphs.Bullet), st.empty
 	}
-	cell := padTruncate(value, lay.value, st.glyphs.Ellipsis)
+	cell := widget.PadTruncate(value, lay.value, st.glyphs.Ellipsis)
 	if selected {
 		b.WriteString(cell)
 	} else {
@@ -330,7 +308,7 @@ func renderField(f *field, lay layout, selected bool, st *styles) string {
 		if f.problem != "" {
 			problem = st.glyphs.Cross + " " + f.problem
 		}
-		cell := padTruncate(problem, lay.problem, st.glyphs.Ellipsis)
+		cell := widget.PadTruncate(problem, lay.problem, st.glyphs.Ellipsis)
 		if selected {
 			b.WriteString(cell)
 		} else {
@@ -338,7 +316,7 @@ func renderField(f *field, lay layout, selected bool, st *styles) string {
 		}
 	}
 
-	line := padTruncate(b.String(), lay.width, st.glyphs.Ellipsis)
+	line := widget.PadTruncate(b.String(), lay.width, st.glyphs.Ellipsis)
 	if selected {
 		return st.selected.Render(line)
 	}
@@ -473,7 +451,7 @@ func (m *Model) choiceRow(i, at int, multiple bool) string {
 	case c.on:
 		box = m.styles.glyphs.Diamond + " "
 	}
-	line := padTruncate("  "+box+c.label, m.width, m.styles.glyphs.Ellipsis)
+	line := widget.PadTruncate("  "+box+widget.Sanitize(c.label), m.width, m.styles.glyphs.Ellipsis)
 	if i == m.pick {
 		line = m.styles.selected.Render(line)
 	}
@@ -490,7 +468,7 @@ func (m *Model) exactly(lines []string, h int) []string {
 }
 
 func (m *Model) fit(s string) string {
-	return padTruncate(s, m.width, m.styles.glyphs.Ellipsis)
+	return widget.PadTruncate(widget.Sanitize(s), m.width, m.styles.glyphs.Ellipsis)
 }
 
 // --- zones ------------------------------------------------------------------
@@ -502,24 +480,3 @@ func (m *Model) mark(id, line string) string { return m.zones.Mark(id, line) }
 func (m *Model) rowZone(i int) string    { return "row:" + strconv.Itoa(i) }
 func (m *Model) typeZone(i int) string   { return "type:" + strconv.Itoa(i) }
 func (m *Model) choiceZone(i int) string { return "choice:" + strconv.Itoa(i) }
-
-// padTruncate makes a string exactly width columns wide, counting grapheme
-// clusters rather than bytes so that an emoji or a CJK field name does not
-// shift every column to its right.
-func padTruncate(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if pad := width - ansi.StringWidth(out); pad > 0 {
-		out += strings.Repeat(" ", pad)
-	}
-	return out
-}

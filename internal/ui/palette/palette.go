@@ -125,7 +125,7 @@ type Model struct {
 	width, height int
 
 	styles   *styles
-	memo     *rowCache
+	memo     *widget.RowCache[rowKey, string]
 	lay      layout
 	keyWidth int
 
@@ -147,7 +147,7 @@ func build(d kernel.Deps, cmds []kernel.Command, freq *table) *Model {
 		input: newInput(d.Cache != nil),
 		freq:  freq,
 		index: app.NewIndex(d.Cache),
-		memo:  newRowCache(rowMemoLimit),
+		memo:  widget.NewRowCache[rowKey, string](rowMemoLimit),
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
@@ -234,7 +234,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.memo.reset()
+		m.memo.Reset()
 		m.head = ""
 
 	case kernel.CapabilitiesMsg:
@@ -263,7 +263,7 @@ func (m *Model) resize(w, h int) {
 	m.width, m.height = w, h
 	m.lay = planLayout(w, m.keyWidth)
 	m.input.SetWidth(max(w-inputPrompt, 8))
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 	m.clampScroll()
 }
@@ -283,7 +283,7 @@ func (m *Model) recheck() tea.Cmd {
 	for i := range m.rows {
 		m.rows[i].reason = m.refusal(m.rows[i].cmd)
 	}
-	m.memo.reset()
+	m.memo.Reset()
 	return m.refilter(m.selection())
 }
 

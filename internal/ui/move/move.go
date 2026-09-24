@@ -137,7 +137,7 @@ type Model struct {
 	wait   waiter
 
 	styles *styles
-	memo   *rowCache
+	memo   *widget.RowCache[rowKey, string]
 	lay    layout
 	head   []string
 	headAt headKey
@@ -162,7 +162,7 @@ func New(d kernel.Deps, opts ...Option) kernel.View {
 	}
 	m.acts, m.typing = m.keys.table(), m.keys.typingTable()
 	m.styles = newStyles(m.deps.Theme)
-	m.memo = newRowCache(rowMemoLimit)
+	m.memo = widget.NewRowCache[rowKey, string](rowMemoLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.lay = planLayout(m.width)
@@ -289,7 +289,7 @@ func (m *Model) focus(on bool) {
 // forget drops every memoized line. It is what a resize, a theme and a new
 // capability answer all do: each of them changes what a row looks like.
 func (m *Model) forget() {
-	m.memo.reset()
+	m.memo.Reset()
 	m.head, m.tail = nil, nil
 }
 

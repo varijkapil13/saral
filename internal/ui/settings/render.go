@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -141,32 +142,6 @@ type renderedRow struct {
 	radioOpts    []kernel.SettingOption
 }
 
-// rowCache is a bounded memo of rendered rows, the same shape
-// palette.rowCache is: past its limit it is emptied rather than evicted one
-// at a time, since a resize or a theme change invalidates a screenful anyway.
-type rowCache struct {
-	rows  map[rowKey]renderedRow
-	limit int
-}
-
-func newRowCache(limit int) *rowCache {
-	return &rowCache{rows: make(map[rowKey]renderedRow, limit), limit: limit}
-}
-
-func (c *rowCache) get(k rowKey) (renderedRow, bool) {
-	r, ok := c.rows[k]
-	return r, ok
-}
-
-func (c *rowCache) put(k rowKey, r renderedRow) {
-	if len(c.rows) >= c.limit {
-		clear(c.rows)
-	}
-	c.rows[k] = r
-}
-
-func (c *rowCache) reset() { clear(c.rows) }
-
 func writeMarker(b *strings.Builder, sel bool, t *kernel.Theme) {
 	if !sel {
 		b.WriteString(strings.Repeat(" ", marker))
@@ -195,16 +170,16 @@ func renderControl(s kernel.Setting, sp shape, d kernel.Deps, value string, sel 
 
 	if sp == shapeAction {
 		span := titleWidth + gap + lay.value
-		writeCell(&b, padTruncate(s.Title, span, t.Glyphs.Ellipsis), sel, st.title)
+		writeCell(&b, widget.PadTruncate(s.Title, span, t.Glyphs.Ellipsis), sel, st.title)
 	} else {
-		writeCell(&b, padTruncate(s.Title, titleWidth, t.Glyphs.Ellipsis), sel, st.title)
+		writeCell(&b, widget.PadTruncate(s.Title, titleWidth, t.Glyphs.Ellipsis), sel, st.title)
 		b.WriteString(strings.Repeat(" ", gap))
-		writeCell(&b, padTruncate(controlText(s, sp, d, value, t), lay.value, t.Glyphs.Ellipsis), sel, controlStyle(sp, st))
+		writeCell(&b, widget.PadTruncate(controlText(s, sp, d, value, t), lay.value, t.Glyphs.Ellipsis), sel, controlStyle(sp, st))
 	}
 
 	b.WriteString(strings.Repeat(" ", gap))
 	sym := symbolFor(sp, s, t)
-	writeCell(&b, padLeft(sym, symWidth, ""), sel, st.muted)
+	writeCell(&b, widget.PadLeft(sym, symWidth, ""), sel, st.muted)
 
 	if sel {
 		return st.selected.Render(b.String())
@@ -281,7 +256,7 @@ func symbolFor(sp shape, s kernel.Setting, t *kernel.Theme) string {
 // the control above it is real and the user is looking straight at it.
 func renderDetail(text string, warn, sel bool, width int, ell string, st *styles) string {
 	indent := strings.Repeat(" ", marker+titleWidth+gap)
-	body := padTruncate(indent+text, width, ell)
+	body := widget.PadTruncate(indent+text, width, ell)
 	style := st.note
 	if warn {
 		style = st.warn
@@ -311,35 +286,4 @@ func scopeText(scope kernel.SettingScope, p profileState) string {
 	default:
 		return "this session only"
 	}
-}
-
-// padTruncate makes a string exactly width columns wide, counting grapheme
-// clusters rather than bytes.
-func padTruncate(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if pad := width - ansi.StringWidth(out); pad > 0 {
-		out += strings.Repeat(" ", pad)
-	}
-	return out
-}
-
-func padLeft(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	if got < width {
-		return strings.Repeat(" ", width-got) + s
-	}
-	return padTruncate(s, width, ellipsis)
 }

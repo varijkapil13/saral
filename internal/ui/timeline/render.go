@@ -151,32 +151,6 @@ type rowKey struct {
 	gen      int
 }
 
-type rowCache struct {
-	rows  map[rowKey]string
-	limit int
-}
-
-func newRowCache(limit int) *rowCache {
-	return &rowCache{rows: make(map[rowKey]string, limit), limit: limit}
-}
-
-func (c *rowCache) get(k rowKey) (string, bool) {
-	s, ok := c.rows[k]
-	return s, ok
-}
-
-// put empties the memo past its limit rather than evicting one at a time,
-// because a scroll or a pan invalidates a screenful at once anyway and clearing
-// keeps the map's capacity.
-func (c *rowCache) put(k rowKey, s string) {
-	if len(c.rows) >= c.limit {
-		clear(c.rows)
-	}
-	c.rows[k] = s
-}
-
-func (c *rowCache) reset() { clear(c.rows) }
-
 // A row's zone id is prefixed per instance, so two of these views on one screen
 // cannot answer for each other.
 func rowZone(key string) string { return "row:" + key }
@@ -318,11 +292,11 @@ func (m *Model) row(at int, selected bool) string {
 		start: r.rng.Start, end: r.rng.End, from: r.rng.From, absent: r.rng.Absent,
 		lay: m.lay, ax: m.ax, left: m.left, today: m.todayCol(), selected: selected, gen: m.styles.gen,
 	}
-	if s, ok := m.memo.get(k); ok {
+	if s, ok := m.memo.Get(k); ok {
 		return s
 	}
 	s := m.zones.Mark(rowZone(r.key), renderRow(r, k, m.styles, m.deps.Theme))
-	m.memo.put(k, s)
+	m.memo.Put(k, s)
 	return s
 }
 
@@ -337,12 +311,12 @@ func renderRow(r *barRow, k rowKey, st *styles, t *kernel.Theme) string {
 	} else {
 		b.WriteString(strings.Repeat(" ", marker))
 	}
-	b.WriteString(st.key.Render(pad(r.key, lay.key, ell)))
+	b.WriteString(st.key.Render(widget.PadTruncate(r.key, lay.key, ell)))
 	b.WriteString("  ")
-	b.WriteString(st.base.Render(pad(r.summary, lay.summary, ell)))
+	b.WriteString(st.base.Render(widget.PadTruncate(r.summary, lay.summary, ell)))
 	if lay.why > 0 {
 		b.WriteString("  ")
-		b.WriteString(st.muted.Render(pad(whyLabel(r.rng), lay.why, ell)))
+		b.WriteString(st.muted.Render(widget.PadTruncate(whyLabel(r.rng), lay.why, ell)))
 	}
 	b.WriteString("  ")
 	writeBar(&b, r.rng, k, st)
@@ -464,12 +438,12 @@ func (m *Model) headingLine() string {
 	var b strings.Builder
 	b.Grow(m.lay.width + 32)
 	b.WriteString(strings.Repeat(" ", marker))
-	b.WriteString(pad("KEY", m.lay.key, ""))
+	b.WriteString(widget.PadTruncate("KEY", m.lay.key, ""))
 	b.WriteString("  ")
-	b.WriteString(pad("SUMMARY", m.lay.summary, ""))
+	b.WriteString(widget.PadTruncate("SUMMARY", m.lay.summary, ""))
 	if m.lay.why > 0 {
 		b.WriteString("  ")
-		b.WriteString(pad("SOURCE", m.lay.why, ""))
+		b.WriteString(widget.PadTruncate("SOURCE", m.lay.why, ""))
 	}
 	b.WriteString("  ")
 	b.WriteString(m.periods())
@@ -935,26 +909,6 @@ func (m *Model) appendNotes(lines []string, h int) []string {
 		lines = append(lines, "")
 	}
 	return lines[:at+h]
-}
-
-// pad makes a string exactly width columns wide, counting grapheme clusters
-// rather than bytes: a summary is whatever anybody typed.
-func pad(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if extra := width - ansi.StringWidth(out); extra > 0 {
-		out += strings.Repeat(" ", extra)
-	}
-	return out
 }
 
 func (m *Model) todayCol() int {

@@ -104,7 +104,7 @@ type Model struct {
 	tools    tools
 
 	styles *styles
-	memo   *rowCache
+	memo   *widget.RowCache[rowKey, string]
 	lay    layout
 	lines  []string
 
@@ -137,7 +137,7 @@ func New(d kernel.Deps, opts ...Option) kernel.View {
 	m.acts, m.inPrompt, m.inConfirm = defaultKeys().tables()
 	m.clicks = widget.NewClicks(d.Now)
 	m.styles = newStyles(m.deps.Theme)
-	m.memo = newRowCache(rowMemoLimit)
+	m.memo = widget.NewRowCache[rowKey, string](rowMemoLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.lay = planLayout(m.width)
 	m.graphics = d.Caps.Graphics
@@ -198,14 +198,14 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.memo.reset()
+		m.memo.Reset()
 		m.repaint()
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.graphics = msg.Caps.Graphics
 		m.canWrite = m.writable()
-		m.memo.reset()
+		m.memo.Reset()
 		m.repaint()
 
 	case kernel.RefreshMsg:
@@ -266,7 +266,7 @@ func (m *Model) resize(w, h int) {
 	m.width, m.height = w, h
 	m.lay = planLayout(w)
 	m.input.SetWidth(max(w-inputChrome, 8))
-	m.memo.reset()
+	m.memo.Reset()
 	m.repaint()
 	// A preview drawn for another box is the wrong number of cells wide, and both
 	// graphics protocols are told the geometry rather than measuring it.
@@ -581,7 +581,7 @@ func (m *Model) tookList(msg listedMsg) {
 		under = att.ID
 	}
 	m.files = msg.files
-	m.memo.reset()
+	m.memo.Reset()
 	m.repaint()
 	m.cursor = max(m.indexOf(under), 0)
 	m.scrollToCursor()
@@ -630,7 +630,7 @@ func (m *Model) tookUpload(msg uploadedMsg) tea.Cmd {
 	}
 	m.files = append(m.files, msg.added...)
 	m.loaded = true
-	m.memo.reset()
+	m.memo.Reset()
 	m.repaint()
 	m.cursor = len(m.files) - len(msg.added)
 	m.scrollToCursor()
@@ -653,7 +653,7 @@ func (m *Model) tookDelete(msg deletedMsg) tea.Cmd {
 	if m.shown.id == msg.id {
 		m.shown = preview{}
 	}
-	m.memo.reset()
+	m.memo.Reset()
 	m.repaint()
 	m.cursor = min(m.cursor, max(len(m.files)-1, 0))
 	m.scrollToCursor()

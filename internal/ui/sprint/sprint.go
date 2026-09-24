@@ -111,7 +111,7 @@ type Model struct {
 	addr   kernel.Addr
 
 	styles *styles
-	memo   *rowCache
+	memo   *widget.RowCache[rowKey, string]
 	lay    layout
 	lines  []string
 
@@ -131,7 +131,7 @@ func New(d kernel.Deps) kernel.View {
 	}
 	m.acts, m.inForm, m.inConf = m.keys.tables()
 	m.styles = newStyles(m.deps.Theme)
-	m.memo = newRowCache(rowMemoLimit)
+	m.memo = widget.NewRowCache[rowKey, string](rowMemoLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.form = newForm()
@@ -176,12 +176,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.memo.reset()
+		m.memo.Reset()
 		m.chrome = [2]string{}
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
-		m.memo.reset()
+		m.memo.Reset()
 		m.chrome = [2]string{}
 
 	case kernel.ProjectMsg:
@@ -235,7 +235,7 @@ func (m *Model) resize(w, h int) {
 	m.width, m.height = w, h
 	m.lay = planLayout(w, len(m.boards))
 	m.form.resize(w)
-	m.memo.reset()
+	m.memo.Reset()
 	m.chrome = [2]string{}
 	m.clampScroll()
 }
@@ -257,7 +257,7 @@ func (m *Model) forget() {
 	m.cursor, m.top = 0, 0
 	m.loaded = false
 	m.state = browsing
-	m.memo.reset()
+	m.memo.Reset()
 	m.chrome = [2]string{}
 }
 
@@ -324,7 +324,7 @@ func (m *Model) took(msg loadedMsg) {
 	m.boards, m.more = msg.boards, msg.more
 	m.sprints = sortSprints(msg.sprints)
 	m.lay = planLayout(m.width, len(m.boards))
-	m.memo.reset()
+	m.memo.Reset()
 	m.chrome = [2]string{}
 	m.restore(under)
 }
@@ -345,7 +345,7 @@ func (m *Model) wrote(msg wroteMsg) tea.Cmd {
 		m.sprints[at] = msg.sprint
 	}
 	m.sprints = sortSprints(m.sprints)
-	m.memo.reset()
+	m.memo.Reset()
 	m.chrome = [2]string{}
 	m.state = browsing
 	m.form.close()
@@ -395,7 +395,7 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	if m.state == confirming {
 		m.state = browsing
 	}
-	m.memo.reset()
+	m.memo.Reset()
 	m.chrome = [2]string{}
 	return kernel.Fail(msg.err)
 }
@@ -489,7 +489,7 @@ func (m *Model) restore(id int64) {
 func (m *Model) boardOf(sp jira.Sprint) string {
 	for i := range m.boards {
 		if m.boards[i].ID == sp.BoardID {
-			return m.boards[i].Name
+			return widget.Sanitize(m.boards[i].Name)
 		}
 	}
 	return ""
@@ -584,7 +584,7 @@ func (m *Model) toggleClosed() tea.Cmd {
 		m.sprints = slices.DeleteFunc(m.sprints, func(sp jira.Sprint) bool {
 			return rankState(sp.State) == rankClosed
 		})
-		m.memo.reset()
+		m.memo.Reset()
 		m.restore(under)
 		return kernel.Status("showing the active and planned sprints")
 	}

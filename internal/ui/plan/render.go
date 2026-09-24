@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -140,32 +141,6 @@ type rowKey struct {
 	problem  bool
 	gen      int
 }
-
-// rowCache is a bounded memo of rendered rows. Past its limit it is emptied
-// rather than evicted one at a time, because a scroll invalidates a screenful
-// at once anyway and clearing keeps the map's capacity.
-type rowCache struct {
-	rows  map[rowKey]string
-	limit int
-}
-
-func newRowCache(limit int) *rowCache {
-	return &rowCache{rows: make(map[rowKey]string, limit), limit: limit}
-}
-
-func (c *rowCache) get(k rowKey) (string, bool) {
-	s, ok := c.rows[k]
-	return s, ok
-}
-
-func (c *rowCache) put(k rowKey, s string) {
-	if len(c.rows) >= c.limit {
-		clear(c.rows)
-	}
-	c.rows[k] = s
-}
-
-func (c *rowCache) reset() { clear(c.rows) }
 
 // reflow rebuilds the flattened rows. It runs when a plan opens or closes, when
 // the plans change and on a resize, and never per frame.
@@ -320,11 +295,11 @@ func (m *Model) row(at int) string {
 	if r.kind != rowPlan {
 		k := rowKey{kind: r.kind, text: r.text, lay: m.lay, selected: sel,
 			problem: r.kind == rowWarn, gen: m.styles.gen}
-		if s, ok := m.memo.get(k); ok {
+		if s, ok := m.memo.Get(k); ok {
 			return s
 		}
 		s := renderDetail(k, m.styles, m.deps.Theme)
-		m.memo.put(k, s)
+		m.memo.Put(k, s)
 		return s
 	}
 	row := &m.plans[r.plan]
@@ -333,11 +308,11 @@ func (m *Model) row(at int) string {
 		status: statusWords(row), note: row.origin, lay: m.lay,
 		selected: sel, problem: row.problem != "", gen: m.styles.gen,
 	}
-	if s, ok := m.memo.get(k); ok {
+	if s, ok := m.memo.Get(k); ok {
 		return s
 	}
 	s := m.zones.Mark(m.zoneOf(at), renderPlan(k, m.styles, m.deps.Theme))
-	m.memo.put(k, s)
+	m.memo.Put(k, s)
 	return s
 }
 
@@ -362,7 +337,7 @@ func renderPlan(k rowKey, st *styles, t *kernel.Theme) string {
 	} else {
 		b.WriteString(strings.Repeat(" ", marker))
 	}
-	name := padTruncate(k.name, k.lay.name, ell)
+	name := widget.PadTruncate(widget.Sanitize(k.name), k.lay.name, ell)
 	if k.selected {
 		b.WriteString(name)
 	} else {
@@ -370,7 +345,7 @@ func renderPlan(k rowKey, st *styles, t *kernel.Theme) string {
 	}
 	if k.lay.status > 0 {
 		b.WriteString(strings.Repeat(" ", gap))
-		cell := padTruncate(k.status, k.lay.status, ell)
+		cell := widget.PadTruncate(widget.Sanitize(k.status), k.lay.status, ell)
 		if k.selected {
 			b.WriteString(cell)
 		} else {
@@ -379,7 +354,7 @@ func renderPlan(k rowKey, st *styles, t *kernel.Theme) string {
 	}
 	if k.lay.note > 0 {
 		b.WriteString(strings.Repeat(" ", gap))
-		cell := padTruncate(k.note, k.lay.note, ell)
+		cell := widget.PadTruncate(widget.Sanitize(k.note), k.lay.note, ell)
 		switch {
 		case k.selected:
 			b.WriteString(cell)
@@ -399,7 +374,7 @@ func renderPlan(k rowKey, st *styles, t *kernel.Theme) string {
 }
 
 func renderDetail(k rowKey, st *styles, t *kernel.Theme) string {
-	text := padTruncate(k.text, k.lay.width, t.Glyphs.Ellipsis)
+	text := widget.PadTruncate(widget.Sanitize(k.text), k.lay.width, t.Glyphs.Ellipsis)
 	switch {
 	case k.selected:
 		return st.selected.Render(text)
@@ -408,26 +383,6 @@ func renderDetail(k rowKey, st *styles, t *kernel.Theme) string {
 	default:
 		return st.muted.Render(text)
 	}
-}
-
-// padTruncate makes a string exactly width columns wide, counting grapheme
-// clusters rather than bytes: a plan name is whatever anybody typed.
-func padTruncate(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if pad := width - ansi.StringWidth(out); pad > 0 {
-		out += strings.Repeat(" ", pad)
-	}
-	return out
 }
 
 // headKey is everything the two lines above the rows are built from, so that

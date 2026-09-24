@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -174,45 +175,19 @@ func unixOr(at *time.Time) int64 {
 	return at.UnixNano()
 }
 
-// rowCache is a bounded memo of rendered rows. Past its limit it is emptied
-// rather than evicted one at a time, because a scroll invalidates a screenful
-// at once anyway and clearing keeps the map's capacity.
-type rowCache struct {
-	rows  map[rowKey]string
-	limit int
-}
-
-func newRowCache(limit int) *rowCache {
-	return &rowCache{rows: make(map[rowKey]string, limit), limit: limit}
-}
-
-func (c *rowCache) get(k rowKey) (string, bool) {
-	s, ok := c.rows[k]
-	return s, ok
-}
-
-func (c *rowCache) put(k rowKey, s string) {
-	if len(c.rows) >= c.limit {
-		clear(c.rows)
-	}
-	c.rows[k] = s
-}
-
-func (c *rowCache) reset() { clear(c.rows) }
-
 func (m *Model) row(at int) string {
 	sp := m.sprints[at]
 	k := rowKey{
-		id: sp.ID, name: sp.Name, goal: sp.Goal, state: stateWord(sp.State),
+		id: sp.ID, name: widget.Sanitize(sp.Name), goal: widget.Sanitize(sp.Goal), state: stateWord(sp.State),
 		start: unixOr(sp.Start), end: unixOr(sp.End), boardID: sp.BoardID,
 		lay: m.lay, selected: at == m.cursor, gen: m.styles.gen,
 	}
-	if s, ok := m.memo.get(k); ok {
+	if s, ok := m.memo.Get(k); ok {
 		return s
 	}
 	s := m.zones.Mark(m.zoneOf(at), renderRow(k, m.datesOf(sp), m.boardOf(sp),
 		m.styles, m.deps.Theme, rankState(sp.State)))
-	m.memo.put(k, s)
+	m.memo.Put(k, s)
 	return s
 }
 
@@ -247,14 +222,14 @@ func renderRow(k rowKey, dates, board string, st *styles, t *kernel.Theme, rank 
 	} else {
 		b.WriteString(strings.Repeat(" ", marker))
 	}
-	state := padTruncate(k.state, k.lay.state, ell)
+	state := widget.PadTruncate(k.state, k.lay.state, ell)
 	if !k.selected {
 		state = st.states[min(rank, len(st.states)-1)].Render(state)
 	}
 	b.WriteString(state)
 	b.WriteString(strings.Repeat(" ", gap))
 
-	name := padTruncate(nameOr(k.name), k.lay.name, ell)
+	name := widget.PadTruncate(nameOr(k.name), k.lay.name, ell)
 	if k.selected {
 		b.WriteString(name)
 	} else {
@@ -268,7 +243,7 @@ func renderRow(k rowKey, dates, board string, st *styles, t *kernel.Theme, rank 
 			continue
 		}
 		b.WriteString(strings.Repeat(" ", gap))
-		text := padTruncate(cell.text, cell.width, ell)
+		text := widget.PadTruncate(cell.text, cell.width, ell)
 		if k.selected {
 			b.WriteString(text)
 		} else {
@@ -551,7 +526,7 @@ func (m *Model) formTitle() string {
 // fieldLine is one field: its name, what is in it, and nothing about where it
 // is on screen — the line is marked where it is drawn so a click resolves to it.
 func (m *Model) fieldLine(at field, room int) string {
-	label := padTruncate(at.label(), formLabel, m.deps.Theme.Glyphs.Ellipsis)
+	label := widget.PadTruncate(at.label(), formLabel, m.deps.Theme.Glyphs.Ellipsis)
 	if at == m.form.at {
 		label = m.styles.accent.Render(label)
 	} else {
@@ -559,7 +534,7 @@ func (m *Model) fieldLine(at field, room int) string {
 	}
 	value := m.form.inputs[at].View()
 	if m.form.locked() && (at == fieldStart || at == fieldEnd) {
-		value = m.styles.muted.Render(padTruncate(m.form.value(at), min(room-formLabel, datesWidth), m.deps.Theme.Glyphs.Ellipsis))
+		value = m.styles.muted.Render(widget.PadTruncate(m.form.value(at), min(room-formLabel, datesWidth), m.deps.Theme.Glyphs.Ellipsis))
 	}
 	return "  " + m.zones.Mark(fieldZone(at), label+strings.Repeat(" ", formGutter)+value)
 }
@@ -615,25 +590,4 @@ func (m *Model) confirmProse(sp jira.Sprint) []string {
 		"This session cannot say how many that is — nothing in the port reads the issues in a sprint — " +
 			"so check the board first if it matters.",
 	}
-}
-
-// padTruncate makes a string exactly width columns wide, counting grapheme
-// clusters rather than bytes: a sprint name is whatever anybody typed, and a
-// goal is a sentence in whatever language they wrote it in.
-func padTruncate(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if pad := width - ansi.StringWidth(out); pad > 0 {
-		out += strings.Repeat(" ", pad)
-	}
-	return out
 }

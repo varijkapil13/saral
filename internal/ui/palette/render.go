@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
 const (
@@ -128,32 +129,6 @@ type rowKey struct {
 	gen      int
 }
 
-// rowCache is a bounded memo of rendered rows. Past its limit it is emptied
-// rather than evicted one at a time, because a scroll invalidates a screenful
-// at once anyway and clearing keeps the map's capacity.
-type rowCache struct {
-	rows  map[rowKey]string
-	limit int
-}
-
-func newRowCache(limit int) *rowCache {
-	return &rowCache{rows: make(map[rowKey]string, limit), limit: limit}
-}
-
-func (c *rowCache) get(k rowKey) (string, bool) {
-	s, ok := c.rows[k]
-	return s, ok
-}
-
-func (c *rowCache) put(k rowKey, s string) {
-	if len(c.rows) >= c.limit {
-		clear(c.rows)
-	}
-	c.rows[k] = s
-}
-
-func (c *rowCache) reset() { clear(c.rows) }
-
 // renderRow draws one command to exactly lay.width columns.
 func renderRow(r *row, lay layout, sel bool, st *styles, t *kernel.Theme) string {
 	ell := t.Glyphs.Ellipsis
@@ -161,7 +136,7 @@ func renderRow(r *row, lay layout, sel bool, st *styles, t *kernel.Theme) string
 	b.Grow(lay.width + 32)
 
 	writeMarker(&b, sel, t)
-	title := padTruncate(r.cmd.Title, lay.title, ell)
+	title := widget.PadTruncate(r.cmd.Title, lay.title, ell)
 	if sel {
 		b.WriteString(title)
 	} else {
@@ -169,7 +144,7 @@ func renderRow(r *row, lay layout, sel bool, st *styles, t *kernel.Theme) string
 	}
 	if lay.group > 0 {
 		b.WriteString(strings.Repeat(" ", gap))
-		cell := padTruncate(r.cmd.Group, lay.group, ell)
+		cell := widget.PadTruncate(r.cmd.Group, lay.group, ell)
 		if sel {
 			b.WriteString(cell)
 		} else {
@@ -181,7 +156,7 @@ func renderRow(r *row, lay layout, sel bool, st *styles, t *kernel.Theme) string
 	}
 	if lay.keys > 0 {
 		b.WriteString(strings.Repeat(" ", gap))
-		cell := padLeft(r.keys, lay.keys, ell)
+		cell := widget.PadLeft(r.keys, lay.keys, ell)
 		if sel {
 			b.WriteString(cell)
 		} else {
@@ -203,7 +178,7 @@ func renderHit(h *hit, lay layout, sel bool, st *styles, t *kernel.Theme) string
 	b.Grow(lay.width + 32)
 
 	writeMarker(&b, sel, t)
-	text := padTruncate(h.text, lay.title, ell)
+	text := widget.PadTruncate(widget.Sanitize(h.text), lay.title, ell)
 	if sel {
 		b.WriteString(text)
 	} else {
@@ -211,7 +186,7 @@ func renderHit(h *hit, lay layout, sel bool, st *styles, t *kernel.Theme) string
 	}
 	if lay.group > 0 {
 		b.WriteString(strings.Repeat(" ", gap))
-		cell := padTruncate(h.age, lay.group, ell)
+		cell := widget.PadTruncate(h.age, lay.group, ell)
 		switch {
 		case sel:
 			b.WriteString(cell)
@@ -237,7 +212,7 @@ func renderHit(h *hit, lay layout, sel bool, st *styles, t *kernel.Theme) string
 // renderHeading draws a group name on its own line. No marker, no click zone.
 func renderHeading(group string, lay layout, st *styles, t *kernel.Theme) string {
 	ell := t.Glyphs.Ellipsis
-	return strings.Repeat(" ", marker) + st.group.Render(padTruncate(group, max(lay.width-marker, 0), ell))
+	return strings.Repeat(" ", marker) + st.group.Render(widget.PadTruncate(group, max(lay.width-marker, 0), ell))
 }
 
 func writeMarker(b *strings.Builder, sel bool, t *kernel.Theme) {
@@ -252,37 +227,37 @@ func writeMarker(b *strings.Builder, sel bool, t *kernel.Theme) {
 func (m *Model) row(at int) string {
 	if row := m.shown[at]; !row.selectable() {
 		k := rowKey{heading: row.heading, lay: m.lay, gen: m.styles.gen}
-		if s, ok := m.memo.get(k); ok {
+		if s, ok := m.memo.Get(k); ok {
 			return s
 		}
 		s := renderHeading(row.heading, m.lay, m.styles, m.deps.Theme)
-		m.memo.put(k, s)
+		m.memo.Put(k, s)
 		return s
 	}
 	sel := at == m.cursor
 	if row := m.shown[at]; row.issue {
 		h := &m.hits[row.at]
 		k := rowKey{id: h.key, text: h.text, age: h.age, lay: m.lay, selected: sel, gen: m.styles.gen}
-		if s, ok := m.memo.get(k); ok {
+		if s, ok := m.memo.Get(k); ok {
 			return s
 		}
 		s := renderHit(h, m.lay, sel, m.styles, m.deps.Theme)
 		if m.deps.Zones != nil {
 			s = m.deps.Zones.Mark(m.zonePrefix+zoneHit+h.key, s)
 		}
-		m.memo.put(k, s)
+		m.memo.Put(k, s)
 		return s
 	}
 	r := &m.rows[m.shown[at].at]
 	k := rowKey{id: r.cmd.ID, lay: m.lay, selected: sel, gen: m.styles.gen}
-	if s, ok := m.memo.get(k); ok {
+	if s, ok := m.memo.Get(k); ok {
 		return s
 	}
 	s := renderRow(r, m.lay, sel, m.styles, m.deps.Theme)
 	if m.deps.Zones != nil {
 		s = m.deps.Zones.Mark(m.zonePrefix+zoneRow+r.cmd.ID, s)
 	}
-	m.memo.put(k, s)
+	m.memo.Put(k, s)
 	return s
 }
 
@@ -434,38 +409,4 @@ func (m *Model) refusalLine(at, room int, ellipsis string) string {
 	r := &m.rows[at]
 	return "  " + m.styles.muted.Render(
 		ansi.Truncate(r.cmd.Title+" "+m.deps.Theme.Glyphs.Separator+" "+r.reason, room, ellipsis))
-}
-
-// padTruncate makes a string exactly width columns wide, counting grapheme
-// clusters rather than bytes so that an emoji or a CJK title does not shift
-// every column to its right.
-func padTruncate(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if pad := width - ansi.StringWidth(out); pad > 0 {
-		out += strings.Repeat(" ", pad)
-	}
-	return out
-}
-
-// padLeft is padTruncate for a cell that reads better against the right edge,
-// which is where a key belongs.
-func padLeft(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	if got < width {
-		return strings.Repeat(" ", width-got) + s
-	}
-	return padTruncate(s, width, ellipsis)
 }

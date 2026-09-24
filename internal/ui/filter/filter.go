@@ -120,7 +120,7 @@ type Model struct {
 	addr    kernel.Addr
 
 	styles *styles
-	memo   *rowCache
+	memo   *widget.RowCache[rowKey, string]
 	lay    layout
 
 	head     string
@@ -144,7 +144,7 @@ func New(d kernel.Deps, opts ...Option) kernel.View {
 	}
 	m.acts, m.inValue = defaultKeys().tables()
 	m.styles = newStyles(m.deps.Theme)
-	m.memo = newRowCache(rowMemoLimit)
+	m.memo = widget.NewRowCache[rowKey, string](rowMemoLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.facets = m.buildFacets()
 	m.lay = planLayout(m.width)
@@ -202,13 +202,13 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.memo.reset()
+		m.memo.Reset()
 		m.head, m.needle = "", ""
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.facets = m.buildFacets()
-		m.memo.reset()
+		m.memo.Reset()
 
 	case vocabularyMsg:
 		cmd = m.tookVocabulary(msg)
@@ -238,7 +238,7 @@ func (m *Model) resize(w, h int) {
 	m.width, m.height = w, h
 	m.lay = planLayout(w)
 	m.input.SetWidth(max(w-inputChrome, 8))
-	m.memo.reset()
+	m.memo.Reset()
 	m.head, m.needle = "", ""
 	m.clampScroll()
 }
@@ -342,7 +342,7 @@ func (m *Model) chooseFacet() tea.Cmd {
 	m.input.Placeholder = "which " + row.facet.Label() + "?"
 	m.input.SetWidth(max(m.width-inputChrome, 8))
 	_ = m.input.Focus()
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 	// The rows this program supplies itself are on offer before the site has
 	// answered anything, and they stay on offer if it refuses.
@@ -368,7 +368,7 @@ func (m *Model) backToFacets() tea.Cmd {
 	m.all, m.shown = nil, m.shown[:0]
 	m.cursor, m.top = m.facetAt(m.facet), 0
 	m.facet = FacetNone
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 	m.clampScroll()
 	return nil
@@ -512,7 +512,7 @@ func (m *Model) tookVocabulary(msg vocabularyMsg) tea.Cmd {
 	m.loading, m.failure = false, nil
 	under := m.underCursor()
 	m.all, m.complete = msg.values, true
-	m.memo.reset()
+	m.memo.Reset()
 	m.rerank(under)
 	return nil
 }
@@ -541,7 +541,7 @@ func (m *Model) tookPeople(msg peopleMsg) tea.Cmd {
 		m.all = append(m.all, personValue(msg.facet, msg.people[i]))
 	}
 	sortPeople(m.all)
-	m.memo.reset()
+	m.memo.Reset()
 	m.rerank(under)
 	return nil
 }
