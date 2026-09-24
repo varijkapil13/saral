@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
 func TestDrafts_KeepsAndReturnsWhatWasTyped(t *testing.T) {
@@ -173,5 +175,85 @@ func TestSafeName_KeepsOnlyWhatEveryFilesystemMeansTheSameBy(t *testing.T) {
 		if got := safeName(tc.in); got != tc.want {
 			t.Errorf("safeName(%q) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestDrafts_LiveUnderTheDraftsDirectoryTheSessionNames(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	d := openDrafts(kernel.Deps{DraftsDir: root})
+	k := draftKey{site: "example.atlassian.net", issue: "PROJ-1"}
+	if err := d.write(k, "kept"); err != nil {
+		t.Fatalf("writing: %v", err)
+	}
+
+	want := filepath.Join(root, "comments", "example_atlassian_net", "PROJ-1.new.md")
+	if _, err := os.Stat(want); err != nil {
+		t.Errorf("the draft is not at %s: %v", want, err)
+	}
+}
+
+func TestMigrateDrafts_MovesEveryDraftOutOfTheCacheDirectory(t *testing.T) {
+	t.Parallel()
+
+	from := filepath.Join(t.TempDir(), "drafts")
+	to := filepath.Join(t.TempDir(), "comments")
+	writeFile(t, filepath.Join(from, "one_atlassian_net", "PROJ-1.new.md"), "first site")
+	writeFile(t, filepath.Join(from, "two_atlassian_net", "PROJ-2.10701.md"), "an edit")
+
+	migrateDrafts(from, to)
+
+	d := &drafts{root: to}
+	if got := d.read(draftKey{site: "one.atlassian.net", issue: "PROJ-1"}); got != "first site" {
+		t.Errorf("the first site's draft read %q after moving", got)
+	}
+	if got := d.read(draftKey{site: "two.atlassian.net", issue: "PROJ-2", comment: "10701"}); got != "an edit" {
+		t.Errorf("the second site's edit read %q after moving", got)
+	}
+	if _, err := os.Stat(from); !os.IsNotExist(err) {
+		t.Errorf("the old drafts directory is still there: %v", err)
+	}
+}
+
+func TestMigrateDrafts_KeepsTheNewerDraftAndLeavesTheOldOneInPlace(t *testing.T) {
+	t.Parallel()
+
+	from := filepath.Join(t.TempDir(), "drafts")
+	to := filepath.Join(t.TempDir(), "comments")
+	old := filepath.Join(from, "example_atlassian_net", "PROJ-1.new.md")
+	writeFile(t, old, "from the old build")
+	writeFile(t, filepath.Join(to, "example_atlassian_net", "PROJ-1.new.md"), "typed since")
+
+	migrateDrafts(from, to)
+
+	d := &drafts{root: to}
+	if got := d.read(draftKey{site: "example.atlassian.net", issue: "PROJ-1"}); got != "typed since" {
+		t.Errorf("moving replaced the newer draft with %q", got)
+	}
+	if body, err := os.ReadFile(old); err != nil || string(body) != "from the old build" {
+		t.Errorf("the old draft was lost rather than left behind: %q, %v", body, err)
+	}
+}
+
+func TestMigrateDrafts_NothingToMoveIsNotAnError(t *testing.T) {
+	t.Parallel()
+
+	to := filepath.Join(t.TempDir(), "comments")
+	migrateDrafts(filepath.Join(t.TempDir(), "absent"), to)
+
+	if _, err := os.Stat(to); !os.IsNotExist(err) {
+		t.Errorf("moving nothing created %s: %v", to, err)
+	}
+}
+
+func writeFile(t *testing.T, path, body string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

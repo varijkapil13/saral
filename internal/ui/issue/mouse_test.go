@@ -36,7 +36,7 @@ func TestEdit_TwoDeliberateClicksOnARowDoNotOpenIt(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(8)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	clock := newPaneClock()
 	d.Now = clock.now
 	p := newPanel(t, New(d, readIssue(t, f, "PROJ-6"), withDrafts(tempDrafts(t))), 100, 28)
@@ -60,7 +60,7 @@ func TestMove_TwoDeliberateClicksOnAMoveDoNotChooseIt(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(8)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	clock := newPaneClock()
 	d.Now = clock.now
 	p := newPanel(t, NewMove(d, readIssue(t, f, "PROJ-6")), 100, 28)
@@ -87,7 +87,7 @@ func TestEdit_TheWheelReachesTheFieldsAShortTerminalClipsOff(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(8)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	p := newPanel(t, New(d, readIssue(t, f, "PROJ-6"), withDrafts(tempDrafts(t))), 100, 16)
 	p.send(loadedMsg{gen: p.editor().gen, issue: readIssue(t, f, "PROJ-6")})
 
@@ -133,7 +133,7 @@ func TestEdit_WalkingTheCursorDownBringsItsRowBackOnScreen(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(8)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	p := newPanel(t, New(d, readIssue(t, f, "PROJ-6"), withDrafts(tempDrafts(t))), 100, 16)
 	p.send(loadedMsg{gen: p.editor().gen, issue: readIssue(t, f, "PROJ-6")})
 	p.editor().focus = regionDetails
@@ -172,7 +172,7 @@ func TestMove_TheWheelScrollsTheMovesAShortTerminalClipsOff(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(8)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	p := newPanel(t, NewMove(d, readIssue(t, f, "PROJ-6")), 100, 8)
 	p.send(movesLoadedMsg{gen: p.mover().gen, moves: manyMoves(12)})
 
@@ -202,7 +202,7 @@ func TestMove_WalkingTheCursorDownBringsTheMoveBackOnScreen(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(8)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	p := newPanel(t, NewMove(d, readIssue(t, f, "PROJ-6")), 100, 8)
 	p.send(movesLoadedMsg{gen: p.mover().gen, moves: manyMoves(12)})
 
@@ -224,7 +224,7 @@ func TestMove_TheWheelLeavesATransitionScreenAlone(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(8)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	p := newPanel(t, NewMove(d, readIssue(t, f, "PROJ-6")), 100, 24)
 
 	p.keys("j", "enter")

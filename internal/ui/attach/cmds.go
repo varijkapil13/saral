@@ -58,6 +58,14 @@ type progressMsg struct {
 	steps   chan int64
 }
 
+// sentMsg is the running total of an upload, carrying its channel for the same
+// reason progressMsg does.
+type sentMsg struct {
+	gen   int
+	sent  int64
+	steps chan int64
+}
+
 type previewMsg struct {
 	gen   int
 	shown preview
@@ -109,22 +117,36 @@ func download(ctx context.Context, reader jira.AttachmentReader, t tools, site s
 	return func() tea.Msg {
 		defer close(steps)
 		path, err := t.save(ctx, reader, site, att, func(written int64) {
-			// The newest total is the only one worth waiting for, so a step that
-			// finds the slot full replaces what is in it rather than blocking a
-			// download on a frame.
-			select {
-			case <-steps:
-			default:
-			}
-			select {
-			case steps <- written:
-			default:
-			}
+			latest(steps, written)
 		})
 		if err != nil {
 			return failedMsg{gen: gen, why: why, err: err}
 		}
 		return downloadedMsg{gen: gen, id: att.ID, why: why, path: path}
+	}
+}
+
+// latest puts a running total in a one-slot channel. The newest total is the
+// only one worth waiting for, so a step that finds the slot full replaces what is
+// in it rather than holding a transfer up on a frame.
+func latest(steps chan int64, n int64) {
+	select {
+	case <-steps:
+	default:
+	}
+	select {
+	case steps <- n:
+	default:
+	}
+}
+
+func awaitSent(steps chan int64, gen int) tea.Cmd {
+	return func() tea.Msg {
+		sent, open := <-steps
+		if !open {
+			return nil
+		}
+		return sentMsg{gen: gen, sent: sent, steps: steps}
 	}
 }
 
@@ -149,8 +171,26 @@ func render(ctx context.Context, t tools, att jira.Attachment, path string, box 
 	}
 }
 
-func upload(ctx context.Context, a jira.Attacher, key string, file jira.FileRef, gen int) tea.Cmd {
+// upload sends one file and reports how much of it has gone. The port reports
+// every write, so a step is passed on only when it moves the percentage: a large
+// file would otherwise put a message per buffer into the program.
+func upload(ctx context.Context, a jira.Attacher, key string, file jira.FileRef, gen int,
+	steps chan int64,
+) tea.Cmd {
 	return func() tea.Msg {
+		defer close(steps)
+		last := int64(-1)
+		file.Progress = func(sent int64) {
+			if file.Size <= 0 {
+				return
+			}
+			pct := min(sent, file.Size) * 100 / file.Size
+			if pct == last {
+				return
+			}
+			last = pct
+			latest(steps, sent)
+		}
 		added, err := a.Upload(ctx, key, []jira.FileRef{file})
 		if err != nil {
 			return failedMsg{gen: gen, err: err}

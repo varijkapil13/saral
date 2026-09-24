@@ -432,6 +432,8 @@ func (m *Model) View() string {
 		lines = append(lines, m.promptLine())
 	case confirming:
 		lines = append(lines, m.confirmLine())
+	case uploading:
+		lines = append(lines, m.uploadLine())
 	case browsing:
 	}
 	for len(lines) < m.height {
@@ -605,11 +607,45 @@ func (m *Model) fetching(att jira.Attachment) string {
 		return "Fetching " + att.Filename + " " + m.deps.Theme.Glyphs.Ellipsis +
 			" " + humanSize(m.written)
 	}
-	done := min(max(int(int64(barWidth)*m.written/m.total), 0), barWidth)
-	bar := strings.Repeat(m.deps.Theme.Glyphs.ProgressOn, done) +
-		strings.Repeat(m.deps.Theme.Glyphs.ProgressNo, barWidth-done)
-	return "Fetching " + att.Filename + " " + bar + " " +
+	return "Fetching " + att.Filename + " " + m.bar(m.written, m.total) + " " +
 		humanSize(m.written) + " of " + humanSize(m.total)
+}
+
+func (m *Model) bar(done, total int64) string {
+	cells := min(max(int(int64(barWidth)*done/total), 0), barWidth)
+	return strings.Repeat(m.deps.Theme.Glyphs.ProgressOn, cells) +
+		strings.Repeat(m.deps.Theme.Glyphs.ProgressNo, barWidth-cells)
+}
+
+// uploadLine is the file on its way up, in the prompt's place: how much of it
+// has gone, as a share and in bytes of the size the file had when it was sent,
+// and the key that stops it.
+func (m *Model) uploadLine() string {
+	key := upKey{name: m.sending, sent: m.sent, size: m.sendSize, width: m.width, gen: m.styles.gen}
+	if m.up != "" && key == m.upAt {
+		return m.up
+	}
+	m.up, m.upAt = m.buildUploadLine(), key
+	return m.up
+}
+
+type upKey struct {
+	name       string
+	sent, size int64
+	width, gen int
+}
+
+func (m *Model) buildUploadLine() string {
+	g := m.deps.Theme.Glyphs
+	text := "  Attaching " + m.sending + " "
+	if m.sendSize > 0 {
+		sent := min(m.sent, m.sendSize)
+		text += m.bar(sent, m.sendSize) + " " + strconv.FormatInt(sent*100/m.sendSize, 10) + "% " +
+			g.Dot + " " + humanSize(sent) + " of " + humanSize(m.sendSize)
+	} else {
+		text += g.Ellipsis
+	}
+	return m.styles.accent.Render(ansi.Truncate(text+" "+g.Dot+" "+stopHint, max(m.width, 8), g.Ellipsis))
 }
 
 // offer names the key that shows this file, spelt from the binding rather than
@@ -655,4 +691,5 @@ var (
 	attachHint = defaultKeys().Upload.Help().Key + " attaches one."
 	deleteHint = defaultKeys().Confirm.Help().Key + " deletes it"
 	keepHint   = defaultKeys().Keep.Help().Key + " keeps it"
+	stopHint   = defaultKeys().Stop.Help().Key + " stops it"
 )

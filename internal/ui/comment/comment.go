@@ -201,7 +201,7 @@ func build(d kernel.Deps, key string) *Model {
 		deps:   d,
 		keys:   defaultKeys(),
 		blocks: newBlocks(blockCacheLimit),
-		drafts: openDrafts(),
+		drafts: openDrafts(d),
 		issue:  strings.TrimSpace(key),
 		editor: newEditor(),
 		addr:   kernel.NewAddr(),

@@ -338,6 +338,7 @@ Two directories, both named for the build (`saral`, or `saral-dev` for a build f
 |---|---|---|---|
 | `config.toml` | `$SARAL_CONFIG_DIR`, else `$XDG_CONFIG_HOME/saral`, else `~/.config/saral` | profiles, where each token comes from (never the token), saved queries, theme | until you edit it |
 | `.config.toml.lock` | beside `config.toml` | nothing — an advisory lock two copies of Saral take while writing | empty; safe to delete while Saral is not running |
+| `drafts/` | beside `config.toml` | text not yet sent, per site: an issue's unsaved edits (`<site>/<key>.json`), unsent comments (`comments/<site>/`), unsubmitted create forms (`create/<site>/`) | until it is sent or discarded; comment drafts an earlier build left under the cache directory move here the first time a thread opens |
 | `cache.db` | `$SARAL_CACHE_DIR`, else `$XDG_CACHE_HOME/saral`, else `~/.cache/saral` | per profile (site and account): issues, searches, boards, backlogs, capability probe answers, the last board each project drew | see below |
 | `cache.db.corrupt-<timestamp>` | beside `cache.db` | a cache file Saral could not read, moved aside when it started afresh | until you delete it |
 | `ui.toml`, `.ui.toml.lock` | the cache directory | split widths, sort orders, each profile's remembered view and filters | until `session.memory` or you delete it |

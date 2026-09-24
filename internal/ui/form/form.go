@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
@@ -39,6 +40,7 @@ var (
 	_ kernel.View        = (*Model)(nil)
 	_ kernel.KeyCapturer = (*Model)(nil)
 	_ kernel.Blocker     = (*Model)(nil)
+	_ kernel.CloseAsker  = (*Model)(nil)
 	_ kernel.Addressed   = (*Model)(nil)
 )
 
@@ -71,10 +73,11 @@ type Model struct {
 	deps     kernel.Deps
 	search   *app.Search
 	cache    *schemaCache
-	drafts   *draftStore
+	drafts   draftStore
 	styles   *styles
 	inList   map[string]action
 	inChoose map[string]action
+	inLeave  map[string]action
 	rows     *widget.RowCache[rowKey, string]
 
 	project string
@@ -116,6 +119,9 @@ type Model struct {
 	note    string
 	loading bool
 	busy    bool
+	leaving bool
+
+	people peopleSearch
 
 	gen    int
 	cancel context.CancelFunc
@@ -141,18 +147,25 @@ type choice struct {
 	label string
 	value jira.Option
 	on    bool
+	// found is an account the site answered the typed name with. Jira matches
+	// on initials and email addresses, so the local filter must not hide it.
+	found bool
 }
 
 // New builds the create form for the project this session is scoped to.
-func New(d kernel.Deps) kernel.View { return newWith(d, schemas, drafts) }
+func New(d kernel.Deps) kernel.View { return newWith(d, schemas) }
 
 // Addr is where the kernel delivers the issue types, the create screen and the
 // issue this form asked for, whatever has since been pushed over it.
 func (m *Model) Addr() kernel.Addr { return m.addr }
 
-func newWith(d kernel.Deps, cache *schemaCache, store *draftStore) *Model {
+func newWith(d kernel.Deps, cache *schemaCache) *Model {
 	if d.Theme == nil {
 		d.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
+	}
+	var store draftStore
+	if root, err := d.DraftRoot(); err == nil {
+		store = newDraftStore(root)
 	}
 	m := &Model{
 		deps:    d,
@@ -166,7 +179,7 @@ func newWith(d kernel.Deps, cache *schemaCache, store *draftStore) *Model {
 		area:    widget.NewArea(),
 		filter:  newFilter(),
 	}
-	m.inList, m.inChoose = defaultKeys().tables()
+	m.inList, m.inChoose, m.inLeave = defaultKeys().tables()
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
@@ -183,20 +196,88 @@ func newFilter() textinput.Model {
 	return ti
 }
 
-// WantsRawKeys is true while an editor is open. Without it the kernel spends
-// the digits on saved queries, q on quitting and esc on going back, so a
-// summary could not contain a number and a chooser could not be closed.
-func (m *Model) WantsRawKeys() bool { return m.edit != editNone }
+// WantsRawKeys is true while an editor or the leave prompt is open. Without it
+// the kernel spends the digits on saved queries, q on quitting and esc on going
+// back, so a summary could not contain a number, a chooser could not be closed
+// and esc could not answer the prompt with "stay".
+func (m *Model) WantsRawKeys() bool { return m.edit != editNone || m.leaving }
 
 // BlocksClose refuses to throw the view away while Jira is being asked to
-// create the issue, because the answer has nowhere else to land. Anything typed
-// survives closing on its own: it is kept and restored the next time the same
-// screen is opened.
+// create the issue, because the answer has nowhere else to land, and while the
+// form holds anything that has not become an issue. AskClose is what the kernel
+// calls instead wherever it can; this stays the fallback for a caller that only
+// knows Blocker.
 func (m *Model) BlocksClose() (string, bool) {
-	if !m.busy {
-		return "", false
+	if m.busy {
+		return "Jira is still being asked to create this issue", true
 	}
-	return "Jira is still being asked to create this issue", true
+	if m.unsent() {
+		return "this new " + m.chosen.Name + " has not been created yet", true
+	}
+	return "", false
+}
+
+// AskClose puts the leave prompt up instead of refusing outright, and answers
+// later by sending kernel.Pop() itself once the prompt is resolved.
+func (m *Model) AskClose() tea.Cmd {
+	if m.busy {
+		return kernel.Warn("Jira is still being asked to create this issue")
+	}
+	cmd := m.closeEditor()
+	if !m.unsent() {
+		return tea.Sequence(cmd, kernel.Pop())
+	}
+	m.leaving = true
+	return cmd
+}
+
+func (m *Model) unsent() bool {
+	if m.stage != stageFields {
+		return false
+	}
+	if m.edit != editNone {
+		return true
+	}
+	return slices.ContainsFunc(m.fields, func(f *field) bool { return !f.empty() })
+}
+
+// leavingKey answers the leave prompt: y creates the issue and closes once it
+// exists, n throws the draft away and closes, k keeps it on disk for next time
+// and closes, esc stays.
+func (m *Model) leavingKey(stroke string) tea.Cmd {
+	switch m.inLeave[stroke] {
+	case actLeaveCreate:
+		cmd := m.submit()
+		if !m.busy {
+			m.leaving = false
+		}
+		return cmd
+	case actLeaveDiscard:
+		m.leaving = false
+		warn := m.discardDraft()
+		for _, f := range m.fields {
+			f.clear()
+		}
+		m.rows.Reset()
+		return tea.Sequence(warn, kernel.Pop(), kernel.Status("the new "+m.chosen.Name+" was thrown away"))
+	case actLeaveKeep:
+		m.leaving = false
+		if warn := m.keepDraft(); warn != nil {
+			return warn
+		}
+		if !m.drafts.available() {
+			return kernel.Warn("there is nowhere to keep a draft in this session")
+		}
+		for _, f := range m.fields {
+			f.clear()
+		}
+		return tea.Sequence(kernel.Pop(), kernel.Status("the new "+m.chosen.Name+" is kept for the next time it is opened"))
+	case actLeaveStay:
+		m.leaving = false
+	case actNone, actUp, actDown, actPageUp, actPageDown, actTop, actBottom, actEdit, actClear,
+		actSubmit, actRetype, actToggle, actAccept, actDone:
+	}
+	return nil
 }
 
 // Init finds out which issue types this project uses.
@@ -244,6 +325,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case accountMsg:
 		m.accountFound(msg)
+
+	case peopleFoundMsg:
+		m.peopleFound(msg)
+
+	case peopleFailedMsg:
+		cmd = m.peopleFailed(msg)
 
 	case createdMsg:
 		cmd = m.created(msg)
@@ -336,7 +423,10 @@ func (m *Model) reply(cmd tea.Cmd) tea.Cmd {
 
 // Close lets go of the issue types and the field schema behind them. A create
 // screen that has been thrown away has nowhere to draw either.
-func (m *Model) Close() { m.stop() }
+func (m *Model) Close() {
+	m.stop()
+	m.stopPeople()
+}
 
 func (m *Model) current(gen int) bool { return gen == m.gen }
 
@@ -420,6 +510,10 @@ func (m *Model) openType(typ jira.IssueType) tea.Cmd {
 
 func (m *Model) screenKey() screen { return screen{project: m.project, issueType: m.chosen.ID} }
 
+func (m *Model) draftKey() draftKey {
+	return draftKey{site: m.deps.Site, project: m.project, issueType: m.chosen.ID}
+}
+
 func (m *Model) schemaLoaded(msg schemaLoadedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
@@ -430,9 +524,9 @@ func (m *Model) schemaLoaded(msg schemaLoadedMsg) tea.Cmd {
 		m.chosen = msg.schema.IssueType
 	}
 	m.build()
-	m.restoreDraft()
+	cmd := m.restoreDraft()
 	m.cursor, m.top, m.banner = 0, 0, nil
-	return nil
+	return cmd
 }
 
 func (m *Model) schemaFailed(msg schemaFailedMsg) tea.Cmd {
@@ -494,26 +588,51 @@ func (m *Model) build() {
 	m.relayout()
 }
 
-func (m *Model) restoreDraft() {
-	kept := m.drafts.get(m.screenKey())
-	if len(kept) == 0 {
-		return
+// restoreDraft puts back what was typed into this screen before, from the file
+// it was kept in. A draft that cannot be read is said so and left where it is:
+// it is somebody's text, and the next commit here is what replaces it.
+func (m *Model) restoreDraft() tea.Cmd {
+	kept, ok, err := m.drafts.load(m.draftKey())
+	if err != nil {
+		return kernel.Warn(err.Error())
+	}
+	if !ok {
+		return nil
 	}
 	for _, f := range m.fields {
-		value, ok := kept[f.id()]
-		if !ok {
+		value, found := kept.Values[f.id()]
+		if !found {
 			continue
 		}
-		f.text, f.picked, f.rev = value.text, value.picked, f.rev+1
+		f.text, f.picked, f.rev = value.Text, fromDraftOptions(value.Picked), f.rev+1
 	}
 	m.validateAll()
 	m.note = "what was typed here before has been put back"
+	return nil
 }
 
-func (m *Model) keepDraft() {
-	if m.stage == stageFields && m.chosen.ID != "" {
-		m.drafts.put(m.screenKey(), m.fields)
+func (m *Model) keepDraft() tea.Cmd {
+	if m.stage != stageFields || m.chosen.ID == "" {
+		return nil
 	}
+	if err := m.drafts.save(m.draftKey(), draftOf(m.draftKey(), m.fields, m.now())); err != nil {
+		return kernel.Warn(err.Error())
+	}
+	return nil
+}
+
+func (m *Model) discardDraft() tea.Cmd {
+	if err := m.drafts.discard(m.draftKey()); err != nil {
+		return kernel.Warn(err.Error())
+	}
+	return nil
+}
+
+func (m *Model) now() time.Time {
+	if m.deps.Now != nil {
+		return m.deps.Now()
+	}
+	return time.Now()
 }
 
 // --- rows -------------------------------------------------------------------
@@ -616,6 +735,9 @@ func (m *Model) focused() *field {
 // --- input ------------------------------------------------------------------
 
 func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
+	if m.leaving {
+		return m.leavingKey(msg.String())
+	}
 	if m.edit != editNone {
 		return m.editKey(msg)
 	}
@@ -639,7 +761,8 @@ func (m *Model) typeKey(stroke string) tea.Cmd {
 		if m.typeCursor < len(m.types) {
 			return m.openType(m.types[m.typeCursor])
 		}
-	case actNone, actPageUp, actPageDown, actClear, actSubmit, actRetype, actToggle, actAccept, actDone:
+	case actNone, actPageUp, actPageDown, actClear, actSubmit, actRetype, actToggle, actAccept, actDone,
+		actLeaveCreate, actLeaveDiscard, actLeaveKeep, actLeaveStay:
 	}
 	m.scrollTypes()
 	return nil
@@ -678,19 +801,20 @@ func (m *Model) listKey(stroke string) tea.Cmd {
 		return m.submit()
 	case actRetype:
 		return m.backToTypes()
-	case actNone, actToggle, actAccept, actDone:
+	case actNone, actToggle, actAccept, actDone,
+		actLeaveCreate, actLeaveDiscard, actLeaveKeep, actLeaveStay:
 	}
 	return nil
 }
 
 func (m *Model) backToTypes() tea.Cmd {
-	m.keepDraft()
+	warn := m.keepDraft()
 	m.stage, m.banner, m.note = stageTypes, nil, ""
 	m.stop()
 	if len(m.types) == 0 {
-		return m.loadTypes()
+		return tea.Batch(warn, m.loadTypes())
 	}
-	return nil
+	return warn
 }
 
 func (m *Model) clearFocused() tea.Cmd {
@@ -703,8 +827,7 @@ func (m *Model) clearFocused() tea.Cmd {
 		f.text = ""
 	}
 	f.problem = f.validate()
-	m.keepDraft()
-	return nil
+	return m.keepDraft()
 }
 
 // activate does whatever the row under the cursor is for.
@@ -714,7 +837,7 @@ func (m *Model) activate() tea.Cmd {
 	}
 	switch at := m.index[m.cursor]; at.kind {
 	case rowField:
-		m.openEditor(at.at)
+		return m.openEditor(at.at)
 	case rowNotes:
 		m.shown = !m.shown
 		m.reindex()
@@ -729,14 +852,19 @@ func (m *Model) activate() tea.Cmd {
 
 // --- editors ----------------------------------------------------------------
 
-func (m *Model) openEditor(at int) {
+func (m *Model) openEditor(at int) tea.Cmd {
 	f := m.fields[at]
 	m.editing, m.edit = at, f.kind.pane()
+	var cmd tea.Cmd
 	switch m.edit {
 	case editChoose:
-		m.choices = m.choicesFor(f)
 		m.filter.Reset()
+		m.people = peopleSearch{}
+		m.choices = m.choicesFor(f)
 		m.pick, m.pickTop = 0, 0
+		if f.kind.people() {
+			cmd = m.findPeople("")
+		}
 	case editDoc:
 		m.area.SetValue(f.text)
 	case editText:
@@ -747,6 +875,7 @@ func (m *Model) openEditor(at int) {
 	m.sizeEditor()
 	m.focusEditor()
 	m.clampScroll()
+	return cmd
 }
 
 func (m *Model) focusEditor() {
@@ -772,9 +901,9 @@ func (m *Model) sizeEditor() {
 // closeEditor puts what was typed on the field and closes the pane. Nothing is
 // thrown away here: docs/UX.md asks that text a user typed survives, and a form
 // that discarded a body on esc would be the worst place to break that.
-func (m *Model) closeEditor() {
+func (m *Model) closeEditor() tea.Cmd {
 	if m.edit == editNone {
-		return
+		return nil
 	}
 	f := m.fields[m.editing]
 	switch m.edit {
@@ -791,8 +920,9 @@ func (m *Model) closeEditor() {
 	m.area.Blur()
 	m.filter.Blur()
 	m.edit = editNone
-	m.keepDraft()
+	m.stopPeople()
 	m.clampScroll()
+	return m.keepDraft()
 }
 
 func (m *Model) editKey(msg tea.KeyPressMsg) tea.Cmd {
@@ -802,17 +932,14 @@ func (m *Model) editKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	switch stroke {
 	case "esc":
-		m.closeEditor()
-		return nil
+		return m.closeEditor()
 	case "enter":
 		if m.edit == editText {
-			m.closeEditor()
-			return nil
+			return m.closeEditor()
 		}
 	case "ctrl+d":
 		if m.edit == editDoc {
-			m.closeEditor()
-			return nil
+			return m.closeEditor()
 		}
 	}
 	// The component's own command is a cursor blink, which would be a timer
@@ -850,20 +977,28 @@ func (m *Model) chooseKey(msg tea.KeyPressMsg, stroke string) tea.Cmd {
 	case actAccept:
 		if m.fields[m.editing].kind.multiple() {
 			m.toggle(visible)
-			m.closeEditor()
-			return nil
+			return m.closeEditor()
 		}
 		m.take(visible)
-		m.closeEditor()
-		return nil
+		return m.closeEditor()
 	case actDone:
-		m.closeEditor()
-		return nil
-	case actNone, actTop, actBottom, actEdit, actClear, actSubmit, actRetype:
+		return m.closeEditor()
+	case actNone, actTop, actBottom, actEdit, actClear, actSubmit, actRetype,
+		actLeaveCreate, actLeaveDiscard, actLeaveKeep, actLeaveStay:
 	}
 	m.filter, _ = m.filter.Update(msg)
 	m.pick, m.pickTop = 0, 0
-	return nil
+	if !m.fields[m.editing].kind.people() {
+		return nil
+	}
+	needle := strings.TrimSpace(m.filter.Value())
+	if needle == m.people.asked {
+		return nil
+	}
+	for i := range m.choices {
+		m.choices[i].found = false
+	}
+	return m.findPeople(needle)
 }
 
 func (m *Model) toggle(visible []int) {
@@ -904,14 +1039,21 @@ func (m *Model) visibleChoices() []int {
 	needle := strings.ToLower(strings.TrimSpace(m.filter.Value()))
 	out := make([]int, 0, len(m.choices))
 	for i := range m.choices {
-		if needle == "" || strings.Contains(strings.ToLower(m.choices[i].label), needle) {
+		if needle == "" || m.choices[i].found || strings.Contains(strings.ToLower(m.choices[i].label), needle) {
 			out = append(out, i)
 		}
 	}
 	return out
 }
 
-func (m *Model) chooserHeight() int { return max(m.editorHeight()-2, 1) }
+func (m *Model) chooserHeight() int { return max(m.editorHeight()-2-m.noticeLines(), 1) }
+
+func (m *Model) noticeLines() int {
+	if m.choosingPeople() {
+		return 1
+	}
+	return 0
+}
 
 func (m *Model) scrollChoices() {
 	h := m.chooserHeight()
@@ -941,7 +1083,7 @@ func (m *Model) choicesFor(f *field) []choice {
 			}
 		}
 	case kindUser, kindUsers:
-		out = append(out, m.userChoices(f)...)
+		out = append(out, m.userChoices(f, f.picked, nil)...)
 	default:
 		for _, option := range f.meta.AllowedValues {
 			out = append(out, choice{label: option.Label, value: option})
@@ -951,32 +1093,6 @@ func (m *Model) choicesFor(f *field) []choice {
 		out[i].on = slices.ContainsFunc(f.picked, func(p jira.Option) bool {
 			return p.ID == out[i].value.ID && cascadeLabel(p) == cascadeLabel(out[i].value)
 		})
-	}
-	return out
-}
-
-// userChoices are the accounts a person picker can offer. The field's own list
-// comes first where it has one; otherwise the only account this client can name
-// without a user-search endpoint is the authenticated one, plus whatever has
-// already been chosen.
-func (m *Model) userChoices(f *field) []choice {
-	out := make([]choice, 0, len(f.meta.AllowedValues)+2)
-	seen := make(map[string]bool, 4)
-	add := func(option jira.Option) {
-		if option.ID == "" || seen[option.ID] {
-			return
-		}
-		seen[option.ID] = true
-		out = append(out, choice{label: option.Label, value: option})
-	}
-	for _, option := range f.meta.AllowedValues {
-		add(option)
-	}
-	if m.haveMe {
-		add(userOption(m.me))
-	}
-	for _, option := range f.picked {
-		add(option)
 	}
 	return out
 }
@@ -1076,13 +1192,14 @@ func (m *Model) created(msg createdMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
-	m.busy = false
-	m.drafts.clear(m.screenKey())
+	m.busy, m.leaving = false, false
+	warn := m.discardDraft()
 	for _, f := range m.fields {
 		f.clear()
 	}
 	m.rows.Reset()
 	return tea.Sequence(
+		warn,
 		kernel.Pop(),
 		kernel.Broadcast(kernel.RefreshMsg{}),
 		kernel.Status(msg.issue.Key+" created"),
@@ -1093,7 +1210,7 @@ func (m *Model) createFailed(msg createFailedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
-	m.busy = false
+	m.busy, m.leaving = false, false
 	var invalid *jira.ValidationError
 	if errors.As(msg.err, &invalid) {
 		m.applyValidationError(invalid)
@@ -1108,6 +1225,9 @@ func (m *Model) createFailed(msg createFailedMsg) tea.Cmd {
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if msg.Button != tea.MouseLeft {
 		return nil
+	}
+	if m.leaving {
+		return m.clickLeave(msg)
 	}
 	if m.stage == stageTypes {
 		return m.clickType(msg)
@@ -1129,6 +1249,17 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		}
 		m.moveTo(i)
 		return nil
+	}
+	return nil
+}
+
+func (m *Model) clickLeave(msg tea.MouseClickMsg) tea.Cmd {
+	for _, answer := range [...]struct{ zone, stroke string }{
+		{zoneLeaveCreate, "y"}, {zoneLeaveDiscard, "n"}, {zoneLeaveKeep, "k"}, {zoneLeaveStay, "esc"},
+	} {
+		if m.zones.Hit(answer.zone, msg) {
+			return m.leavingKey(answer.stroke)
+		}
 	}
 	return nil
 }

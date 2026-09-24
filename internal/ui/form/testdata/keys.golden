@@ -18,3 +18,6 @@ the value chooser open
   full   [↓ next value, ↑ previous value, pgdn page down, pgup page up]
   full   [tab pick or unpick, enter take this value, esc close the editor, keeping what is typed]
   full   [alt+k delete to end of line]
+the leave prompt up
+  acts   y create · n discard · k keep · esc stay
+  full   [y create the issue, then leave, n throw it away and leave, k keep it for the next time and leave, esc stay on the form]

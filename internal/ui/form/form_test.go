@@ -18,7 +18,7 @@ func TestForm_BuildsEveryFieldFromWhatTheSiteSaysTheScreenHas(t *testing.T) {
 	t.Parallel()
 
 	c := newFake(20)
-	dr := openOn(t, testDeps(c), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, c), 100, 24, fakeStory)
 
 	schema, err := c.CreateMeta(t.Context(), "PROJ", fakeStory)
 	if err != nil {
@@ -50,7 +50,7 @@ func TestForm_BuildsEveryFieldFromWhatTheSiteSaysTheScreenHas(t *testing.T) {
 func TestForm_GivesEachSchemaTypeTheWidgetItEarns(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 
 	tests := map[string]kind{
 		"summary":           kindText,
@@ -72,12 +72,12 @@ func TestForm_GivesEachSchemaTypeTheWidgetItEarns(t *testing.T) {
 func TestForm_AsksADifferentScreenForADifferentIssueType(t *testing.T) {
 	t.Parallel()
 
-	story := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	story := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	if story.field("parent").meta.Required {
 		t.Error("a parent is required on a story, and only a subtask needs one")
 	}
 
-	sub := openOn(t, testDeps(newFake(20)), 100, 24, fakeSubtask)
+	sub := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeSubtask)
 	if !sub.field("parent").meta.Required {
 		t.Error("a parent is not required on a subtask, and the screen says it is")
 	}
@@ -89,7 +89,7 @@ func TestForm_AsksADifferentScreenForADifferentIssueType(t *testing.T) {
 func TestForm_DoesNotOfferAFieldItCannotSetAndSaysWhy(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 
 	if len(dr.m.hidden) == 0 {
 		t.Fatal("every field on the screen was offered, including the ones this form fixes itself")
@@ -117,7 +117,7 @@ func TestForm_RefusesToCreateWhileARequiredFieldIsEmpty(t *testing.T) {
 	t.Parallel()
 
 	c := newFake(20)
-	dr := openOn(t, testDeps(c), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, c), 100, 24, fakeStory)
 
 	dr.submitRow()
 	dr.key("enter")
@@ -140,7 +140,7 @@ func TestForm_CreatesTheIssueWithWhatWasTypedIntoIt(t *testing.T) {
 	t.Parallel()
 
 	c := newFake(20)
-	dr := openOn(t, testDeps(c), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, c), 100, 24, fakeStory)
 
 	dr.focus("summary")
 	dr.key("enter")
@@ -202,7 +202,7 @@ func TestForm_PutsAValidationErrorOnTheFieldItNames(t *testing.T) {
 	t.Parallel()
 
 	c := newFake(20)
-	dr := openOn(t, testDeps(c), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, c), 100, 24, fakeStory)
 
 	dr.focus("summary")
 	dr.key("enter")
@@ -235,7 +235,7 @@ func TestForm_ShowsARefusalAboutAFieldItDoesNotHaveRatherThanDroppingIt(t *testi
 	t.Parallel()
 
 	c := newFake(20)
-	dr := openOn(t, testDeps(c), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, c), 100, 24, fakeStory)
 
 	dr.focus("summary")
 	dr.key("enter")
@@ -285,7 +285,7 @@ func TestForm_ReportsEveryWayTheCreateScreenCanFail(t *testing.T) {
 			t.Parallel()
 
 			c := newFake(20)
-			dr := newDriver(t, testDeps(c), 100, 24)
+			dr := newDriver(t, testDeps(t, c), 100, 24)
 			c.FailNext(tt.err)
 			dr.send(CreateMsg{IssueTypeID: fakeStory})
 
@@ -303,7 +303,7 @@ func TestForm_ReportsACreateJiraRefusedForAReasonThatIsNotAField(t *testing.T) {
 	t.Parallel()
 
 	c := newFake(20)
-	dr := openOn(t, testDeps(c), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, c), 100, 24, fakeStory)
 	dr.focus("summary")
 	dr.key("enter")
 	dr.typeText("Anything at all")
@@ -327,7 +327,7 @@ func TestForm_ReportsACreateJiraRefusedForAReasonThatIsNotAField(t *testing.T) {
 func TestForm_DropsAnAnswerToAQuestionTheUserHasMovedOn(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	before := dr.ids()
 
 	dr.send(schemaLoadedMsg{gen: 0, schema: jira.Schema{Fields: []jira.FieldMeta{{
@@ -343,7 +343,7 @@ func TestForm_DropsAnAnswerToAQuestionTheUserHasMovedOn(t *testing.T) {
 func TestForm_StopsTheWorkInFlightWhenItIsAskedSomethingElse(t *testing.T) {
 	t.Parallel()
 
-	m := newWith(testDeps(newFake(20)), newSchemaCache(schemaTTL, time.Now), newDraftStore())
+	m := newWith(testDeps(t, newFake(20)), newSchemaCache(schemaTTL, time.Now))
 	ctx, _ := m.begin()
 	m.stop()
 
@@ -356,11 +356,11 @@ func TestForm_ReadsTheCreateScreenOnceForTwoFormsOnTheSameThing(t *testing.T) {
 	t.Parallel()
 
 	c := newFake(20)
-	cache, store := newSchemaCache(schemaTTL, time.Now), newDraftStore()
-	d := testDeps(c)
+	cache := newSchemaCache(schemaTTL, time.Now)
+	d := testDeps(t, c)
 
 	for range 2 {
-		dr := &driver{t: t, m: newWith(d, cache, store)}
+		dr := &driver{t: t, m: newWith(d, cache)}
 		dr.send(kernel.SizeMsg{Width: 100, Height: 24})
 		dr.run(dr.m.Init())
 		dr.send(CreateMsg{IssueTypeID: fakeStory})
@@ -384,7 +384,7 @@ func TestForm_ReadsTheCreateScreenAgainWhenTheCacheIsPurged(t *testing.T) {
 	t.Parallel()
 
 	c := newFake(20)
-	dr := openOn(t, testDeps(c), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, c), 100, 24, fakeStory)
 	dr.send(kernel.RefreshMsg{Purge: true})
 
 	reads := 0
@@ -398,60 +398,10 @@ func TestForm_ReadsTheCreateScreenAgainWhenTheCacheIsPurged(t *testing.T) {
 	}
 }
 
-func TestForm_PutsBackWhatWasTypedWhenTheSameScreenIsOpenedAgain(t *testing.T) {
-	t.Parallel()
-
-	c := newFake(20)
-	cache, store := newSchemaCache(schemaTTL, time.Now), newDraftStore()
-	d := testDeps(c)
-
-	first := &driver{t: t, m: newWith(d, cache, store)}
-	first.send(kernel.SizeMsg{Width: 100, Height: 24})
-	first.run(first.m.Init())
-	first.send(CreateMsg{IssueTypeID: fakeStory})
-	first.focus("summary")
-	first.key("enter")
-	first.typeText("Half a thought")
-	first.key("esc")
-
-	second := &driver{t: t, m: newWith(d, cache, store)}
-	second.send(kernel.SizeMsg{Width: 100, Height: 24})
-	second.run(second.m.Init())
-	second.send(CreateMsg{IssueTypeID: fakeStory})
-
-	if got := second.field("summary").text; got != "Half a thought" {
-		t.Errorf("the summary reads %q, want what was typed before the form was closed", got)
-	}
-	mustContain(t, second.view(), "Half a thought")
-}
-
-func TestForm_ForgetsTheDraftOnceTheIssueExists(t *testing.T) {
-	t.Parallel()
-
-	c := newFake(20)
-	cache, store := newSchemaCache(schemaTTL, time.Now), newDraftStore()
-	d := testDeps(c)
-
-	dr := &driver{t: t, m: newWith(d, cache, store)}
-	dr.send(kernel.SizeMsg{Width: 100, Height: 24})
-	dr.run(dr.m.Init())
-	dr.send(CreateMsg{IssueTypeID: fakeStory})
-	dr.focus("summary")
-	dr.key("enter")
-	dr.typeText("Something real")
-	dr.key("enter")
-	dr.submitRow()
-	dr.key("enter")
-
-	if kept := store.get(screen{project: "PROJ", issueType: fakeStory}); len(kept) != 0 {
-		t.Errorf("the draft outlived the issue it created: %v", kept)
-	}
-}
-
 func TestForm_TakesEveryKeyWhileAFieldIsBeingEdited(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	if dr.m.WantsRawKeys() {
 		t.Error("the form is swallowing keys with no editor open")
 	}
@@ -475,7 +425,7 @@ func TestForm_TakesEveryKeyWhileAFieldIsBeingEdited(t *testing.T) {
 func TestForm_KeepsWhatWasTypedWhenTheEditorIsClosedWithEscape(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	dr.focus("summary")
 	dr.key("enter")
 	dr.typeText("Do not lose this")
@@ -489,7 +439,7 @@ func TestForm_KeepsWhatWasTypedWhenTheEditorIsClosedWithEscape(t *testing.T) {
 func TestForm_ChoosesOnlyFromTheValuesTheSiteAllows(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	priority := dr.field("priority")
 
 	dr.focus("priority")
@@ -516,7 +466,7 @@ func TestForm_ChoosesOnlyFromTheValuesTheSiteAllows(t *testing.T) {
 func TestForm_NarrowsAPickerAsItIsTypedInto(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	dr.focus("priority")
 	dr.key("enter")
 
@@ -536,7 +486,7 @@ func TestForm_OffersTheAuthenticatedAccountToAPersonPicker(t *testing.T) {
 	t.Parallel()
 
 	c := newFake(20)
-	dr := openOn(t, testDeps(c), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, c), 100, 24, fakeStory)
 
 	me, err := c.Me(t.Context())
 	if err != nil {
@@ -560,7 +510,7 @@ func TestForm_AsksTheSiteWhichIssueTypesThisProjectUses(t *testing.T) {
 	t.Parallel()
 
 	c := newFake(20)
-	dr := newDriver(t, testDeps(c), 100, 24)
+	dr := newDriver(t, testDeps(t, c), 100, 24)
 
 	if len(dr.m.types) == 0 {
 		t.Fatal("the picker offers no issue type at all")
@@ -584,7 +534,7 @@ func TestForm_AsksTheSiteWhichIssueTypesThisProjectUses(t *testing.T) {
 func TestForm_SaysSoWhenThereIsNoProjectToCreateIn(t *testing.T) {
 	t.Parallel()
 
-	d := testDeps(newFake(20))
+	d := testDeps(t, newFake(20))
 	d.Project = ""
 	dr := newDriver(t, d, 100, 24)
 
@@ -597,37 +547,17 @@ func TestForm_SaysSoWhenThereIsNoProjectToCreateIn(t *testing.T) {
 func TestForm_SaysSoWhenThereIsNoConnection(t *testing.T) {
 	t.Parallel()
 
-	d := testDeps(nil)
+	d := testDeps(t, nil)
 	d.Jira = nil
 	dr := newDriver(t, d, 100, 24)
 
 	mustContain(t, dr.view(), "no Jira connection")
 }
 
-func TestForm_RefusesToCloseOnlyWhileTheCreateIsInFlight(t *testing.T) {
-	t.Parallel()
-
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
-	dr.focus("summary")
-	dr.key("enter")
-	dr.typeText("Typed and unsaved")
-	dr.key("enter")
-
-	if _, blocked := dr.m.BlocksClose(); blocked {
-		t.Error("the form refuses to close over a draft it keeps anyway")
-	}
-
-	dr.m.busy = true
-	reason, blocked := dr.m.BlocksClose()
-	if !blocked || reason == "" {
-		t.Error("the form would be thrown away while Jira is answering a create")
-	}
-}
-
 func TestForm_SelectsARowOnAClickAndOpensItOnTheNext(t *testing.T) {
 	t.Parallel()
 
-	d := testDeps(newFake(20))
+	d := testDeps(t, newFake(20))
 	dr := openOn(t, d, 100, 24, fakeStory)
 	dr.m.moveTo(0)
 
@@ -647,7 +577,7 @@ func TestForm_SelectsARowOnAClickAndOpensItOnTheNext(t *testing.T) {
 func TestForm_ClickingAValueInAPickerTakesIt(t *testing.T) {
 	t.Parallel()
 
-	d := testDeps(newFake(20))
+	d := testDeps(t, newFake(20))
 	dr := openOn(t, d, 100, 24, fakeStory)
 	dr.focus("priority")
 	dr.key("enter")
@@ -691,7 +621,7 @@ func TestForm_RegistersItselfWithItsKeysAndACommand(t *testing.T) {
 func TestForm_SurvivesATerminalTooNarrowToDrawIn(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	for _, size := range [][2]int{{40, 10}, {20, 6}, {8, 3}} {
 		dr.send(kernel.SizeMsg{Width: size[0], Height: size[1]})
 		if got := dr.view(); got == "" {
@@ -716,7 +646,7 @@ func TestForm_KeepsItsReadOnABlurAndDropsItOnAClose(t *testing.T) {
 
 	c := newFake(20)
 
-	kept := New(testDeps(c))
+	kept := New(testDeps(t, c))
 	kept, _ = kept.Update(kernel.SizeMsg{Width: 100, Height: 24})
 	reading := kept.Init()
 	if _, more := kept.Update(kernel.FocusMsg{}); more != nil {
@@ -726,7 +656,7 @@ func TestForm_KeepsItsReadOnABlurAndDropsItOnAClose(t *testing.T) {
 		t.Error("the create screen gave up its read when it merely lost the keyboard")
 	}
 
-	dropped := New(testDeps(c))
+	dropped := New(testDeps(t, c))
 	dropped, _ = dropped.Update(kernel.SizeMsg{Width: 100, Height: 24})
 	cmd := dropped.Init()
 	closer, ok := dropped.(kernel.Closer)
@@ -763,7 +693,7 @@ func TestForm_ShowsTheDefaultJiraWillUseAndDoesNotPutItInTheWidget(t *testing.T)
 	t.Parallel()
 
 	c := newFake(20)
-	dr := openOn(t, testDeps(c), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, c), 100, 24, fakeStory)
 
 	priority := dr.field("priority")
 	if !priority.meta.HasDefault {

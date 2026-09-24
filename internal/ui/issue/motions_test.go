@@ -68,7 +68,7 @@ func motionPane(t *testing.T) *driver {
 	block.Attrs = adf.Attrs{"language": "go"}
 	full.Description = adf.NewDoc(append([]adf.Node{block}, long.Content...)...)
 
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-3"), 120, 24)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-3"), 120, 24)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: full})
 	return dr
 }
@@ -88,7 +88,7 @@ func TestMotions_PanningReachesTheThreadWhenItHasTheKeyboard(t *testing.T) {
 		adf.NewNode("paragraph", adf.NewText("The client is below.")), block)); err != nil {
 		t.Fatalf("AddComment: %v", err)
 	}
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-4"), 120, 30)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-4"), 120, 30)
 	dr.key("tab", "tab")
 	if dr.m.focus != regionComments {
 		t.Fatalf("two tabs left the keyboard on region %d", dr.m.focus)

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -82,6 +83,8 @@ func (k kind) chooses() bool { return k.pane() == editChoose }
 
 // multiple reports whether the widget holds more than one value.
 func (k kind) multiple() bool { return k == kindMultiSelect || k == kindUsers }
+
+func (k kind) people() bool { return k == kindUser || k == kindUsers }
 
 // selectable are the schema types whose values come from a list the site
 // states. They are Jira's own type names, which are not translated.
@@ -410,9 +413,9 @@ func (f *field) users() []jira.User {
 // userOption is how an account is offered in a picker: the account id is the
 // value, because a display name is neither unique nor writable.
 func userOption(user jira.User) jira.Option {
-	label := strings.TrimSpace(user.DisplayName)
+	label := strings.TrimSpace(widget.Sanitize(user.DisplayName))
 	if label == "" {
-		label = user.AccountID
+		label = widget.Sanitize(user.AccountID)
 	}
 	return jira.Option{ID: user.AccountID, Label: label}
 }

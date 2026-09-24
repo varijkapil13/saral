@@ -34,6 +34,9 @@ const (
 	// deep. Past it the map is cleared rather than evicted one row at a time,
 	// because a scroll invalidates a screenful at once anyway.
 	rowMemoLimit = 256
+	// dropRows is how many dropped fields the confirm screen lists one per line
+	// before folding the rest into one, so the sentence under them stays on screen.
+	dropRows = 5
 )
 
 // styles are the wizard's own, built once per theme generation because
@@ -389,6 +392,7 @@ func (m *Model) mappingLines() []string {
 			out = append(out, m.line(m.styles.warn, said))
 		}
 	}
+	out = append(out, m.dropLines()...)
 	out = append(out, m.line(m.styles.muted, "  watchers "+t.Glyphs.Arrow+" "+m.notifyWords()))
 	for _, said := range m.indented("  ", "Subtasks travel with their parents and are retyped in "+m.target+
 		". They count towards the "+strconv.Itoa(maxKeys)+" one move takes, so the site can still refuse this.") {
@@ -398,6 +402,56 @@ func (m *Model) mappingLines() []string {
 	// before they agree, and a narrow window is exactly where it was being cut.
 	for _, said := range m.wrapped("Once submitted the move runs on Jira whether this stays open or not. There is no undo.") {
 		out = append(out, m.line(m.styles.warn, said))
+	}
+	return out
+}
+
+// dropLines say what the target's create screen has no place for, and how many
+// of the leaving issues lose a value to it. A check that could not run says so:
+// silence there would read as nothing being lost.
+func (m *Model) dropLines() []string {
+	t := m.deps.Theme
+	switch m.drop {
+	case dropPending:
+		return []string{m.line(m.styles.muted, "  checking which fields "+m.target+" has no place for"+t.Glyphs.Ellipsis)}
+	case dropFailed:
+		reason, _ := jira.Reason(m.dropErr)
+		lead := "Which fields the move drops could not be checked: " + reason
+		if m.schemaErr != nil {
+			lead = "What " + m.target + " insists on could not be read, so every mandatory field is kept from " +
+				"the source and which fields the move drops was not checked: " + reason
+		}
+		out := make([]string, 0, 4)
+		for _, said := range m.indented("  ", lead) {
+			out = append(out, m.line(m.styles.warn, said))
+		}
+		return append(out, m.line(m.styles.muted, "  "+retryHint))
+	case dropDone:
+		if len(m.drops) == 0 {
+			return nil
+		}
+	case dropNone:
+		return nil
+	}
+	out := make([]string, 0, min(len(m.drops), dropRows)+3)
+	for _, said := range m.indented("  ", "Not on the "+m.targetType().Name+" create screen in "+m.target+
+		", so the move drops what these hold:") {
+		out = append(out, m.line(m.styles.warn, said))
+	}
+	shown := min(len(m.drops), dropRows)
+	if len(m.drops) > dropRows {
+		shown = dropRows - 1
+	}
+	for _, d := range m.drops[:shown] {
+		out = append(out, m.line(m.styles.warn, "    "+d.name+" "+t.Glyphs.Arrow+" "+
+			strconv.Itoa(d.count)+" of "+plural(m.leaving, "issue")))
+	}
+	if rest := len(m.drops) - shown; rest > 0 {
+		names := make([]string, 0, rest)
+		for _, d := range m.drops[shown:] {
+			names = append(names, d.name)
+		}
+		out = append(out, m.line(m.styles.warn, "    and "+plural(rest, "more field")+": "+strings.Join(names, ", ")))
 	}
 	return out
 }

@@ -36,6 +36,9 @@ func TestBudget_MoveScrollingCostsTheSameOnAThousandIssuesAsOnTwenty(t *testing.
 		t.Errorf("a steady-state frame allocates %d times, want at most %d: the memo is meant to carry "+
 			"all but the frame itself (docs/PERFORMANCE.md)", got, confirmFrameAllocs)
 	}
+	if got := testing.Benchmark(BenchmarkMoveConfirmScrollWithDrops).AllocsPerOp(); got > confirmFrameAllocs {
+		t.Errorf("a frame listing dropped fields allocates %d times, want at most %d", got, confirmFrameAllocs)
+	}
 	t.Logf("a thousand issues: %d allocs a frame; twenty: %d", big.AllocsPerOp(), small.AllocsPerOp())
 }
 

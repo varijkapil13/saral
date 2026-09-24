@@ -89,7 +89,7 @@ func TestFields_WithNoScreenSignalTheOrderIsAlphabetical(t *testing.T) {
 	t.Parallel()
 
 	iss, labels := orderIssue()
-	dr := newDriver(t, testDeps(newFake(1)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 28)
+	dr := newDriver(t, testDeps(t, newFake(1)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 28)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
 
 	_, rest, _, _ := dr.m.customFields(60)
@@ -105,7 +105,7 @@ func TestFields_TheScreenTheSiteSentOrdersOnScreenFieldsFirst(t *testing.T) {
 	t.Parallel()
 
 	iss, labels := orderIssue()
-	dr := newDriver(t, testDeps(newFake(1)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 28)
+	dr := newDriver(t, testDeps(t, newFake(1)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 28)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
 	dr.send(editMetaMsg{gen: dr.m.gen, meta: jira.EditMeta{
 		Fields: []jira.FieldMeta{{Field: jira.FieldRef{ID: zebraID}}},
@@ -136,7 +136,7 @@ func TestFetch_AsksForEditMetaOnceAlongsideTheIssueRead(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(3)
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-1"), 90, 28)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-1"), 90, 28)
 	dr.key("tab", "G", "down", "up")
 
 	if !dr.m.loadedIssue {
@@ -154,7 +154,7 @@ func TestFetch_AsksForEditMetaOnceAlongsideTheIssueRead(t *testing.T) {
 func TestFetch_AsksForNothingWithNoJiraClient(t *testing.T) {
 	t.Parallel()
 
-	dr := newDriver(t, testDeps(nil), jira.Issue{Key: "PROJ-1"}, 90, 28)
+	dr := newDriver(t, testDeps(t, nil), jira.Issue{Key: "PROJ-1"}, 90, 28)
 	if dr.m.loadedIssue {
 		t.Fatal("the issue loaded with no client to read it from")
 	}

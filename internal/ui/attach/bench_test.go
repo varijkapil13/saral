@@ -121,3 +121,16 @@ func scrollOver(b *testing.B, n int) {
 func BenchmarkPaneSteadyScroll2000(b *testing.B) { scrollOver(b, 2000) }
 
 func BenchmarkPaneSteadyScroll20(b *testing.B) { scrollOver(b, 20) }
+
+// BenchmarkPaneUploadProgress is a frame redrawn for each step an upload posts.
+func BenchmarkPaneUploadProgress(b *testing.B) {
+	m := stocked(b, 2000, 120, 40)
+	m.mode, m.sending, m.sendSize = uploading, "notes.txt", 1<<20
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		next, _ := m.Update(sentMsg{gen: m.gen, sent: int64(i%100) << 13})
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -23,21 +24,28 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
-// TestMain points the drafts at a directory of this run's own. Every test in
-// this package writes drafts through the real store, and none of them may reach
-// the machine's cache directory to do it.
+// TestMain points the cache and config directories at ones of this run's own,
+// so that a Deps somebody builds without a DraftsDir still cannot reach the
+// real drafts of whoever is running the suite.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "saral-comment-cache")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	if err := os.Setenv("SARAL_CACHE_DIR", dir); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	envs := []string{"SARAL_CACHE_DIR", "SARAL_CONFIG_DIR"}
+	dirs := make([]string, 0, len(envs))
+	for _, env := range envs {
+		dir, err := os.MkdirTemp("", "saral-comment")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		dirs = append(dirs, dir)
+		if err := os.Setenv(env, dir); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	}
 	code := m.Run()
-	_ = os.RemoveAll(dir)
+	for _, dir := range dirs {
+		_ = os.RemoveAll(dir)
+	}
 	os.Exit(code)
 }
 
@@ -49,20 +57,35 @@ func fullCaps() jira.Capabilities {
 	}
 }
 
-// testDeps gives every test a site of its own, because the site is half of the
-// key a draft is filed under and these tests run in parallel against one drafts
-// directory. Two tests writing a draft for PROJ-1 must not read each other's.
+// draftDirs is one drafts directory per test, so two views a test builds share
+// their drafts the way two sessions on one machine do, and no other test — nor
+// the same test on its next -count — sees them.
+var draftDirs sync.Map
+
+func draftsFor(t *testing.T) string {
+	t.Helper()
+
+	if dir, ok := draftDirs.Load(t); ok {
+		return dir.(string)
+	}
+	dir := t.TempDir()
+	draftDirs.Store(t, dir)
+	t.Cleanup(func() { draftDirs.Delete(t) })
+	return dir
+}
+
 func testDeps(t *testing.T, client jira.Client) kernel.Deps {
 	t.Helper()
 
 	return kernel.Deps{
-		Jira:    client,
-		Caps:    fullCaps(),
-		Project: "PROJ",
-		Theme:   kernel.NewTheme(kernel.ThemeNoColor, true, kernel.ASCIIGlyphs()),
-		Zones:   zone.New(),
-		Site:    t.Name() + ".example.atlassian.net",
-		Now:     func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
+		Jira:      client,
+		Caps:      fullCaps(),
+		Project:   "PROJ",
+		Theme:     kernel.NewTheme(kernel.ThemeNoColor, true, kernel.ASCIIGlyphs()),
+		Zones:     zone.New(),
+		Site:      "example.atlassian.net",
+		Now:       func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
+		DraftsDir: draftsFor(t),
 	}
 }
 

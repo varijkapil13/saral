@@ -31,6 +31,8 @@ type keyMap struct {
 	// scaled into six rows is not one anybody can look at.
 	Grow kernel.Binding
 	Send kernel.Binding
+	// Complete fills in as much of the path as the directory it names agrees on.
+	Complete kernel.Binding
 	// Cancel is esc while a path is being typed. The kernel keeps esc for itself
 	// everywhere else, which is what closes the pane.
 	Cancel kernel.Binding
@@ -40,6 +42,9 @@ type keyMap struct {
 	// prompt.
 	Confirm kernel.Binding
 	Keep    kernel.Binding
+	// Stop is esc while a file is on its way up, which is the only key that state
+	// answers: anything that asked the site for something else would cancel it.
+	Stop kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -56,9 +61,11 @@ func defaultKeys() keyMap {
 		Delete:   kernel.Bind([]string{"d"}, "d", "delete this file"),
 		Grow:     kernel.Bind([]string{"z"}, "z", "give the preview the whole pane"),
 		Send:     kernel.Bind([]string{"ctrl+s", "enter"}, "ctrl+s", "attach it"),
+		Complete: kernel.Bind([]string{"tab"}, "tab", "complete the path"),
 		Cancel:   kernel.Bind([]string{"esc"}, "esc", "leave it unattached"),
 		Confirm:  kernel.Bind([]string{"y"}, "y", "delete it"),
 		Keep:     kernel.Bind([]string{"esc"}, "esc", "keep it"),
+		Stop:     kernel.Bind([]string{"esc"}, "esc", "stop the upload"),
 	}
 }
 
@@ -83,6 +90,7 @@ const (
 	keysEmptyWrite
 	keysTyping
 	keysConfirming
+	keysUploading
 	keyStates
 )
 
@@ -119,11 +127,15 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	}
 	sets[keysTyping] = kernel.KeySet{
 		Acts: []kernel.Binding{k.Send, k.Cancel},
-		Full: [][]kernel.Binding{{k.Send, k.Cancel}, {widget.KillLine}},
+		Full: [][]kernel.Binding{{k.Send, k.Cancel}, {k.Complete, widget.KillLine}},
 	}
 	sets[keysConfirming] = kernel.KeySet{
 		Acts: []kernel.Binding{k.Confirm, k.Keep},
 		Full: [][]kernel.Binding{{k.Confirm, k.Keep}},
+	}
+	sets[keysUploading] = kernel.KeySet{
+		Acts: []kernel.Binding{k.Stop},
+		Full: [][]kernel.Binding{{k.Stop}},
 	}
 	return sets
 }()
@@ -143,6 +155,8 @@ func (m *Model) keyState() keyState {
 		return keysTyping
 	case m.mode == confirming:
 		return keysConfirming
+	case m.mode == uploading:
+		return keysUploading
 	case len(m.files) > 0 && m.canWrite:
 		return keysReadingWrite
 	case len(m.files) > 0:
@@ -172,6 +186,8 @@ const (
 	actSend
 	actCancel
 	actConfirm
+	actComplete
+	actStop
 )
 
 // tables turn the bindings into a keystroke lookup, built once per pane. The
@@ -182,7 +198,7 @@ const (
 // different answer in each: enter shows a file on the list and sends the path in
 // the prompt, and y is a letter somebody is typing in one state and the go-ahead
 // for a deletion in another.
-func (k keyMap) tables() (browse, prompt, confirm map[string]action) {
+func (k keyMap) tables() (browse, prompt, confirm, sending map[string]action) {
 	browse = table(
 		binding{k.Down, actDown}, binding{k.Up, actUp},
 		binding{k.PageDown, actPageDown}, binding{k.PageUp, actPageUp},
@@ -191,9 +207,10 @@ func (k keyMap) tables() (browse, prompt, confirm map[string]action) {
 		binding{k.Upload, actUpload}, binding{k.Delete, actDelete},
 		binding{k.Grow, actGrow},
 	)
-	prompt = table(binding{k.Send, actSend}, binding{k.Cancel, actCancel})
+	prompt = table(binding{k.Send, actSend}, binding{k.Cancel, actCancel}, binding{k.Complete, actComplete})
 	confirm = table(binding{k.Confirm, actConfirm}, binding{k.Keep, actCancel})
-	return browse, prompt, confirm
+	sending = table(binding{k.Stop, actStop})
+	return browse, prompt, confirm, sending
 }
 
 type binding struct {

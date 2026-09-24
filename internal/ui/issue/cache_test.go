@@ -119,7 +119,7 @@ func TestIssue_DrawsTheCachedIssueBeforeAnythingIsAskedOfTheSite(t *testing.T) {
 	cache.hold(full)
 
 	seed := seedOf(t, fake, "PROJ-1")
-	deps := withCache(testDeps(refusing(t, 3)), cache)
+	deps := withCache(testDeps(t, refusing(t, 3)), cache)
 
 	view, ok := New(deps, seed).(*Model)
 	if !ok {
@@ -142,7 +142,7 @@ func TestIssue_ANarrowSeedWithNothingCachedStillReadsAsNotYetKnown(t *testing.T)
 
 	fake := refusing(t, 3)
 	seed := seedOf(t, newFake(3), "PROJ-1")
-	deps := withCache(testDeps(fake), newFakeCache())
+	deps := withCache(testDeps(t, fake), newFakeCache())
 
 	view, ok := New(deps, seed).(*Model)
 	if !ok {
@@ -173,7 +173,7 @@ func TestIssue_TheLandingFetchReplacesTheCachedCopyCleanly(t *testing.T) {
 	cache.hold(stale)
 
 	seed := seedOf(t, fake, "PROJ-1")
-	dr := newDriver(t, withCache(testDeps(fake), cache), seed, 100, 30)
+	dr := newDriver(t, withCache(testDeps(t, fake), cache), seed, 100, 30)
 
 	if dr.m.issue.Summary == stale.Summary {
 		t.Error("the landing fetch did not replace the cached summary")
@@ -189,7 +189,7 @@ func TestIssue_StoresTheFetchedIssueSoTheNextOpenDrawsItFirst(t *testing.T) {
 	fake := newFake(3)
 	cache := newFakeCache()
 	seed := seedOf(t, fake, "PROJ-1")
-	newDriver(t, withCache(testDeps(fake), cache), seed, 100, 30)
+	newDriver(t, withCache(testDeps(t, fake), cache), seed, 100, 30)
 
 	snap, ok := cache.Issue("PROJ-1")
 	if !ok {
@@ -207,7 +207,7 @@ func TestIssue_SaysSoWhenTheIssueCannotBeStored(t *testing.T) {
 	cache := newFakeCache()
 	cache.putFail = errors.New("the cache file is read-only")
 	seed := seedOf(t, fake, "PROJ-1")
-	dr := newDriver(t, withCache(testDeps(fake), cache), seed, 100, 30)
+	dr := newDriver(t, withCache(testDeps(t, fake), cache), seed, 100, 30)
 
 	if !dr.m.loadedIssue {
 		t.Fatal("a cache that could not be written dropped the issue that had already arrived")
@@ -229,8 +229,8 @@ func TestIssue_WithNoCacheDrawsExactlyWhatItDrewBefore(t *testing.T) {
 	fakeA, fakeB := newFake(3), newFake(3)
 	seedA, seedB := seedOf(t, fakeA, "PROJ-1"), seedOf(t, fakeB, "PROJ-1")
 
-	withNone := newDriver(t, testDeps(fakeA), seedA, 100, 30)
-	withEmpty := newDriver(t, withCache(testDeps(fakeB), newFakeCache()), seedB, 100, 30)
+	withNone := newDriver(t, testDeps(t, fakeA), seedA, 100, 30)
+	withEmpty := newDriver(t, withCache(testDeps(t, fakeB), newFakeCache()), seedB, 100, 30)
 
 	if withNone.view() != withEmpty.view() {
 		t.Errorf("a session with nowhere to cache draws a different frame\n--- no cache ---\n%s\n--- empty cache ---\n%s",

@@ -170,10 +170,10 @@ func TestSession_AnAnswerLandingWhileThePaneIsCoveredStillReachesThePane(t *test
 
 	f := newFake(20)
 	seed := seedOf(t, f, "PROJ-8")
-	s := bootRoot(t, testDeps(f), 120, 30)
+	s := bootRoot(t, testDeps(t, f), 120, 30)
 
 	s.hold()
-	s.send(kernel.PushMsg{ID: ViewID, Title: seed.Key, View: New(testDeps(f), seed)})
+	s.send(kernel.PushMsg{ID: ViewID, Title: seed.Key, View: New(testDeps(t, f), seed)})
 	s.send(kernel.PushMsg{ID: "cover", Title: "Cover", View: cover{}})
 	mustContain(t, s.frame(), "something else entirely")
 
@@ -206,7 +206,7 @@ func TestSession_TheThreadOpensOverTheIssueAndEscComesBack(t *testing.T) {
 
 	f := newFake(12)
 	addComment(t, f, "PROJ-2", "The conversation you came for.")
-	s := boot(t, testDeps(f), seedOf(t, f, "PROJ-2"), 120, 30)
+	s := boot(t, testDeps(t, f), seedOf(t, f, "PROJ-2"), 120, 30)
 	mustContain(t, s.title(), "PROJ-2")
 	// The sidebar already holds the thread, so the gesture is about the size it
 	// can be written at rather than about opening it at all.
@@ -234,7 +234,7 @@ func TestSession_TheFooterNamesTheKeyOnlyWhereItOpensTheThread(t *testing.T) {
 
 	f := newFake(12)
 	addComment(t, f, "PROJ-3", "Something to read.")
-	s := boot(t, testDeps(f), seedOf(t, f, "PROJ-3"), 120, 30)
+	s := boot(t, testDeps(t, f), seedOf(t, f, "PROJ-3"), 120, 30)
 	mustContain(t, s.footer(), "C comment")
 
 	s.press("C")
@@ -251,7 +251,7 @@ func TestSession_TheHelpOverlayListsTheKeyForTheViewItIsCovering(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(12)
-	s := boot(t, testDeps(f), seedOf(t, f, "PROJ-4"), 120, 30)
+	s := boot(t, testDeps(t, f), seedOf(t, f, "PROJ-4"), 120, 30)
 
 	// The overlay pads the key column to its widest entry, so what is asserted
 	// here is the description only the overlay has room for.
@@ -269,7 +269,7 @@ func TestSession_WhatIsWrittenInTheThreadIsThereWhenYouComeBack(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(12)
-	s := boot(t, testDeps(f), seedOf(t, f, "PROJ-5"), 120, 30)
+	s := boot(t, testDeps(t, f), seedOf(t, f, "PROJ-5"), 120, 30)
 	mustContain(t, s.frame(), "Nobody has commented on PROJ-5")
 
 	s.press("C")
@@ -292,7 +292,7 @@ func TestSession_TheSmallestTerminalStillTeachesThePanesKeys(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(12)
-	s := boot(t, testDeps(f), seedOf(t, f, "PROJ-7"), kernel.MinWidth, kernel.MinHeight)
+	s := boot(t, testDeps(t, f), seedOf(t, f, "PROJ-7"), kernel.MinWidth, kernel.MinHeight)
 
 	mustContain(t, s.footer(), "Issues", "tab pane", "e edit", "t status", "C comment", "? esc")
 	mustNotContain(t, s.footer(), "…")
@@ -313,7 +313,7 @@ func TestSession_Frames(t *testing.T) {
 
 			f := newFake(12)
 			addComment(t, f, size.key, "A comment worth a line or two, and a second sentence to wrap.")
-			s := boot(t, testDeps(f), seedOf(t, f, size.key), size.w, size.h)
+			s := boot(t, testDeps(t, f), seedOf(t, f, size.key), size.w, size.h)
 			golden(t, fmt.Sprintf("session_issue_%dx%d.golden", size.w, size.h), s.frame())
 
 			s.press("C")
