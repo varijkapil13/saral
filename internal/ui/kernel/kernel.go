@@ -58,20 +58,21 @@ type KeyCapturer interface {
 // before anything that would discard the view: quitting, going back, and
 // switching to another view. It shows the reason instead.
 //
-// Going back asks the view being popped. Quitting and switching root view ask
-// every entry on the stack, because both throw all of it away and the one
-// holding a draft is often underneath.
+// Going back asks the view being popped. Quitting asks every entry on the
+// stack, because it throws all of it away and the one holding a draft is often
+// underneath. Switching root view asks every entry above the root, which is
+// parked rather than discarded.
 type Blocker interface {
 	BlocksClose() (reason string, blocked bool)
 }
 
 // CloseAsker is the optional interface a Blocker implements when it would
 // rather ask before losing what it holds than simply refuse. The kernel calls
-// AskClose instead of refuse wherever a view that blocks also answers to this,
-// and the view is left to put its own prompt up — it answers later, once that
-// prompt is resolved, by sending the ordinary close message itself
-// (kernel.Pop(), typically): BlocksClose has nothing left to hold by then, so
-// the gesture goes through on its own the second time.
+// AskClose instead of refuse when the view that blocks is the one on top — a
+// view underneath cannot be seen putting a prompt up — and records the gesture
+// that was held up. The view answers once its prompt is resolved by sending
+// Proceed, which replays that gesture: a pop, a root switch or a quit.
+// BlocksClose has nothing left to hold by then, so it goes through.
 //
 // It is additive: a Blocker that does not implement it is refused exactly as
 // before.
@@ -112,6 +113,14 @@ func CloseView(v View) {
 	if c, ok := v.(Closer); ok {
 		c.Close()
 	}
+}
+
+// BackClaimer is the optional interface a root view implements when esc means
+// something to it at rest — a list with a filter in force clears it. The kernel
+// otherwise spends esc in a root view on clearing the status line. It is asked
+// on every esc, so a view answers for the state it is in.
+type BackClaimer interface {
+	WantsBack() bool
 }
 
 // Addr is where a view's own answers come back to. A view mints one for itself
@@ -193,6 +202,7 @@ type chromeKey struct {
 	palette   bool
 	capturing bool
 	prefixed  bool
+	mouse     bool
 }
 
 type chromeCache struct {
@@ -261,6 +271,16 @@ type Model struct {
 	prefixSet bool
 	dest      int
 
+	// wanted is the root named for this session — on the command line, or
+	// remembered from the last one — that its capability had not been checked
+	// for when the first frame was drawn. The first answer either opens it over
+	// the fallback or says why it cannot.
+	wanted string
+
+	// held is the gesture a CloseAsker was asked about, replayed when it
+	// answers with Proceed.
+	held heldGesture
+
 	// startup is a view the composition root wants over the root at startup,
 	// built at Init rather than here so that it is given the same complete Deps
 	// every other view gets — a zone manager included, which New is what mints.
@@ -280,6 +300,24 @@ type Model struct {
 
 // Option configures the root model.
 type Option func(*Model)
+
+// heldGesture is a pop, a root switch or a quit waiting on a view's own
+// prompt. depth is the stack it was asked over, so an answer arriving after the
+// stack has moved on replays nothing.
+type heldGesture struct {
+	kind  gestureKind
+	open  OpenMsg
+	depth int
+}
+
+type gestureKind uint8
+
+const (
+	gestureNone gestureKind = iota
+	gesturePop
+	gestureOpen
+	gestureQuit
+)
 
 // startupPush is WithInitialPush's argument, held until Init can build it.
 type startupPush struct {
@@ -381,6 +419,7 @@ func New(d Deps, opts ...Option) (Model, error) {
 	m.restoreCaps()
 	m.roots = Views()
 
+	m.wanted = m.unprobedWant()
 	spec, ok := m.startView()
 	if !ok {
 		return m, nil
@@ -388,8 +427,30 @@ func New(d Deps, opts ...Option) (Model, error) {
 	root := spec.New(m.deps)
 	m.live[spec.ID] = root
 	m.stack = []stackEntry{{spec: spec, view: root}}
-	m.rememberRoot(spec.ID)
+	if m.wanted == "" || m.wanted == spec.ID {
+		m.wanted = ""
+		m.rememberRoot(spec.ID)
+	}
 	return m, nil
+}
+
+// unprobedWant is the root this session was asked to open when only a probe
+// can say whether it may: named explicitly or remembered, gated, and not
+// allowed by anything known yet. A stored answer counts as not known, since
+// the probe revalidates it.
+func (m Model) unprobedWant() string {
+	if m.capsProbed {
+		return ""
+	}
+	id := m.initialView
+	if id == "" {
+		id, _ = Recall(m.deps, memoryScope, rootViewKey)
+	}
+	spec, ok := LookupView(id)
+	if !ok || m.available(spec) || (m.initialView == "" && spec.Slot <= 0) {
+		return ""
+	}
+	return spec.ID
 }
 
 // restoreCaps draws the first frame from what the last run learnt about this
@@ -493,6 +554,14 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) top() stackEntry { return m.stack[len(m.stack)-1] }
 
+// Top is the view on top of the stack, or nil when there is none.
+func (m Model) Top() View {
+	if len(m.stack) == 0 {
+		return nil
+	}
+	return m.top().view
+}
+
 // Update routes a message, then re-sizes if the status line appeared or went
 // away — it costs the focused view a row, and a view that is not told loses its
 // bottom line for as long as the message is up.
@@ -555,7 +624,10 @@ func (m Model) route(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.pop()
 
 	case OpenMsg:
-		return m.open(msg.ID)
+		return m.openThen(msg)
+
+	case ProceedMsg:
+		return m.proceed()
 
 	case latchPrefixMsg:
 		return m.latchPrefix()
@@ -669,17 +741,16 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(m.stack) > 1 {
 			return m.pop()
 		}
-		if v, reason, blocked := m.blockingEntry(); blocked {
-			return m.askOrRefuse(v, reason)
-		}
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 
 	case Matches(msg, m.keys.Back):
 		if len(m.stack) > 1 {
 			return m.pop()
 		}
 		m.status = ""
+		if c, ok := m.Top().(BackClaimer); ok && c.WantsBack() {
+			return m.forwardTop(msg)
+		}
 		return m, nil
 
 	case Matches(msg, m.keys.Refresh):
@@ -697,6 +768,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // forwards them: nothing is reporting, so nothing arrives, and a view handed one
 // anyway looks its zones up in a manager that is disabled and misses.
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	// Nothing is drawn below the minimum but a sentence, so every zone a click
+	// could resolve through belongs to a frame that is no longer on screen.
+	if m.tooSmall() {
+		return m, nil
+	}
 	if m.menu.open {
 		return m.menuMouse(msg)
 	}
@@ -771,29 +847,19 @@ func (m Model) capturing() bool {
 	return ok && c.WantsRawKeys()
 }
 
-// blockingEntry is the first entry anywhere on the stack that is holding
-// something, in that entry's own words, plus the view itself so a caller can
-// ask it rather than refuse when it knows how (see CloseAsker). The whole
-// stack is asked because quitting and switching root view discard all of it,
-// and the entry with the draft is often not the top one — the palette is
-// pushed over whatever it was opened from and holds nothing itself.
-func (m Model) blockingEntry() (View, string, bool) {
-	for _, entry := range m.stack {
-		if reason, yes := blocks(entry.view); yes {
-			return entry.view, reason, true
+// blockingEntry is the first entry from index from up that is holding
+// something, in that entry's own words, plus where it is so a caller can ask it
+// rather than refuse when it knows how (see CloseAsker). Quitting asks from the
+// bottom, because it discards all of it and the entry with the draft is often
+// not the top one — the palette is pushed over whatever it was opened from and
+// holds nothing itself. A root switch asks from one, since it parks the root.
+func (m Model) blockingEntry(from int) (at int, reason string, blocked bool) {
+	for i := from; i < len(m.stack); i++ {
+		if reason, yes := blocks(m.stack[i].view); yes {
+			return i, reason, true
 		}
 	}
-	return nil, "", false
-}
-
-// blockingTop is blockingEntry narrowed to the view a pop would discard, which
-// is the only one it can be asked about.
-func (m Model) blockingTop() (View, string, bool) {
-	if len(m.stack) == 0 {
-		return nil, "", false
-	}
-	reason, yes := blocks(m.top().view)
-	return m.top().view, reason, yes
+	return -1, "", false
 }
 
 func blocks(v View) (string, bool) {
@@ -804,17 +870,51 @@ func blocks(v View) (string, bool) {
 	return b.BlocksClose()
 }
 
-// refuse puts the reason a view gave for staying open into the status line.
-func (m Model) askOrRefuse(v View, reason string) (tea.Model, tea.Cmd) {
-	if asker, ok := v.(CloseAsker); ok {
-		return m, asker.AskClose()
+// askOrRefuse asks only the view on top: one underneath cannot be seen putting
+// a prompt up.
+func (m Model) askOrRefuse(at int, reason string, g heldGesture) (tea.Model, tea.Cmd) {
+	if at != len(m.stack)-1 {
+		return m.refuse(reason)
 	}
-	return m.refuse(reason)
+	asker, ok := m.stack[at].view.(CloseAsker)
+	if !ok {
+		return m.refuse(reason)
+	}
+	g.depth = len(m.stack)
+	m.held = g
+	return m, asker.AskClose()
 }
 
 func (m Model) refuse(reason string) (tea.Model, tea.Cmd) {
 	m.status, m.statusLevel = reason, LevelWarn
 	return m, nil
+}
+
+// proceed replays through the same checks the gesture went through, so another
+// entry still holding something is asked or refused in turn.
+func (m Model) proceed() (tea.Model, tea.Cmd) {
+	g := m.held
+	m.held = heldGesture{}
+	if g.kind == gestureNone || g.depth != len(m.stack) {
+		return m, nil
+	}
+	switch g.kind {
+	case gesturePop:
+		return m.pop()
+	case gestureOpen:
+		return m.openThen(g.open)
+	case gestureQuit:
+		return m.quit()
+	}
+	return m, nil
+}
+
+func (m Model) quit() (tea.Model, tea.Cmd) {
+	if at, reason, blocked := m.blockingEntry(0); blocked {
+		return m.askOrRefuse(at, reason, heldGesture{kind: gestureQuit})
+	}
+	m.quitting = true
+	return m, tea.Quit
 }
 
 func (m Model) openSlot(slot int) (tea.Model, tea.Cmd) {
@@ -876,13 +976,7 @@ func (m Model) runSaved(slot int) (tea.Model, tea.Cmd) {
 		m.status, m.statusLevel = "nothing in this build can run a saved query", LevelWarn
 		return m, nil
 	}
-	opened, cmd := m.open(spec.ID)
-	model, ok := opened.(Model)
-	if !ok || len(model.stack) == 0 || model.top().spec.ID != spec.ID {
-		return opened, cmd
-	}
-	next, follow := model.forwardTop(RunQueryMsg{JQL: query.JQL, Title: query.Name})
-	return next, tea.Batch(cmd, follow)
+	return m.openThen(OpenMsg{ID: spec.ID, Then: RunQueryMsg{JQL: query.JQL, Title: query.Name}})
 }
 
 func (m Model) queryView() (ViewSpec, bool) {
@@ -940,7 +1034,24 @@ func (m Model) persistQueries(saved app.SavedQueries) tea.Cmd {
 	}
 }
 
-func (m Model) open(id string) (tea.Model, tea.Cmd) {
+func (m Model) open(id string) (tea.Model, tea.Cmd) { return m.openThen(OpenMsg{ID: id}) }
+
+// openThen switches root view and, only once the switch has landed, hands the
+// view msg.Then. An open that is refused or held up by a draft delivers
+// nothing, so a command meant for one view never reaches whatever else is on
+// screen instead.
+func (m Model) openThen(msg OpenMsg) (tea.Model, tea.Cmd) {
+	opened, cmd := m.switchTo(msg)
+	model, ok := opened.(Model)
+	if !ok || msg.Then == nil || len(model.stack) != 1 || model.stack[0].spec.ID != msg.ID {
+		return opened, cmd
+	}
+	next, follow := model.forwardTop(msg.Then)
+	return next, tea.Batch(cmd, follow)
+}
+
+func (m Model) switchTo(msg OpenMsg) (tea.Model, tea.Cmd) {
+	id := msg.ID
 	spec, ok := LookupView(id)
 	if !ok {
 		m.status, m.statusLevel = fmt.Sprintf("%s is not available in this build", id), LevelWarn
@@ -953,10 +1064,11 @@ func (m Model) open(id string) (tea.Model, tea.Cmd) {
 	if len(m.stack) == 1 && m.stack[0].spec.ID == id {
 		return m, nil
 	}
-	if v, reason, blocked := m.blockingEntry(); blocked {
-		return m.askOrRefuse(v, reason)
+	if at, reason, blocked := m.blockingEntry(1); blocked {
+		return m.askOrRefuse(at, reason, heldGesture{kind: gestureOpen, open: msg})
 	}
 	m.keepRoot()
+	m.wanted = ""
 
 	view, resumed := m.live[id]
 	if !resumed {
@@ -1096,8 +1208,8 @@ func (m Model) pop() (tea.Model, tea.Cmd) {
 	if len(m.stack) <= 1 {
 		return m, nil
 	}
-	if v, reason, blocked := m.blockingTop(); blocked {
-		return m.askOrRefuse(v, reason)
+	if at, reason, blocked := m.blockingEntry(len(m.stack) - 1); blocked {
+		return m.askOrRefuse(at, reason, heldGesture{kind: gesturePop})
 	}
 	blurred := m.blur()
 	// Read after the blur, so this is the instance the view last handed back.
@@ -1115,7 +1227,7 @@ func (m Model) pop() (tea.Model, tea.Cmd) {
 func (m Model) setMouse(enabled bool) (tea.Model, tea.Cmd) {
 	m.mouse = enabled
 	m.deps.Zones.SetEnabled(m.mouse)
-	return m, nil
+	return m.forwardAll(SetMouseMsg{Enabled: enabled})
 }
 
 func (m Model) retheme(t *Theme) (tea.Model, tea.Cmd) {
@@ -1400,7 +1512,49 @@ func (m Model) applyCaps(caps jira.Capabilities) (tea.Model, tea.Cmd) {
 	if !ok {
 		return told, cmd
 	}
-	return model.openWhenNothingCould(cmd)
+	opened, cmd := model.openWhenNothingCould(cmd)
+	if model, ok = opened.(Model); !ok {
+		return opened, cmd
+	}
+	return model.openWanted(cmd)
+}
+
+// openWanted settles the root this session was asked for once there is an
+// answer to whether it may open. The fallback it stood in for is replaced in
+// place, under anything pushed over it, and never remembered as a choice; a
+// root the user has since switched to is theirs and is left alone.
+func (m Model) openWanted(cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	id := m.wanted
+	m.wanted = ""
+	if id == "" || len(m.stack) == 0 {
+		return m, cmd
+	}
+	spec, ok := LookupView(id)
+	if !ok || m.stack[0].spec.ID == id {
+		return m, cmd
+	}
+	fallback := m.stack[0]
+	if !m.available(spec) {
+		if m.initialView != id {
+			return m, cmd
+		}
+		m.status, m.statusLevel = fmt.Sprintf("%s needs %s on this site; opened %s",
+			spec.Title, spec.Requires, fallback.spec.Title), LevelWarn
+		return m, cmd
+	}
+	view := spec.New(m.deps)
+	stack := append([]stackEntry(nil), m.stack...)
+	stack[0] = stackEntry{spec: spec, view: view}
+	m.stack = stack
+	delete(m.live, fallback.spec.ID)
+	m.live[spec.ID] = view
+	m.rememberRoot(spec.ID)
+	discard(fallback)
+	cmds := []tea.Cmd{cmd, view.Init(), m.resizeAll()}
+	if len(m.stack) == 1 {
+		cmds = append(cmds, m.focus())
+	}
+	return m, tea.Batch(cmds...)
 }
 
 // openWhenNothingCould opens a root for a session that had none.
@@ -1420,7 +1574,9 @@ func (m Model) openWhenNothingCould(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	view := spec.New(m.deps)
 	m.live[spec.ID] = view
 	m.stack = []stackEntry{{spec: spec, view: view}}
-	m.rememberRoot(spec.ID)
+	if m.wanted == "" || m.wanted == spec.ID {
+		m.rememberRoot(spec.ID)
+	}
 	return m, tea.Batch(cmd, view.Init(), m.focus(), m.resizeAll())
 }
 
@@ -1467,10 +1623,11 @@ func (m Model) Frame() string {
 	if m.quitting {
 		return ""
 	}
-	if m.width < MinWidth || m.height < MinHeight {
-		return m.deps.Theme.Base.Render(fmt.Sprintf(
+	if m.tooSmall() {
+		// Scanned like any frame, so the zones of the last full one are purged.
+		return m.deps.Zones.Scan(m.deps.Theme.Base.Render(fmt.Sprintf(
 			"saral needs a terminal at least %d×%d.\nThis one is %d×%d.",
-			MinWidth, MinHeight, m.width, m.height))
+			MinWidth, MinHeight, m.width, m.height)))
 	}
 
 	header, footer := m.chromeFor()
@@ -1481,12 +1638,12 @@ func (m Model) Frame() string {
 	}
 	rows = append(rows, footer)
 
-	frame := strings.Join(rows, "\n")
-	if m.mouse {
-		return m.deps.Zones.Scan(frame)
-	}
-	return frame
+	// Scanned with the mouse off too: a disabled manager strips the markers a
+	// memoized row drew while it was on, and records nothing.
+	return m.deps.Zones.Scan(strings.Join(rows, "\n"))
 }
+
+func (m Model) tooSmall() bool { return m.width < MinWidth || m.height < MinHeight }
 
 // chromeFor returns the header and footer, rebuilding them only when something
 // they depend on has changed.
@@ -1498,7 +1655,7 @@ func (m Model) chromeFor() (header, footer string) {
 		savedGen: m.savedGen, keysGen: keysGen, project: m.deps.Project,
 		status: m.status, help: m.showHelp, menu: m.menu.open,
 		depth: len(m.stack), palette: palette,
-		capturing: m.capturing(), prefixed: m.prefixSet,
+		capturing: m.capturing(), prefixed: m.prefixSet, mouse: m.mouse,
 	}
 	if len(m.stack) > 0 {
 		key.rootID = m.stack[0].spec.ID
@@ -1606,15 +1763,17 @@ func (m Model) helpView() string {
 
 func (m Model) statusLine() string {
 	t := m.deps.Theme
-	style := t.StatusBar
+	style, text := t.StatusBar, m.status
+	// A glyph as well as a colour, so a session with NO_COLOR can still tell a
+	// warning from a failure.
 	switch m.statusLevel {
 	case LevelWarn:
-		style = t.StatusWarn
+		style, text = t.StatusWarn, t.Glyphs.Warn+" "+text
 	case LevelError:
-		style = t.StatusFail
+		style, text = t.StatusFail, t.Glyphs.Cross+" "+text
 	case LevelInfo:
 	}
-	return style.Width(m.width).Render(oneLine(m.status, m.width-2, t.Glyphs.Ellipsis))
+	return style.Width(m.width).Render(oneLine(text, m.width-2, t.Glyphs.Ellipsis))
 }
 
 // oneLine keeps a string to a single row. lipgloss.Style.Width word-wraps rather

@@ -34,11 +34,19 @@ const zoneWait = 10 * time.Second
 // this frame's.
 func Zone(t testing.TB, mgr *zone.Manager, frame func() string, id string, also ...string) zone.ZoneInfo {
 	t.Helper()
+	return ZoneDrawn(t, mgr, func() { _ = mgr.Scan(frame()) }, id, also...)
+}
+
+// ZoneDrawn is Zone for a draw that scans its own frame, which is what the
+// kernel's Frame does: scanning its output a second time would find no markers
+// left in it and purge the zones the first scan recorded.
+func ZoneDrawn(t testing.TB, mgr *zone.Manager, draw func(), id string, also ...string) zone.ZoneInfo {
+	t.Helper()
 	ids := append([]string{id}, also...)
 	for _, want := range ids {
 		mgr.Clear(want)
 	}
-	_ = mgr.Scan(frame())
+	draw()
 	deadline := time.Now().Add(zoneWait)
 	for {
 		ready := true

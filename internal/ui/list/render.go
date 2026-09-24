@@ -156,6 +156,7 @@ type rowKey struct {
 	lay      layout
 	selected bool
 	gen      int
+	mouse    bool
 }
 
 // renderRow draws one row to exactly lay.width columns.

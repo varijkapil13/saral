@@ -34,7 +34,7 @@ func init() {
 		Kind:  kernel.KindSearch,
 		Keys:  []string{keys.FilterBy.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(OpenFilterMsg{}))
+			return kernel.OpenThen(ViewID, OpenFilterMsg{})
 		},
 	})
 	kernel.RegisterCommand(kernel.Command{
@@ -44,7 +44,7 @@ func init() {
 		Kind:  kernel.KindSearch,
 		Keys:  []string{keys.Edit.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(EditQueryMsg{}))
+			return kernel.OpenThen(ViewID, EditQueryMsg{})
 		},
 	})
 	kernel.RegisterCommand(kernel.Command{
@@ -54,7 +54,7 @@ func init() {
 		Kind:  kernel.KindSearch,
 		Keys:  []string{keys.Sort.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SortMsg{}))
+			return kernel.OpenThen(ViewID, SortMsg{})
 		},
 	})
 	kernel.RegisterCommand(kernel.Command{
@@ -64,7 +64,7 @@ func init() {
 		Kind:  kernel.KindSearch,
 		Keys:  []string{keys.Save.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SaveQueryMsg{}))
+			return kernel.OpenThen(ViewID, SaveQueryMsg{})
 		},
 	})
 	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that
@@ -75,7 +75,7 @@ func init() {
 		Group: "Search",
 		Kind:  kernel.KindSearch,
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(ClearFilterMsg{}))
+			return kernel.OpenThen(ViewID, ClearFilterMsg{})
 		},
 	})
 	// The cells a click narrows by, reachable without a pointer. There is no key
@@ -97,7 +97,7 @@ func init() {
 			Group: "Search",
 			Kind:  kernel.KindSearch,
 			Run: func(kernel.Deps) tea.Cmd {
-				return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(FacetMsg{Kind: kind}))
+				return kernel.OpenThen(ViewID, FacetMsg{Kind: kind})
 			},
 		})
 	}
@@ -113,10 +113,7 @@ func init() {
 			Keys:  bound[s.id],
 			Run: func(d kernel.Deps) tea.Cmd {
 				jql, title := s.at(d.Project)
-				return tea.Sequence(
-					kernel.Open(ViewID),
-					kernel.Broadcast(QueryMsg{JQL: jql, Title: title}),
-				)
+				return kernel.OpenThen(ViewID, QueryMsg{JQL: jql, Title: title})
 			},
 		})
 	}

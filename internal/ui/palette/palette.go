@@ -405,9 +405,9 @@ func (m *Model) zone(at entry) string {
 func (m *Model) wheel(msg tea.MouseWheelMsg) {
 	switch msg.Button {
 	case tea.MouseWheelUp:
-		m.top -= 3
+		m.top -= widget.WheelStep
 	case tea.MouseWheelDown:
-		m.top += 3
+		m.top += widget.WheelStep
 	default:
 		return
 	}

@@ -226,11 +226,14 @@ func (s *session) typeText(text string) {
 func (s *session) queries() []string {
 	out := []string{}
 	for _, msg := range s.msgs {
-		broadcast, ok := msg.(kernel.BroadcastMsg)
-		if !ok {
-			continue
+		var carried tea.Msg
+		switch msg := msg.(type) {
+		case kernel.BroadcastMsg:
+			carried = msg.Msg
+		case kernel.OpenMsg:
+			carried = msg.Then
 		}
-		if query, isQuery := broadcast.Msg.(list.QueryMsg); isQuery {
+		if query, isQuery := carried.(list.QueryMsg); isQuery {
 			out = append(out, query.JQL)
 		}
 	}

@@ -315,12 +315,12 @@ func TestClearFilterCommand_IsRegisteredAndClearsWhatWasTyped(t *testing.T) {
 
 	var sent bool
 	for _, msg := range collect(unfilter.Run(kernel.Deps{})) {
-		if got, ok := msg.(kernel.BroadcastMsg); ok {
-			_, sent = got.Msg.(ClearFilterMsg)
+		if got, ok := msg.(kernel.OpenMsg); ok && got.ID == ViewID {
+			_, sent = got.Then.(ClearFilterMsg)
 		}
 	}
 	if !sent {
-		t.Fatal("the command broadcasts no ClearFilterMsg")
+		t.Fatal("the command hands the list no ClearFilterMsg")
 	}
 
 	dr := openAll(t, testDeps(newFake(40)), 120, 30)
@@ -335,4 +335,27 @@ func TestClearFilterCommand_IsRegisteredAndClearsWhatWasTyped(t *testing.T) {
 	if got := len(dr.m.view); got != len(dr.m.issues) {
 		t.Errorf("%d of %d rows came back", got, len(dr.m.issues))
 	}
+}
+
+// A long search wrapped under the message would push the chip bar and the
+// footer off the screen.
+func TestEmptyPane_ALongSearchIsCutToTheWidth(t *testing.T) {
+	t.Parallel()
+
+	long := `project = "PROJ" AND status = "10203" AND assignee = "acct-ada" AND labels in ("one", "two", "three") ORDER BY updated DESC`
+	dr := newDriver(t, testDeps(newFake(0)), 80, 20)
+	dr.send(QueryMsg{JQL: long, Title: "Nothing"})
+
+	view := dr.view()
+	mustContain(t, view, "Nothing matches this search.")
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		if got := ansi.StringWidth(line); got > 80 {
+			t.Errorf("line %d is %d columns wide: %q", i, got, line)
+		}
+	}
+	if len(lines) != 20 {
+		t.Errorf("the pane is %d lines tall, want 20", len(lines))
+	}
+	golden(t, "list_empty_long_jql_80x20.golden", view)
 }

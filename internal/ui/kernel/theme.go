@@ -87,6 +87,7 @@ type Glyphs struct {
 	Arrow      string
 	Check      string
 	Cross      string
+	Warn       string
 	Dot        string
 	Ellipsis   string
 	Stale      string
@@ -129,7 +130,7 @@ type Glyphs struct {
 // UnicodeGlyphs is the mid tier: box drawing and geometric shapes only.
 func UnicodeGlyphs() Glyphs {
 	return Glyphs{
-		Bullet: "•", Arrow: "→", Check: "✓", Cross: "✗", Dot: "·",
+		Bullet: "•", Arrow: "→", Check: "✓", Cross: "✗", Warn: "!", Dot: "·",
 		Ellipsis: "…", Stale: "◌", Spinner: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
 		VLine: "│", HLine: "─", CornerTL: "╭", CornerTR: "╮", CornerBL: "╰", CornerBR: "╯",
 		Separator: "•", Collapsed: "▸", Expanded: "▾", Diamond: "◆",
@@ -143,7 +144,7 @@ func UnicodeGlyphs() Glyphs {
 // be trusted with anything past plain ASCII.
 func ASCIIGlyphs() Glyphs {
 	return Glyphs{
-		Bullet: "*", Arrow: "->", Check: "+", Cross: "x", Dot: ".",
+		Bullet: "*", Arrow: "->", Check: "+", Cross: "x", Warn: "!", Dot: ".",
 		Ellipsis: "...", Stale: "~", Spinner: []string{"|", "/", "-", "\\"},
 		VLine: "|", HLine: "-", CornerTL: "+", CornerTR: "+", CornerBL: "+", CornerBR: "+",
 		Separator: "|", Collapsed: ">", Expanded: "v", Diamond: "<>",
@@ -160,6 +161,7 @@ func NerdGlyphs() Glyphs {
 	g := UnicodeGlyphs()
 	g.Check = ""              // nf-fa-check
 	g.Cross = ""              // nf-fa-times
+	g.Warn = ""               // nf-fa-exclamation_triangle
 	g.Arrow = ""              // nf-fa-arrow_right
 	g.Stale = ""              // nf-fa-clock_o
 	g.Collapsed = ""          // nf-fa-caret_right
@@ -639,42 +641,60 @@ func saveTheme(site string, mode ThemeMode) tea.Cmd {
 	}
 }
 
-// writeTheme reads the whole file and writes it back with one field changed.
-// Save writes the profile it is handed and nothing else, so a fresh Profile
-// built from what is on screen would drop the saved queries, the timeline field
-// names and the glyph set.
+// writeTheme changes one field of the profile in the file. Save writes the
+// profile it is handed and nothing else, so a fresh Profile built from what is
+// on screen would drop the saved queries, the timeline field names and the
+// glyph set.
 func writeTheme(site string, mode ThemeMode) error {
-	path, err := config.Path()
-	if err != nil {
-		return err
-	}
-	cfg, err := config.LoadFile(path)
-	if err != nil {
-		return err
-	}
-	profile, err := cfg.Current()
-	if err != nil {
-		return err
-	}
-	// The kernel is told which site it is talking to and never which profile was
-	// named on the command line, so a session started with --profile would
-	// otherwise write the choice onto whichever profile is active instead.
-	if site != "" && profile.Site != site {
-		return fmt.Errorf("this session is on %s and the active profile %q is on %s, so nothing was written",
-			site, profile.Name, profile.Site)
-	}
 	// Auto is the absence of a theme in the file rather than a value, so that a
 	// profile that never chose and a profile that chose auto read the same.
 	value := mode.String()
 	if mode == ThemeAuto {
 		value = ""
 	}
-	if profile.Theme == value {
+	return updateProfile(site, func(p *config.Profile) error {
+		if p.Theme == value {
+			return errUnchanged
+		}
+		p.Theme = value
 		return nil
+	})
+}
+
+// errUnchanged is what an edit returns to leave the file as it found it.
+var errUnchanged = errors.New("unchanged")
+
+func updateConfig(fn func(*config.Config) error) error {
+	path, err := config.Path()
+	if err != nil {
+		return err
 	}
-	profile.Theme = value
-	cfg.Profiles[profile.Name] = profile
-	return cfg.Save(path)
+	if err := config.UpdateFile(path, fn); err != nil && !errors.Is(err, errUnchanged) {
+		return err
+	}
+	return nil
+}
+
+// updateProfile edits the active profile. The kernel is told which site it is
+// talking to and never which profile was named on the command line, so a
+// session started with --profile would otherwise write the choice onto
+// whichever profile is active instead.
+func updateProfile(site string, fn func(*config.Profile) error) error {
+	return updateConfig(func(cfg *config.Config) error {
+		profile, err := cfg.Current()
+		if err != nil {
+			return err
+		}
+		if site != "" && profile.Site != site {
+			return fmt.Errorf("this session is on %s and the active profile %q is on %s, so nothing was written",
+				site, profile.Name, profile.Site)
+		}
+		if err := fn(&profile); err != nil {
+			return err
+		}
+		cfg.Profiles[profile.Name] = profile
+		return nil
+	})
 }
 
 // saveGlyphs writes the glyph set into the profile it came from, the same
@@ -698,27 +718,7 @@ func saveGlyphs(site string, g Glyphs) tea.Cmd {
 	}
 }
 
-// writeGlyphs reads the whole file and writes it back with one field changed,
-// for the reason writeTheme already does: Save writes the profile it is
-// handed and nothing else, so a fresh Profile built from what is on screen
-// would drop the saved queries, the timeline field names and the theme.
 func writeGlyphs(site string, g Glyphs) error {
-	path, err := config.Path()
-	if err != nil {
-		return err
-	}
-	cfg, err := config.LoadFile(path)
-	if err != nil {
-		return err
-	}
-	profile, err := cfg.Current()
-	if err != nil {
-		return err
-	}
-	if site != "" && profile.Site != site {
-		return fmt.Errorf("this session is on %s and the active profile %q is on %s, so nothing was written",
-			site, profile.Name, profile.Site)
-	}
 	// Nerd is the absence of a glyph set in the file rather than a value, so
 	// that a profile that never chose and a profile that chose nerd read the
 	// same.
@@ -726,10 +726,11 @@ func writeGlyphs(site string, g Glyphs) error {
 	if value == "nerd" {
 		value = ""
 	}
-	if profile.Glyphs == value {
+	return updateProfile(site, func(p *config.Profile) error {
+		if p.Glyphs == value {
+			return errUnchanged
+		}
+		p.Glyphs = value
 		return nil
-	}
-	profile.Glyphs = value
-	cfg.Profiles[profile.Name] = profile
-	return cfg.Save(path)
+	})
 }

@@ -46,6 +46,8 @@ var _ kernel.KeyCapturer = (*Model)(nil)
 
 var _ kernel.Addressed = (*Model)(nil)
 
+var _ kernel.BackClaimer = (*Model)(nil)
+
 // Model is the issue list.
 type Model struct {
 	deps     kernel.Deps
@@ -206,6 +208,12 @@ const (
 func (m *Model) WantsRawKeys() bool {
 	return m.filtering || m.asking || m.sorting || m.bind != bindNone
 }
+
+// WantsBack claims esc from the kernel while something is narrowing the rows,
+// so that esc clears it rather than only the status line.
+func (m *Model) WantsBack() bool { return m.narrowed() }
+
+func (m *Model) narrowed() bool { return m.keptFilter() || len(m.terms) > 0 }
 
 // New builds the issue list. The query it opens on is the user's own work,
 // narrowed to the session's project when there is one — and the project itself
@@ -775,11 +783,16 @@ func (m *Model) missingFields() tea.Cmd {
 // pageAheadIfNeeded asks for the next page when the cursor is near the end of
 // what is loaded, or when the local filter has left too few rows to fill the
 // screen. One request is in flight at a time, whatever the cursor does.
-func (m *Model) pageAheadIfNeeded() tea.Cmd {
+func (m *Model) pageAheadIfNeeded() tea.Cmd { return m.pageAheadFrom(m.cursor) }
+
+// pageAheadFrom is pageAheadIfNeeded measured from a row other than the
+// cursor's. The wheel scrolls without moving the selection, so it measures from
+// the bottom of the window, which would otherwise stop at the last loaded row.
+func (m *Model) pageAheadFrom(at int) tea.Cmd {
 	if m.loading || m.search == nil || !m.hasMore() {
 		return nil
 	}
-	near := m.cursor >= len(m.view)-lookahead
+	near := at >= len(m.view)-lookahead
 	starved := m.filtered() && len(m.view) < m.rowsHeight() && len(m.issues) < autoFillCap
 	if !near && !starved {
 		return nil
@@ -1180,14 +1193,14 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 func (m *Model) wheel(msg tea.MouseWheelMsg) tea.Cmd {
 	switch msg.Button {
 	case tea.MouseWheelUp:
-		m.top -= 3
+		m.top -= widget.WheelStep
 	case tea.MouseWheelDown:
-		m.top += 3
+		m.top += widget.WheelStep
 	default:
 		return nil
 	}
 	m.clampScroll()
-	return nil
+	return m.pageAheadFrom(m.top + m.rowsHeight())
 }
 
 // --- rendering --------------------------------------------------------------
@@ -1250,7 +1263,10 @@ func (m *Model) warm(end int) {
 
 func (m *Model) row(at int, selected bool) string {
 	iss := &m.issues[at]
-	k := rowKey{key: iss.Key, updated: iss.Updated.UnixNano(), lay: m.lay, selected: selected, gen: m.styles.gen}
+	k := rowKey{
+		key: iss.Key, updated: iss.Updated.UnixNano(), lay: m.lay, selected: selected,
+		gen: m.styles.gen, mouse: m.zones.Enabled(),
+	}
 	if s, ok := m.rows.Get(k); ok {
 		return s
 	}
@@ -1281,6 +1297,7 @@ type summaryKey struct {
 	checked         int64
 	sortField       string
 	sortDesc        bool
+	mouse           bool
 }
 
 func (m *Model) summaryKey() summaryKey {
@@ -1289,7 +1306,7 @@ func (m *Model) summaryKey() summaryKey {
 		issues: len(m.issues), visible: len(m.view), more: m.hasMore(),
 		loading: m.loading, loaded: m.loaded, filtered: m.filtered(),
 		stale: m.stale, failed: m.failure != nil, checked: m.checked.UnixNano(),
-		sortField: m.sort.field, sortDesc: m.sort.desc,
+		sortField: m.sort.field, sortDesc: m.sort.desc, mouse: m.zones.Enabled(),
 	}
 }
 
@@ -1385,7 +1402,7 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 		lines = append(lines, m.styles.muted.Render("  No loaded row matches "+strconv.Quote(m.query)+"."))
 	default:
 		lines = append(lines, m.styles.muted.Render("  Nothing matches this search."),
-			m.styles.muted.Render("  "+m.jql))
+			m.styles.muted.Render("  "+ansi.Truncate(m.jql, max(m.width-2, 8), m.deps.Theme.Glyphs.Ellipsis)))
 		if m.defaulted && m.assignedNowhere {
 			lines = append(lines, "", m.styles.muted.Render("  "+nothingAssignedPane))
 		}

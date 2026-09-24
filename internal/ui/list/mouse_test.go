@@ -371,3 +371,17 @@ func TestList_TheWheelScrollsWithoutMovingTheCursorOffTheRowItIsOn(t *testing.T)
 		t.Errorf("the wheel is at %d after going down and back up, want 0", dr.m.top)
 	}
 }
+
+// A row memoized while the mouse was off carries no marker; turning it on has
+// to redraw it, or the row stops answering clicks until it changes.
+func TestList_RowsAreMarkedAgainWhenTheMouseComesBack(t *testing.T) {
+	t.Parallel()
+
+	d := testDeps(newFake(20))
+	m := startAll(t, d, 120, 30, kernel.WithMouse(false))
+	_ = m.Frame()
+
+	m = send(t, m, kernel.SetMouseMsg{Enabled: true})
+	lm := m.Top().(*Model)
+	uitest.ZoneDrawn(t, d.Zones, func() { _ = m.Frame() }, lm.zones.ID(rowZone("PROJ-3")), lm.zones.ID(titleZone))
+}

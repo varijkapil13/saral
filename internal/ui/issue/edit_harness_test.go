@@ -113,7 +113,7 @@ func (p *panel) run(cmd tea.Cmd) {
 		case kernel.PushMsg:
 			p.pushes = append(p.pushes, msg)
 			continue
-		case kernel.PopMsg:
+		case kernel.PopMsg, kernel.ProceedMsg:
 			p.pops++
 			continue
 		case kernel.BroadcastMsg:

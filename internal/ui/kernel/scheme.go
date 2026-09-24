@@ -224,27 +224,7 @@ func saveScheme(site string, s Scheme) tea.Cmd {
 	}
 }
 
-// writeScheme reads the whole file and writes it back with one field changed,
-// for the reason writeTheme already does: Save writes the profile it is
-// handed and nothing else, so a fresh Profile built from what is on screen
-// would drop the saved queries, the timeline field names and the glyph set.
 func writeScheme(site string, s Scheme) error {
-	path, err := config.Path()
-	if err != nil {
-		return err
-	}
-	cfg, err := config.LoadFile(path)
-	if err != nil {
-		return err
-	}
-	profile, err := cfg.Current()
-	if err != nil {
-		return err
-	}
-	if site != "" && profile.Site != site {
-		return fmt.Errorf("this session is on %s and the active profile %q is on %s, so nothing was written",
-			site, profile.Name, profile.Site)
-	}
 	// Default is the absence of a scheme in the file rather than a value, so
 	// that a profile that never chose and a profile that chose default read
 	// the same.
@@ -252,10 +232,11 @@ func writeScheme(site string, s Scheme) error {
 	if s.id == DefaultScheme.id {
 		value = ""
 	}
-	if profile.Scheme == value {
+	return updateProfile(site, func(p *config.Profile) error {
+		if p.Scheme == value {
+			return errUnchanged
+		}
+		p.Scheme = value
 		return nil
-	}
-	profile.Scheme = value
-	cfg.Profiles[profile.Name] = profile
-	return cfg.Save(path)
+	})
 }

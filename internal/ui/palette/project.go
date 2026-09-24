@@ -421,9 +421,9 @@ func (m *projectModel) zone(at int) string {
 func (m *projectModel) wheel(msg tea.MouseWheelMsg) {
 	switch msg.Button {
 	case tea.MouseWheelUp:
-		m.top -= 3
+		m.top -= widget.WheelStep
 	case tea.MouseWheelDown:
-		m.top += 3
+		m.top += widget.WheelStep
 	default:
 		return
 	}

@@ -3,7 +3,6 @@ package list
 import (
 	"errors"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -377,15 +377,8 @@ func TestList_ClickingARowSelectsItAndClickingItAgainOpensIt(t *testing.T) {
 
 	d := testDeps(newFake(20))
 	m := startAll(t, d, 120, 30, kernel.WithMouse(true))
-	_ = m.Frame() // registering the zones is a side effect of drawing them
-
-	var id string
-	eventually(t, func() bool {
-		id = zoneFor(d, "PROJ-3")
-		return id != ""
-	})
-
-	at := d.Zones.Get(id)
+	lm := m.Top().(*Model)
+	at := uitest.ZoneDrawn(t, d.Zones, func() { _ = m.Frame() }, lm.zones.ID(rowZone("PROJ-3")))
 	click := tea.MouseClickMsg{X: at.StartX + 2, Y: at.StartY, Button: tea.MouseLeft}
 
 	m = send(t, m, click)
@@ -398,20 +391,6 @@ func TestList_ClickingARowSelectsItAndClickingItAgainOpensIt(t *testing.T) {
 	if !strings.Contains(frame(m), "Details") {
 		t.Errorf("a second click on the selected row did not open it:\n%s", frame(m))
 	}
-}
-
-// zoneFor finds the zone id the list marked a row with. The prefix is handed
-// out by the manager per component, so it is discovered rather than assumed,
-// and the manager records a zone on its own goroutine, so it is looked for
-// until it appears.
-func zoneFor(d kernel.Deps, key string) string {
-	for i := 1; i < 4096; i++ {
-		id := "zone_" + strconv.Itoa(i) + "__row:" + key
-		if !d.Zones.Get(id).IsZero() {
-			return id
-		}
-	}
-	return ""
 }
 
 func TestList_GAndCapitalGJumpToTheEnds(t *testing.T) {
@@ -482,8 +461,8 @@ func TestCommands_AreRegisteredAndRetargetTheListAtTheSessionsProject(t *testing
 
 	var query QueryMsg
 	for _, msg := range collect(mine.Run(kernel.Deps{Project: "PROJ"})) {
-		if got, ok := msg.(kernel.BroadcastMsg); ok {
-			query, _ = got.Msg.(QueryMsg)
+		if got, ok := msg.(kernel.OpenMsg); ok && got.ID == ViewID {
+			query, _ = got.Then.(QueryMsg)
 		}
 	}
 	if !strings.Contains(query.JQL, `project = "PROJ"`) || !strings.Contains(query.JQL, "currentUser()") {
@@ -707,5 +686,26 @@ func TestFilter_ARebuildThatIsNotTypingLeavesTheCursorWhereItWas(t *testing.T) {
 	}
 	if got := m.selectedKey(); got != under {
 		t.Errorf("a page landing moved the cursor to %s, want it left on %s", got, under)
+	}
+}
+
+func TestList_TheWheelPagesAheadAsTheWindowNearsTheEnd(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(60, jiratest.WithPageSize(20))
+	dr := openAll(t, testDeps(f), 120, 30)
+	before := countCalls(f, "Search")
+
+	for range 10 {
+		dr.send(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	}
+	if got := len(dr.m.issues); got <= 20 {
+		t.Errorf("still holding %d issues after wheeling to the end, want another page", got)
+	}
+	if countCalls(f, "Search") == before {
+		t.Error("the wheel reached the last loaded row and asked for nothing")
+	}
+	if dr.m.cursor != 0 {
+		t.Errorf("the wheel moved the cursor to %d", dr.m.cursor)
 	}
 }
