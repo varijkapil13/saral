@@ -76,7 +76,7 @@ func TestParseMarkdown_ReadsEveryShapeTheRendererWrites(t *testing.T) {
 			want: paraOf(txt("snake_case_name")),
 		},
 		{
-			name: "a link whose text holds brackets, which the renderer does not escape",
+			name: "a link whose text holds a pair of brackets, which the renderer does not escape",
 			in:   "[a [b] c](https://example.com/x)",
 			want: paraOf(txt("a [b] c", linkMark("https://example.com/x"))),
 		},
@@ -503,7 +503,7 @@ func TestParseMarkdownDropsOnly_NamesTheConstructsTheTestsProve(t *testing.T) {
 	if len(drops) == 0 {
 		t.Fatal("the list is empty, which is a claim this package cannot make")
 	}
-	for _, want := range []string{"mention", "status", "date", "table", "media", "heading", "hardBreak", "text", "marks"} {
+	for _, want := range []string{"status", "date", "table", "media", "heading", "hardBreak", "text", "marks"} {
 		found := false
 		for _, drop := range drops {
 			found = found || strings.HasPrefix(drop, want+":")
@@ -515,13 +515,13 @@ func TestParseMarkdownDropsOnly_NamesTheConstructsTheTestsProve(t *testing.T) {
 }
 
 // TestParseMarkdown_TurnsWhatItCannotRebuildBackIntoProse is the honest half of
-// the loss: a mention, a lozenge and a date are not dropped, they stop being
-// nodes. A reader still sees every word the author wrote.
+// the loss: a lozenge and a date are not dropped, they stop being nodes. A
+// reader still sees every word the author wrote.
 func TestParseMarkdown_TurnsWhatItCannotRebuildBackIntoProse(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct{ in, want string }{
-		"a mention": {
-			in:   wrap(para(text("Ask ") + `,{"type":"mention","attrs":{"id":"5b10ac8d","text":"@Someone"}},` + text(" about it"))),
+		"a mention with no account id": {
+			in:   wrap(para(text("Ask ") + `,{"type":"mention","attrs":{"text":"@Someone"}},` + text(" about it"))),
 			want: "Ask @Someone about it",
 		},
 		"a status lozenge": {

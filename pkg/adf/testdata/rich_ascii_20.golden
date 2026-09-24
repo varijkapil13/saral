@@ -4,7 +4,7 @@ The basket total is **recalculated** before the line items are read, so an empty
 
 - Sign in as a customer with no saved basket.
 - Open <https://example.atlassian.net/browse/EX-2> and follow the linked route.
-- Ask @user to confirm the account state.
+- Ask @[user](accountid:5b10ac8d82e05b22cc7d4ef5) to confirm the account state.
 
 > ! WARNING
 > Do not retry the request: each attempt writes an orphaned order row.

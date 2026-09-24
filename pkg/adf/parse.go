@@ -24,7 +24,8 @@ import (
 // the markdown was rendered from is still to hand — it restores every block the
 // author did not touch from the original bytes, which is the only way an
 // untouched document survives byte for byte. [ParseMarkdownDropsOnly] lists
-// what a parse without the original loses.
+// what a parse without the original loses, and [LossyConstructs] what an edit
+// still loses with it.
 func ParseMarkdown(md string) (Doc, error) { return ParseMarkdownWith(md, Options{}) }
 
 // ParseMarkdownWith parses markdown with explicit options.
@@ -44,13 +45,17 @@ func ParseMarkdownWith(md string, opt Options) (Doc, error) {
 }
 
 // ParseMarkdownInto parses markdown that was rendered from d, and reuses d's
-// own nodes for every top-level block the author left alone.
+// own nodes for everything the author left alone: every top-level block, and
+// inside a block that was edited, every list item, quoted block, table row and
+// cell that was not. An edited container keeps the attributes of the node it
+// replaced — a cell its background and span, a panel its colour, an item its
+// localId — and takes from the markdown only what markdown spells.
 //
 // This is what makes an edit safe. A reused node keeps the bytes it was parsed
 // from, so it re-encodes exactly as it arrived — attributes this package does
-// not model, node types it has never heard of, the account id behind a mention,
-// the colour of a lozenge and the key order Jira happened to use. Markdown
-// carries none of those; the original document does.
+// not model, node types it has never heard of, the colour of a lozenge and the
+// key order Jira happened to use. Markdown carries none of those; the original
+// document does.
 //
 //	md := adf.Markdown(d)          // hand to $EDITOR
 //	out, err := adf.ParseMarkdownInto(d, edited, adf.Options{})
@@ -78,35 +83,6 @@ func ParseMarkdownInto(d Doc, md string, opt Options) (Doc, error) {
 	out.Content = nodes
 	out.extra = maps.Clone(d.extra)
 	return out, nil
-}
-
-// ParseMarkdownDropsOnly names, in document order, every construct that ADF →
-// markdown → ADF cannot reproduce without the original document. It is here so
-// that a caller can tell a user what an edit will cost rather than finding out
-// afterwards, and so that the list is maintained beside the code that causes
-// it.
-//
-// [ParseMarkdownInto] restores all of these for a block the author did not
-// touch. Nothing in this list is dropped as text: a mention still reads
-// "@Someone" and a lozenge still reads "[Done]", they are simply prose again.
-func ParseMarkdownDropsOnly() []string {
-	return []string{
-		"mention: the account id, which markdown has no room for, so a mention becomes its own display text",
-		"status: the lozenge colour, so a lozenge becomes bracketed text",
-		"date: the instant, which renders as a day in one timezone and cannot be read back as an epoch",
-		"emoji: the shortName and id behind the character",
-		"media: the collection, dimensions and layout of an attachment",
-		"table: colspan, rowspan, cell background, layout and the number column; a cell's blocks are folded to one line",
-		"table: every cell of a table rendered with a TableWidth, which is truncated to fit the width",
-		"panel: the case of a panelType this package does not know, which renders uppercased",
-		"heading: a heading with no content, which renders as nothing at all",
-		"hardBreak: one that opens a block, or sits in a heading, or is followed by a line that reads as a marker",
-		"text: prose that begins a line with a marker, because the renderer does not escape what an author typed",
-		"text: trailing whitespace on a line, and the control characters the renderer strips",
-		"marks: the order marks arrived in, which is meaningless but byte-significant",
-		"marks: neighbouring runs whose marks overlap, which spell the same characters as one run inside another",
-		"any node type ADF gained after this package was written, which renders as an [unsupported: …] marker",
-	}
 }
 
 // ParseError reports markdown this package will not turn into ADF, and where.
@@ -185,6 +161,7 @@ type parser struct {
 	// scratch is reused by every render the parser does of its own work, which
 	// is one per line that holds a marker.
 	scratch []byte
+	keyBuf  []byte
 }
 
 func newParser(opt Options) *parser { return &parser{opt: opt, gl: glyphsFor(opt.ASCII)} }
@@ -292,7 +269,7 @@ func headingLevel(text string) int {
 func (p *parser) heading(ls []line, i int) (Node, int, error) {
 	level := headingLevel(ls[i].text)
 	rest := line{text: strings.TrimSpace(ls[i].text[level:]), no: ls[i].no}
-	content, err := p.inline([]line{rest})
+	content, err := p.inlineIn([]line{rest}, true)
 	if err != nil {
 		return Node{}, i + 1, err
 	}

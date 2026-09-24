@@ -24,15 +24,17 @@ func (p *parser) reconcile(ls []line, original []Node) ([]Node, error) {
 		first[pieces[i][0]] = append(first[pieces[i][0]], i)
 	}
 
-	var out []Node
+	var out, fresh []Node
 	taken := 0
 	// A match is tried before a blank line is skipped: a paragraph that opens
 	// with a hard break renders with a blank first line, and skipping it would
 	// look for that block one line too late.
 	for i := 0; i < len(ls); {
 		if at, lines, ok := match(ls, i, pieces, first[ls[i].text], taken); ok {
+			out = append(out, p.restore(fresh, original[taken:at])...)
 			out = append(out, unseen(original, pieces, taken, at)...)
 			out = append(out, original[at].Clone())
+			fresh = nil
 			taken, i = at+1, i+lines
 			continue
 		}
@@ -44,9 +46,10 @@ func (p *parser) reconcile(ls []line, original []Node) ([]Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, node)
+		fresh = append(fresh, node)
 		i = next
 	}
+	out = append(out, p.restore(fresh, original[taken:])...)
 	return append(out, unseen(original, pieces, taken, len(original))...), nil
 }
 

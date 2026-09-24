@@ -103,14 +103,15 @@ func (w *writer) tableCells(n Node) (rows [][]string, header bool) {
 // reused for every cell of the table.
 func (w *writer) cellText(n Node) string {
 	buf := w.buf[:0]
-	*w = writer{buf: buf, opt: w.opt, gl: w.gl}
+	*w = writer{buf: buf, opt: w.opt, gl: w.gl, noBlocks: true}
 	w.blocks(n.Content, false)
 	w.endLine()
 	return foldCell(w.buf)
 }
 
-// foldCell puts a cell's lines on one line and escapes the character the grid
-// is drawn with.
+// foldCell puts a cell's lines on one line and escapes its pipes. A run of
+// backslashes before a pipe is doubled first; splitRow halves it and knows the
+// pipe is text by the odd one out.
 func foldCell(b []byte) string {
 	var out strings.Builder
 	out.Grow(len(b))
@@ -136,11 +137,21 @@ func foldCell(b []byte) string {
 			out.Write(line)
 			continue
 		}
-		for _, c := range line {
-			if c == '|' {
-				out.WriteByte('\\')
+		for i := 0; i < len(line); {
+			run := 0
+			for i+run < len(line) && line[i+run] == '\\' {
+				run++
 			}
-			out.WriteByte(c)
+			if i+run < len(line) && line[i+run] == '|' {
+				for range 2*run + 1 {
+					out.WriteByte('\\')
+				}
+				out.WriteByte('|')
+				i += run + 1
+				continue
+			}
+			out.Write(line[i : i+max(run, 1)])
+			i += max(run, 1)
 		}
 	}
 	return out.String()

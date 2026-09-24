@@ -33,7 +33,7 @@ func (p *parser) table(ls []line, i int) (Node, int, error) {
 		}
 		row := NewNode("tableRow")
 		for _, text := range cells {
-			content, err := p.inline([]line{{text: text, no: ls[i].no}})
+			content, err := p.inlineIn([]line{{text: text, no: ls[i].no}}, true)
 			if err != nil {
 				return Node{}, end, err
 			}
@@ -45,25 +45,32 @@ func (p *parser) table(ls []line, i int) (Node, int, error) {
 	return node, end, nil
 }
 
-// splitRow takes a pipe row apart. The renderer escapes the one character the
-// grid is drawn with, so a backslash before a pipe is the author's pipe.
+// splitRow takes a pipe row apart, undoing foldCell's escaping.
 func splitRow(text string) []string {
 	text = strings.TrimSuffix(strings.TrimPrefix(strings.TrimRight(text, " \t"), "|"), "|")
 	var (
 		cells []string
 		cell  strings.Builder
 	)
-	for i := 0; i < len(text); i++ {
-		switch {
-		case text[i] == '\\' && i+1 < len(text) && text[i+1] == '|':
+	for i := 0; i < len(text); {
+		run := 0
+		for i+run < len(text) && text[i+run] == '\\' {
+			run++
+		}
+		if i+run == len(text) || text[i+run] != '|' {
+			n := max(run, 1)
+			cell.WriteString(text[i : i+n])
+			i += n
+			continue
+		}
+		cell.WriteString(strings.Repeat("\\", run/2))
+		if run%2 == 1 {
 			cell.WriteByte('|')
-			i++
-		case text[i] == '|':
+		} else {
 			cells = append(cells, strings.TrimSpace(cell.String()))
 			cell.Reset()
-		default:
-			cell.WriteByte(text[i])
 		}
+		i += run + 1
 	}
 	return append(cells, strings.TrimSpace(cell.String()))
 }

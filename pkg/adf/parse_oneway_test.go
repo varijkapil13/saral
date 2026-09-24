@@ -26,18 +26,6 @@ func TestParseMarkdown_CannotUndoTheseRenderings(t *testing.T) {
 		twice string // what rendering the parse of that writes
 	}{
 		{
-			name:  "prose that begins a line with a marker, because the renderer does not escape",
-			in:    wrap(para(text("- not a list"))),
-			once:  "- not a list",
-			twice: "- not a list",
-		},
-		{
-			name:  "a hard break followed by a line that reads as a block",
-			in:    wrap(para(text("above") + `,{"type":"hardBreak"},` + text("- below"))),
-			once:  "above\n- below",
-			twice: "above\n\n- below",
-		},
-		{
 			name:  "a hard break with nothing before it, which markdown spells as a blank line",
 			in:    wrap(para(`{"type":"hardBreak"},` + text("after"))),
 			once:  "\nafter",

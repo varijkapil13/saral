@@ -333,19 +333,10 @@ func (f *field) document() (adf.Doc, error) {
 // than after it. A block nobody touches is restored whole, so the warning is
 // about what an edit costs, not about opening the editor.
 func (f *field) oneWay() []string {
-	if f.original.IsEmpty() {
-		return nil
-	}
-	present := f.original.NodeTypes()
-	out := make([]string, 0, 4)
-	for _, entry := range adf.ParseMarkdownDropsOnly() {
-		node, _, ok := strings.Cut(entry, ":")
-		// text and marks describe prose rather than a node type, and every
-		// document has text, so naming them would warn about every document.
-		if !ok || node == "text" || node == "marks" || present[node] == 0 {
-			continue
-		}
-		out = append(out, entry)
+	losses := adf.LossyConstructs(f.original, adf.Options{})
+	out := make([]string, 0, len(losses))
+	for _, l := range losses {
+		out = append(out, l.String())
 	}
 	return out
 }

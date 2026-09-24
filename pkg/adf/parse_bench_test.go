@@ -118,3 +118,51 @@ func BenchmarkParseMarkdown_ScalesWithTheText(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkParseMarkdownInto_OneCellEdited(b *testing.B) {
+	rows := make([]string, 0, 500)
+	for i := range 500 {
+		rows = append(rows, row(cell("tableCell", "row "+itoa(i)),
+			node("tableCell", `"attrs":{"background":"#deebff"},"content":[`+para(`{"type":"mention","attrs":{"id":"5b10ac8d","text":"@Someone"}}`)+`]`)))
+	}
+	d := parse(b, wrap(node("table", `"content":[`+strings.Join(rows, ",")+`]`)))
+	md := strings.Replace(adf.Markdown(d), "row 250 ", "row 250!", 1)
+	b.SetBytes(int64(len(md)))
+	b.ReportAllocs()
+	for b.Loop() {
+		out, err := adf.ParseMarkdownInto(d, md, adf.Options{})
+		if err != nil {
+			b.Fatal(err)
+		}
+		docSink = out
+	}
+}
+
+func BenchmarkParseMarkdownInto_OneListItemEdited(b *testing.B) {
+	items := make([]string, 0, 500)
+	for i := range 500 {
+		items = append(items, node("listItem", `"content":[`+para(text("item "+itoa(i)+" for ")+`,`+
+			`{"type":"mention","attrs":{"id":"5b10ac8d","text":"@Someone"}}`)+`]`))
+	}
+	d := parse(b, wrap(node("bulletList", `"content":[`+strings.Join(items, ",")+`]`)))
+	md := strings.Replace(adf.Markdown(d), "item 250 for", "item 250 by", 1)
+	b.SetBytes(int64(len(md)))
+	b.ReportAllocs()
+	for b.Loop() {
+		out, err := adf.ParseMarkdownInto(d, md, adf.Options{})
+		if err != nil {
+			b.Fatal(err)
+		}
+		docSink = out
+	}
+}
+
+func BenchmarkLossyConstructs_RichFixture(b *testing.B) {
+	d := fixtureDescription(b)
+	b.ReportAllocs()
+	for b.Loop() {
+		lossSink = adf.LossyConstructs(d, adf.Options{})
+	}
+}
+
+var lossSink []adf.Loss

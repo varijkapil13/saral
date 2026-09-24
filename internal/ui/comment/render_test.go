@@ -45,10 +45,12 @@ func TestOneWay_NamesOnlyTheConstructsTheDocumentActuallyHolds(t *testing.T) {
 
 	rich := adf.NewDoc(
 		adf.NewNode("paragraph",
-			adf.NewNode("mention").WithAttrs(adf.Attrs{"id": "acct-1", "text": "@Someone"}),
+			adf.NewNode("mention").WithAttrs(adf.Attrs{"text": "@Someone"}),
 			adf.NewNode("status").WithAttrs(adf.Attrs{"text": "DONE", "color": "green"}),
+			adf.NewNode("status").WithAttrs(adf.Attrs{"text": "OPEN", "color": "blue"}),
 		),
-		adf.NewNode("table"),
+		adf.NewNode("table", adf.NewNode("tableRow", adf.NewNode("tableCell",
+			adf.NewNode("paragraph", adf.NewText("one")), adf.NewNode("paragraph", adf.NewText("two"))))),
 	)
 	got := oneWay(rich)
 	want := map[string]bool{"mention": false, "status": false, "table": false}

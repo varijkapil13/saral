@@ -217,7 +217,8 @@ func TestThread_EditKeepsWhatMarkdownCannotCarry(t *testing.T) {
 		adf.NewNode("paragraph",
 			adf.NewText("thanks "),
 			adf.NewNode("mention").WithAttrs(adf.Attrs{"id": "acct-someone", "text": "@Someone"}),
-			adf.NewText(" for the fix"),
+			adf.NewText(" for the fix "),
+			adf.NewNode("status").WithAttrs(adf.Attrs{"text": "DONE", "color": "green"}),
 		),
 		adf.NewNode("paragraph", adf.NewText("The second paragraph is the one being rewritten.")),
 	)
@@ -231,7 +232,7 @@ func TestThread_EditKeepsWhatMarkdownCannotCarry(t *testing.T) {
 		t.Fatal("e did not open the editor on the comment under the cursor")
 	}
 	seeded := dr.m.editor.Value()
-	if !strings.Contains(seeded, "@Someone") {
+	if !strings.Contains(seeded, "Someone") {
 		t.Fatalf("the editor was seeded with %q", seeded)
 	}
 	dr.m.editor.SetValue(strings.Replace(seeded,
@@ -250,10 +251,13 @@ func TestThread_EditKeepsWhatMarkdownCannotCarry(t *testing.T) {
 		t.Fatalf("the edit did not land: %q", got)
 	}
 
-	var mention adf.Node
+	var mention, status adf.Node
 	stored[0].Body.Walk(func(n adf.Node) bool {
-		if n.Type == "mention" {
+		switch n.Type {
+		case "mention":
 			mention = n
+		case "status":
+			status = n
 		}
 		return true
 	})
@@ -261,7 +265,10 @@ func TestThread_EditKeepsWhatMarkdownCannotCarry(t *testing.T) {
 		t.Fatal("the mention was rewritten as prose by the edit")
 	}
 	if got := mention.Attrs["id"]; got != "acct-someone" {
-		t.Errorf("the mention came back with id %v; markdown has no room for one, so the original must supply it", got)
+		t.Errorf("the mention came back with id %v", got)
+	}
+	if got := status.Attrs["color"]; got != "green" {
+		t.Errorf("the lozenge came back with colour %v; markdown has no room for one, so the original must supply it", got)
 	}
 }
 
@@ -306,8 +313,8 @@ func TestThread_SaysWhatAnEditWillOnlyKeepInThePartsNobodyTouches(t *testing.T) 
 
 	f := newFake(3)
 	body := adf.NewDoc(adf.NewNode("paragraph",
-		adf.NewText("ask "),
-		adf.NewNode("mention").WithAttrs(adf.Attrs{"id": "acct-someone", "text": "@Someone"}),
+		adf.NewText("state: "),
+		adf.NewNode("status").WithAttrs(adf.Attrs{"text": "DONE", "color": "green"}),
 	))
 	if _, err := f.AddComment(t.Context(), "PROJ-1", body); err != nil {
 		t.Fatalf("AddComment: %v", err)
@@ -316,7 +323,7 @@ func TestThread_SaysWhatAnEditWillOnlyKeepInThePartsNobodyTouches(t *testing.T) 
 
 	dr.key("e")
 
-	if got := dr.statusText(); !strings.Contains(got, "mention") {
+	if got := dr.statusText(); !strings.Contains(got, "status") {
 		t.Errorf("opening the editor said %q, want a warning naming what markdown cannot carry", got)
 	}
 }

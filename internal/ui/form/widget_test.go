@@ -325,13 +325,15 @@ func TestField_ReportsNothingForANumberThatIsNotFinite(t *testing.T) {
 	}
 }
 
-// richDoc is a document carrying the two things markdown has no spelling for:
-// a mention's account id and a lozenge's colour.
+// richDoc is a document carrying a mention and a lozenge, whose colour is
+// something markdown has no spelling for.
 func richDoc() adf.Doc {
 	return adf.NewDoc(
 		adf.NewNode("paragraph",
 			adf.NewText("Assigned to "),
 			adf.NewNode("mention").WithAttrs(adf.Attrs{"id": "acc-42", "text": "@Someone"}),
+			adf.NewText(" "),
+			adf.NewNode("status").WithAttrs(adf.Attrs{"text": "DONE", "color": "green"}),
 		),
 		adf.NewNode("paragraph", adf.NewText("The second paragraph.")),
 	)
@@ -379,6 +381,9 @@ func TestField_KeepsWhatMarkdownCannotCarryInBlocksNobodyTouched(t *testing.T) {
 	if !hasMention(got, "acc-42") {
 		t.Error("the account id behind the mention was lost by an edit to another paragraph")
 	}
+	if !hasStatus(got, "green") {
+		t.Error("the colour of the lozenge was lost by an edit to another paragraph")
+	}
 	if !strings.Contains(adf.MarkdownWith(got, adf.Options{}), "rewritten") {
 		t.Error("the edit itself did not survive")
 	}
@@ -389,8 +394,8 @@ func TestField_KeepsWhatMarkdownCannotCarryInBlocksNobodyTouched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hasMention(loose, "acc-42") {
-		t.Fatal("markdown carried an account id, so nothing here is being tested")
+	if hasStatus(loose, "green") {
+		t.Fatal("markdown carried a lozenge's colour, so nothing here is being tested")
 	}
 }
 
@@ -405,14 +410,25 @@ func TestField_NamesWhatAnEditWouldCostBeforeItIsMade(t *testing.T) {
 	f.original = richDoc()
 	warnings := f.oneWay()
 	if len(warnings) == 0 {
-		t.Fatal("a document with a mention in it warns about nothing")
+		t.Fatal("a document with a lozenge in it warns about nothing")
 	}
 	for _, warning := range warnings {
 		node, _, _ := strings.Cut(warning, ":")
-		if node != "mention" {
+		if node != "status" {
 			t.Errorf("the warning mentions %q, which this document does not have", node)
 		}
 	}
+}
+
+func hasStatus(d adf.Doc, color string) bool {
+	found := false
+	d.Walk(func(n adf.Node) bool {
+		if n.Type == "status" && n.Attrs["color"] == color {
+			found = true
+		}
+		return true
+	})
+	return found
 }
 
 func hasMention(d adf.Doc, id string) bool {

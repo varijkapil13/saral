@@ -123,12 +123,27 @@ func TestMarkdown_RendersEveryNodeTypeItKnows(t *testing.T) {
 		{
 			name: "a mention",
 			in:   para(text("Ask ") + `,{"type":"mention","attrs":{"id":"5b10ac8d","text":"@Someone"}},` + text(" about it")),
-			want: "Ask @Someone about it",
+			want: "Ask @[Someone](accountid:5b10ac8d) about it",
 		},
 		{
 			name: "a mention the editor stored without its text",
 			in:   para(`{"type":"mention","attrs":{"id":"5b10ac8d"}}`),
-			want: "@5b10ac8d",
+			want: "@[5b10ac8d](accountid:5b10ac8d)",
+		},
+		{
+			name: "a mention with no account id",
+			in:   para(`{"type":"mention","attrs":{"text":"@Someone"}}`),
+			want: "@Someone",
+		},
+		{
+			name: "a mention whose name holds a bracket",
+			in:   para(`{"type":"mention","attrs":{"id":"5b10ac8d","text":"@Some [one]("}}`),
+			want: "@[Some \\[one\\](](accountid:5b10ac8d)",
+		},
+		{
+			name: "a mention whose account id holds a space",
+			in:   para(`{"type":"mention","attrs":{"id":"a b","text":"@Someone"}}`),
+			want: "@[Someone](<accountid:a b>)",
 		},
 		{
 			name: "a status lozenge",
