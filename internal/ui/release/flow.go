@@ -64,7 +64,7 @@ type Flow struct {
 	addr    kernel.Addr
 
 	styles *styles
-	rows   *memo[flowRowKey]
+	rows   *widget.RowCache[flowRowKey, string]
 	head   [3]string
 	headAt chromeKey
 	lines  []string
@@ -84,7 +84,7 @@ func NewFlow(d kernel.Deps, v jira.Version, open int, targets []jira.Version) ke
 	f.choices, f.targetRows = f.buildChoices(), f.buildTargets()
 	f.acts = defaultFlowKeys().table()
 	f.styles = newStyles(f.deps.Theme)
-	f.rows = newMemo[flowRowKey](flowMemoLimit)
+	f.rows = widget.NewRowCache[flowRowKey, string](flowMemoLimit)
 	f.zones = widget.NewZoner(d.Zones)
 	f.clicks = widget.NewClicks(d.Now)
 	// Nothing open is nothing to decide, and it is still not nothing to
@@ -122,7 +122,7 @@ func (f *Flow) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	switch msg := msg.(type) {
 	case kernel.SizeMsg:
 		if msg.Width != f.width {
-			f.rows.reset()
+			f.rows.Reset()
 			f.head[0] = ""
 		}
 		f.width, f.height = msg.Width, msg.Height
@@ -131,7 +131,7 @@ func (f *Flow) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		f.deps.Theme = msg.Theme
 		f.styles = newStyles(msg.Theme)
-		f.rows.reset()
+		f.rows.Reset()
 		f.head[0] = ""
 
 	// r and R are the kernel's, and this screen has nothing of its own to
@@ -178,6 +178,7 @@ type choice struct {
 // time and every sentence in one of them is a string to build, so building them
 // per frame would put that under every keystroke.
 func (f *Flow) buildChoices() []choice {
+	name := widget.Sanitize(f.version.Name)
 	moving := choice{
 		policy: jira.MoveUnresolved,
 		label:  "Move them to another version",
@@ -189,13 +190,13 @@ func (f *Flow) buildChoices() []choice {
 	out := []choice{
 		{
 			policy: jira.ReleaseAnyway,
-			label:  "Release " + f.version.Name + " anyway",
+			label:  "Release " + name + " anyway",
 			note:   "the " + plural(f.open, "open issue", "open issues") + " stay on it",
 		},
 		moving,
 		{
 			policy: jira.StripUnresolved,
-			label:  "Take " + f.version.Name + " off the open issues",
+			label:  "Take " + name + " off the open issues",
 			note:   "they end up with no fix version",
 		},
 	}

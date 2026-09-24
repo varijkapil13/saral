@@ -99,7 +99,7 @@ type Model struct {
 	addr            kernel.Addr
 
 	styles *styles
-	memo   *rowCache
+	memo   *widget.RowCache[rowKey, string]
 	lay    layout
 
 	head       string
@@ -134,7 +134,7 @@ func New(d kernel.Deps, opts ...Option) kernel.View {
 	}
 	m.acts = defaultKeys().table()
 	m.styles = newStyles(m.deps.Theme)
-	m.memo = newRowCache(rowMemoLimit)
+	m.memo = widget.NewRowCache[rowKey, string](rowMemoLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.lay = planLayout(m.width)
 	m.settle()
@@ -222,7 +222,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.memo.reset()
+		m.memo.Reset()
 		m.head = ""
 
 	case kernel.CapabilitiesMsg:
@@ -269,7 +269,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 func (m *Model) reprobe() tea.Cmd {
 	was := m.source
 	m.settle()
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 	if m.source == fromSite && was == fromProfile {
 		return m.load()
@@ -287,7 +287,7 @@ func (m *Model) rederive() tea.Cmd {
 	m.defined = derive(m.deps.Project, m.deps.Saved)
 	if m.source == fromProfile {
 		m.takeProfilePlans()
-		m.memo.reset()
+		m.memo.Reset()
 		m.head = ""
 	}
 	return nil
@@ -299,7 +299,7 @@ func (m *Model) rederive() tea.Cmd {
 func (m *Model) refresh() tea.Cmd {
 	if m.source == fromProfile {
 		m.takeProfilePlans()
-		m.memo.reset()
+		m.memo.Reset()
 		m.head = ""
 		return kernel.Status(m.refreshedProfile())
 	}
@@ -320,7 +320,7 @@ func (m *Model) resize(w, h int) {
 	}
 	m.width, m.height = w, h
 	m.lay = planLayout(w)
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 	m.reflow()
 }
@@ -391,7 +391,7 @@ func (m *Model) tookPlans(msg plansMsg) tea.Cmd {
 	}
 	under := m.underCursor()
 	m.takeSitePlans(msg.plans)
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 	m.putCursorBack(under)
 	return nil
@@ -415,14 +415,14 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	if reason, refused := plansRefused(msg.err); refused {
 		m.source, m.reason = fromProfile, reason
 		m.takeProfilePlans()
-		m.memo.reset()
+		m.memo.Reset()
 		m.head = ""
 		return kernel.Warn(reason)
 	}
 	m.failure = msg.err
 	m.plans = m.plans[:0]
 	m.reflow()
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 	return kernel.Fail(msg.err)
 }

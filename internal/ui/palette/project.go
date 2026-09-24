@@ -153,7 +153,7 @@ type projectModel struct {
 	width, height int
 
 	styles     *styles
-	memo       *rowCache
+	memo       *widget.RowCache[rowKey, string]
 	lay        layout
 	lines      []string
 	head       string
@@ -174,7 +174,7 @@ func buildProject(d kernel.Deps, freq *table) *projectModel {
 		keys:  defaultProjectKeys(),
 		input: newProjectInput(),
 		freq:  freq,
-		memo:  newRowCache(rowMemoLimit),
+		memo:  widget.NewRowCache[rowKey, string](rowMemoLimit),
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
@@ -286,7 +286,7 @@ func (m *projectModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.memo.reset()
+		m.memo.Reset()
 		m.head = ""
 
 	case projectsFoundMsg:
@@ -337,7 +337,7 @@ func (m *projectModel) rescope(key string) {
 func (m *projectModel) rebuild() {
 	under := m.selection()
 	m.rows = m.buildRows(m.found)
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 	m.refilter()
 	if at := m.indexOf(under); at >= 0 {
@@ -353,7 +353,7 @@ func (m *projectModel) resize(w, h int) {
 	m.width, m.height = w, h
 	m.lay = planLayout(w, 0)
 	m.input.SetWidth(max(w-inputPrompt, 8))
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 	m.clampScroll()
 }

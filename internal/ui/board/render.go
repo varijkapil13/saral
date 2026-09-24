@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -422,7 +423,7 @@ func renderCard(iss *jira.Issue, cell int, selected, inHand bool, st *styles, t 
 	if left := room - ansi.StringWidth(estimate); left < minSummary {
 		estimate = ""
 	}
-	key := iss.Key
+	key := widget.Sanitize(iss.Key)
 	// The key carries the status category's colour while the card is resting:
 	// a column already says which status something is in, so this is which
 	// kind of status. Selected and held both invert the whole card, which a
@@ -435,9 +436,9 @@ func renderCard(iss *jira.Issue, cell int, selected, inHand bool, st *styles, t 
 	}
 	body := renderedKey
 	if left := room - ansi.StringWidth(estimate) - ansi.StringWidth(key) - 1; left > 0 {
-		body += " " + ansi.Truncate(iss.Summary, left, ell)
+		body += " " + ansi.Truncate(widget.Sanitize(iss.Summary), left, ell)
 	}
-	out := markCell + padTruncate(body, max(room-ansi.StringWidth(estimate), 0), ell) + estimate
+	out := markCell + widget.PadTruncate(body, max(room-ansi.StringWidth(estimate), 0), ell) + estimate
 	switch {
 	case inHand:
 		return st.held.Render(out)
@@ -491,7 +492,7 @@ func (m *Model) caption(col int) string {
 	n := m.columnLen(col)
 	count := strconv.Itoa(n)
 	room := max(m.lay.cell-ansi.StringWidth(count)-1, 1)
-	name := padTruncate(c.name, room, m.deps.Theme.Glyphs.Ellipsis)
+	name := widget.PadTruncate(widget.Sanitize(c.name), room, m.deps.Theme.Glyphs.Ellipsis)
 	style := m.styles.muted
 	if col == m.aimedAt() {
 		style = m.styles.aimed
@@ -822,27 +823,6 @@ func repeatTo(glyph string, width int) string {
 // separate from padTruncate because what it is handed carries escape sequences
 // and must keep them.
 func padCells(s string, width int, ellipsis string) string {
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if pad := width - ansi.StringWidth(out); pad > 0 {
-		out += strings.Repeat(" ", pad)
-	}
-	return out
-}
-
-// padTruncate makes a string exactly width columns wide, counting grapheme
-// clusters rather than bytes so that an emoji or a CJK summary does not shift
-// every column to its right.
-func padTruncate(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
 	got := ansi.StringWidth(s)
 	switch {
 	case got == width:

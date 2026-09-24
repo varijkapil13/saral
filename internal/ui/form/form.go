@@ -75,7 +75,7 @@ type Model struct {
 	styles   *styles
 	inList   map[string]action
 	inChoose map[string]action
-	rows     *rowCache
+	rows     *widget.RowCache[rowKey, string]
 
 	project string
 
@@ -160,7 +160,7 @@ func newWith(d kernel.Deps, cache *schemaCache, store *draftStore) *Model {
 		cache:   cache,
 		drafts:  store,
 		styles:  newStyles(d.Theme),
-		rows:    newRowCache(rowCacheLimit),
+		rows:    widget.NewRowCache[rowKey, string](rowCacheLimit),
 		project: strings.TrimSpace(d.Project),
 		input:   widget.NewInput(),
 		area:    widget.NewArea(),
@@ -215,7 +215,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.rows.reset()
+		m.rows.Reset()
 		m.relayout()
 
 	case kernel.CapabilitiesMsg:
@@ -292,7 +292,7 @@ func (m *Model) relayout() {
 	lay := planLayout(m.width, m.widestLabel())
 	if lay != m.lay {
 		m.lay = lay
-		m.rows.reset()
+		m.rows.Reset()
 	}
 }
 
@@ -489,7 +489,7 @@ func (m *Model) build() {
 			return 1
 		}
 	})
-	m.rows.reset()
+	m.rows.Reset()
 	m.reindex()
 	m.relayout()
 }
@@ -1081,7 +1081,7 @@ func (m *Model) created(msg createdMsg) tea.Cmd {
 	for _, f := range m.fields {
 		f.clear()
 	}
-	m.rows.reset()
+	m.rows.Reset()
 	return tea.Sequence(
 		kernel.Pop(),
 		kernel.Broadcast(kernel.RefreshMsg{}),
@@ -1097,7 +1097,7 @@ func (m *Model) createFailed(msg createFailedMsg) tea.Cmd {
 	var invalid *jira.ValidationError
 	if errors.As(msg.err, &invalid) {
 		m.applyValidationError(invalid)
-		m.rows.reset()
+		m.rows.Reset()
 		return kernel.Warn("Jira refused this issue; the fields it named say why")
 	}
 	return kernel.Fail(msg.err)

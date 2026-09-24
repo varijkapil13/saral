@@ -204,7 +204,7 @@ func TestPane_DatesAreTheAccountsTimezone(t *testing.T) {
 	dr := newDriver(t, d, 120, 24, WithIssue("PROJ-1"))
 
 	dr.m.files[0].Created = time.Date(2026, time.March, 2, 22, 0, 0, 0, time.UTC)
-	dr.m.memo.reset()
+	dr.m.memo.Reset()
 	mustContain(t, dr.view(), "2026-03-03")
 }
 

@@ -158,33 +158,6 @@ type rowKey struct {
 	gen      int
 }
 
-// rowCache is a bounded memo of rendered rows. It holds the visible window and
-// its overscan several times over; past that it is emptied rather than evicted
-// one at a time, because a scroll invalidates a whole screen at once anyway and
-// clear keeps the map's capacity.
-type rowCache struct {
-	rows  map[rowKey]string
-	limit int
-}
-
-func newRowCache(limit int) *rowCache {
-	return &rowCache{rows: make(map[rowKey]string, limit), limit: limit}
-}
-
-func (c *rowCache) get(k rowKey) (string, bool) {
-	s, ok := c.rows[k]
-	return s, ok
-}
-
-func (c *rowCache) put(k rowKey, s string) {
-	if len(c.rows) >= c.limit {
-		clear(c.rows)
-	}
-	c.rows[k] = s
-}
-
-func (c *rowCache) reset() { clear(c.rows) }
-
 // renderRow draws one row to exactly lay.width columns.
 //
 // The three cells that name a facet carry a zone of their own, inside the row's,
@@ -219,7 +192,8 @@ func renderRow(iss *jira.Issue, lay layout, sel bool, st *styles, t *kernel.Them
 	}
 	if lay.assignee > 0 {
 		writeGap(&b)
-		b.WriteString(z.Mark(whoZone(iss.Key), padTruncate(assigneeName(iss, unassigned), lay.assignee, ell)))
+		who := widget.PadTruncate(widget.Sanitize(assigneeName(iss, unassigned)), lay.assignee, ell)
+		b.WriteString(z.Mark(whoZone(iss.Key), who))
 	}
 	if lay.updated > 0 {
 		writeGap(&b)
@@ -238,13 +212,14 @@ func renderRow(iss *jira.Issue, lay layout, sel bool, st *styles, t *kernel.Them
 // ordinary width showed the word and never the shape; the shape is the part a
 // reader takes in without reading, and it goes first, everywhere.
 func iconAndName(name, lead string, width int, ellipsis string) string {
+	name = widget.Sanitize(name)
 	if lead == "" {
-		return padTruncate(name, width, ellipsis)
+		return widget.PadTruncate(name, width, ellipsis)
 	}
 	if rest := width - ansi.StringWidth(lead); rest >= 1 {
-		return lead + padTruncate(name, rest, ellipsis)
+		return lead + widget.PadTruncate(name, rest, ellipsis)
 	}
-	return padTruncate(strings.TrimSuffix(lead, " "), width, ellipsis)
+	return widget.PadTruncate(strings.TrimSuffix(lead, " "), width, ellipsis)
 }
 
 func categoryIndex(c jira.StatusCategory) int {
@@ -267,28 +242,7 @@ func writeCell(b *strings.Builder, s string, width int, ellipsis string) {
 	if width <= 0 {
 		return
 	}
-	b.WriteString(padTruncate(s, width, ellipsis))
-}
-
-// padTruncate makes a string exactly width columns wide, counting grapheme
-// clusters rather than bytes so that an emoji or a CJK summary does not shift
-// every column to its right.
-func padTruncate(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if pad := width - ansi.StringWidth(out); pad > 0 {
-		out += strings.Repeat(" ", pad)
-	}
-	return out
+	b.WriteString(widget.PadTruncate(widget.Sanitize(s), width, ellipsis))
 }
 
 // formatWhen renders an instant in the Jira account's timezone, which is not

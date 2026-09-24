@@ -112,7 +112,7 @@ type Model struct {
 	addr   kernel.Addr
 
 	styles *styles
-	memo   *rowCache
+	memo   *widget.RowCache[rowKey, string]
 	zones  widget.Zoner
 	clicks *widget.Clicks
 	drag   widget.Drag
@@ -230,7 +230,7 @@ func New(d kernel.Deps) kernel.View {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
 	m.styles = newStyles(m.deps.Theme)
-	m.memo = newRowCache(rowCacheLimit)
+	m.memo = widget.NewRowCache[rowKey, string](rowCacheLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.bar = filterbar.New(m.zones)
@@ -349,12 +349,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.memo.reset()
+		m.memo.Reset()
 		m.head = ""
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
-		m.memo.reset()
+		m.memo.Reset()
 		m.head = ""
 
 	case kernel.ProjectMsg:
@@ -446,7 +446,7 @@ func (m *Model) relayout() {
 		return
 	}
 	m.lay = lay
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 }
 
@@ -600,7 +600,7 @@ func (m *Model) forget() {
 	m.loaded, m.stale, m.failure, m.absent, m.said = false, false, nil, "", ""
 	m.mode = browsing
 	m.endMove()
-	m.memo.reset()
+	m.memo.Reset()
 	m.head = ""
 }
 

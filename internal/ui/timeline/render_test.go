@@ -218,8 +218,8 @@ func TestTimeline_ATh0emeSwitchRedrawsEveryRow(t *testing.T) {
 	if dr.m.styles.gen == before {
 		t.Error("the styles were not rebuilt")
 	}
-	if len(dr.m.memo.rows) != 0 {
-		t.Errorf("%d rows survived the theme switch in the memo", len(dr.m.memo.rows))
+	if dr.m.memo.Len() != 0 {
+		t.Errorf("%d rows survived the theme switch in the memo", dr.m.memo.Len())
 	}
 	if !strings.Contains(dr.m.View(), "\x1b") {
 		t.Error("the dark theme drew no colour at all")

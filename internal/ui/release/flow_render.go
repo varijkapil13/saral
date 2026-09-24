@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -79,11 +80,11 @@ func (f *Flow) row(at int) string {
 		return ""
 	}
 	k.width, k.selected, k.gen = f.width, at == f.cursor, f.styles.gen
-	if s, ok := f.rows.get(k); ok {
+	if s, ok := f.rows.Get(k); ok {
 		return s
 	}
 	s := f.zones.Mark(f.zoneOf(at), renderFlowRow(k, f.styles, f.deps.Theme))
-	f.rows.put(k, s)
+	f.rows.Put(k, s)
 	return s
 }
 
@@ -101,7 +102,7 @@ func (f *Flow) buildTargets() []choice {
 		if !v.ReleaseDate.IsZero() {
 			note = "releases " + v.ReleaseDate.String()
 		}
-		out = append(out, choice{label: v.Name, note: note, zone: "target:" + v.ID})
+		out = append(out, choice{label: widget.Sanitize(v.Name), note: note, zone: "target:" + v.ID})
 	}
 	return out
 }
@@ -111,7 +112,7 @@ func renderFlowRow(k flowRowKey, st *styles, t *kernel.Theme) string {
 	var b strings.Builder
 	b.Grow(k.width + 32)
 	if k.selected {
-		b.WriteString(padTruncate(t.Glyphs.Collapsed, marker, ell))
+		b.WriteString(widget.PadTruncate(t.Glyphs.Collapsed, marker, ell))
 	} else {
 		b.WriteString(strings.Repeat(" ", marker))
 	}
@@ -122,7 +123,7 @@ func renderFlowRow(k flowRowKey, st *styles, t *kernel.Theme) string {
 		width = max(min(width, flowMinLabel), minName)
 		room = max(k.width-marker-gap-width, 8)
 	}
-	label := padTruncate(k.label, width, ell)
+	label := widget.PadTruncate(k.label, width, ell)
 	switch {
 	case k.selected:
 		b.WriteString(label)
@@ -132,13 +133,13 @@ func renderFlowRow(k flowRowKey, st *styles, t *kernel.Theme) string {
 		b.WriteString(st.name.Render(label))
 	}
 	b.WriteString(strings.Repeat(" ", gap))
-	cell := padTruncate(note, room, ell)
+	cell := widget.PadTruncate(note, room, ell)
 	if k.selected {
 		b.WriteString(cell)
 	} else {
 		b.WriteString(st.muted.Render(cell))
 	}
-	line := padTruncate(b.String(), k.width, ell)
+	line := widget.PadTruncate(b.String(), k.width, ell)
 	if k.selected {
 		return st.selected.Render(line)
 	}

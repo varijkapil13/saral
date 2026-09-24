@@ -745,6 +745,16 @@ view that minted the ids is the only thing that knows what they mean, so the hit
   press elsewhere cancels a gesture rather than applying it. The column is marked as a zone the way
   the regions are — the marker at the top of it and again at the bottom — so a one-column rectangle is
   what a press resolves through.
+- **`widget.PadTruncate` / `widget.PadLeft`** — a cell exactly N columns wide, counting grapheme
+  clusters. They do not sanitize: a card colours its key before truncating it, and stripping escapes
+  in the shared truncate path would erase that colour along with whatever it was guarding against.
+- **`widget.Sanitize`** — strips what a terminal would act on in Jira-sourced text before it is
+  styled or measured: tabs (which would misalign a padded column, so it becomes a single space), ANSI
+  escape sequences, and the bidi override/isolate characters that could reorder or spoof a cell. A
+  view calls it on the raw field the moment it leaves the port, not inside the pad/truncate call.
+- **`widget.RowCache[K, V]`** — the bounded per-row memo every list-shaped view keeps: past its
+  limit the map is cleared rather than evicted one entry at a time, since a scroll or a resize
+  invalidates a screenful at once anyway.
 
 **Zone ids are never freed.** `Mark` fills a permanent id map in the manager, and nothing evicts from
 it. Every id in this tree is minted from a per-instance prefix and a stable name, so redrawing an

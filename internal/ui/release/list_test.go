@@ -532,9 +532,9 @@ func TestReleases_OnlyTheRowsThatFitAreRendered(t *testing.T) {
 	stock(dr, manyVersions(400))
 
 	m := dr.list()
-	m.rows.reset()
+	m.rows.Reset()
 	_ = m.View()
-	if got, ceiling := len(m.rows.rows), m.rowsHeight()+2*overscan+1; got > ceiling {
+	if got, ceiling := m.rows.Len(), m.rowsHeight()+2*overscan+1; got > ceiling {
 		t.Errorf("drawing a window of %d rows rendered %d of them, over the ceiling of %d",
 			m.rowsHeight(), got, ceiling)
 	}

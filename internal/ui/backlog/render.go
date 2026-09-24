@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -163,32 +164,6 @@ type rowKey struct {
 	gen      int
 }
 
-// rowCache is a bounded memo of rendered rows. Past its limit it is emptied
-// rather than evicted one at a time, because a scroll invalidates a screenful at
-// once anyway and clearing keeps the map's capacity.
-type rowCache struct {
-	rows  map[rowKey]string
-	limit int
-}
-
-func newRowCache(limit int) *rowCache {
-	return &rowCache{rows: make(map[rowKey]string, limit), limit: limit}
-}
-
-func (c *rowCache) get(k rowKey) (string, bool) {
-	s, ok := c.rows[k]
-	return s, ok
-}
-
-func (c *rowCache) put(k rowKey, s string) {
-	if len(c.rows) >= c.limit {
-		clear(c.rows)
-	}
-	c.rows[k] = s
-}
-
-func (c *rowCache) reset() { clear(c.rows) }
-
 // headKey is everything the head line is built from, so that it is rebuilt when
 // one of them moves and never otherwise.
 type headKey struct {
@@ -279,7 +254,7 @@ func (m *Model) line(at int) string {
 		k.name, k.updated = iss.Key, iss.Updated.UnixNano()
 		k.picked = m.picked[iss.Key]
 	}
-	if s, ok := m.memo.get(k); ok {
+	if s, ok := m.memo.Get(k); ok {
 		return s
 	}
 	var s string
@@ -289,7 +264,7 @@ func (m *Model) line(at int) string {
 		s = m.renderRow(&m.issues[r.issue], k.selected, k.picked)
 	}
 	s = m.zones.Mark(m.zoneOf(at), s)
-	m.memo.put(k, s)
+	m.memo.Put(k, s)
 	return s
 }
 
@@ -301,13 +276,13 @@ func (m *Model) renderHead(g *group, sel bool) string {
 	var b strings.Builder
 	b.Grow(m.lay.width + 32)
 	if sel {
-		b.WriteString(padTruncate(t.Glyphs.Collapsed, marker, t.Glyphs.Ellipsis))
+		b.WriteString(widget.PadTruncate(t.Glyphs.Collapsed, marker, t.Glyphs.Ellipsis))
 	} else {
 		b.WriteString(strings.Repeat(" ", marker))
 	}
 	b.WriteString(t.Glyphs.Expanded)
 	b.WriteString(" ")
-	b.WriteString(g.name)
+	b.WriteString(widget.Sanitize(g.name))
 	if g.state != "" {
 		b.WriteString(" ")
 		b.WriteString(t.Glyphs.Separator)
@@ -318,7 +293,7 @@ func (m *Model) renderHead(g *group, sel bool) string {
 	b.WriteString(t.Glyphs.Separator)
 	b.WriteString(" ")
 	b.WriteString(count(len(g.issues), "issue"))
-	line := padTruncate(b.String(), m.lay.width, t.Glyphs.Ellipsis)
+	line := widget.PadTruncate(b.String(), m.lay.width, t.Glyphs.Ellipsis)
 	if sel {
 		return m.styles.selected.Render(line)
 	}
@@ -336,12 +311,12 @@ func (m *Model) renderRow(iss *jira.Issue, sel, picked bool) string {
 	b.Grow(lay.width + 32)
 
 	if sel {
-		b.WriteString(padTruncate(t.Glyphs.Collapsed, marker, ell))
+		b.WriteString(widget.PadTruncate(t.Glyphs.Collapsed, marker, ell))
 	} else {
 		b.WriteString(strings.Repeat(" ", marker))
 	}
 	if picked {
-		b.WriteString(padTruncate(t.Glyphs.Check, box, ell))
+		b.WriteString(widget.PadTruncate(t.Glyphs.Check, box, ell))
 	} else {
 		b.WriteString(strings.Repeat(" ", box))
 	}
@@ -598,14 +573,15 @@ func (m *Model) fit(s string) string {
 // ordinary width showed the word and never the shape; the shape is the part a
 // reader takes in without reading, and it goes first, everywhere.
 func iconAndName(name, icon string, width int, ellipsis string) string {
+	name = widget.Sanitize(name)
 	if icon == "" {
-		return padTruncate(name, width, ellipsis)
+		return widget.PadTruncate(name, width, ellipsis)
 	}
 	lead := icon + " "
 	if rest := width - ansi.StringWidth(lead); rest >= 1 {
-		return lead + padTruncate(name, rest, ellipsis)
+		return lead + widget.PadTruncate(name, rest, ellipsis)
 	}
-	return padTruncate(icon, width, ellipsis)
+	return widget.PadTruncate(icon, width, ellipsis)
 }
 
 func categoryIndex(c jira.StatusCategory) int {
@@ -628,26 +604,8 @@ func writeCell(b *strings.Builder, s string, width int, ellipsis string) {
 	if width <= 0 {
 		return
 	}
-	b.WriteString(padTruncate(s, width, ellipsis))
+	b.WriteString(widget.PadTruncate(widget.Sanitize(s), width, ellipsis))
 }
 
 // padTruncate makes a string exactly width columns wide, counting grapheme
 // clusters rather than bytes so that an emoji or a CJK summary does not shift
-// every column to its right.
-func padTruncate(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if pad := width - ansi.StringWidth(out); pad > 0 {
-		out += strings.Repeat(" ", pad)
-	}
-	return out
-}

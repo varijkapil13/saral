@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -110,29 +111,6 @@ type rowKey struct {
 	gen      int
 }
 
-type rowCache struct {
-	rows  map[rowKey]string
-	limit int
-}
-
-func newRowCache(limit int) *rowCache {
-	return &rowCache{rows: make(map[rowKey]string, limit), limit: limit}
-}
-
-func (c *rowCache) get(k rowKey) (string, bool) {
-	s, ok := c.rows[k]
-	return s, ok
-}
-
-func (c *rowCache) put(k rowKey, s string) {
-	if len(c.rows) >= c.limit {
-		clear(c.rows)
-	}
-	c.rows[k] = s
-}
-
-func (c *rowCache) reset() { clear(c.rows) }
-
 // zoneOf is the click target one row is marked with. Every name is built from an
 // id rather than a row number, so it is stable for the life of the wizard —
 // bubblezone never frees an id.
@@ -156,14 +134,14 @@ func (m *Model) zoneOf(at int) string {
 
 func (m *Model) row(at int) string {
 	k := m.rowKeyAt(at)
-	if s, ok := m.memo.get(k); ok {
+	if s, ok := m.memo.Get(k); ok {
 		return s
 	}
 	s := renderRow(k, m.styles, m.deps.Theme)
 	if name := m.zoneOf(at); name != "" {
 		s = m.zones.Mark(name, s)
 	}
-	m.memo.put(k, s)
+	m.memo.Put(k, s)
 	return s
 }
 
@@ -223,7 +201,7 @@ func renderRow(k rowKey, st *styles, t *kernel.Theme) string {
 	} else {
 		b.WriteString(strings.Repeat(" ", marker))
 	}
-	name := padTruncate(k.name, k.lay.name, ell)
+	name := widget.PadTruncate(widget.Sanitize(k.name), k.lay.name, ell)
 	switch {
 	case k.selected:
 		b.WriteString(name)
@@ -234,7 +212,7 @@ func renderRow(k rowKey, st *styles, t *kernel.Theme) string {
 	}
 	if k.lay.note > 0 {
 		b.WriteString(strings.Repeat(" ", gap))
-		note := padTruncate(k.note, k.lay.note, ell)
+		note := widget.PadTruncate(widget.Sanitize(k.note), k.lay.note, ell)
 		switch {
 		case k.selected:
 			b.WriteString(note)
@@ -688,27 +666,6 @@ func (m *Model) rowsHeight() int {
 		return 1
 	}
 	return max(m.height-len(m.headBlock())-len(m.tailBlock()), 1)
-}
-
-// padTruncate makes a string exactly width columns wide, counting grapheme
-// clusters rather than bytes: a project name, a status and a summary are all
-// whatever somebody typed.
-func padTruncate(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if pad := width - ansi.StringWidth(out); pad > 0 {
-		out += strings.Repeat(" ", pad)
-	}
-	return out
 }
 
 // View draws the block above, the window of rows, and the block below. Only the

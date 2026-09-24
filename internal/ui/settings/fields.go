@@ -477,7 +477,7 @@ func (m *fieldPickerModel) row(at int) string {
 	}
 	var b strings.Builder
 	writeMarker(&b, sel, m.deps.Theme)
-	text := padTruncate(mark+r.label, m.width-marker, m.deps.Theme.Glyphs.Ellipsis)
+	text := widget.PadTruncate(mark+r.label, m.width-marker, m.deps.Theme.Glyphs.Ellipsis)
 	if sel {
 		b.WriteString(text)
 	} else {

@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -139,7 +140,7 @@ func (m *Model) relayout() {
 	}
 	m.lay = lay
 	m.head = lay.caption(m.styles, m.deps.Theme.Glyphs.Ellipsis)
-	m.rows.reset()
+	m.rows.Reset()
 }
 
 func (m *Model) widestName() int {
@@ -156,7 +157,7 @@ func (lay layout) caption(st *styles, ell string) string {
 	var b strings.Builder
 	b.Grow(lay.width + 16)
 	b.WriteString(strings.Repeat(" ", marker))
-	b.WriteString(padTruncate("version", lay.name, ell))
+	b.WriteString(widget.PadTruncate("version", lay.name, ell))
 	for _, cell := range []struct {
 		text  string
 		width int
@@ -168,9 +169,9 @@ func (lay layout) caption(st *styles, ell string) string {
 			continue
 		}
 		b.WriteString(strings.Repeat(" ", gap))
-		b.WriteString(padTruncate(cell.text, cell.width, ell))
+		b.WriteString(widget.PadTruncate(cell.text, cell.width, ell))
 	}
-	return st.muted.Render(padTruncate(b.String(), lay.width, ell))
+	return st.muted.Render(widget.PadTruncate(b.String(), lay.width, ell))
 }
 
 // rowCells is one version as its row draws it. A version carries no updated
@@ -195,35 +196,6 @@ type rowKey struct {
 	gen      int
 }
 
-// memo is a bounded cache of rendered rows. Past its limit it is emptied rather
-// than evicted one at a time, because a scroll invalidates a screenful at once
-// anyway and clearing keeps the map's capacity.
-//
-// It is generic because the list and the release flow both memoize rows, over
-// keys of their own.
-type memo[K comparable] struct {
-	rows  map[K]string
-	limit int
-}
-
-func newMemo[K comparable](limit int) *memo[K] {
-	return &memo[K]{rows: make(map[K]string, limit), limit: limit}
-}
-
-func (c *memo[K]) get(k K) (string, bool) {
-	s, ok := c.rows[k]
-	return s, ok
-}
-
-func (c *memo[K]) put(k K, s string) {
-	if len(c.rows) >= c.limit {
-		clear(c.rows)
-	}
-	c.rows[k] = s
-}
-
-func (c *memo[K]) reset() { clear(c.rows) }
-
 // rowZone is the click target one row is marked with, named by the version's id
 // because that is stable for the life of the list and a row number is not.
 func rowZone(id string) string { return "version:" + id }
@@ -231,8 +203,8 @@ func rowZone(id string) string { return "version:" + id }
 // cellsOf is one version's row, drawn out once.
 func cellsOf(v jira.Version, today jira.Date) rowCells {
 	return rowCells{
-		id: v.ID, name: v.Name, state: versionState(v, today), open: openLabel(v),
-		start: v.StartDate.String(), release: v.ReleaseDate.String(), description: v.Description,
+		id: v.ID, name: widget.Sanitize(v.Name), state: versionState(v, today), open: openLabel(v),
+		start: v.StartDate.String(), release: v.ReleaseDate.String(), description: widget.Sanitize(v.Description),
 	}
 }
 
@@ -245,7 +217,7 @@ func (m *Model) rebuildCells() {
 	for i := range m.versions {
 		m.cells = append(m.cells, cellsOf(m.versions[i], m.day))
 	}
-	m.rows.reset()
+	m.rows.Reset()
 }
 
 func (m *Model) rowKeyOf(at int, selected bool) rowKey {
@@ -254,11 +226,11 @@ func (m *Model) rowKeyOf(at int, selected bool) rowKey {
 
 func (m *Model) row(at int, selected bool) string {
 	k := m.rowKeyOf(at, selected)
-	if s, ok := m.rows.get(k); ok {
+	if s, ok := m.rows.Get(k); ok {
 		return s
 	}
 	s := m.zones.Mark(rowZone(k.cells.id), renderRow(k, m.styles, m.deps.Theme))
-	m.rows.put(k, s)
+	m.rows.Put(k, s)
 	return s
 }
 
@@ -316,17 +288,17 @@ func renderRow(k rowKey, st *styles, t *kernel.Theme) string {
 	b.Grow(k.lay.width + 32)
 
 	if k.selected {
-		b.WriteString(padTruncate(t.Glyphs.Collapsed, marker, ell))
+		b.WriteString(widget.PadTruncate(t.Glyphs.Collapsed, marker, ell))
 	} else {
 		b.WriteString(strings.Repeat(" ", marker))
 	}
-	name := padTruncate(k.cells.name, k.lay.name, ell)
+	name := widget.PadTruncate(k.cells.name, k.lay.name, ell)
 	if k.selected {
 		b.WriteString(name)
 	} else {
 		b.WriteString(st.name.Render(name))
 	}
-	state := padTruncate(k.cells.state, k.lay.state, ell)
+	state := widget.PadTruncate(k.cells.state, k.lay.state, ell)
 	b.WriteString(strings.Repeat(" ", gap))
 	if k.selected {
 		b.WriteString(state)
@@ -346,14 +318,14 @@ func renderRow(k rowKey, st *styles, t *kernel.Theme) string {
 			continue
 		}
 		b.WriteString(strings.Repeat(" ", gap))
-		text := padTruncate(cell.text, cell.width, ell)
+		text := widget.PadTruncate(cell.text, cell.width, ell)
 		if k.selected {
 			b.WriteString(text)
 			continue
 		}
 		b.WriteString(st.muted.Render(text))
 	}
-	line := padTruncate(b.String(), k.lay.width, ell)
+	line := widget.PadTruncate(b.String(), k.lay.width, ell)
 	if k.selected {
 		return st.selected.Render(line)
 	}
@@ -533,7 +505,7 @@ func (m *Model) appendForm(lines []string) []string {
 	clip := func(line string) string { return ansi.Truncate(line, max(m.width, 1), ell) }
 	lines = append(lines, m.styles.accent.Render(clip(title)))
 	for f := field(0); f < fieldCount; f++ {
-		label := m.styles.muted.Render(padTruncate("  "+fieldLabels[f], labelWidth, ell))
+		label := m.styles.muted.Render(widget.PadTruncate("  "+fieldLabels[f], labelWidth, ell))
 		if f == m.form.at {
 			lines = append(lines, clip(label+m.form.input.View()))
 			continue
@@ -544,27 +516,6 @@ func (m *Model) appendForm(lines []string) []string {
 		lines = append(lines, m.styles.danger.Render(clip("  "+m.form.problem)))
 	}
 	return lines
-}
-
-// padTruncate makes a string exactly width columns wide, counting grapheme
-// clusters rather than bytes: a version name is whatever anybody typed and a
-// description is whatever anybody pasted.
-func padTruncate(s string, width int, ellipsis string) string {
-	if width <= 0 {
-		return ""
-	}
-	got := ansi.StringWidth(s)
-	switch {
-	case got == width:
-		return s
-	case got < width:
-		return s + strings.Repeat(" ", width-got)
-	}
-	out := ansi.Truncate(s, width, ellipsis)
-	if pad := width - ansi.StringWidth(out); pad > 0 {
-		out += strings.Repeat(" ", pad)
-	}
-	return out
 }
 
 // View draws the summary, the caption and the window of rows under them. Only

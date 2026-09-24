@@ -597,7 +597,8 @@ func expandTabs(s string, col int) string {
 	return b.String()
 }
 
-// sanitize drops the control characters a terminal would act on. Issue text is
+// sanitize drops the control characters a terminal would act on, including the
+// bidi override/isolate characters that could reorder a line. Issue text is
 // written by anyone with a Jira login, and an escape sequence in a description
 // must not be able to repaint the screen it is displayed in.
 func sanitize(s string) string {
@@ -631,6 +632,10 @@ func isControl(r rune) bool {
 	case r < 0x20 || r == 0x7f:
 		return true
 	case r >= 0x80 && r <= 0x9f:
+		return true
+	case r >= 0x202a && r <= 0x202e:
+		return true
+	case r >= 0x2066 && r <= 0x2069:
 		return true
 	default:
 		return false

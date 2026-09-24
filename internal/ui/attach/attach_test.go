@@ -566,7 +566,7 @@ func TestPane_DrawsOnlyTheRowsThatFit(t *testing.T) {
 	attached(t, f, "PROJ-1", many...)
 	dr := newDriver(t, testDeps(f), 120, 30, WithIssue("PROJ-1"))
 
-	if got := len(dr.m.memo.rows); got > maxListRows {
+	if got := dr.m.memo.Len(); got > maxListRows {
 		t.Errorf("a frame rendered %d rows for a list showing at most %d", got, maxListRows)
 	}
 }

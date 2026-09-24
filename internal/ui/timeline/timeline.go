@@ -83,7 +83,7 @@ type Model struct {
 	inChart map[string]action
 	inNotes map[string]action
 	styles  *styles
-	memo    *rowCache
+	memo    *widget.RowCache[rowKey, string]
 
 	jql   string
 	title string
@@ -191,7 +191,7 @@ func New(d kernel.Deps) kernel.View {
 		addr:   kernel.NewAddr(),
 		cache:  d.Cache,
 		styles: newStyles(themeOf(d)),
-		memo:   newRowCache(rowCacheLimit),
+		memo:   widget.NewRowCache[rowKey, string](rowCacheLimit),
 		zoom:   ZoomWeek,
 	}
 	m.deps.Theme = themeOf(d)
@@ -277,10 +277,10 @@ func (m *Model) take(res app.Resolution, issues []jira.Issue, recentre bool) {
 		if rng.OK() {
 			m.resolvedShown++
 		}
-		m.rows = append(m.rows, barRow{key: key, summary: issues[i].Summary, rng: rng, at: i})
+		m.rows = append(m.rows, barRow{key: widget.Sanitize(key), summary: widget.Sanitize(issues[i].Summary), rng: rng, at: i})
 	}
 	slices.SortFunc(m.rows, byStartThenKey)
-	m.memo.reset()
+	m.memo.Reset()
 	m.relayout()
 	m.reaxis(recentre)
 	m.restore(under)
@@ -350,13 +350,13 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.memo.reset()
+		m.memo.Reset()
 		m.marksBuilt, m.noteCountSet = false, false
 		m.summary, m.heading, m.ruler, m.detail = "", "", "", ""
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
-		m.memo.reset()
+		m.memo.Reset()
 
 	case kernel.ProjectMsg:
 		cmd = m.reproject(msg.Project)
@@ -422,7 +422,7 @@ func (m *Model) relayout() {
 		return
 	}
 	m.lay = lay
-	m.memo.reset()
+	m.memo.Reset()
 }
 
 func (m *Model) widestKey() int {
@@ -531,7 +531,7 @@ func (m *Model) reproject(project string) tea.Cmd {
 	m.versionMarks, m.sprintMarks, m.markerNotes = nil, nil, nil
 	m.marksGen, m.marksBuilt = m.marksGen+1, false
 	m.cursor, m.top, m.checked = 0, 0, time.Time{}
-	m.memo.reset()
+	m.memo.Reset()
 	m.buildNotes()
 	m.reaxis(true)
 	m.fromCache()
@@ -668,7 +668,7 @@ func (m *Model) setZoom(z Zoom) tea.Cmd {
 		centre = m.ax.start(m.left + m.lay.chart/2)
 	}
 	m.zoom = z
-	m.memo.reset()
+	m.memo.Reset()
 	m.reaxis(false)
 	m.centreOn(centre)
 	return nil

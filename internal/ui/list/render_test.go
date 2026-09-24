@@ -116,6 +116,28 @@ func TestRenderRow_TypeAndStatusIconsAcrossGlyphTiers(t *testing.T) {
 	}
 }
 
+// A summary reaches the row exactly as Jira sent it: a tab that would misalign
+// the columns after it, an escape sequence that could repaint the row, and a
+// bidi override that could read the key backwards.
+func TestRenderRow_SanitisesUnsafeCharactersInTheSummary(t *testing.T) {
+	theme := kernel.NewTheme(kernel.ThemeNoColor, true, kernel.UnicodeGlyphs())
+	st := newStyles(theme)
+	now := time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC)
+	lay := planLayout(100, 8)
+
+	iss := jira.Issue{
+		Key:     "PROJ-42",
+		Summary: "before\tafter\x1b[31mred\x1b[0m\u202eevil",
+		Status:  jira.Status{Name: "Triage", Category: jira.CategoryToDo},
+	}
+	got := ansi.Strip(renderRow(&iss, lay, false, st, theme, time.UTC, now, widget.Zoner{}))
+	golden(t, "row_sanitised.golden", got+"\n")
+
+	if w := ansi.StringWidth(got); w != lay.width {
+		t.Errorf("a sanitised row is %d columns, want %d", w, lay.width)
+	}
+}
+
 func TestFormatWhen_RendersInTheAccountsZoneAndDropsTheYearOnlyWhenItIsThisOne(t *testing.T) {
 	t.Parallel()
 
@@ -146,61 +168,6 @@ func TestFormatWhen_RendersInTheAccountsZoneAndDropsTheYearOnlyWhenItIsThisOne(t
 				t.Errorf("formatWhen = %q, want %q", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestPadTruncate_CountsColumnsRatherThanBytes(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name  string
-		in    string
-		width int
-		want  string
-	}{
-		{name: "short is padded", in: "ab", width: 5, want: "ab   "},
-		{name: "exact is left alone", in: "abcde", width: 5, want: "abcde"},
-		{name: "long is cut with an ellipsis", in: "abcdefgh", width: 5, want: "abcd…"},
-		{name: "a wide grapheme counts as two", in: "日本語", width: 4, want: "日… "},
-		{name: "no room at all", in: "abc", width: 0, want: ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := padTruncate(tt.in, tt.width, "…")
-			if got != tt.want {
-				t.Errorf("padTruncate(%q, %d) = %q, want %q", tt.in, tt.width, got, tt.want)
-			}
-			if w := ansi.StringWidth(got); tt.width > 0 && w != tt.width {
-				t.Errorf("padTruncate(%q, %d) is %d columns wide", tt.in, tt.width, w)
-			}
-		})
-	}
-}
-
-func TestRowCache_StaysBoundedAndForgetsARowWhoseIssueMoved(t *testing.T) {
-	t.Parallel()
-
-	c := newRowCache(4)
-	base := rowKey{key: "PROJ-1", updated: 1}
-	c.put(base, "first")
-
-	if got, ok := c.get(base); !ok || got != "first" {
-		t.Fatalf("the row was not memoized: %q %t", got, ok)
-	}
-	moved := base
-	moved.updated = 2
-	if _, ok := c.get(moved); ok {
-		t.Error("an issue that has been updated since hit the memo anyway")
-	}
-
-	for i := range 20 {
-		c.put(rowKey{key: "PROJ-1", updated: int64(i + 10)}, "row")
-	}
-	if len(c.rows) > 4 {
-		t.Errorf("the memo grew to %d entries with a limit of 4", len(c.rows))
 	}
 }
 
