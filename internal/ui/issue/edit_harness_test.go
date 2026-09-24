@@ -154,8 +154,26 @@ func (p *panel) zoneAt(d kernel.Deps, suffix string) *zone.ZoneInfo {
 	p.t.Helper()
 
 	id := p.zoneID(suffix)
-	at := uitest.Zone(p.t, d.Zones, p.view.View, id)
+	at := uitest.Zone(p.t, d.Zones, p.view.View, id, p.passesThrough(suffix)...)
 	return &at
+}
+
+// passesThrough names the zones a click on a row is resolved through before it
+// reaches the row's own: the region, and every row ahead of it in clickRow's walk.
+func (p *panel) passesThrough(suffix string) []string {
+	m, ok := p.view.(*Model)
+	if !ok || !strings.HasPrefix(suffix, "row:") {
+		return nil
+	}
+	ids := []string{m.zones.ID(zoneNames[regionDetails])}
+	for i := range m.sideRows {
+		row := fieldRowZone(m.sideRows[i].id)
+		if row == suffix {
+			break
+		}
+		ids = append(ids, m.zones.ID(row))
+	}
+	return ids
 }
 
 func (p *panel) zoneID(suffix string) string {
