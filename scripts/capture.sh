@@ -104,10 +104,10 @@ remember() {
   umask 077
   {
     echo "# Written by scripts/capture.sh. The API token is deliberately not here."
-    echo "SARAL_SITE=\"$SARAL_SITE\""
-    echo "SARAL_EMAIL=\"$SARAL_EMAIL\""
-    echo "SARAL_PROJECT=\"$SARAL_PROJECT\""
-    echo "SARAL_ISSUE=\"$SARAL_ISSUE\""
+    printf 'SARAL_SITE=%q\n' "$SARAL_SITE"
+    printf 'SARAL_EMAIL=%q\n' "$SARAL_EMAIL"
+    printf 'SARAL_PROJECT=%q\n' "$SARAL_PROJECT"
+    printf 'SARAL_ISSUE=%q\n' "$SARAL_ISSUE"
   } > "$STATE"
 }
 

@@ -8,13 +8,14 @@ force_token: github
 before:
   hooks:
     - go mod tidy
+    - git diff --exit-code
 
 builds:
   - id: saral
     main: ./cmd/saral
     binary: saral
     env: [CGO_ENABLED=0]
-    goos: [darwin, linux]
+    goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     flags: [-trimpath]
     ldflags:
@@ -26,11 +27,47 @@ builds:
 
 archives:
   - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files: [README.md, LICENSE, docs/*]
+    files: [README.md, LICENSE, docs/INSTALL.md, docs/SETTINGS.md, docs/UX.md, docs/FIELDS.md, docs/FILTERS.md]
+
+nfpms:
+  - id: saral
+    package_name: saral
+    file_name_template: "{{ .ConventionalFileName }}"
+    formats: [deb, rpm, apk]
+    maintainer: Varij Kapil <varij.kapil@it-manufactory.com>
+    homepage: https://github.com/varijkapil13/saral
+    description: Jira in your terminal, made simple
+    license: MIT
+    contents:
+      - src: README.md
+        dst: /usr/share/doc/saral/README.md
+      - src: LICENSE
+        dst: /usr/share/doc/saral/LICENSE
 
 checksum:
   name_template: checksums.txt
+
+sboms:
+  - id: archive
+    artifacts: archive
+
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - --output-certificate=${certificate}
+      - --output-signature=${signature}
+      - ${artifact}
+      - --yes
+    artifacts: checksum
+    output: true
 
 changelog:
   use: github

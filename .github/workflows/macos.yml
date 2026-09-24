@@ -1,0 +1,33 @@
+name: macos
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # No `unshare -n` equivalent is available on the macos-latest runner, so this
+  # job cannot prove network isolation the way ci.yml's jailed run does; it
+  # catches macOS-specific build and runtime differences, not network reaches.
+  # The suite is written to need none (docs/TESTING.md), which is what makes
+  # running it unjailed here honest rather than a gap.
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: vet
+        run: go vet ./...
+      - name: build
+        run: go build -trimpath -ldflags "-s -w" -o saral ./cmd/saral
+      - name: test with race detector
+        run: go test -race -count=1 ./...

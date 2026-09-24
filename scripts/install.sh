@@ -88,6 +88,38 @@ sha256_of() {
 	fi
 }
 
+# verify_signature checks the release beyond the sha256 the checksum step above
+# already did: that checksums.txt itself was produced by this repository's
+# release workflow, via whichever of cosign or gh it finds. Neither is required
+# to install, but a failure once one of them ran is real, not a fallback case.
+verify_signature() {
+	checksums=$1
+	if command -v cosign >/dev/null 2>&1; then
+		if fetch "$download_base/checksums.txt.sig" "$tmp/checksums.txt.sig" 2>/dev/null &&
+			fetch "$download_base/checksums.txt.pem" "$tmp/checksums.txt.pem" 2>/dev/null; then
+			cosign verify-blob \
+				--certificate "$tmp/checksums.txt.pem" \
+				--signature "$tmp/checksums.txt.sig" \
+				--certificate-identity-regexp "^https://github.com/$REPO/" \
+				--certificate-oidc-issuer https://token.actions.githubusercontent.com \
+				"$checksums" >/dev/null 2>&1 ||
+				die "cosign could not verify checksums.txt's signature for $version. Nothing was installed."
+			say "$BIN: checksums.txt signature verified with cosign"
+			return
+		fi
+		warn 'cosign is installed, but this release has no checksums.txt.sig/.pem to verify against'
+	fi
+	if command -v gh >/dev/null 2>&1; then
+		if gh attestation verify "$tmp/$archive" --repo "$REPO" >/dev/null 2>&1; then
+			say "$BIN: build provenance verified with gh attestation"
+		else
+			warn "gh attestation verify found no provenance to confirm $archive against; continuing on the checksum alone"
+		fi
+		return
+	fi
+	warn 'neither cosign nor gh (attestation verify) is installed; only the sha256 checksum was checked, not the signature or provenance'
+}
+
 case $(uname -s) in
 Darwin) os=darwin ;;
 Linux) os=linux ;;
@@ -172,6 +204,7 @@ if [ "$got" != "$expected" ]; then
 Nothing was installed."
 fi
 say "$BIN: checksum verified"
+verify_signature "$tmp/checksums.txt"
 
 mkdir -p "$tmp/unpacked"
 tar -xzf "$tmp/$archive" -C "$tmp/unpacked" || die "could not unpack $archive"
