@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -57,9 +58,17 @@ type apiIssueRef struct {
 // apiIssueWrite is the body both the edit and the transition endpoints take.
 // Values are held as raw JSON because a field's wire shape depends on what the
 // field holds, and the encoder that knows that is fieldJSON.
+// Update carries the edits that are operations on a value rather than a new
+// value for it, which is how a label is added without writing the whole list.
 type apiIssueWrite struct {
 	Fields     map[string]json.RawMessage `json:"fields,omitempty"`
+	Update     map[string][]apiEditOp     `json:"update,omitempty"`
 	Transition *apiTransitionRef          `json:"transition,omitempty"`
+}
+
+type apiEditOp struct {
+	Add    string `json:"add,omitempty"`
+	Remove string `json:"remove,omitempty"`
 }
 
 type apiTransitionRef struct {
@@ -150,10 +159,14 @@ func (c *Client) UpdateIssue(ctx context.Context, key string, in jira.IssuePatch
 	if err != nil {
 		return err
 	}
+	update, err := patchUpdate(in)
+	if err != nil {
+		return err
+	}
 	r := request{
 		method: http.MethodPut,
 		path:   issuePath + "/" + url.PathEscape(id),
-		body:   apiIssueWrite{Fields: fields},
+		body:   apiIssueWrite{Fields: fields, Update: update},
 		kind:   "issue",
 		id:     id,
 	}
@@ -220,10 +233,14 @@ func (c *Client) Transition(ctx context.Context, key, transitionID string, in ji
 	if err != nil {
 		return err
 	}
+	update, err := patchUpdate(in)
+	if err != nil {
+		return err
+	}
 	r := request{
 		method: http.MethodPost,
 		path:   issuePath + "/" + url.PathEscape(id) + "/transitions",
-		body:   apiIssueWrite{Fields: fields, Transition: &apiTransitionRef{ID: move}},
+		body:   apiIssueWrite{Fields: fields, Update: update, Transition: &apiTransitionRef{ID: move}},
 		kind:   "issue",
 		id:     id,
 	}
@@ -474,6 +491,54 @@ func patchFields(in jira.IssuePatch) (map[string]json.RawMessage, error) {
 		}
 	}
 	return out, nil
+}
+
+// patchUpdate builds the update object: each label added and each removed as
+// its own operation, in the order given, adds first. The site applies them to
+// the list it holds at the moment of the write, so a label somebody else added
+// a second ago survives an edit that never read it.
+//
+// A label is one word to Jira and it refuses one with a space in it, so that is
+// refused here, where the patch can still say which label it was.
+func patchUpdate(in jira.IssuePatch) (map[string][]apiEditOp, error) {
+	if len(in.AddLabels) == 0 && len(in.RemoveLabels) == 0 {
+		return nil, nil
+	}
+	if in.Labels != nil {
+		return nil, invalidField("labels", "a patch replaces the labels or edits them, not both")
+	}
+	if slices.ContainsFunc(in.Clear, func(ref jira.FieldRef) bool { return strings.TrimSpace(ref.ID) == "labels" }) {
+		return nil, invalidField("labels", "a patch clears the labels or edits them, not both")
+	}
+	if in.Fields.Len() > 0 {
+		if _, set := in.Fields.ByID("labels"); set {
+			return nil, invalidField("labels", "a patch replaces the labels or edits them, not both")
+		}
+	}
+	ops := make([]apiEditOp, 0, len(in.AddLabels)+len(in.RemoveLabels))
+	seen := make(map[string]bool, cap(ops))
+	for _, group := range []struct {
+		labels []string
+		op     func(string) apiEditOp
+	}{
+		{in.AddLabels, func(l string) apiEditOp { return apiEditOp{Add: l} }},
+		{in.RemoveLabels, func(l string) apiEditOp { return apiEditOp{Remove: l} }},
+	} {
+		for _, label := range group.labels {
+			trimmed := strings.TrimSpace(label)
+			switch {
+			case trimmed == "":
+				return nil, invalidField("labels", "a label to add or remove is empty")
+			case strings.ContainsFunc(trimmed, unicode.IsSpace):
+				return nil, invalidField("labels", strconv.Quote(trimmed)+" is not a label: a label cannot contain a space")
+			case seen[trimmed]:
+				return nil, invalidField("labels", "this patch adds or removes "+strconv.Quote(trimmed)+" twice")
+			}
+			seen[trimmed] = true
+			ops = append(ops, group.op(trimmed))
+		}
+	}
+	return map[string][]apiEditOp{"labels": ops}, nil
 }
 
 // addFieldSet encodes the custom and system fields a caller carried in a

@@ -64,6 +64,14 @@ var (
 	_ jira.TaskWatcher      = (*Fake)(nil)
 	_ jira.Relocator        = (*Fake)(nil)
 	_ jira.PlanReader       = (*Fake)(nil)
+
+	_ jira.IssueReader       = (*Fake)(nil)
+	_ jira.SprintIssueReader = (*Fake)(nil)
+	_ jira.Ranker            = (*Fake)(nil)
+	_ jira.Linker            = (*Fake)(nil)
+	_ jira.Worklogger        = (*Fake)(nil)
+	_ jira.WatcherManager    = (*Fake)(nil)
+	_ jira.ServerInfoReader  = (*Fake)(nil)
 )
 
 // BoardKind is what WithProject builds alongside a project.
@@ -157,6 +165,10 @@ type Fake struct {
 
 	tasks map[string]*fakeTask
 
+	worklogs   map[string][]jira.Worklog
+	watchers   map[string][]string
+	serverInfo jira.ServerInfo
+
 	failures   []error
 	delay      time.Duration
 	cursorLoop bool
@@ -207,6 +219,9 @@ func (f *Fake) fakeInit() {
 	f.attachOwner = make(map[string]string)
 	f.sprintOf = make(map[string]int64)
 	f.tasks = make(map[string]*fakeTask)
+	f.worklogs = make(map[string][]jira.Worklog)
+	f.watchers = make(map[string][]string)
+	f.serverInfo = fakeDefaultServerInfo
 	f.failures = nil
 	f.delay = 0
 	f.cursorLoop = false
@@ -315,6 +330,12 @@ func WithPageSize(n int) Option {
 // from a fixed epoch either way, so that it does not move when the clock does.
 func WithNow(t time.Time) Option {
 	return func(f *Fake) { f.now = t }
+}
+
+// WithServerInfo sets what ServerInfo answers, which is how a site that is not
+// Jira Cloud is modelled.
+func WithServerInfo(info jira.ServerInfo) Option {
+	return func(f *Fake) { f.serverInfo = info }
 }
 
 // FailNext queues an error for the next call, whichever method that turns out

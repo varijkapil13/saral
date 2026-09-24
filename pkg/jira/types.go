@@ -725,22 +725,31 @@ type IssueInput struct {
 // field named in Clear is set to null. The two are separate because "leave it"
 // and "empty it" are different requests and a single zero value cannot say
 // which one was meant.
+//
+// Labels replaces the whole list. AddLabels and RemoveLabels edit it instead,
+// and are what an edit of one label should use: a replacement written from a
+// read that is a moment old drops whatever label somebody else added in that
+// moment, and an add or a remove cannot. A patch sets one form or the other,
+// never both.
 type IssuePatch struct {
-	Summary     *string
-	Description *adf.Doc
-	Assignee    *string
-	Labels      *[]string
-	PriorityID  *string
-	Due         *Date
-	Fields      FieldSet
-	Clear       []FieldRef
-	Notify      *bool
+	Summary      *string
+	Description  *adf.Doc
+	Assignee     *string
+	Labels       *[]string
+	AddLabels    []string
+	RemoveLabels []string
+	PriorityID   *string
+	Due          *Date
+	Fields       FieldSet
+	Clear        []FieldRef
+	Notify       *bool
 }
 
 // IsEmpty reports whether the patch would change nothing.
 func (p IssuePatch) IsEmpty() bool {
 	return p.Summary == nil && p.Description == nil && p.Assignee == nil &&
-		p.Labels == nil && p.PriorityID == nil && p.Due == nil &&
+		p.Labels == nil && len(p.AddLabels) == 0 && len(p.RemoveLabels) == 0 &&
+		p.PriorityID == nil && p.Due == nil &&
 		p.Fields.Len() == 0 && len(p.Clear) == 0
 }
 
@@ -859,10 +868,16 @@ type DownloadOptions struct {
 
 // FileRef is a file to upload. Open is called once per attempt, so a retry
 // re-reads the file rather than buffering it in memory.
+//
+// Size is what the upload declares before it sends a byte, and a file that
+// reads longer or shorter than it is refused part way rather than sent as
+// something else. Progress, when set, is told how many of this file's bytes
+// have gone out so far; a retried attempt starts it again from zero.
 type FileRef struct {
-	Name string
-	Size int64
-	Open func() (io.ReadCloser, error)
+	Name     string
+	Size     int64
+	Open     func() (io.ReadCloser, error)
+	Progress func(sent int64)
 }
 
 // FileFromPath makes a FileRef for a file on disk.
@@ -1010,7 +1025,32 @@ type BoardConfig struct {
 	// SubQuery is the Kanban-only extra condition that decides which resolved
 	// issues still show. It is empty on a Scrum board.
 	SubQuery string
+	// Constraint is what the columns' Min and Max count, and whether they are
+	// limits at all: a board keeps the numbers after its constraint is turned
+	// off, so a column carrying a Max is not by itself a column with a limit.
+	Constraint ColumnConstraint
 }
+
+// ColumnConstraint is what a board's column limits count.
+type ColumnConstraint string
+
+// The constraints a board configuration reports. The empty value is a board
+// that sent none, which enforces nothing, the same as ConstraintNone.
+const (
+	ConstraintNone               ColumnConstraint = "none"
+	ConstraintIssueCount         ColumnConstraint = "issueCount"
+	ConstraintIssueCountExclSubs ColumnConstraint = "issueCountExclSubs"
+)
+
+// Enforced reports whether a column's Min and Max are limits the board applies.
+// A constraint this client does not know is not one it can count, so it reads
+// as none rather than as a limit drawn against the wrong number.
+func (c ColumnConstraint) Enforced() bool {
+	return c == ConstraintIssueCount || c == ConstraintIssueCountExclSubs
+}
+
+// CountsSubtasks reports whether a sub-task counts toward a column's limit.
+func (c ColumnConstraint) CountsSubtasks() bool { return c == ConstraintIssueCount }
 
 // Ordering reports how this board's columns are ordered.
 func (c BoardConfig) Ordering() Ordering {

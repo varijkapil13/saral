@@ -260,6 +260,7 @@ func (b apiBoardConfig) domain(boardID int64) jira.BoardConfig {
 		RankFieldID: b.Ranking.fieldID(),
 		FilterID:    string(b.Filter.ID),
 		SubQuery:    strings.TrimSpace(b.SubQuery.Query),
+		Constraint:  jira.ColumnConstraint(b.ColumnConfig.ConstraintType),
 	}
 	if out.BoardID == 0 {
 		out.BoardID = boardID
@@ -288,8 +289,12 @@ type apiBoardSubQuery struct {
 	Query string `json:"query"`
 }
 
+// apiBoardColumns carries constraintType beside the columns, and it is what
+// says whether their min and max are limits: turning the constraint off keeps
+// the numbers.
 type apiBoardColumns struct {
-	Columns []apiBoardColumn `json:"columns"`
+	Columns        []apiBoardColumn `json:"columns"`
+	ConstraintType string           `json:"constraintType"`
 }
 
 // apiBoardColumn is one column. min and max are independently optional and stay

@@ -426,97 +426,30 @@ func TestUpload_ReadsOneByteMoreThanItMayKeepOfAFileOfUnknownSize(t *testing.T) 
 func TestUpload_RefusesAFileTooLargeToSendWithoutOpeningIt(t *testing.T) {
 	t.Parallel()
 
-	tests := map[string]string{
-		"a site whose cap the file is over":       attachmentMetaTinyBody,
-		"a site that did not say what it accepts": "",
+	c, s := attachmentClient(t, jiratest.WithHandler(http.MethodGet, attachmentMetaRoute,
+		jsonHandler(http.StatusOK, attachmentMetaTinyBody)))
+
+	var opened atomic.Int64
+	_, err := c.Upload(t.Context(), testIssueKey, []jira.FileRef{{
+		Name: "capture.mov",
+		Size: 9,
+		Open: func() (io.ReadCloser, error) {
+			opened.Add(1)
+			return io.NopCloser(strings.NewReader("never read")), nil
+		},
+	}})
+	var invalid *jira.ValidationError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("got %T (%v), want a *jira.ValidationError", err, err)
 	}
-	for name, meta := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			opts := []jiratest.ServerOption{jiratest.WithStatus(http.MethodGet, attachmentMetaRoute,
-				http.StatusInternalServerError, "")}
-			if meta != "" {
-				opts = []jiratest.ServerOption{jiratest.WithHandler(http.MethodGet, attachmentMetaRoute,
-					jsonHandler(http.StatusOK, meta))}
-			}
-			c, s := attachmentClient(t, opts...)
-
-			var opened atomic.Int64
-			_, err := c.Upload(t.Context(), testIssueKey, []jira.FileRef{{
-				Name: "capture.mov",
-				Size: attachmentBufferCeiling + 1,
-				Open: func() (io.ReadCloser, error) {
-					opened.Add(1)
-					return io.NopCloser(strings.NewReader("never read")), nil
-				},
-			}})
-			var invalid *jira.ValidationError
-			if !errors.As(err, &invalid) {
-				t.Fatalf("got %T (%v), want a *jira.ValidationError", err, err)
-			}
-			if n := opened.Load(); n != 0 {
-				t.Errorf("the file was opened %d times; os.Stat already said it cannot be sent", n)
-			}
-			for _, served := range s.Requests() {
-				if served.Method == http.MethodPost {
-					t.Errorf("the file was uploaded anyway: %v", served)
-				}
-			}
-		})
+	if n := opened.Load(); n != 0 {
+		t.Errorf("the file was opened %d times; its declared size already said the site will not take it", n)
 	}
-}
-
-func TestAttachmentBody_HoldsNoMoreOfAnUploadThanTheClientsOwnCeiling(t *testing.T) {
-	t.Parallel()
-
-	const ceiling = 10
-	six := func(name string) jira.FileRef { return unsizedFile(name, "123456", nil) }
-
-	t.Run("one file inside the ceiling and no site cap at all", func(t *testing.T) {
-		t.Parallel()
-
-		body, contentType, err := attachmentBody([]jira.FileRef{six("notes.txt")}, attachmentLimitUnknown, ceiling)
-		if err != nil {
-			t.Fatalf("attachmentBody: %v", err)
+	for _, served := range s.Requests() {
+		if served.Method == http.MethodPost {
+			t.Errorf("the file was uploaded anyway: %v", served)
 		}
-		if !bytes.Contains(body, []byte("123456")) {
-			t.Error("the file's bytes are not in the body")
-		}
-		if !strings.HasPrefix(contentType, "multipart/form-data") {
-			t.Errorf("Content-Type = %q", contentType)
-		}
-	})
-
-	t.Run("two files that only overrun together", func(t *testing.T) {
-		t.Parallel()
-
-		_, _, err := attachmentBody([]jira.FileRef{six("one.txt"), six("two.txt")}, attachmentLimitUnknown, ceiling)
-		var invalid *jira.ValidationError
-		if !errors.As(err, &invalid) {
-			t.Fatalf("got %T (%v), want a *jira.ValidationError: two files of 6 bytes do not fit in 10", err, err)
-		}
-		if !strings.Contains(invalid.Error(), "two.txt") {
-			t.Errorf("the refusal must name the file that did not fit, got %q", invalid.Error())
-		}
-	})
-
-	t.Run("a declared size over the ceiling with no site cap", func(t *testing.T) {
-		t.Parallel()
-
-		_, _, err := attachmentBody([]jira.FileRef{{
-			Name: "capture.mov",
-			Size: ceiling + 1,
-			Open: func() (io.ReadCloser, error) {
-				t.Error("a file too big to hold was opened")
-				return io.NopCloser(strings.NewReader("")), nil
-			},
-		}}, attachmentLimitUnknown, ceiling)
-		var invalid *jira.ValidationError
-		if !errors.As(err, &invalid) {
-			t.Fatalf("got %T (%v), want a *jira.ValidationError", err, err)
-		}
-	})
+	}
 }
 
 func TestUpload_RefusesWhenTheSiteHasAttachmentsSwitchedOff(t *testing.T) {

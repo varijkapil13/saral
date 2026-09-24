@@ -64,6 +64,7 @@ type Client interface {
 
 	Search(ctx context.Context, q Query) (Page[Issue], error)
 	Issue(ctx context.Context, key string) (Issue, error)
+	IssueFields(ctx context.Context, key string, fields []string) (Issue, error)
 	CreateIssue(ctx context.Context, in IssueInput) (Issue, error)
 	UpdateIssue(ctx context.Context, key string, in IssuePatch) error
 	Transitions(ctx context.Context, key string) ([]Transition, error)
@@ -88,6 +89,7 @@ type Client interface {
 	BoardConfig(ctx context.Context, boardID int64) (BoardConfig, error)
 	BoardIssues(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
 	BoardBacklog(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
+	QuickFilters(ctx context.Context, boardID int64) ([]QuickFilter, error)
 	Sprints(ctx context.Context, boardID int64, states ...SprintState) (Page[Sprint], error)
 	Sprint(ctx context.Context, id int64) (Sprint, error)
 	CreateSprint(ctx context.Context, in SprintInput) (Sprint, error)
@@ -96,9 +98,22 @@ type Client interface {
 	CompleteSprint(ctx context.Context, id int64) (Sprint, error)
 	MoveToSprint(ctx context.Context, sprintID int64, keys []string) error
 	MoveToBacklog(ctx context.Context, keys []string) error
+	SprintIssues(ctx context.Context, boardID, sprintID int64, q BoardQuery) (Page[Issue], error)
+	RankIssues(ctx context.Context, keys []string, at RankPosition) error
+
+	IssueLinkTypes(ctx context.Context) ([]LinkType, error)
+	LinkIssues(ctx context.Context, in LinkInput) error
+	DeleteLink(ctx context.Context, linkID string) error
+	Worklogs(ctx context.Context, key string) (Page[Worklog], error)
+	AddWorklog(ctx context.Context, key string, in WorklogInput) (Worklog, error)
+	Watchers(ctx context.Context, key string) (WatcherList, error)
+	Watch(ctx context.Context, key, accountID string) error
+	Unwatch(ctx context.Context, key, accountID string) error
+	ServerInfo(ctx context.Context) (ServerInfo, error)
 
 	Fields(ctx context.Context) ([]Field, error)
 	CreateMeta(ctx context.Context, projectKey, issueTypeID string) (Schema, error)
+	EditMeta(ctx context.Context, key string) (EditMeta, error)
 	BulkMove(ctx context.Context, in MoveRequest) (TaskRef, error)
 	Task(ctx context.Context, ref TaskRef) (TaskStatus, error)
 	Plans(ctx context.Context) ([]Plan, error)
@@ -127,6 +142,12 @@ Rules for the port:
   id and drawn back through `People`; a status is chosen by id from `IssueTypeStatuses`. Both exist
   because the alternative was measured and does not work: a name is localised, a name is not unique
   on one site, and one account answered to two different names on two endpoints within a minute.
+
+The listing is a summary; `pkg/jira/port.go` is the contract. The methods added with ranks, links,
+worklogs, watchers and `ServerInfo` each sit behind a role of their own in `pkg/jira/roles.go` —
+`IssueReader`, `SprintIssueReader`, `Ranker`, `Linker`, `Worklogger`, `WatcherManager`,
+`ServerInfoReader` — and none is in `SessionClient` until a view calls it: the packet that lands that
+view widens the composite. `*cloud.Client` and `*jiratest.Fake` both implement the whole port.
 
 ### Filtering by a person, and by the site's own words
 

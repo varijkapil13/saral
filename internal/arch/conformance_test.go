@@ -42,12 +42,8 @@ var noCaseYet = map[string]string{
 	"Capabilities": "the probe folds six reads and their refusals into a reason per capability, and " +
 		"jiratest states capabilities as options rather than deriving them from anything — so a table " +
 		"has to compare the reasons a 403 produces, not the flags",
-	"Issue": "one issue read whole is the widest decode in the adapter, and the fake builds an issue " +
-		"rather than decoding one; a table has to assert the field mask and the shape of every value kind",
 	"CreateIssue": "the write path: what a create sends for each field kind, and which refusals come " +
 		"back as *jira.ValidationError against a field id rather than as prose",
-	"UpdateIssue": "a sparse patch has to leave out what it does not name, and Clear has to send null; " +
-		"a table has to prove the omitted field is untouched on both sides",
 	"Transitions": "the list is per issue, per token and expires, and the fake's is derived from its own " +
 		"workflow; a table has to compare what a screened transition states about its fields",
 	"Transition": "a transition screen's required fields are not what the read said they were, so the " +
@@ -57,8 +53,6 @@ var noCaseYet = map[string]string{
 	"EditComment":   "the same, plus the refusal for a comment this token did not write",
 	"DeleteComment": "the only comment method whose success is a 204 with no body, and the fake answers nothing at all",
 	"Fields":        "the catalogue is an unpaged bare array on one side and a fixed list on the other; a table has to compare what a custom field's schema says",
-	"MoveToSprint": "MoveToBacklog has a table and this does not, which is the pair that should have been " +
-		"written together: the case set is the one that moves an issue out of a sprint it is already in",
 }
 
 // The two things this guard does not prove, said wherever it fails. A test that

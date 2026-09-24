@@ -1,0 +1,25 @@
+{
+  "issueLinkTypes": [
+    {
+      "id": "10300",
+      "name": "Holds up",
+      "inward": "is held up by",
+      "outward": "holds up",
+      "self": "https://example.atlassian.net/rest/api/3/issueLinkType/10300"
+    },
+    {
+      "id": "10301",
+      "name": "Echoes",
+      "inward": "is echoed by",
+      "outward": "echoes",
+      "self": "https://example.atlassian.net/rest/api/3/issueLinkType/10301"
+    },
+    {
+      "id": "10302",
+      "name": "Leans on",
+      "inward": "is leaned on by",
+      "outward": "leans on",
+      "self": "https://example.atlassian.net/rest/api/3/issueLinkType/10302"
+    }
+  ]
+}

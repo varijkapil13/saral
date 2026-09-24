@@ -8,10 +8,11 @@ import "github.com/varijkapil13/saral/pkg/jira"
 // adapt something and does not should fail `go build`, not a suite somebody has
 // to run.
 //
-// The list is what the adapter satisfies today. A packet landing the rest of an
-// area adds its role here in the same PR; jira.Client joins the list when the
-// last of the port's methods arrives.
+// The adapter implements the whole port, and says so first; the roles below it
+// are what the rest of the tree holds it as.
 var (
+	_ jira.Client = (*Client)(nil)
+
 	_ jira.Prober         = (*Client)(nil)
 	_ jira.Identifier     = (*Client)(nil)
 	_ jira.Searcher       = (*Client)(nil)

@@ -431,7 +431,7 @@ func (f *Fake) Upload(ctx context.Context, key string, files []jira.FileRef) ([]
 	}
 	added := make([]jira.Attachment, 0, len(files))
 	for i := range files {
-		size, err := fakeReadAll(&files[i])
+		size, err := fakeReadAll(ctx, &files[i])
 		if err != nil {
 			return nil, err
 		}
@@ -706,6 +706,13 @@ func (f *Fake) BoardConfig(ctx context.Context, boardID int64) (jira.BoardConfig
 		FilterID: "filter-" + strconv.FormatInt(board.ID, 10),
 	}
 	cfg.SubQuery = fakeSubQueryOf(board)
+	// Neither board limits a column, and they say so two ways: the one a board
+	// with limits switched off answers, and the one a board counting sub-tasks
+	// answers with no numbers set.
+	cfg.Constraint = jira.ConstraintNone
+	if board.Type != jira.BoardScrum {
+		cfg.Constraint = jira.ConstraintIssueCount
+	}
 	if ref, ranked := f.fakeRankField(board); ranked {
 		cfg.RankFieldID = ref.ID
 	}
@@ -780,7 +787,7 @@ func fakeQuickFiltersOf(boardID int64) []jira.QuickFilter {
 // a status mapped to no column is an issue the board does not show, and the
 // sub-query is applied rather than ignored.
 func (f *Fake) BoardIssues(ctx context.Context, boardID int64, q jira.BoardQuery) (jira.Page[jira.Issue], error) {
-	return f.fakeBoardIssues(ctx, "BoardIssues", boardID, q, false)
+	return f.fakeBoardIssues(ctx, "BoardIssues", boardID, q, fakeBoardScope{})
 }
 
 // BoardBacklog lists a board's backlog: the same set, less the issues an active
@@ -788,12 +795,18 @@ func (f *Fake) BoardIssues(ctx context.Context, boardID int64, q jira.BoardQuery
 // means by a backlog. A closed sprint holds nothing back — the work in it is
 // over — so an issue whose only sprint is closed is in the backlog.
 func (f *Fake) BoardBacklog(ctx context.Context, boardID int64, q jira.BoardQuery) (jira.Page[jira.Issue], error) {
-	return f.fakeBoardIssues(ctx, "BoardBacklog", boardID, q, true)
+	return f.fakeBoardIssues(ctx, "BoardBacklog", boardID, q, fakeBoardScope{backlog: true})
 }
 
 // fakeBoardIssues pages either board issue read by offset with a total, which is
 // the Agile API's model rather than the platform API's cursor.
-func (f *Fake) fakeBoardIssues(ctx context.Context, name string, boardID int64, q jira.BoardQuery, backlog bool) (jira.Page[jira.Issue], error) {
+// fakeBoardScope narrows a board read to its backlog or to one of its sprints.
+type fakeBoardScope struct {
+	backlog bool
+	sprint  int64
+}
+
+func (f *Fake) fakeBoardIssues(ctx context.Context, name string, boardID int64, q jira.BoardQuery, scope fakeBoardScope) (jira.Page[jira.Issue], error) {
 	mask := jira.NewFieldMask(q.Fields)
 	expanded := fakeExpandsSchema(q.Fields)
 	return jira.Offset(ctx, func(ctx context.Context, startAt int) ([]jira.Issue, int, bool, error) {
@@ -816,7 +829,12 @@ func (f *Fake) fakeBoardIssues(ctx context.Context, name string, boardID int64, 
 		if !ok {
 			return nil, -1, false, fakeNotFound("board", strconv.FormatInt(boardID, 10))
 		}
-		matched, err := f.fakeBoardSet(board, q.SubQuery, q.QuickFilters, backlog)
+		if scope.sprint != 0 {
+			if err := f.fakeBoardSprint(board, scope.sprint); err != nil {
+				return nil, -1, false, err
+			}
+		}
+		matched, err := f.fakeBoardSet(board, q.SubQuery, q.QuickFilters, scope)
 		if err != nil {
 			return nil, -1, false, err
 		}
@@ -841,7 +859,7 @@ func (f *Fake) fakeBoardIssues(ctx context.Context, name string, boardID int64, 
 
 // fakeBoardSet is the issues one of the two reads answers with, in the order it
 // answers them in.
-func (f *Fake) fakeBoardSet(board *jira.Board, subQuery string, quickFilters []string, backlog bool) ([]*jira.Issue, error) {
+func (f *Fake) fakeBoardSet(board *jira.Board, subQuery string, quickFilters []string, scope fakeBoardScope) ([]*jira.Issue, error) {
 	keep, err := f.fakeSubQuery(board, subQuery)
 	if err != nil {
 		return nil, err
@@ -859,7 +877,8 @@ func (f *Fake) fakeBoardSet(board *jira.Board, subQuery string, quickFilters []s
 		case !mapped[iss.Status.ID]:
 		case !keep(iss):
 		case !quick(iss):
-		case backlog && !f.fakeUnscheduled(iss):
+		case scope.backlog && !f.fakeUnscheduled(iss):
+		case scope.sprint != 0 && f.sprintOf[iss.Key] != scope.sprint:
 		default:
 			out = append(out, iss)
 		}
@@ -1600,6 +1619,9 @@ func (f *Fake) fakeFieldMeta(id string, required bool, allowed []jira.Option) (j
 // lets a caller ship code that leaves an issue in a state the real API cannot
 // produce.
 func (f *Fake) fakeValidatePatch(in *jira.IssuePatch) error {
+	if err := fakeLabelEdits(in); err != nil {
+		return err
+	}
 	if in.PriorityID != nil && fakePriorityByID(*in.PriorityID) == nil {
 		return fakeInvalid("priority", fmt.Sprintf("no priority %q on this site", *in.PriorityID))
 	}
@@ -1655,6 +1677,14 @@ func (f *Fake) fakeApplyPatch(iss *jira.Issue, in *jira.IssuePatch) error {
 	}
 	if in.Labels != nil {
 		iss.Labels = slices.Clone(*in.Labels)
+	}
+	for _, label := range in.AddLabels {
+		if label = strings.TrimSpace(label); !slices.Contains(iss.Labels, label) {
+			iss.Labels = append(iss.Labels, label)
+		}
+	}
+	for _, label := range in.RemoveLabels {
+		iss.Labels = slices.DeleteFunc(iss.Labels, func(held string) bool { return held == strings.TrimSpace(label) })
 	}
 	if in.PriorityID != nil {
 		iss.Priority = fakePriorityByID(*in.PriorityID)
@@ -1907,20 +1937,45 @@ func fakeAttachmentID(id string) (string, error) {
 	return trimmed, nil
 }
 
-func fakeReadAll(file *jira.FileRef) (int64, error) {
+func fakeReadAll(ctx context.Context, file *jira.FileRef) (int64, error) {
 	rc, err := file.Open()
 	if err != nil {
 		return 0, &jira.TransportError{Op: "open " + file.Name, Err: err}
 	}
-	n, err := io.Copy(io.Discard, rc)
+	n, err := io.Copy(&fakeProgress{ctx: ctx, report: file.Progress}, rc)
 	closeErr := rc.Close()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return 0, ctxErr
+	}
 	if err != nil {
 		return 0, &jira.TransportError{Op: "read " + file.Name, Err: err}
 	}
 	if closeErr != nil {
 		return 0, &jira.TransportError{Op: "close " + file.Name, Err: closeErr}
 	}
+	if file.Size > 0 && n != file.Size {
+		return 0, fakeInvalid("file", fmt.Sprintf("%s declared %d bytes and read %d: it changed while it was being sent", file.Name, file.Size, n))
+	}
 	return n, nil
+}
+
+// fakeProgress stands in for the request body an upload is written into: it
+// keeps nothing, reports what it was given, and stops when the context does.
+type fakeProgress struct {
+	ctx    context.Context
+	report func(sent int64)
+	sent   int64
+}
+
+func (p *fakeProgress) Write(b []byte) (int, error) {
+	if err := p.ctx.Err(); err != nil {
+		return 0, err
+	}
+	p.sent += int64(len(b))
+	if p.report != nil && len(b) > 0 {
+		p.report(p.sent)
+	}
+	return len(b), nil
 }
 
 func fakeMimeType(name string) string {

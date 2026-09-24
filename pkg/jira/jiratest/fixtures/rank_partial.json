@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "issueId": 10001,
+      "issueKey": "EX-1",
+      "status": 200
+    },
+    {
+      "issueId": 10002,
+      "issueKey": "EX-2",
+      "status": 400,
+      "errors": [
+        "The issue cannot be ranked relative to an issue on a board it is not on."
+      ]
+    }
+  ]
+}

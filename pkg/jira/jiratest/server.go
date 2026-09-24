@@ -263,6 +263,21 @@ var srvDefaultRoutes = []srvRoute{
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/backlog", srvFixtureHandler(http.StatusOK, "board_issues.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/epic", srvFixtureHandler(http.StatusOK, "board_epics.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/quickfilter", srvFixtureHandler(http.StatusOK, "board_quickfilters.json")},
+	{http.MethodGet, "/rest/agile/1.0/board/{id}/sprint/{sprintId}/issue", srvFixtureHandler(http.StatusOK, "board_issues.json")},
+	// 204 is every issue moving; a 207 names each issue's own status, and a test
+	// asks for one the way it asks for any other fixture:
+	//   WithStatus(http.MethodPut, "/rest/agile/1.0/issue/rank", http.StatusMultiStatus, "rank_partial.json")
+	{http.MethodPut, "/rest/agile/1.0/issue/rank", srvFixtureHandler(http.StatusNoContent, "")},
+	{http.MethodGet, "/rest/api/3/issueLinkType", srvFixtureHandler(http.StatusOK, "issue_link_types.json")},
+	// A created link is answered with no body and no id.
+	{http.MethodPost, "/rest/api/3/issueLink", srvFixtureHandler(http.StatusCreated, "")},
+	{http.MethodDelete, "/rest/api/3/issueLink/{id}", srvFixtureHandler(http.StatusNoContent, "")},
+	{http.MethodGet, "/rest/api/3/issue/{key}/worklog", srvOffsetPages("worklogs.json", "worklogs_page2.json")},
+	{http.MethodPost, "/rest/api/3/issue/{key}/worklog", srvFixtureHandler(http.StatusCreated, "worklog_created.json")},
+	{http.MethodGet, "/rest/api/3/issue/{key}/watchers", srvFixtureHandler(http.StatusOK, "watchers.json")},
+	{http.MethodPost, "/rest/api/3/issue/{key}/watchers", srvFixtureHandler(http.StatusNoContent, "")},
+	{http.MethodDelete, "/rest/api/3/issue/{key}/watchers", srvFixtureHandler(http.StatusNoContent, "")},
+	{http.MethodGet, "/rest/api/3/serverInfo", srvFixtureHandler(http.StatusOK, "server_info.json")},
 	// 403 is the normal answer — the Plans API needs Administer Jira — so it is
 	// the default. A test that wants the reachable case overrides the route:
 	//   WithFixture(http.MethodGet, "/rest/api/3/plans/plan", "plans_ok.json")

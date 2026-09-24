@@ -46,6 +46,10 @@ type Client interface {
 	Search(ctx context.Context, q Query) (Page[Issue], error)
 	// Issue fetches one issue by key.
 	Issue(ctx context.Context, key string) (Issue, error)
+	// IssueFields fetches one issue by key with only the fields named. It is the
+	// read to make after a write: Search runs on an index that trails a write,
+	// and this does not.
+	IssueFields(ctx context.Context, key string, fields []string) (Issue, error)
 	// CreateIssue creates an issue and returns it as stored.
 	CreateIssue(ctx context.Context, in IssueInput) (Issue, error)
 	// UpdateIssue applies a sparse patch. It cannot change status or project.
@@ -135,6 +139,41 @@ type Client interface {
 	MoveToSprint(ctx context.Context, sprintID int64, keys []string) error
 	// MoveToBacklog moves issues out of whatever sprint they are in.
 	MoveToBacklog(ctx context.Context, keys []string) error
+
+	// SprintIssues lists what a board shows of one sprint, on the terms
+	// BoardIssues lists the whole board on: the board's filter and column
+	// mapping applied at the site, rank order, and the sub-query left to the
+	// caller.
+	SprintIssues(ctx context.Context, boardID, sprintID int64, q BoardQuery) (Page[Issue], error)
+	// RankIssues moves issues to just before or just after another one, in the
+	// order given. A reorder that lands for some issues and not others reports
+	// as a *PartialRankError.
+	RankIssues(ctx context.Context, keys []string, at RankPosition) error
+
+	// IssueLinkTypes lists the kinds of link this site has.
+	IssueLinkTypes(ctx context.Context) ([]LinkType, error)
+	// LinkIssues links two issues. The site answers with no link id, so the
+	// link is found again through Issue.Links.
+	LinkIssues(ctx context.Context, in LinkInput) error
+	// DeleteLink removes a link by the id Issue.Links carries.
+	DeleteLink(ctx context.Context, linkID string) error
+
+	// Worklogs lists the time logged on an issue, oldest first.
+	Worklogs(ctx context.Context, key string) (Page[Worklog], error)
+	// AddWorklog logs time on an issue and returns the entry as stored.
+	AddWorklog(ctx context.Context, key string, in WorklogInput) (Worklog, error)
+
+	// Watchers reports who watches an issue.
+	Watchers(ctx context.Context, key string) (WatcherList, error)
+	// Watch adds a watcher. An empty accountID is the authenticated account.
+	Watch(ctx context.Context, key, accountID string) error
+	// Unwatch removes a watcher. The account is required, because the endpoint
+	// has no spelling for "me".
+	Unwatch(ctx context.Context, key, accountID string) error
+
+	// ServerInfo reports what the site is, which is how a site that is not Jira
+	// Cloud is told apart before anything is written for it.
+	ServerInfo(ctx context.Context) (ServerInfo, error)
 
 	// Fields returns the site's field catalogue, which is how a custom field is
 	// resolved from a name to an ID.
