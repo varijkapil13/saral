@@ -46,7 +46,7 @@ Taken rather than derived, so they are written down once:
    makes it that view. Neither gets a sort control, and this sentence is why.
 2. **A Nerd Font may be assumed, as a tier and not as a floor.** This reverses the rule stated in
    `kernel/theme.go` — *"Nothing here may assume a Nerd Font"* — deliberately and on request. Three
-   tiers now: `nerd` → `unicode` → `ascii`, `nerd` the default, all three switchable from the
+   tiers now: `nerd` → `unicode` → `ascii`, all three switchable from the
    settings screen's existing Glyphs row. A terminal without the font shows tofu, which is why the
    row exists and why the tier below is kept whole rather than deleted.
 3. **The filter bar is lifted into one widget and adopted by every list-shaped view**, rather than
@@ -88,7 +88,8 @@ rows follow along. What changes is that the picker no longer sends `kernel.Pop()
 ## The glyph tier
 
 `kernel.Glyphs` gains a third constructor beside `UnicodeGlyphs` and `ASCIIGlyphs`, and gains the
-fields the icons need. `GlyphsFor` resolves `"nerd"`, `"unicode"`, `"ascii"`, defaulting to nerd.
+fields the icons need. `GlyphsFor` resolves `"nerd"`, `"unicode"`, `"ascii"`. It defaulted to nerd when this was written and
+defaults to unicode now: see `docs/SETTINGS.md` for why and how to switch.
 
 **Checked against the payload rather than the port, on the second pass.** The first pass found no
 hierarchy on `pkg/jira.IssueType` and fell back to the type's first letter — which, drawn as a board

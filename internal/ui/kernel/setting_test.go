@@ -270,8 +270,8 @@ func TestGlyphsSetting_ValueReadsTheTier(t *testing.T) {
 	if got := s.Value(Deps{Theme: NewTheme(ThemeDark, true, NerdGlyphs())}); got != "nerd" {
 		t.Errorf("got %q for a nerd theme, want nerd", got)
 	}
-	if got := s.Value(Deps{}); got != "nerd" {
-		t.Errorf("got %q with no theme at all, want the default nerd", got)
+	if got := s.Value(Deps{}); got != "unicode" {
+		t.Errorf("got %q with no theme at all, want the default unicode", got)
 	}
 }
 
@@ -315,7 +315,22 @@ func TestWriteGlyphs_ChangesGlyphsAndNothingElseInTheProfile(t *testing.T) {
 	}
 }
 
-func TestWriteGlyphs_WritesNerdAsNoGlyphSetAtAll(t *testing.T) {
+func TestWriteGlyphs_WritesUnicodeAsNoGlyphSetAtAll(t *testing.T) {
+	path := writeConfig(t, profileWithEverything)
+
+	if err := writeGlyphs("example.atlassian.net", UnicodeGlyphs()); err != nil {
+		t.Fatalf("writeGlyphs: %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "glyphs") {
+		t.Errorf("unicode was written as a value rather than as an absence:\n%s", body)
+	}
+}
+
+func TestWriteGlyphs_WritesNerdAsAValue(t *testing.T) {
 	path := writeConfig(t, profileWithEverything)
 
 	if err := writeGlyphs("example.atlassian.net", NerdGlyphs()); err != nil {
@@ -325,8 +340,8 @@ func TestWriteGlyphs_WritesNerdAsNoGlyphSetAtAll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(body), "glyphs") {
-		t.Errorf("nerd was written as a value rather than as an absence:\n%s", body)
+	if !strings.Contains(string(body), `glyphs = "nerd"`) {
+		t.Errorf("nerd, which is no longer the default, was not written down:\n%s", body)
 	}
 }
 

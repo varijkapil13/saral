@@ -154,9 +154,8 @@ func ASCIIGlyphs() Glyphs {
 	}
 }
 
-// NerdGlyphs is the top tier, assumed by default: every icon a Nerd Font
-// patches in over the box-drawing and geometric shapes UnicodeGlyphs already
-// carries, which a Nerd Font renders as well as any other font does.
+// NerdGlyphs is the top tier: every icon a Nerd Font patches in over the
+// box-drawing and geometric shapes UnicodeGlyphs already carries.
 func NerdGlyphs() Glyphs {
 	g := UnicodeGlyphs()
 	g.Check = ""              // nf-fa-check
@@ -181,15 +180,16 @@ func NerdGlyphs() Glyphs {
 }
 
 // GlyphsFor picks a glyph set by name: "nerd", "unicode" or "ascii", falling
-// back to nerd, the default tier.
+// back to unicode, the default tier: no terminal reliably says whether a Nerd
+// Font is installed, and guessing wrong fills the screen with tofu.
 func GlyphsFor(name string) Glyphs {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "ascii":
 		return ASCIIGlyphs()
-	case "unicode":
-		return UnicodeGlyphs()
-	default:
+	case "nerd":
 		return NerdGlyphs()
+	default:
+		return UnicodeGlyphs()
 	}
 }
 
@@ -524,7 +524,7 @@ func glyphsSetting() Setting {
 		Section: appearanceSection,
 		Order:   2,
 		Title:   "Glyphs",
-		Summary: "Nerd Font icons, plain box drawing, or ASCII for a font you cannot trust",
+		Summary: "unicode by default; nerd font icons need a Nerd Font installed; ascii for a font you cannot trust",
 		Kind:    KindChoice,
 		Scope:   ScopeProfile,
 		Options: func(Deps) []SettingOption {
@@ -536,7 +536,7 @@ func glyphsSetting() Setting {
 		},
 		Value: func(d Deps) string {
 			if d.Theme == nil {
-				return "nerd"
+				return "unicode"
 			}
 			return d.Theme.Glyphs.Tier()
 		},
@@ -575,7 +575,7 @@ func SwitchTheme(d Deps, mode ThemeMode) tea.Cmd {
 	if forced, why := noColorForced(); forced && mode != ThemeNoColor {
 		return func() tea.Msg { return StatusMsg{Text: why, Level: LevelWarn} }
 	}
-	dark, glyphs, scheme := true, NerdGlyphs(), DefaultScheme
+	dark, glyphs, scheme := true, UnicodeGlyphs(), DefaultScheme
 	if d.Theme != nil {
 		dark, glyphs, scheme = d.Theme.Dark, d.Theme.Glyphs, d.Theme.Scheme
 	}
@@ -719,11 +719,9 @@ func saveGlyphs(site string, g Glyphs) tea.Cmd {
 }
 
 func writeGlyphs(site string, g Glyphs) error {
-	// Nerd is the absence of a glyph set in the file rather than a value, so
-	// that a profile that never chose and a profile that chose nerd read the
-	// same.
+	// The default tier is written as no value, so an untouched profile follows the default.
 	value := g.Tier()
-	if value == "nerd" {
+	if value == "unicode" {
 		value = ""
 	}
 	return updateProfile(site, func(p *config.Profile) error {

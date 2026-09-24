@@ -1,4 +1,4 @@
-# See docs/DEMO.md before recording: this tape needs a profile it cannot create.
+# See docs/DEMO.md. The session is saral -fake: synthetic data, no site, no token.
 Require saral
 
 Output demo.gif
@@ -16,18 +16,13 @@ Set TypingSpeed 90ms
 Set CursorBlink false
 Set Theme "Catppuccin Frappe"
 
-# The scratch profile, which docs/DEMO.md specifies.
-Env SARAL_CONFIG_DIR "/tmp/saral-demo/config"
-Env SARAL_CACHE_DIR "/tmp/saral-demo/cache"
-Env SARAL_DEMO_PROJECT "EX"
-
 Hide
 Type "clear"
 Enter
 Show
 
 # The issue list
-Type "saral --project $SARAL_DEMO_PROJECT --theme dark"
+Type "saral -fake --theme dark"
 Sleep 800ms
 Enter
 Sleep 4s

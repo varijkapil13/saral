@@ -209,8 +209,8 @@ you could enter from an issue and not get out of. The kernel builds it through t
     Colour scheme             nord                                       ▸
       which colours mean accent, danger and the rest
 
-    Glyphs                    (•) nerd font  ( ) unicode  ( ) ascii
-      box drawing, or plain ASCII for a font you cannot trust
+    Glyphs                    ( ) nerd font  (•) unicode  ( ) ascii
+      unicode by default; nerd font icons need a Nerd Font installed
 
     Mouse                     [✓] on
       clicking, dragging the split, the right-click menu  (saved to config.toml)
@@ -295,7 +295,15 @@ go; `SwitchTheme` and `SwitchScheme` stay exactly as they are and become the set
 | `Config.Mouse` | `appearance.mouse`, toggle | config.toml, shared |
 
 Glyphs already switches cleanly: `NewTheme` takes a `Glyphs` and a `ThemeMsg` carries the rebuilt
-theme, so a `SwitchGlyphs` beside `SwitchTheme` is the same six lines. Mouse needs one new message —
+theme, so a `SwitchGlyphs` beside `SwitchTheme` is the same six lines.
+
+**The default tier is `unicode`.** No terminal reliably reports whether a Nerd Font is installed, and
+guessing `nerd` wrong draws tofu across every row, so the icons are opt-in. Three ways to switch, in
+the order they win: `--glyphs nerd` for one run; *Settings → Appearance → Glyphs* (`ctrl+,`), which
+saves to the profile; or `glyphs = "nerd"` in the profile by hand. The default is saved as no key at
+all. Before this default changed, choosing *nerd font* on the settings screen was also saved as no
+key, so a profile that chose it then reads as `unicode` now and needs choosing once more.
+`saral --version` and `saral doctor` both print the tier a run would use. Mouse needs one new message —
 the kernel holds `m.mouse`, calls `Zones.SetEnabled` once in `Init` and reads `m.mouse` per frame in
 `View`, so a `SetMouseMsg` that sets the field, re-enables the zone manager and writes `Config.Mouse`
 is all of it.

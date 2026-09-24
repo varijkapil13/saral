@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -21,7 +22,6 @@ import (
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/store"
 	_ "github.com/varijkapil13/saral/internal/ui"
-	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/list"
 	"github.com/varijkapil13/saral/internal/ui/onboarding"
@@ -32,10 +32,6 @@ import (
 // cacheFile is the bbolt database inside config.CacheDir().
 const cacheFile = "cache.db"
 
-// fileNameTOML is what config.Path builds; --version names it without asking
-// for the path, which would fail on a machine with no home directory.
-const fileNameTOML = "config.toml"
-
 // tokenTimeout bounds resolving the token, which happens before the first frame
 // and cannot be cancelled by anyone watching it. internal/config gives a command
 // source 15s plus a 2s wait delay of its own, so this sits above that and lets
@@ -43,113 +39,66 @@ const fileNameTOML = "config.toml"
 // prompt nobody is at the machine to answer.
 const tokenTimeout = 20 * time.Second
 
-var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
-)
-
 // errAlreadyReported means the message has been printed already, so main exits
 // without printing a second one.
 var errAlreadyReported = errors.New("")
 
 func main() {
 	err := run(os.Args[1:], os.Stdout, os.Stderr)
-	switch {
-	case err == nil:
-		return
-	case errors.Is(err, errAlreadyReported):
-	default:
+	if err != nil && !errors.Is(err, errAlreadyReported) {
 		fmt.Fprintln(os.Stderr, "saral: "+err.Error())
 	}
-	os.Exit(1)
-}
-
-type options struct {
-	profile string
-	project string
-	// arg is the positional argument, which names a view, an issue or a Jira URL.
-	arg        string
-	theme      string
-	scheme     string
-	glyphs     string
-	poll       time.Duration
-	mouse      bool
-	mouseSet   bool
-	benchPaint bool
-	showVer    bool
-}
-
-// printVersion names the build and where it keeps its files. The path is not
-// decoration: a checkout and an installed copy are two programs on one machine,
-// and the first question about a profile that did not save is which of them
-// wrote it.
-func printVersion(stdout io.Writer) error {
-	if _, err := fmt.Fprintf(stdout, "saral %s (%s, %s)\n", version, commit, date); err != nil {
-		return err
-	}
-	_, err := fmt.Fprintln(stdout, configNote())
-	return err
-}
-
-// configNote is where this build keeps its profile, and why that is not where
-// another copy keeps its. A machine with no home directory has nowhere to put
-// one, which is worth saying rather than leaving the line off.
-func configNote() string {
-	dir, err := config.Dir()
-	if err != nil {
-		return "config nowhere: " + err.Error()
-	}
-	kind := "release"
-	if config.IsDevBuild() {
-		kind = "development build, kept apart from an installed copy"
-	}
-	return "config " + filepath.Join(dir, fileNameTOML) + " (" + kind + ")"
+	os.Exit(exitCodeOf(err))
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
 	var opt options
-	fs := flag.NewFlagSet("saral", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	fs.StringVar(&opt.project, "project", "", "project key to scope the session to; several capabilities are per-project")
-	fs.StringVar(&opt.profile, "profile", "", "profile to use (default: the active one)")
-	fs.StringVar(&opt.theme, "theme", "", "auto, dark, light or no-color")
-	fs.StringVar(&opt.scheme, "scheme", "", "default, nord, dracula, solarized or gruvbox")
-	fs.StringVar(&opt.glyphs, "glyphs", "", "nerd, unicode or ascii; nerd is the default and assumes a Nerd Font")
-	fs.DurationVar(&opt.poll, "poll", 0, "re-read the focused view this often; off by default, and pauses when Jira rate-limits")
-	fs.BoolVar(&opt.mouse, "mouse", true, "enable mouse reporting")
-	fs.BoolVar(&opt.benchPaint, "bench-first-paint", false, "render one frame, print how long it took, and exit")
-	fs.BoolVar(&opt.showVer, "version", false, "print the version and exit")
-	fs.Usage = func() {
-		_, _ = fmt.Fprint(stderr, "usage: saral [flags] [view | issue key | Jira URL]\n\nflags:\n")
-		fs.PrintDefaults()
-	}
-	if len(args) > 0 && args[0] == "version" {
-		args = []string{"--version"}
-	}
-	if err := fs.Parse(args); err != nil {
-		// --help is a request, not a failure, and flag has already printed the
-		// usage and the error for anything else.
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		return errAlreadyReported
+	fs := rootFlags(&opt)
+	positional, subArgs, sub, err := parseRoot(fs, args)
+	switch {
+	case err == nil:
+	case isHelp(err):
+		return printHelp(stdout, fs)
+	case len(positional) > 0:
+		return tooManyArguments(positional)
+	default:
+		return flagError(err)
 	}
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "mouse" {
 			opt.mouseSet = true
 		}
 	})
-	if opt.showVer {
-		return printVersion(stdout)
+	if err := opt.validate(); err != nil {
+		return err
 	}
-	switch rest := fs.Args(); len(rest) {
+	if opt.showVer {
+		return printVersion(stdout, opt)
+	}
+	if opt.logFile != "" {
+		logger, closeLog, err := openLog(opt.logFile)
+		if err != nil {
+			return err
+		}
+		defer closeLog()
+		opt.logger = logger
+	}
+	if opt.fake {
+		cleanup, err := useFakeSite(&opt)
+		defer cleanup()
+		if err != nil {
+			return err
+		}
+	}
+	if sub != nil {
+		return sub.run(&invocation{opt: opt, stdout: stdout, stderr: stderr}, subArgs)
+	}
+	switch len(positional) {
 	case 0:
 	case 1:
-		opt.arg = rest[0]
+		opt.arg = positional[0]
 	default:
-		return fmt.Errorf("saral opens one thing: %s. To scope a session to a project, use --project",
-			strings.Join(rest, " and "))
+		return tooManyArguments(positional)
 	}
 
 	if errs := kernel.RegistrationErrors(); len(errs) > 0 {
@@ -186,29 +135,33 @@ func build(opt options) (deps kernel.Deps, kopts []kernel.Option, notice string,
 	case errors.Is(err, config.ErrNoConfig):
 		cfg = config.Config{Mouse: true}
 	case err != nil:
-		return deps, nil, notice, releaseCache, err
+		return deps, nil, notice, releaseCache, withCode(exitConfig, err)
 	}
 
 	// A config file that exists but points nowhere is a mistake worth naming: the
 	// alternative is a session that silently talks to no site at all.
-	profile, perr := profileFor(cfg, opt.profile)
-	if perr != nil && (opt.profile != "" || len(cfg.Profiles) > 0) {
-		return deps, nil, notice, releaseCache, perr
+	profile, fromEnv, perr := resolveProfile(cfg, opt.profile)
+	named := opt.profile != "" || getenv(envProfile) != ""
+	if perr != nil && (named || len(cfg.Profiles) > 0 || !errors.Is(perr, config.ErrNoProfile)) {
+		return deps, nil, notice, releaseCache, withCode(exitConfig, perr)
 	}
 	deps.Site = profile.Site
 	notice = strings.Join(cfg.Warnings, " · ")
 	project, err := sessionProject(opt.project, profile.Project)
 	if err != nil {
-		return deps, nil, notice, releaseCache, err
+		return deps, nil, notice, releaseCache, withCode(exitUsage, err)
 	}
 	deps.Project = project
 
 	saved, err := app.NewSavedQueries(profile.Queries...)
 	if err != nil {
-		return deps, nil, notice, releaseCache, err
+		return deps, nil, notice, releaseCache, withCode(exitConfig, err)
 	}
 	deps.Saved = saved
 	deps.SaveQueries = queryWriter(profile.Name)
+	if fromEnv {
+		deps.SaveQueries = func(app.SavedQueries) error { return errEnvProfile }
+	}
 
 	// Nothing configured means the first thing to show is the thing that
 	// configures it. Without this the kernel opens whichever view claimed the
@@ -218,12 +171,16 @@ func build(opt options) (deps kernel.Deps, kopts []kernel.Option, notice string,
 
 	// A first run is exactly the path with no token yet, and onboarding is what
 	// gets one, so this goes on whether or not there is a profile to open with.
-	onboarding.SetConnector(connect)
+	onboarding.SetConnector(connectWith(opt.logger))
 
 	if !firstRun {
-		client, cerr := clientFor(profile)
+		connectVia := opt.connectVia
+		if connectVia == nil {
+			connectVia = func(p config.Profile) (jira.SessionClient, error) { return clientFor(p, opt.logger) }
+		}
+		client, cerr := connectVia(profile)
 		if cerr != nil {
-			notice = strings.TrimPrefix(notice+" · "+cerr.Error(), " · ")
+			notice = joinNotice(notice, cerr.Error())
 		} else {
 			deps.Jira = client
 		}
@@ -232,7 +189,7 @@ func build(opt options) (deps kernel.Deps, kopts []kernel.Option, notice string,
 		var cacheNote string
 		deps.Cache, releaseCache, cacheNote = openCache(profile, profileScopes(cfg))
 		if cacheNote != "" {
-			notice = strings.TrimPrefix(notice+" · "+cacheNote, " · ")
+			notice = joinNotice(notice, cacheNote)
 		}
 		deps.Memory = newMemory(profile.Site, profile.Email)
 	}
@@ -262,72 +219,28 @@ func build(opt options) (deps kernel.Deps, kopts []kernel.Option, notice string,
 	if opt.mouseSet {
 		mouse = opt.mouse
 	}
-	kopts = []kernel.Option{kernel.WithMouse(mouse)}
-	switch {
-	case opt.arg != "":
-		opened, argNotice, aerr := argument(opt.arg, profile.Site)
-		if aerr != nil {
-			return deps, nil, notice, releaseCache, aerr
+	var opened []kernel.Option
+	if opt.arg != "" {
+		var argNotice string
+		opened, argNotice, err = argument(opt.arg, profile.Site)
+		if err != nil {
+			return deps, nil, notice, releaseCache, err
 		}
-		kopts = append(kopts, opened...)
-		// Both, when there are both: one says why nothing will reach the site and
-		// the other why the issue that was asked for is not on screen, and
-		// dropping either leaves a question the status line could have answered.
-		if argNotice != "" {
-			notice = strings.TrimPrefix(notice+" · "+argNotice, " · ")
+		if firstRun {
+			opened = nil
+			argNotice = fmt.Sprintf("saral %s was not opened: there is no profile yet, so setup comes first", opt.arg)
 		}
-	case firstRun:
-		kopts = append(kopts, kernel.WithInitialView(kernel.SetupViewID))
+		notice = joinNotice(notice, argNotice)
 	}
+	if firstRun {
+		opened = []kernel.Option{kernel.WithInitialView(kernel.SetupViewID)}
+	}
+	kopts = append([]kernel.Option{kernel.WithMouse(mouse)}, opened...)
 	return deps, kopts, notice, releaseCache, nil
 }
 
-// argument resolves the positional argument: an issue key, a Jira URL, or the ID
-// of a registered view.
-//
-// Anything else is an error rather than nothing. The argument used to be handed
-// to the kernel as a view ID and dropped where no view had it, so `saral PROJ-142`
-// and `saral bord` both opened whichever view held the first footer slot and said
-// nothing about the word that was typed.
-//
-// A URL for another site is named rather than opened: the key would be read
-// against this profile's site, where it is at best a 404 and at worst somebody
-// else's issue with the same key.
-func argument(arg, site string) (opts []kernel.Option, notice string, err error) {
-	if key, ok := app.ParseKey(arg); ok {
-		return []kernel.Option{openIssue(key)}, "", nil
-	}
-	if key, host, ok := app.ParseIssueURL(arg); ok {
-		here, serr := config.NormalizeSite(site)
-		if serr == nil && !strings.EqualFold(here, host) {
-			return nil, fmt.Sprintf("%s is on %s and this profile is on %s, so it was not opened", key, host, here), nil
-		}
-		return []kernel.Option{openIssue(key)}, "", nil
-	}
-	if _, ok := kernel.LookupView(arg); ok {
-		return []kernel.Option{kernel.WithInitialView(arg)}, "", nil
-	}
-	return nil, "", fmt.Errorf("%q is not an issue key, a Jira URL, or one of the views in this build (%s)",
-		arg, strings.Join(viewIDs(), ", "))
-}
-
-// openIssue is the detail pane over whichever root opens, seeded with the key
-// and nothing else: the pane reads the issue itself, and says so in its own
-// words when the site has no such key.
-func openIssue(key string) kernel.Option {
-	return kernel.WithInitialPush(issue.ViewID, key, func(d kernel.Deps) kernel.View {
-		return issue.New(d, jira.Issue{Key: key})
-	})
-}
-
-func viewIDs() []string {
-	specs := kernel.Views()
-	ids := make([]string, 0, len(specs))
-	for _, spec := range specs {
-		ids = append(ids, spec.ID)
-	}
-	slices.Sort(ids)
-	return ids
+func joinNotice(a, b string) string {
+	return strings.TrimPrefix(strings.TrimSuffix(a+" · "+b, " · "), " · ")
 }
 
 // openCache opens the profile's cache, and says in words when it could not.
@@ -388,26 +301,32 @@ func profileScopes(cfg config.Config) []store.Scope {
 	return out
 }
 
-// connect opens a client for credentials the caller already holds, which is what
-// onboarding does with three fields that have never been saved.
+// connectWith opens a client for credentials the caller already holds, which is
+// what onboarding does with three fields that have never been saved.
 //
 // The error path returns a nil interface deliberately. cloud.New returns a
 // *cloud.Client, and returning that straight into the result would hand back a
 // non-nil jira.SessionClient wrapping a nil pointer — every `== nil` check
 // downstream would pass and the first call would panic.
-func connect(site, email, token string) (jira.SessionClient, error) {
-	client, err := cloud.New(site, email, token, cloud.WithUserAgent("saral/"+version))
-	if err != nil {
-		return nil, err
+func connectWith(logger *slog.Logger) func(site, email, token string) (jira.SessionClient, error) {
+	return func(site, email, token string) (jira.SessionClient, error) {
+		opts := []cloud.Option{cloud.WithUserAgent("saral/" + stamp().version)}
+		if logger != nil {
+			opts = append(opts, loggingOption(logger))
+		}
+		client, err := cloud.New(site, email, token, opts...)
+		if err != nil {
+			return nil, err
+		}
+		return client, nil
 	}
-	return client, nil
 }
 
 // clientFor resolves the profile's token and opens a client with it.
 //
 // Nothing is probed here. The kernel probes on Init once deps.Jira is set, so
 // the first frame is drawn from what is already on disk (docs/UX.md).
-func clientFor(p config.Profile) (jira.SessionClient, error) {
+func clientFor(p config.Profile, logger *slog.Logger) (jira.SessionClient, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), tokenTimeout)
 	defer cancel()
 
@@ -415,7 +334,7 @@ func clientFor(p config.Profile) (jira.SessionClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return connect(p.Site, p.Email, token)
+	return connectWith(logger)(p.Site, p.Email, token)
 }
 
 // sessionProject scopes the session. The flag overrides the profile for one run

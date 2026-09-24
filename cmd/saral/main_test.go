@@ -22,13 +22,21 @@ import (
 )
 
 func TestRun_Version(t *testing.T) {
+	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+	t.Setenv("TERM", "xterm-256color")
+	t.Setenv("TERM_PROGRAM", "")
 	for _, args := range [][]string{{"version"}, {"--version"}, {"-version"}} {
 		var out, errOut bytes.Buffer
 		if err := run(args, &out, &errOut); err != nil {
 			t.Fatalf("%v: %v", args, err)
 		}
-		if !strings.HasPrefix(out.String(), "saral dev (none, unknown)") {
+		if !strings.HasPrefix(out.String(), "saral dev (") {
 			t.Errorf("%v printed %q", args, out.String())
+		}
+		for _, want := range []string{"config ", "glyphs unicode", "TERM xterm-256color", "TERM_PROGRAM unset"} {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("%v printed %q, want it to say %q", args, out.String(), want)
+			}
 		}
 	}
 }
@@ -103,7 +111,7 @@ func TestBuild_NoColorEnvironmentWinsOverTheFlag(t *testing.T) {
 	}
 }
 
-func TestBuild_DefaultsToTheNerdGlyphTier(t *testing.T) {
+func TestBuild_DefaultsToTheUnicodeGlyphTier(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
 	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 
@@ -111,8 +119,28 @@ func TestBuild_DefaultsToTheNerdGlyphTier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
+	if got := deps.Theme.Glyphs.Tier(); got != "unicode" {
+		t.Errorf("a fresh build's glyph tier is %q, want unicode", got)
+	}
+}
+
+func TestBuild_AProfileThatChoseNerdGetsNerd(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SARAL_CONFIG_DIR", dir)
+	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
+	cfg := "active = \"work\"\n\n[profiles.work]\nsite  = \"example.atlassian.net\"\n" +
+		"email = \"you@example.com\"\nglyphs = \"nerd\"\ntoken = { env = \"SARAL_TEST_TOKEN\" }\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	deps, _, _, release, err := build(options{})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	defer release()
 	if got := deps.Theme.Glyphs.Tier(); got != "nerd" {
-		t.Errorf("a fresh build's glyph tier is %q, want nerd", got)
+		t.Errorf("a profile with glyphs = nerd drew %q", got)
 	}
 }
 
@@ -145,16 +173,45 @@ func TestBuild_AFirstRunStartsAtSetup(t *testing.T) {
 	}
 }
 
-func TestBuild_AnExplicitViewStillWinsOnAFirstRun(t *testing.T) {
+func TestBuild_AFirstRunWithAnArgumentOpensSetupAndSaysSo(t *testing.T) {
+	for _, arg := range []string{"board", "PROJ-1"} {
+		t.Run(arg, func(t *testing.T) {
+			t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
+			t.Setenv("SARAL_CACHE_DIR", t.TempDir())
+
+			deps, opts, notice, _, err := build(options{arg: arg})
+			if err != nil {
+				t.Fatalf("build: %v", err)
+			}
+			if _, pushed := kernel.InitialPushOf(opts...); pushed {
+				t.Errorf("saral %s pushed a view over setup", arg)
+			}
+			m, err := kernel.New(deps, append(opts, kernel.WithSize(100, 30))...)
+			if err != nil {
+				t.Fatalf("kernel.New: %v", err)
+			}
+			collect(m.Init(), func(msg tea.Msg) {
+				if _, ok := msg.(kernel.PushMsg); ok {
+					t.Errorf("Init pushed %T over setup", msg)
+				}
+			})
+			frame := withNotice(m, notice).(kernel.Model).Frame()
+			if !strings.Contains(frame, "Setup") {
+				t.Errorf("saral %s on a first run did not open setup:\n%s", arg, frame)
+			}
+			if !strings.Contains(notice, arg) || !strings.Contains(notice, "not opened") {
+				t.Errorf("the notice %q does not say that %s was not opened", notice, arg)
+			}
+		})
+	}
+}
+
+func TestBuild_AFirstRunStillRefusesAMistypedArgument(t *testing.T) {
 	t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
 	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
 
-	_, opts, _, _, err := build(options{arg: "board"})
-	if err != nil {
-		t.Fatalf("build: %v", err)
-	}
-	if got := initialView(opts); got != "board" {
-		t.Errorf("saral board opened %q, want board", got)
+	if _, _, _, _, err := build(options{arg: "bord"}); exitCodeOf(err) != exitUsage {
+		t.Errorf("saral bord on a first run: %v (exit %d), want a usage error", err, exitCodeOf(err))
 	}
 }
 
@@ -359,9 +416,7 @@ func collect(cmd tea.Cmd, fn func(tea.Msg)) {
 func writeProfile(t *testing.T) {
 	t.Helper()
 
-	dir := t.TempDir()
-	t.Setenv("SARAL_CONFIG_DIR", dir)
-	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
+	dir, _ := isolated(t)
 	cfg := "active = \"work\"\n\n[profiles.work]\nsite  = \"example.atlassian.net\"\n" +
 		"email = \"you@example.com\"\ntoken = { env = \"SARAL_TEST_TOKEN\" }\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(cfg), 0o600); err != nil {
@@ -444,7 +499,7 @@ func TestWithNotice_LeavesTheModelAloneWhenThereIsNothingToSay(t *testing.T) {
 func TestConnect_ReturnsANilInterfaceRatherThanANilPointerInOne(t *testing.T) {
 	t.Parallel()
 
-	client, err := connect("", "you@example.com", "a-token")
+	client, err := connectWith(nil)("", "you@example.com", "a-token")
 	if err == nil {
 		t.Fatal("a site of nothing was accepted")
 	}
@@ -456,7 +511,7 @@ func TestConnect_ReturnsANilInterfaceRatherThanANilPointerInOne(t *testing.T) {
 func TestConnect_BuildsAClientForCredentialsThatWereNeverSaved(t *testing.T) {
 	t.Parallel()
 
-	client, err := connect("example.atlassian.net", "you@example.com", "a-token")
+	client, err := connectWith(nil)("example.atlassian.net", "you@example.com", "a-token")
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
