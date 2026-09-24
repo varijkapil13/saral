@@ -14,6 +14,8 @@ package attach
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -47,6 +49,7 @@ const (
 	browsing mode = iota
 	typing
 	confirming
+	uploading
 )
 
 // Option configures a pane at construction.
@@ -68,9 +71,15 @@ type Model struct {
 	acts      map[string]action
 	inPrompt  map[string]action
 	inConfirm map[string]action
+	inUpload  map[string]action
 	input     textinput.Model
 	clicks    *widget.Clicks
 	confirm   string
+
+	// sending is the file on its way up, and sent how much of its size has gone.
+	sending  string
+	sendSize int64
+	sent     int64
 
 	files       []jira.Attachment
 	cursor, top int
@@ -117,6 +126,8 @@ type Model struct {
 	divAt  divKey
 	pane   []string
 	paneAt paneKey
+	up     string
+	upAt   upKey
 
 	zones widget.Zoner
 }
@@ -134,7 +145,7 @@ func New(d kernel.Deps, opts ...Option) kernel.View {
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
-	m.acts, m.inPrompt, m.inConfirm = defaultKeys().tables()
+	m.acts, m.inPrompt, m.inConfirm, m.inUpload = defaultKeys().tables()
 	m.clicks = widget.NewClicks(d.Now)
 	m.styles = newStyles(m.deps.Theme)
 	m.memo = widget.NewRowCache[rowKey, string](rowMemoLimit)
@@ -149,7 +160,7 @@ func New(d kernel.Deps, opts ...Option) kernel.View {
 // that says what it was built from, and this is the belt: a state that moved
 // without moving a key would otherwise leave a stale line on screen.
 func (m *Model) repaint() {
-	m.top1, m.head, m.div, m.pane = "", "", "", nil
+	m.top1, m.head, m.div, m.pane, m.up = "", "", "", nil, ""
 }
 
 // writable reports whether this token may add and remove files here. Reading
@@ -170,10 +181,11 @@ func (m *Model) refusal() string {
 	return "attachments are switched off on this site"
 }
 
-// WantsRawKeys is true while a path is being typed and while a deletion is
-// waiting for an answer. Without it the kernel matches its own bindings first,
-// so a path loses every digit, q quits out from under the typing, and esc pops
-// the pane instead of leaving the file where it is.
+// WantsRawKeys is true while a path is being typed, while a deletion is waiting
+// for an answer and while a file is on its way up. Without it the kernel matches
+// its own bindings first, so a path loses every digit, q quits out from under the
+// typing, and esc pops the pane instead of leaving the file where it is or
+// stopping the upload.
 func (m *Model) WantsRawKeys() bool { return m.mode != browsing }
 
 // Init reads the files on the issue, and only when there is an issue to read
@@ -209,6 +221,10 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.repaint()
 
 	case kernel.RefreshMsg:
+		if m.mode == uploading {
+			cmd = m.busy()
+			break
+		}
 		if msg.Purge {
 			m.shown, m.asked = preview{}, ""
 		}
@@ -226,6 +242,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case previewMsg:
 		m.tookPreview(msg)
 
+	case sentMsg:
+		cmd = m.tookSent(msg)
+
 	case uploadedMsg:
 		cmd = m.tookUpload(msg)
 
@@ -235,17 +254,8 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case failedMsg:
 		cmd = m.failed(msg)
 
-	case ShowMsg:
-		cmd = m.show()
-
-	case OpenOutsideMsg:
-		cmd = m.openOutside()
-
-	case UploadMsg:
-		cmd = m.startUpload()
-
-	case DeleteMsg:
-		cmd = m.startDelete()
+	case ShowMsg, OpenOutsideMsg, UploadMsg, DeleteMsg:
+		cmd = m.command(msg)
 
 	case tea.KeyPressMsg:
 		cmd = m.key(msg)
@@ -257,6 +267,30 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.wheel(msg)
 	}
 	return m, cmd
+}
+
+// command runs what the palette asked for. Every one of them asks the site for
+// something, which would cancel a file on its way up, so none of them runs while
+// one is.
+func (m *Model) command(msg tea.Msg) tea.Cmd {
+	if m.mode == uploading {
+		return m.busy()
+	}
+	switch msg.(type) {
+	case ShowMsg:
+		return m.show()
+	case OpenOutsideMsg:
+		return m.openOutside()
+	case UploadMsg:
+		return m.startUpload()
+	case DeleteMsg:
+		return m.startDelete()
+	}
+	return nil
+}
+
+func (m *Model) busy() tea.Cmd {
+	return kernel.Warn(m.sending + " is still on its way up; " + defaultKeys().Stop.Help().Key + " stops it")
 }
 
 func (m *Model) resize(w, h int) {
@@ -300,6 +334,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.typingKey(msg)
 	case confirming:
 		return m.confirmingKey(msg)
+	case uploading:
+		return m.uploadingKey(msg)
 	case browsing:
 	}
 	switch m.acts[msg.String()] {
@@ -325,7 +361,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.startDelete()
 	case actGrow:
 		m.toggleGrown()
-	case actNone, actSend, actCancel, actConfirm:
+	case actNone, actSend, actCancel, actConfirm, actComplete, actStop:
 	}
 	return nil
 }
@@ -342,8 +378,10 @@ func (m *Model) typingKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.input.Reset()
 		m.repaint()
 		return nil
+	case actComplete:
+		return m.completeInput()
 	case actNone, actUp, actDown, actPageUp, actPageDown, actTop, actBottom,
-		actShow, actOpen, actUpload, actDelete, actGrow, actConfirm:
+		actShow, actOpen, actUpload, actDelete, actGrow, actConfirm, actStop:
 	}
 	// The input's own command is a cursor blink, which is a timer this view would
 	// then own for as long as it is up. Dropping it costs a blinking block and
@@ -364,9 +402,60 @@ func (m *Model) confirmingKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.repaint()
 		return kernel.Status("the file is where it was")
 	case actNone, actUp, actDown, actPageUp, actPageDown, actTop, actBottom,
-		actShow, actOpen, actUpload, actDelete, actGrow, actSend:
+		actShow, actOpen, actUpload, actDelete, actGrow, actSend, actComplete, actStop:
 	}
 	return nil
+}
+
+func (m *Model) uploadingKey(msg tea.KeyPressMsg) tea.Cmd {
+	if m.inUpload[msg.String()] != actStop {
+		return nil
+	}
+	m.stop()
+	// The upload answers its cancellation with the context's error, and the
+	// generation moving on is what drops that answer rather than reporting it.
+	m.gen++
+	m.endUpload()
+	return kernel.Status("upload cancelled")
+}
+
+func (m *Model) endUpload() {
+	m.mode, m.sending, m.sendSize, m.sent = browsing, "", 0, 0
+	m.repaint()
+}
+
+func (m *Model) completeInput() tea.Cmd {
+	got := completePath(m.input.Value(), homeDir(), onWindows)
+	if got.line != m.input.Value() {
+		m.input.SetValue(got.line)
+		m.input.CursorEnd()
+		m.repaint()
+		return nil
+	}
+	if len(got.matches) == 0 {
+		return nil
+	}
+	return kernel.Status(matchList(got.matches))
+}
+
+// shownMatches is how many candidates a tab names before it counts the rest.
+const shownMatches = 6
+
+func matchList(names []string) string {
+	head := names[:min(len(names), shownMatches)]
+	text := strconv.Itoa(len(names)) + " match: " + strings.Join(head, ", ")
+	if rest := len(names) - len(head); rest > 0 {
+		text += " and " + strconv.Itoa(rest) + " more"
+	}
+	return text
+}
+
+func homeDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return home
 }
 
 // toggleGrown folds the list away and gives the preview the whole box, or puts it
@@ -433,7 +522,7 @@ func (m *Model) startUpload() tea.Cmd {
 }
 
 func (m *Model) sendUpload() tea.Cmd {
-	path := strings.TrimSpace(m.input.Value())
+	path := cleanPath(m.input.Value(), homeDir(), onWindows)
 	if path == "" {
 		return kernel.Warn("there is no path here to attach")
 	}
@@ -441,12 +530,16 @@ func (m *Model) sendUpload() tea.Cmd {
 	if err != nil {
 		return kernel.Fail(err)
 	}
-	m.mode = browsing
 	m.input.Blur()
 	m.input.Reset()
-	m.repaint()
 	ctx, gen := m.begin()
-	return m.reply(upload(ctx, m.deps.Jira, m.issue, file, gen))
+	m.mode, m.sending, m.sendSize, m.sent = uploading, file.Name, file.Size, 0
+	m.repaint()
+	steps := make(chan int64, 1)
+	return tea.Batch(
+		m.reply(upload(ctx, m.deps.Jira, m.issue, file, gen, steps)),
+		m.reply(awaitSent(steps, gen)),
+	)
 }
 
 // startDelete opens the confirmation. It never deletes: docs/UX.md asks for a
@@ -571,6 +664,14 @@ func (m *Model) tookProgress(msg progressMsg) tea.Cmd {
 	return m.reply(awaitProgress(msg.steps, msg.id, msg.gen))
 }
 
+func (m *Model) tookSent(msg sentMsg) tea.Cmd {
+	if msg.gen != m.gen || m.mode != uploading {
+		return nil
+	}
+	m.sent = msg.sent
+	return m.reply(awaitSent(msg.steps, msg.gen))
+}
+
 func (m *Model) tookList(msg listedMsg) {
 	if msg.gen != m.gen {
 		return
@@ -625,6 +726,9 @@ func (m *Model) tookUpload(msg uploadedMsg) tea.Cmd {
 		return nil
 	}
 	m.failure = nil
+	if m.mode == uploading {
+		m.endUpload()
+	}
 	if len(msg.added) == 0 {
 		return kernel.Warn("the site stored nothing and said nothing about it")
 	}
@@ -670,6 +774,9 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	}
 	m.loading, m.failure = false, msg.err
 	m.asked = ""
+	if m.mode == uploading {
+		m.endUpload()
+	}
 	m.repaint()
 	if msg.why != noIntent {
 		m.shown = preview{}

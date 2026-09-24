@@ -23,6 +23,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"nothing attached, and a token that may attach one", keysEmptyWrite},
 		{"typing a path", keysTyping},
 		{"a deletion waiting for an answer", keysConfirming},
+		{"a file on its way up", keysUploading},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the pane has %d key states and this test names %d", keyStates, len(named))
@@ -88,9 +89,9 @@ func TestLiveKeys_TheStateWithNothingToOfferStillAnswers(t *testing.T) {
 func TestKeys_NothingIsBoundToTheViewSwitchPrefix(t *testing.T) {
 	t.Parallel()
 
-	browse, prompt, confirm := defaultKeys().tables()
+	browse, prompt, confirm, sending := defaultKeys().tables()
 	for name, table := range map[string]map[string]action{
-		"the list": browse, "the path prompt": prompt, "the confirmation": confirm,
+		"the list": browse, "the path prompt": prompt, "the confirmation": confirm, "an upload": sending,
 	} {
 		if _, bound := table["g"]; bound {
 			t.Errorf("%s binds g, which the kernel buffers and never delivers", name)
@@ -103,7 +104,7 @@ func TestKeys_NothingIsBoundToTheViewSwitchPrefix(t *testing.T) {
 func TestKeys_TheConfirmationAnswersOnlyItsTwoKeys(t *testing.T) {
 	t.Parallel()
 
-	_, _, confirm := defaultKeys().tables()
+	_, _, confirm, _ := defaultKeys().tables()
 	if len(confirm) != 2 {
 		t.Errorf("the confirmation answers %d strokes: %v", len(confirm), confirm)
 	}
@@ -111,6 +112,17 @@ func TestKeys_TheConfirmationAnswersOnlyItsTwoKeys(t *testing.T) {
 		if got, bound := confirm[stroke]; bound {
 			t.Errorf("the confirmation answers %q with action %d", stroke, got)
 		}
+	}
+}
+
+// An upload answers esc and nothing else: every other key would ask the site for
+// something, and asking cancels the file on its way up.
+func TestKeys_AnUploadAnswersOnlyTheKeyThatStopsIt(t *testing.T) {
+	t.Parallel()
+
+	_, _, _, sending := defaultKeys().tables()
+	if len(sending) != 1 || sending["esc"] != actStop {
+		t.Errorf("an upload answers %v, want esc alone", sending)
 	}
 }
 
