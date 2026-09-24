@@ -33,7 +33,7 @@ func TestIssue_Golden(t *testing.T) {
 			f := newFake(20)
 			addComment(t, f, "PROJ-12", "Reproduced on staging, twice.", "The fix is in the shared client.")
 			addComment(t, f, "PROJ-12", "Agreed. I will pick this up on Monday.")
-			dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-12"), size.w, size.h)
+			dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-12"), size.w, size.h)
 
 			golden(t, "issue_"+name+".golden", dr.view())
 
@@ -54,7 +54,7 @@ func TestIssue_TheFrameIsExactlyAsTallAsItsBox(t *testing.T) {
 
 	f := newFake(20)
 	for _, size := range []struct{ w, h int }{{80, 20}, {90, 28}, {100, 28}, {120, 38}, {200, 60}} {
-		dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-12"), size.w, size.h)
+		dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-12"), size.w, size.h)
 		for _, focus := range []string{"", "tab", "tab"} {
 			if focus != "" {
 				dr.key(focus)
@@ -80,7 +80,7 @@ func TestIssue_DrawsTheRowItWasOpenedWithBeforeAnythingIsFetched(t *testing.T) {
 	seed := seedOf(t, f, "PROJ-7")
 	f.Delay(time.Hour) // nothing will arrive during this test
 
-	view, ok := New(testDeps(f), seed).(*Model)
+	view, ok := New(testDeps(t, f), seed).(*Model)
 	if !ok {
 		t.Fatal("New did not return a *Model")
 	}
@@ -96,7 +96,7 @@ func TestIssue_ShowsTheCommentThreadOldestFirst(t *testing.T) {
 	f := newFake(20)
 	addComment(t, f, "PROJ-3", "First thing said.")
 	addComment(t, f, "PROJ-3", "Second thing said.")
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-3"), 120, 40)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-3"), 120, 40)
 
 	got := dr.view()
 	mustContain(t, got, "2 comments", "Sam Tester", "First thing said.", "Second thing said.")
@@ -109,7 +109,7 @@ func TestIssue_SaysSoWhenNobodyHasCommented(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(20)
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-5"), 120, 40)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-5"), 120, 40)
 
 	mustContain(t, dr.view(), "Nobody has commented on PROJ-5")
 }
@@ -124,7 +124,7 @@ func TestIssue_RendersTheDescriptionAsStyledTextRatherThanMarkdown(t *testing.T)
 	f := newFake(20)
 	seed := seedOf(t, f, "PROJ-4")
 	seed.Description = richDoc()
-	dr := newDriver(t, testDeps(f), seed, 120, 40)
+	dr := newDriver(t, testDeps(t, f), seed, 120, 40)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: seed})
 
 	// The same document is asserted through the markdown serialisation first, so
@@ -168,7 +168,7 @@ func TestIssue_ReadsTheIssueWithANarrowFieldSetRatherThanTheWholeThing(t *testin
 	f := newFake(20)
 	seed := seedOf(t, f, "PROJ-6")
 	before := len(f.Calls())
-	newDriver(t, testDeps(f), seed, 120, 40)
+	newDriver(t, testDeps(t, f), seed, 120, 40)
 
 	for _, call := range f.Calls()[before:] {
 		if call == "Issue" {
@@ -205,7 +205,7 @@ func TestIssue_ReportsWhatTheErrorItselfSays(t *testing.T) {
 			f := newFake(20)
 			seed := seedOf(t, f, "PROJ-2")
 			f.FailNextN(2, tc.err)
-			dr := newDriver(t, testDeps(f), seed, 120, 30)
+			dr := newDriver(t, testDeps(t, f), seed, 120, 30)
 
 			if status := dr.lastStatus(); !strings.Contains(status.Text, tc.want) {
 				t.Errorf("the status line reads %q, want it to carry %q", status.Text, tc.want)
@@ -219,7 +219,7 @@ func TestIssue_SaysSoWhenTheIssueIsGone(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(5)
-	dr := newDriver(t, testDeps(f), jira.Issue{Key: "PROJ-999", Summary: "deleted while you were reading"}, 120, 30)
+	dr := newDriver(t, testDeps(t, f), jira.Issue{Key: "PROJ-999", Summary: "deleted while you were reading"}, 120, 30)
 
 	if got := dr.lastStatus().Text; !strings.Contains(got, "PROJ-999") {
 		t.Errorf("the status line reads %q, want it to name the missing issue", got)
@@ -243,7 +243,7 @@ func TestIssue_LosingTheKeyboardDoesNotGiveUpTheRead(t *testing.T) {
 	seed := seedOf(t, f, "PROJ-8")
 	f.Delay(50 * time.Millisecond)
 
-	view, ok := New(testDeps(f), seed).(*Model)
+	view, ok := New(testDeps(t, f), seed).(*Model)
 	if !ok {
 		t.Fatal("New did not return a *Model")
 	}
@@ -277,7 +277,7 @@ func TestIssue_ClosingStopsTheReadAndTheThreadItHolds(t *testing.T) {
 	seed := seedOf(t, f, "PROJ-8")
 	f.Delay(50 * time.Millisecond)
 
-	view, ok := New(testDeps(f), seed).(*Model)
+	view, ok := New(testDeps(t, f), seed).(*Model)
 	if !ok {
 		t.Fatal("New did not return a *Model")
 	}
@@ -384,8 +384,8 @@ func TestIssue_RendersDatesInTheAccountsTimezoneAndNotTheMachines(t *testing.T) 
 	addComment(t, f, "PROJ-9", "Said something.")
 	seed := seedOf(t, f, "PROJ-9")
 
-	utc := newDriver(t, testDeps(f), seed, 120, 40)
-	d := testDeps(f)
+	utc := newDriver(t, testDeps(t, f), seed, 120, 40)
+	d := testDeps(t, f)
 	d.Caps.TimeZone = kolkata
 	shifted := newDriver(t, d, seed, 120, 40)
 
@@ -398,7 +398,7 @@ func TestIssue_StillRendersWhenTheCapabilityProbeFoundNothing(t *testing.T) {
 
 	f := newFake(20)
 	addComment(t, f, "PROJ-10", "Still readable.")
-	d := testDeps(f)
+	d := testDeps(t, f)
 	d.Caps = jira.Capabilities{}
 	dr := newDriver(t, d, seedOf(t, f, "PROJ-10"), 120, 30)
 
@@ -411,7 +411,7 @@ func TestIssue_ScrollsTheBodyAndKeepsTheIdentityLinesPut(t *testing.T) {
 	f := newFake(20)
 	seed := seedOf(t, f, "PROJ-11")
 	seed.Description = longDoc(30)
-	dr := newDriver(t, testDeps(f), seed, 100, 14)
+	dr := newDriver(t, testDeps(t, f), seed, 100, 14)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: seed})
 
 	top := dr.view()
@@ -444,7 +444,7 @@ func TestIssue_AMotionMovesTheRegionThatHasTheKeyboard(t *testing.T) {
 	}
 	seed := seedOf(t, f, "PROJ-11")
 	seed.Description = longDoc(30)
-	dr := newDriver(t, testDeps(f), seed, 120, 30)
+	dr := newDriver(t, testDeps(t, f), seed, 120, 30)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: seed})
 
 	before := dr.view()
@@ -470,7 +470,7 @@ func TestIssue_AResizeReflowsWithoutLosingThePlace(t *testing.T) {
 	}
 	seed := seedOf(t, f, "PROJ-13")
 	seed.Description = longDoc(40)
-	dr := newDriver(t, testDeps(f), seed, 120, 16)
+	dr := newDriver(t, testDeps(t, f), seed, 120, 16)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: seed})
 	dr.key("ctrl+d", "ctrl+d")
 	at := dr.m.tops[regionDesc]
@@ -488,7 +488,7 @@ func TestIssue_ARefreshRereadsTheIssueAndTheThread(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(20)
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-14"), 120, 40)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-14"), 120, 40)
 	addComment(t, f, "PROJ-14", "Added while you were reading.")
 
 	dr.send(kernel.RefreshMsg{})

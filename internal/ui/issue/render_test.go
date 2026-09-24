@@ -30,7 +30,7 @@ func TestHeader_FactsCarryTheirIconsAtEveryWidth(t *testing.T) {
 		{"ascii", kernel.ASCIIGlyphs()},
 	} {
 		t.Run(tier.name, func(t *testing.T) {
-			d := testDeps(nil)
+			d := testDeps(t, nil)
 			d.Theme = kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
 			dr := newDriver(t, d, seed, 60, 24)
 
@@ -56,7 +56,7 @@ func TestHeader_FactsCarryTheirIconsAtEveryWidth(t *testing.T) {
 // colour every other fact still uses.
 func TestHeader_TheStatusFactCarriesItsCategorysColour(t *testing.T) {
 	t.Parallel()
-	d := testDeps(nil)
+	d := testDeps(t, nil)
 	d.Theme = kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs())
 
 	seed := jira.Issue{Key: "PROJ-1", Summary: "one", Status: jira.Status{Name: "Done", Category: jira.CategoryDone}}

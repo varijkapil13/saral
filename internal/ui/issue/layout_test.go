@@ -103,7 +103,7 @@ func TestLayout_PanningReachesACodeLineWiderThanThePane(t *testing.T) {
 	f := newFake(8)
 	full := readIssue(t, f, "PROJ-2")
 	full.Description = codeDoc()
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-2"), 120, 24)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-2"), 120, 24)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: full})
 
 	mustContain(t, dr.view(), "func (c *Client) Export(ctx")
@@ -198,7 +198,7 @@ func TestIssue_NarrowModeShowsOneRegionAtATime(t *testing.T) {
 
 	f := newFake(8)
 	addComment(t, f, "PROJ-4", "Only visible once the thread has the screen.")
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-4"), 80, 20)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-4"), 80, 20)
 
 	mustContain(t, dr.view(), "Document CSV import.")
 	mustNotContain(t, dr.view(), "Details", "Only visible once")
@@ -229,7 +229,7 @@ func TestIssue_AResizeAcrossTheBreakpointKeepsFocusAndScrollSane(t *testing.T) {
 	f := newFake(8)
 	full := readIssue(t, f, "PROJ-3")
 	full.Description = longDoc(60)
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-3"), 120, 30)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-3"), 120, 30)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: full})
 	dr.key("tab")
 	dr.key("G")
@@ -288,7 +288,7 @@ func TestIssue_NoMemoSurvivesAResizeAThemeSwitchAFoldOrAProjectSwitch(t *testing
 	f := newFake(8)
 	full := readIssue(t, f, "PROJ-6")
 	full.Description = foldDoc()
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-6"), 120, 30)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-6"), 120, 30)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: full})
 
 	for _, tc := range []struct {
@@ -324,7 +324,7 @@ func TestIssue_AnExpandIsClosedUntilZOpensIt(t *testing.T) {
 	f := newFake(8)
 	full := readIssue(t, f, "PROJ-6")
 	full.Description = foldDoc()
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-6"), 120, 30)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-6"), 120, 30)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: full})
 
 	mustContain(t, dr.view(), "How we tested it")
@@ -351,7 +351,7 @@ func TestRail_IsTheLeftmostColumnOfEveryRegion(t *testing.T) {
 	f := newFake(8)
 	full := readIssue(t, f, "PROJ-3")
 	full.Description = longDoc(60)
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-3"), 120, 24)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-3"), 120, 24)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: full})
 
 	glyphs := kernel.ASCIIGlyphs()
@@ -380,7 +380,7 @@ func TestRail_IsTheLeftmostColumnOfEveryRegion(t *testing.T) {
 	// And it goes away when everything fits.
 	short := readIssue(t, f, "PROJ-3")
 	short.Description = longDoc(1)
-	fits := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-3"), 120, 40)
+	fits := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-3"), 120, 40)
 	fits.send(loadedMsg{gen: fits.m.gen, issue: short})
 	if strings.Contains(fits.view(), glyphs.ProgressOn) {
 		t.Errorf("a pane whose content fits still drew a thumb:\n%s", fits.view())

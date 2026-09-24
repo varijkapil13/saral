@@ -62,7 +62,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 
 func TestLiveKeys_FollowTheSidebarsOwnState(t *testing.T) {
 	t.Parallel()
-	m, ok := New(testDeps(nil), jira.Issue{Key: "PROJ-1"}).(*Model)
+	m, ok := New(testDeps(t, nil), jira.Issue{Key: "PROJ-1"}).(*Model)
 	if !ok {
 		t.Fatal("New no longer builds a *Model")
 	}
@@ -93,7 +93,7 @@ func TestLiveKeys_FollowTheSidebarsOwnState(t *testing.T) {
 
 func TestLiveKeys_FollowTheStageThePickerIsIn(t *testing.T) {
 	t.Parallel()
-	m, ok := NewMove(testDeps(nil), jira.Issue{Key: "PROJ-1"}).(*moveModel)
+	m, ok := NewMove(testDeps(t, nil), jira.Issue{Key: "PROJ-1"}).(*moveModel)
 	if !ok {
 		t.Fatal("NewMove no longer builds a *moveModel")
 	}
@@ -129,11 +129,11 @@ func TestLiveKeys_FollowTheStageThePickerIsIn(t *testing.T) {
 // AllocsPerRun measures the whole process, so this one cannot run beside
 // anything else.
 func TestLiveKeys_CostNothingToAskFor(t *testing.T) {
-	side, ok := New(testDeps(nil), jira.Issue{Key: "PROJ-1"}).(*Model)
+	side, ok := New(testDeps(t, nil), jira.Issue{Key: "PROJ-1"}).(*Model)
 	if !ok {
 		t.Fatal("New no longer builds a *Model")
 	}
-	move, ok := NewMove(testDeps(nil), jira.Issue{Key: "PROJ-1"}).(*moveModel)
+	move, ok := NewMove(testDeps(t, nil), jira.Issue{Key: "PROJ-1"}).(*moveModel)
 	if !ok {
 		t.Fatal("NewMove no longer builds a *moveModel")
 	}

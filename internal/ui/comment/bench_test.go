@@ -18,10 +18,11 @@ func thread(tb testing.TB, n, w, h int) *Model {
 	tb.Helper()
 
 	d := kernel.Deps{
-		Caps:  jira.Capabilities{TimeZone: time.UTC},
-		Theme: kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
-		Site:  "bench.example.atlassian.net",
-		Now:   func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
+		DraftsDir: tb.TempDir(),
+		Caps:      jira.Capabilities{TimeZone: time.UTC},
+		Theme:     kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
+		Site:      "bench.example.atlassian.net",
+		Now:       func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
 	}
 	m := build(d, "PROJ-1")
 	next, _ := m.Update(kernel.SizeMsg{Width: w, Height: h})

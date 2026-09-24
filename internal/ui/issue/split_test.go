@@ -30,7 +30,7 @@ func splitPane(t *testing.T, w, h int) (*driver, kernel.Deps, *jiratest.Fake) {
 	t.Helper()
 
 	f := newFake(8)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	addComment(t, f, "PROJ-3", "Reproduced on staging, twice.")
 	full := readIssue(t, f, "PROJ-3")
 	full.Description = longDoc(20)
@@ -414,7 +414,7 @@ func TestSplit_TheChoiceIsThereWhenTheNextPaneOpens(t *testing.T) {
 		t.Fatal("two strokes chose nothing")
 	}
 
-	next, ok := New(testDeps(f), seedOf(t, f, "PROJ-3")).(*Model)
+	next, ok := New(testDeps(t, f), seedOf(t, f, "PROJ-3")).(*Model)
 	if !ok {
 		t.Fatal("New did not return a *Model")
 	}
@@ -423,7 +423,7 @@ func TestSplit_TheChoiceIsThereWhenTheNextPaneOpens(t *testing.T) {
 	}
 
 	dr.key("=")
-	after, ok := New(testDeps(f), seedOf(t, f, "PROJ-3")).(*Model)
+	after, ok := New(testDeps(t, f), seedOf(t, f, "PROJ-3")).(*Model)
 	if !ok {
 		t.Fatal("New did not return a *Model")
 	}

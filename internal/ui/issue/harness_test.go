@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -67,15 +68,35 @@ func fullCaps() jira.Capabilities {
 	}
 }
 
-func testDeps(client jira.Client) kernel.Deps {
+// draftDirs is one drafts directory per test, so two panes a test builds share
+// their drafts the way two sessions on one machine do, and no other test — nor
+// the same test on its next -count — sees them.
+var draftDirs sync.Map
+
+func draftsFor(tb testing.TB) string {
+	tb.Helper()
+
+	if dir, ok := draftDirs.Load(tb); ok {
+		return dir.(string)
+	}
+	dir := tb.TempDir()
+	draftDirs.Store(tb, dir)
+	tb.Cleanup(func() { draftDirs.Delete(tb) })
+	return dir
+}
+
+func testDeps(tb testing.TB, client jira.Client) kernel.Deps {
+	tb.Helper()
+
 	return kernel.Deps{
-		Jira:    client,
-		Caps:    fullCaps(),
-		Project: "PROJ",
-		Theme:   kernel.NewTheme(kernel.ThemeNoColor, true, kernel.ASCIIGlyphs()),
-		Zones:   zone.New(),
-		Site:    "example.atlassian.net",
-		Now:     func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
+		DraftsDir: draftsFor(tb),
+		Jira:      client,
+		Caps:      fullCaps(),
+		Project:   "PROJ",
+		Theme:     kernel.NewTheme(kernel.ThemeNoColor, true, kernel.ASCIIGlyphs()),
+		Zones:     zone.New(),
+		Site:      "example.atlassian.net",
+		Now:       func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
 	}
 }
 

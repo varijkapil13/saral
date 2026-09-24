@@ -222,7 +222,7 @@ func New(d kernel.Deps, seed jira.Issue, opts ...modelOption) kernel.View {
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
-	if store, err := newDraftStore(); err == nil {
+	if store, err := newDraftStore(d); err == nil {
 		m.drafts = store
 	}
 	for _, o := range opts {

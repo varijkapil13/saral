@@ -29,7 +29,7 @@ func TestRegions_AClickMovesTheKeyboardAndTheWheelScrollsWhatIsUnderThePointer(t
 	t.Parallel()
 
 	f := newFake(8)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	full := readIssue(t, f, "PROJ-3")
 	full.Description = longDoc(60)
 	dr := newDriver(t, d, seedOf(t, f, "PROJ-3"), 120, 30)
@@ -61,7 +61,7 @@ func TestRegions_AClickOnAnExpandOpensThatOne(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(8)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	full := readIssue(t, f, "PROJ-6")
 	full.Description = twoFoldDoc()
 	dr := newDriver(t, d, seedOf(t, f, "PROJ-6"), 120, 30)

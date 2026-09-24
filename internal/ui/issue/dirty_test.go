@@ -26,7 +26,7 @@ func openEditable(t *testing.T, f *jiratest.Fake, key string, opts ...modelOptio
 	t.Helper()
 	allEditable(f, key)
 	rec := record(f)
-	d := testDeps(rec)
+	d := testDeps(t, rec)
 	p := newPanel(t, New(d, readIssue(t, f, key), opts...), 100, 30)
 	p.send(loadedMsg{gen: p.editor().gen, issue: readIssue(t, f, key)})
 	p.editor().focus = regionDetails
@@ -256,7 +256,7 @@ func TestDirty_ADraftIsPickedBackUpAfterTheModelIsRebuilt(t *testing.T) {
 	// A fresh pane on the same issue, from the same drafts directory — a crash
 	// and a restart, or a "stay" that later reopens it.
 	allEditable(f, "PROJ-1")
-	next := newPanel(t, New(testDeps(f), readIssue(t, f, "PROJ-1"), withDrafts(drafts)), 100, 30)
+	next := newPanel(t, New(testDeps(t, f), readIssue(t, f, "PROJ-1"), withDrafts(drafts)), 100, 30)
 	next.send(loadedMsg{gen: next.editor().gen, issue: readIssue(t, f, "PROJ-1")})
 
 	if !next.editor().draftRestored {
@@ -336,7 +336,7 @@ func TestDirty_RowsEditmetaDoesNotListAreNotEditable(t *testing.T) {
 	f := newFake(3)
 	// No SetEditMeta call: the fake answers an empty screen, which is a site
 	// saying nothing here is editable right now.
-	d := testDeps(f)
+	d := testDeps(t, f)
 	p := newPanel(t, New(d, readIssue(t, f, "PROJ-1")), 100, 30)
 	p.send(loadedMsg{gen: p.editor().gen, issue: readIssue(t, f, "PROJ-1")})
 	p.editor().focus = regionDetails
@@ -386,7 +386,7 @@ func TestDirty_ARowNoOneCanReadStaysReadOnly(t *testing.T) {
 	// even returns, since the fake answers synchronously, which would replace
 	// this narrow seed with a full one before the row was ever built from it.
 	seed := jira.Issue{Key: "PROJ-1", Summary: "narrow seed"}
-	p := newPanel(t, New(testDeps(nil), seed, withDrafts(tempDrafts(t))), 100, 30)
+	p := newPanel(t, New(testDeps(t, nil), seed, withDrafts(tempDrafts(t))), 100, 30)
 	p.editor().focus = regionDetails
 
 	rowAt(t, p, "summary")

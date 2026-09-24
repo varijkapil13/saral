@@ -15,7 +15,7 @@ import (
 func openMover(t *testing.T, client jira.Client, iss jira.Issue, w, h int) *panel {
 	t.Helper()
 
-	return newPanel(t, NewMove(testDeps(client), iss), w, h)
+	return newPanel(t, NewMove(testDeps(t, client), iss), w, h)
 }
 
 // stubMoves answers with transitions of the test's own, for the screens the
@@ -225,7 +225,7 @@ func TestMove_ClickingAMovePicksItAndClickingItAgainChoosesIt(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(8)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	p := newPanel(t, NewMove(d, readIssue(t, f, "PROJ-6")), 100, 28)
 
 	want := p.mover().moves[1]
@@ -299,7 +299,7 @@ func TestMove_StopsReadingWhenThePaneIsClosed(t *testing.T) {
 
 	f := newFake(6)
 	iss := readIssue(t, f, "PROJ-3")
-	view := NewMove(testDeps(f), iss)
+	view := NewMove(testDeps(t, f), iss)
 	view, _ = view.Update(kernel.SizeMsg{Width: 100, Height: 28})
 	cmd := view.Init()
 
@@ -325,7 +325,7 @@ func TestMove_LosingTheKeyboardDoesNotGiveUpTheRead(t *testing.T) {
 
 	f := newFake(6)
 	iss := readIssue(t, f, "PROJ-3")
-	view := NewMove(testDeps(f), iss)
+	view := NewMove(testDeps(t, f), iss)
 	view, _ = view.Update(kernel.SizeMsg{Width: 100, Height: 28})
 	cmd := view.Init()
 

@@ -4,14 +4,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/varijkapil13/saral/internal/config"
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
-// draftDirName is where unsent comments live under the cache directory. They
+// draftDirName is where unsent comments live under the drafts directory. They
 // are the user's own words rather than anything fetched, so nothing in the
 // program deletes one except sending it or clearing it by hand.
-const draftDirName = "drafts"
+const draftDirName = "comments"
 
 // draftKey names one draft: a new comment on an issue, or an edit of one
 // comment. The two are separate drafts, because abandoning an edit must not
@@ -58,15 +60,75 @@ type drafts struct {
 }
 
 // openDrafts finds the drafts directory. A session with nowhere to write —
-// no home directory, an unwritable cache — gets a store that keeps nothing
-// rather than a failure, because a comment nobody can save is still worth
-// typing.
-func openDrafts() *drafts {
-	dir, err := config.CacheDir()
+// no home directory, an unwritable profile directory — gets a store that keeps
+// nothing rather than a failure, because a comment nobody can save is still
+// worth typing.
+func openDrafts(deps kernel.Deps) *drafts {
+	dir, err := deps.DraftRoot()
 	if err != nil || strings.TrimSpace(dir) == "" {
 		return &drafts{}
 	}
-	return &drafts{root: filepath.Join(dir, draftDirName)}
+	root := filepath.Join(dir, draftDirName)
+	if deps.DraftsDir == "" {
+		migrateOnce.Do(func() {
+			if cache, err := config.CacheDir(); err == nil && strings.TrimSpace(cache) != "" {
+				migrateDrafts(filepath.Join(cache, legacyDraftDirName), root)
+			}
+		})
+	}
+	return &drafts{root: root}
+}
+
+// legacyDraftDirName is where earlier builds kept comment drafts, under the
+// cache directory a user is entitled to delete.
+const legacyDraftDirName = "drafts"
+
+var migrateOnce sync.Once
+
+// migrateDrafts moves every draft under from into the same place under to. A
+// draft already at the destination is newer than the one left behind, so it
+// wins and the old one stays where it was rather than being lost.
+func migrateDrafts(from, to string) {
+	sites, err := os.ReadDir(from)
+	if err != nil {
+		return
+	}
+	for _, site := range sites {
+		if !site.IsDir() {
+			continue
+		}
+		files, err := os.ReadDir(filepath.Join(from, site.Name()))
+		if err != nil {
+			continue
+		}
+		for _, f := range files {
+			if f.IsDir() || !strings.HasSuffix(f.Name(), ".md") {
+				continue
+			}
+			moveDraft(filepath.Join(from, site.Name(), f.Name()), filepath.Join(to, site.Name(), f.Name()))
+		}
+		_ = os.Remove(filepath.Join(from, site.Name()))
+	}
+	_ = os.Remove(from)
+}
+
+func moveDraft(src, dst string) {
+	if _, err := os.Lstat(dst); err == nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+		return
+	}
+	if os.Rename(src, dst) == nil {
+		return
+	}
+	body, err := os.ReadFile(src) //nolint:gosec // src is a directory entry under the legacy drafts directory
+	if err != nil {
+		return
+	}
+	if os.WriteFile(dst, body, 0o600) == nil {
+		_ = os.Remove(src)
+	}
 }
 
 func (d *drafts) path(k draftKey) string {
@@ -82,7 +144,7 @@ func (d *drafts) read(k draftKey) string {
 	if path == "" {
 		return ""
 	}
-	b, err := os.ReadFile(path) //nolint:gosec // the path is built from safeName segments under the cache directory
+	b, err := os.ReadFile(path) //nolint:gosec // the path is built from safeName segments under the drafts directory
 	if err != nil {
 		return ""
 	}

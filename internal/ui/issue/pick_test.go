@@ -31,7 +31,7 @@ func openPickable(t *testing.T, f *jiratest.Fake, key string, priorities []jira.
 	t.Helper()
 	allEditableWithChoices(f, key, priorities...)
 	rec := record(f)
-	d := testDeps(rec)
+	d := testDeps(t, rec)
 	p := newPanel(t, New(d, readIssue(t, f, key), opts...), 100, 30)
 	p.send(loadedMsg{gen: p.editor().gen, issue: readIssue(t, f, key)})
 	p.editor().focus = regionDetails
@@ -140,7 +140,7 @@ func TestPick_APriorityEditmetaDoesNotListStaysReadOnly(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(3)
-	d := testDeps(f)
+	d := testDeps(t, f)
 	p := newPanel(t, New(d, readIssue(t, f, "PROJ-1")), 100, 30)
 	p.send(loadedMsg{gen: p.editor().gen, issue: readIssue(t, f, "PROJ-1")})
 	p.editor().focus = regionDetails
@@ -276,7 +276,7 @@ func TestPick_NoCapPeopleSaysWhyRatherThanShowingAnEmptyList(t *testing.T) {
 
 	f := newFake(3)
 	allEditableWithChoices(f, "PROJ-1")
-	d := testDeps(f)
+	d := testDeps(t, f)
 	d.Caps.People = jira.Capability{Reason: "needs the Browse users and groups permission"}
 	p := newPanel(t, New(d, readIssue(t, f, "PROJ-1"), withDrafts(tempDrafts(t))), 100, 30)
 	p.send(loadedMsg{gen: p.editor().gen, issue: readIssue(t, f, "PROJ-1")})
@@ -411,7 +411,7 @@ func TestPick_ADraftOfAChoiceSurvivesAModelRebuild(t *testing.T) {
 	wantID, wantValue := row.chosenID, row.value
 
 	allEditableWithChoices(f, "PROJ-1", fakePriorityOptions...)
-	next := newPanel(t, New(testDeps(f), readIssue(t, f, "PROJ-1"), withDrafts(drafts)), 100, 30)
+	next := newPanel(t, New(testDeps(t, f), readIssue(t, f, "PROJ-1"), withDrafts(drafts)), 100, 30)
 	next.send(loadedMsg{gen: next.editor().gen, issue: readIssue(t, f, "PROJ-1")})
 
 	if !next.editor().draftRestored {
@@ -432,7 +432,7 @@ func TestPick_ClickingACandidateChoosesIt(t *testing.T) {
 	iss := readIssue(t, f, "PROJ-1")
 	want := otherPriority(iss)
 	allEditableWithChoices(f, "PROJ-1", fakePriorityOptions...)
-	d := testDeps(record(f))
+	d := testDeps(t, record(f))
 	p := newPanel(t, New(d, readIssue(t, f, "PROJ-1"), withDrafts(tempDrafts(t))), 100, 30)
 	p.send(loadedMsg{gen: p.editor().gen, issue: readIssue(t, f, "PROJ-1")})
 	p.editor().focus = regionDetails
@@ -456,7 +456,7 @@ func TestPick_ClickingACandidateChoosesIt(t *testing.T) {
 func TestPick_InlineListGolden(t *testing.T) {
 	f := newFake(3)
 	allEditableWithChoices(f, "PROJ-1", fakePriorityOptions...)
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-1"), 100, 28)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-1"), 100, 28)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: readIssue(t, f, "PROJ-1")})
 	dr.m.focus = regionDetails
 	for i, cr := range dr.m.sideRows {

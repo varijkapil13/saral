@@ -38,8 +38,7 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 Frecency is a plain local table of `(item, count, lastUsed)` scored `count * decay(lastUsed)`. No
 telemetry leaves the machine, ever.
 
-The palette keeps its own table in a file of the palette's under the cache directory, beside where a
-comment draft goes: command IDs from this build and two numbers each, nothing from any site. It is
+The palette keeps its own table in a file of the palette's under the cache directory: command IDs from this build and two numbers each, nothing from any site. It is
 not the profile, because `config.toml` has to stay safe to hand somebody, and a list of what you
 personally run most is not that; and it is not the issue cache, which has no record API and is
 absent exactly when a first run would most want to start learning. Half a use is worth what it was
@@ -367,8 +366,7 @@ and below the breakpoint the keys have nothing to move — a row naming them the
 answer with a refusal, which is the failure principle 2 describes rather than a smaller version of it.
 
 **The ratio is kept per machine, not per profile.** It goes in `ui.toml` under the cache directory,
-beside where a comment draft goes and where the palette's own frecency table is to go, for the
-reasons that directory already holds them: a pane width belongs to the terminal it was chosen in and not to a Jira
+beside the palette's own frecency table, for the reasons that directory already holds it: a pane width belongs to the terminal it was chosen in and not to a Jira
 account, so two profiles on one machine want one answer and a `config.toml` handed to somebody else
 should not carry your proportions.
 

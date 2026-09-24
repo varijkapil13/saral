@@ -47,7 +47,7 @@ func TestComments_TheKeyOpensTheThreadForTheIssueOnScreen(t *testing.T) {
 	f := newFake(12)
 	addComment(t, f, "PROJ-4", "What we agreed in the end.")
 	addComment(t, f, "PROJ-5", "Said on an issue nobody opened.")
-	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-4")), 100, 24)
+	p := newPanel(t, New(testDeps(t, f), seedOf(t, f, "PROJ-4")), 100, 24)
 
 	p.keys("C")
 
@@ -64,7 +64,7 @@ func TestComments_ThePaletteOpensTheSameThreadTheKeyDoes(t *testing.T) {
 
 	f := newFake(12)
 	addComment(t, f, "PROJ-6", "Reached without touching the keyboard shortcut.")
-	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-6")), 100, 24)
+	p := newPanel(t, New(testDeps(t, f), seedOf(t, f, "PROJ-6")), 100, 24)
 
 	p.send(CommentsMsg{})
 
@@ -81,7 +81,7 @@ func TestComments_EachPaneOpensTheThreadOfItsOwnIssue(t *testing.T) {
 	f := newFake(12)
 	addComment(t, f, "PROJ-1", "The first conversation.")
 	addComment(t, f, "PROJ-2", "The second conversation.")
-	d := testDeps(f)
+	d := testDeps(t, f)
 
 	first := newPanel(t, New(d, seedOf(t, f, "PROJ-1")), 100, 24)
 	first.keys("C")
@@ -102,7 +102,7 @@ func TestComments_WriteEditAndDeleteReachTheSiteFromTheDetailPane(t *testing.T) 
 	t.Parallel()
 
 	f := newFake(12)
-	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-7")), 100, 24)
+	p := newPanel(t, New(testDeps(t, f), seedOf(t, f, "PROJ-7")), 100, 24)
 	p.keys("C")
 	thread := threadPanel(t, p, "PROJ-7", 100, 24)
 
@@ -136,7 +136,7 @@ func TestComments_DeletingStillWaitsForTheAnswerItAsksFor(t *testing.T) {
 
 	f := newFake(12)
 	addComment(t, f, "PROJ-8", "Not going anywhere.")
-	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-8")), 100, 24)
+	p := newPanel(t, New(testDeps(t, f), seedOf(t, f, "PROJ-8")), 100, 24)
 	p.keys("C")
 	thread := threadPanel(t, p, "PROJ-8", 100, 24)
 
@@ -181,7 +181,7 @@ func TestComments_ReadingTheThreadThatFailsSaysWhyRatherThanShowingAnEmptyOne(t 
 
 			f := newFake(12)
 			addComment(t, f, "PROJ-3", "Never read.")
-			p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-3")), 100, 24)
+			p := newPanel(t, New(testDeps(t, f), seedOf(t, f, "PROJ-3")), 100, 24)
 			p.keys("C")
 			thread := newPanel(t, threadOf(t, p, "PROJ-3"), 100, 24)
 
@@ -205,7 +205,7 @@ func TestComments_ReadingTheThreadThatFailsSaysWhyRatherThanShowingAnEmptyOne(t 
 func TestComments_APaneWithNoIssueOpensNothing(t *testing.T) {
 	t.Parallel()
 
-	p := newPanel(t, New(testDeps(newFake(2)), jira.Issue{}), 100, 24)
+	p := newPanel(t, New(testDeps(t, newFake(2)), jira.Issue{}), 100, 24)
 
 	p.keys("C")
 	p.send(CommentsMsg{})
@@ -223,7 +223,7 @@ func TestComments_TakingCLeftTheOtherGesturesAlone(t *testing.T) {
 	f := newFake(12)
 	seed := seedOf(t, f, "PROJ-9")
 	seed.Description = longDoc(60)
-	p := newPanel(t, New(testDeps(f), seed), 100, 12)
+	p := newPanel(t, New(testDeps(t, f), seed), 100, 12)
 	p.send(loadedMsg{gen: p.pane(t).gen, issue: seed})
 
 	p.keys("g", "e")

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/varijkapil13/saral/internal/config"
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
 // draft is an edit that has not reached Jira. docs/UX.md principle 6 is that
@@ -54,12 +54,12 @@ type draftStore struct{ dir string }
 
 // newDraftStore locates the draft directory. A store with no directory keeps
 // nothing and says so, which is what a session with nowhere to write gets.
-func newDraftStore() (draftStore, error) {
-	dir, err := config.Dir()
+func newDraftStore(d kernel.Deps) (draftStore, error) {
+	dir, err := d.DraftRoot()
 	if err != nil {
 		return draftStore{}, fmt.Errorf("locating the drafts directory: %w", err)
 	}
-	return draftStore{dir: filepath.Join(dir, "drafts")}, nil
+	return draftStore{dir: dir}, nil
 }
 
 func (s draftStore) available() bool { return s.dir != "" }

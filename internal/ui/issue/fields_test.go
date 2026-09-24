@@ -67,7 +67,7 @@ func fieldsPane(t *testing.T, w, h int) *driver {
 	t.Helper()
 
 	iss, labels := relatedIssue()
-	dr := newDriver(t, testDeps(newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
+	dr := newDriver(t, testDeps(t, newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
 	return dr
 }
@@ -193,7 +193,7 @@ func sprintPane(t *testing.T, value string, w, h int) *driver {
 		}),
 		Requested: jira.NewFieldMask([]string{"summary", "status", "issuetype", "project", sprint.ID}),
 	}
-	dr := newDriver(t, testDeps(newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
+	dr := newDriver(t, testDeps(t, newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
 	return dr
 }
@@ -259,7 +259,7 @@ func bookkeepingPane(t *testing.T, w, h int) *driver {
 	}
 	labels := app.NewFieldLabels(catalogue, ids)
 
-	dr := newDriver(t, testDeps(f), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
+	dr := newDriver(t, testDeps(t, f), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
 	return dr
 }
@@ -430,7 +430,7 @@ func pinnedPane(t *testing.T, pinned []string, w, h int) *driver {
 		t.Setenv("SARAL_CONFIG_DIR", t.TempDir())
 	}
 	iss, labels := pinnableIssue()
-	dr := newDriver(t, testDeps(newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
+	dr := newDriver(t, testDeps(t, newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
 	return dr
 }
@@ -459,7 +459,7 @@ func TestFields_AnUnknownPinnedIDIsSkippedButSurvivesASave(t *testing.T) {
 	pinned := []string{"customfield_99999", "customfield_30002"}
 	writeProfile(t, pinned)
 	iss, labels := pinnableIssue()
-	dr := newDriver(t, testDeps(newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 40)
+	dr := newDriver(t, testDeps(t, newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 40)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
 	dr.key("tab")
 
@@ -489,7 +489,7 @@ func TestFields_CustomFieldsNeverReadsOutsideTheIsolatedConfigDir(t *testing.T) 
 		t.Fatalf("config.Dir() = %q, %v, want the isolated %q", dir, err, isolatedConfigDir)
 	}
 	iss, labels := pinnableIssue()
-	dr := newDriver(t, testDeps(newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 40)
+	dr := newDriver(t, testDeps(t, newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 40)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
 	dr.key("tab")
 
@@ -519,7 +519,7 @@ func TestFields_APinFromAnotherSiteIsNeverDrawn(t *testing.T) {
 	}
 
 	iss, labels := pinnableIssue()
-	dr := newDriver(t, testDeps(newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 40)
+	dr := newDriver(t, testDeps(t, newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 40)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
 	dr.key("tab")
 

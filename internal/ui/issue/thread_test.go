@@ -16,7 +16,7 @@ func TestComments_TheSidebarAndTheFullScreenAreOneModel(t *testing.T) {
 
 	f := newFake(12)
 	addComment(t, f, "PROJ-4", "The conversation the sidebar is already showing.")
-	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-4")), 120, 30)
+	p := newPanel(t, New(testDeps(t, f), seedOf(t, f, "PROJ-4")), 120, 30)
 	mustContain(t, p.frame(), "The conversation the sidebar")
 
 	p.keys("C")
@@ -46,7 +46,7 @@ func TestComments_ComingBackPutsTheThreadBackInItsBox(t *testing.T) {
 
 	f := newFake(12)
 	addComment(t, f, "PROJ-5", "Something to come back to.")
-	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-5")), 120, 30)
+	p := newPanel(t, New(testDeps(t, f), seedOf(t, f, "PROJ-5")), 120, 30)
 	inBox := p.frame()
 
 	p.keys("C")
@@ -68,7 +68,7 @@ func TestComments_ThePaletteWriteGoesFullScreenFirst(t *testing.T) {
 
 	f := newFake(12)
 	addComment(t, f, "PROJ-6", "Something to edit.")
-	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-6")), 120, 30)
+	p := newPanel(t, New(testDeps(t, f), seedOf(t, f, "PROJ-6")), 120, 30)
 
 	p.send(comment.WriteMsg{})
 
@@ -85,7 +85,7 @@ func TestComments_APaletteWriteWhileTheThreadIsUpIsLeftToTheThread(t *testing.T)
 	t.Parallel()
 
 	f := newFake(12)
-	p := newPanel(t, New(testDeps(f), seedOf(t, f, "PROJ-7")), 120, 30)
+	p := newPanel(t, New(testDeps(t, f), seedOf(t, f, "PROJ-7")), 120, 30)
 	p.keys("C")
 	p.send(comment.WriteMsg{})
 
@@ -113,7 +113,7 @@ func TestThread_EveryMotionSpellsAStrokeItAnswers(t *testing.T) {
 	for i := range 12 {
 		addComment(t, f, "PROJ-8", "Comment "+strconv.Itoa(i+1)+", worth a couple of lines of somebody's day.")
 	}
-	dr := newDriver(t, testDeps(f), seedOf(t, f, "PROJ-8"), 120, 30)
+	dr := newDriver(t, testDeps(t, f), seedOf(t, f, "PROJ-8"), 120, 30)
 	dr.key("tab", "tab")
 	if dr.m.focus != regionComments {
 		t.Fatalf("two tabs left the keyboard on region %d", dr.m.focus)
