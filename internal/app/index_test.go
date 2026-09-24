@@ -241,6 +241,42 @@ func TestIndex_WalksAgainOnceTheCorpusHasMoved(t *testing.T) {
 	}
 }
 
+// SharedIndex is what keeps a view rebuilt on every open — the palette on
+// ctrl+k — from discarding the previous open's walk: these two are not
+// t.Parallel(), because both touch the one Index SharedIndex hands out.
+func TestSharedIndex_ReusesTheIndexAcrossCallsOverTheSameCorpus(t *testing.T) {
+	corpus := newStubCorpus(titledIssue("PROJ-1", "Fix the login flow"))
+
+	first := SharedIndex(corpus)
+	searched(t, first, "login", 10)
+	second := SharedIndex(corpus)
+	searched(t, second, "login", 10)
+
+	if first != second {
+		t.Fatal("a second call over the same corpus minted a new Index")
+	}
+	if corpus.walks != 1 {
+		t.Errorf("two opens over an unchanged corpus walked it %d times, want once", corpus.walks)
+	}
+}
+
+func TestSharedIndex_MintsAFreshIndexForADifferentCorpus(t *testing.T) {
+	one := newStubCorpus(titledIssue("PROJ-1", "Fix the login flow"))
+	two := newStubCorpus(titledIssue("PROJ-2", "Retire the login banner"))
+
+	first := SharedIndex(one)
+	searched(t, first, "login", 10)
+	second := SharedIndex(two)
+	searched(t, second, "login", 10)
+
+	if first == second {
+		t.Fatal("two different corpora were handed the same Index")
+	}
+	if one.walks != 1 || two.walks != 1 {
+		t.Errorf("the corpora were walked %d and %d times, want one each", one.walks, two.walks)
+	}
+}
+
 func TestIndex_ReportsAnIssueItCouldNotReadWithoutRetryingItEveryKeystroke(t *testing.T) {
 	t.Parallel()
 

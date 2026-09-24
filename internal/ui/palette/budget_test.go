@@ -43,6 +43,25 @@ func TestBudget_PaletteOpeningIsOnTheKeystrokeBudget(t *testing.T) {
 	}
 }
 
+// ctrl+k over a cache at its bound shares build's app.Index across opens
+// (app.SharedIndex), so this stays on budget rather than paying for a walk of
+// the whole cache on every single open.
+func TestBudget_PaletteOpenWithCachedIssuesIsOnTheKeystrokeBudget(t *testing.T) {
+	res := testing.Benchmark(BenchmarkPaletteOpenCached)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("opening the palette over %d cached issues took %s, want under the 16ms in docs/PERFORMANCE.md",
+			app.DefaultIssueBound, per)
+	}
+}
+
+func TestBudget_PaletteFirstKeystrokeOverCachedIssuesIsOnBudget(t *testing.T) {
+	res := testing.Benchmark(BenchmarkPaletteFirstKeystrokeCached)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("the first keystroke after opening over %d cached issues took %s, want under the 16ms in docs/PERFORMANCE.md",
+			app.DefaultIssueBound, per)
+	}
+}
+
 // The picker is a list that ranks on every keystroke like the palette itself, so
 // it is on the same budget.
 func TestBudget_ProjectPickerKeystroke(t *testing.T) {

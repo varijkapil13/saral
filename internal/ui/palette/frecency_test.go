@@ -8,6 +8,16 @@ import (
 	"time"
 )
 
+// runSave drives Save to completion the way the kernel would, synchronously:
+// bubbletea just calls the func a tea.Cmd returns, so a test can too. It is a
+// no-op when there is nothing dirty to write.
+func runSave(t *testing.T, freq *table) {
+	t.Helper()
+	if cmd := freq.Save(); cmd != nil {
+		cmd()
+	}
+}
+
 func TestTable_ScoresCountAgainstHowLongAgoItWas(t *testing.T) {
 	t.Parallel()
 
@@ -75,6 +85,7 @@ func TestTable_SurvivesTheProcessThatWroteIt(t *testing.T) {
 	first := openTable(path, commandsPart)
 	first.ran("issues.mine", clockAt)
 	first.ran("issues.mine", clockAt)
+	runSave(t, first)
 
 	second := openTable(path, commandsPart)
 	if got := second.ran("issues.mine", clockAt); got != 3 {
@@ -114,6 +125,7 @@ func TestTable_CarriesOnInMemoryAfterAWriteFails(t *testing.T) {
 	if got := freq.ran("issue.edit", clockAt); got != 1 {
 		t.Errorf("the run was counted as %d", got)
 	}
+	runSave(t, freq)
 	if !freq.stopped {
 		t.Error("the failed write was not recorded, so every run will try it again")
 	}
@@ -148,5 +160,73 @@ func TestTable_IgnoresAFileItCannotUnderstand(t *testing.T) {
 	freq := openTable(path, commandsPart)
 	if got := freq.ran("issue.edit", clockAt); got != 1 {
 		t.Errorf("a table over an unreadable file counted the first run as %d", got)
+	}
+}
+
+func TestTable_SaveIsNilWithNothingToWrite(t *testing.T) {
+	t.Parallel()
+
+	freq := openTable(filepath.Join(t.TempDir(), "usage.json"), commandsPart)
+	if cmd := freq.Save(); cmd != nil {
+		t.Error("Save returned a command over a table nothing has run against yet")
+	}
+}
+
+// A run that lands while a write is already going must not queue a second one:
+// the disk write is what Ran used to do inline, on the event loop, and doing it
+// twice at once would still be that cost paid twice.
+func TestTable_SaveCoalescesARunThatLandsWhileOneIsInFlight(t *testing.T) {
+	t.Parallel()
+
+	freq := openTable(filepath.Join(t.TempDir(), "palette", "usage.json"), commandsPart)
+	freq.ran("issue.edit", clockAt)
+
+	cmd := freq.Save()
+	if cmd == nil {
+		t.Fatal("Save returned nil with a dirty table")
+	}
+	freq.ran("issue.create", clockAt)
+	if again := freq.Save(); again != nil {
+		t.Error("Save started a second write while the first was still in flight")
+	}
+
+	cmd()
+	runSave(t, freq)
+
+	reloaded := openTable(freq.path, commandsPart)
+	if got := reloaded.score("issue.create", clockAt); got <= 0 {
+		t.Error("the run that landed mid-write never reached disk")
+	}
+}
+
+func TestTable_WarningIsSaidOnceAfterAFailedSave(t *testing.T) {
+	t.Parallel()
+
+	blocked := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blocked, []byte("in the way"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	freq := openTable(filepath.Join(blocked, "usage.json"), commandsPart)
+	freq.ran("issue.edit", clockAt)
+	runSave(t, freq)
+
+	text, ok := freq.Warning()
+	if !ok || text == "" {
+		t.Fatal("Warning did not report the failed save")
+	}
+	if _, ok := freq.Warning(); ok {
+		t.Error("Warning reported the same failure twice")
+	}
+}
+
+func TestTable_WarningIsSilentWhenNothingFailed(t *testing.T) {
+	t.Parallel()
+
+	freq := memoryTable()
+	freq.ran("issue.edit", clockAt)
+	runSave(t, freq)
+
+	if _, ok := freq.Warning(); ok {
+		t.Error("Warning reported a failure with nowhere to write and no error")
 	}
 }

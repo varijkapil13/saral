@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -63,7 +64,10 @@ type Hit struct {
 //
 // An Index belongs to whatever holds it and is not safe for concurrent use: it
 // is read and rebuilt on the event loop, like every other read a first paint
-// depends on.
+// depends on. A caller rebuilt fresh on every open — the palette on ctrl+k —
+// should hold it through SharedIndex rather than NewIndex, or Refresh's
+// generation check never gets the chance to answer "nothing moved": a fresh
+// Index has never walked, so it walks again on the very next search.
 type Index struct {
 	corpus  IssueCorpus
 	rows    []indexRow
@@ -83,6 +87,35 @@ type indexRow struct {
 // NewIndex returns an index over a corpus, without reading it. A nil corpus is
 // a session with nowhere to cache, and searching it finds nothing.
 func NewIndex(corpus IssueCorpus) *Index { return &Index{corpus: corpus} }
+
+var (
+	sharedIndexMu  sync.Mutex
+	sharedIndexOf  IssueCorpus
+	sharedIndexVal *Index
+)
+
+// SharedIndex returns the process's one Index over corpus, minted the first
+// time corpus is seen and handed back unchanged after — the way sharedTable
+// keeps the palette's frecency table alive across opens rather than starting
+// over on every ctrl+k. Refresh still decides whether a walk is needed; this
+// only decides whether a caller's rebuilt-on-every-open view gets a fresh,
+// never-walked Index each time, which would decide "needed" every time.
+//
+// A different corpus — a second session's cache, a test's fake one — mints its
+// own Index rather than reusing one built over somebody else's, compared by
+// identity: every Cache implementation in this codebase is a pointer, which
+// compares safely.
+func SharedIndex(corpus IssueCorpus) *Index {
+	sharedIndexMu.Lock()
+	defer sharedIndexMu.Unlock()
+	if corpus == nil {
+		return NewIndex(nil)
+	}
+	if sharedIndexOf != corpus || sharedIndexVal == nil {
+		sharedIndexOf, sharedIndexVal = corpus, NewIndex(corpus)
+	}
+	return sharedIndexVal
+}
 
 // Len reports how many issues the index holds as of its last walk.
 func (ix *Index) Len() int {

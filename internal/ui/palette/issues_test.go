@@ -397,6 +397,27 @@ func TestPalette_WalksTheCacheOnceWhileAFilterIsTyped(t *testing.T) {
 	}
 }
 
+// Two opens are two ctrl+k presses over a session that has not touched the
+// cache in between: the second build must not pay for a walk the first one
+// already did, which is what app.SharedIndex's generation check is for.
+// Not t.Parallel(): app.SharedIndex keeps one Index behind the process, and a
+// concurrent test reusing it for a different cache would steal the slot mid-way
+// through this one, thrashing the reuse this test exists to prove.
+func TestPalette_ASecondOpenDoesNotWalkTheCacheAgainWhenNothingChanged(t *testing.T) {
+	d, cache := cachedDeps()
+	first := fly(t, d, sample(), memoryTable(), 120, 24)
+	first.typeText("login")
+	if got := cache.walked(); got != 1 {
+		t.Fatalf("the first open walked the cache %d times, want 1", got)
+	}
+
+	second := fly(t, d, sample(), memoryTable(), 120, 24)
+	second.typeText("login")
+	if got := cache.walked(); got != 1 {
+		t.Errorf("a second open over an unchanged cache walked it %d times in total, want 1", got)
+	}
+}
+
 func TestPalette_ClickingACachedIssueSelectsItAndClickingItAgainOpensIt(t *testing.T) {
 	t.Parallel()
 
@@ -445,7 +466,7 @@ func TestPalette_KeepsTheSelectedIssueWhenTheCapabilitiesChange(t *testing.T) {
 // hitZone resolves the click target the palette marked a cached issue with.
 func (p *pilot) hitZone(key string) zoneBounds {
 	p.t.Helper()
-	id := p.m.zonePrefix + zoneHit + key
+	id := p.m.zones.ID(zoneHit + key)
 	at := uitest.Zone(p.t, p.m.deps.Zones, p.m.View, id)
 	return zoneBounds{StartX: at.StartX, StartY: at.StartY}
 }

@@ -178,8 +178,10 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/move` | `TestBudget_MoveRemapKeystrokeToFrame` |
 | `internal/ui/move` | `TestBudget_MoveRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/move` | `TestBudget_MoveScrollingCostsTheSameOnAThousandIssuesAsOnTwenty` |
+| `internal/ui/palette` | `TestBudget_PaletteFirstKeystrokeOverCachedIssuesIsOnBudget` |
 | `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverEveryCachedIssue` |
 | `internal/ui/palette` | `TestBudget_PaletteKeystrokeOverTwoThousandCommands` |
+| `internal/ui/palette` | `TestBudget_PaletteOpenWithCachedIssuesIsOnTheKeystrokeBudget` |
 | `internal/ui/palette` | `TestBudget_PaletteOpeningIsOnTheKeystrokeBudget` |
 | `internal/ui/palette` | `TestBudget_PaletteRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/palette` | `TestBudget_PaletteScrollingCostsTheSameOnTwoThousandCommandsAsOnTwenty` |

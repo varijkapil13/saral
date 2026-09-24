@@ -462,7 +462,7 @@ func actsOf(set kernel.KeySet) string {
 // the manager's own goroutine.
 func (p *pilot) zoneOf(id string) zoneBounds {
 	p.t.Helper()
-	zid := p.m.zonePrefix + zoneRow + id
+	zid := p.m.zones.ID(zoneRow + id)
 	at := uitest.Zone(p.t, p.m.deps.Zones, p.m.View, zid)
 	return zoneBounds{StartX: at.StartX, StartY: at.StartY}
 }

@@ -2,12 +2,15 @@ package palette
 
 import (
 	"encoding/json"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/config"
 )
@@ -57,9 +60,18 @@ type table struct {
 	part string
 	path string
 	uses map[string]use
+	// dirty is a run Save has not yet written.
+	dirty bool
+	// saving is a write already in flight, so Ran landing while one is going
+	// only marks the table dirty again rather than starting a second write.
+	saving bool
 	// stopped records a write that failed. Ranking carries on in memory; there
 	// is nothing to be gained from retrying a path that just refused.
 	stopped bool
+	// failure is the first error a write hit, and warned is whether Warning has
+	// already handed it to a caller: said once, not on every keystroke after.
+	failure error
+	warned  bool
 }
 
 // shared is the table the running program uses. The palette is built fresh on
@@ -122,22 +134,21 @@ func decay(age time.Duration) float64 {
 
 // ran records one run and returns how many there have now been, which is what
 // the hint counts: docs/UX.md notes an action's key the third time it is reached
-// from here.
+// from here. The mutation is a map write and stays synchronous; the disk write
+// it earns is Save's job, off the event loop.
 func (t *table) ran(id string, now time.Time) int {
 	if strings.TrimSpace(id) == "" {
 		return 0
 	}
 	t.mu.Lock()
+	defer t.mu.Unlock()
 	held := t.uses[id]
 	held.Count++
 	held.Last = now
 	t.uses[id] = held
 	t.trim(now)
-	count := held.Count
-	t.mu.Unlock()
-
-	t.save()
-	return count
+	t.dirty = true
+	return held.Count
 }
 
 // trim keeps the table bounded by dropping whatever ranks lowest. The caller
@@ -176,22 +187,61 @@ func (t *table) load() {
 	}
 }
 
-// save writes the table beside its target and renames it over the top, so that
-// a crash half way through leaves the previous table rather than a truncated
-// one.
-func (t *table) save() {
+// Save schedules a write of whatever Ran has changed since the last one, off
+// the event loop: CreateTemp/write/rename on every run put a command's disk
+// I/O on the goroutine that has to draw the next frame. It is coalesced
+// against a write already going — Ran landing while one is in flight marks the
+// table dirty again rather than this starting a second write, and flush picks
+// that up once it is back — and nil when there is nothing to write or a
+// previous failure has already stopped this table from trying.
+func (t *table) Save() tea.Cmd {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.path == "" || t.stopped {
-		return
+	if t.path == "" || t.stopped || t.saving || !t.dirty {
+		t.mu.Unlock()
+		return nil
 	}
-	if err := t.write(); err != nil {
-		t.stopped = true
+	t.saving, t.dirty = true, false
+	snapshot := maps.Clone(t.uses)
+	t.mu.Unlock()
+	return func() tea.Msg {
+		t.flush(snapshot)
+		return nil
 	}
 }
 
-func (t *table) write() error {
-	raw, err := json.Marshal(map[string]map[string]use{t.part: t.uses})
+// flush is Save's write, run off the event loop against the snapshot Save
+// took under the lock: the map itself keeps moving on the event loop while
+// this runs, and marshalling it here without a copy would race that.
+func (t *table) flush(snapshot map[string]use) {
+	err := t.write(snapshot)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.saving = false
+	if err != nil {
+		t.stopped = true
+		if t.failure == nil {
+			t.failure = err
+		}
+	}
+}
+
+// Warning is the first save failure this table hit, reported once: a caller
+// puts it on the status line, and nothing hands it back again after.
+func (t *table) Warning() (string, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.failure == nil || t.warned {
+		return "", false
+	}
+	t.warned = true
+	return "what gets used here won't be remembered next time: " + t.failure.Error(), true
+}
+
+// write saves the table beside its target and renames it over the top, so that
+// a crash half way through leaves the previous table rather than a truncated
+// one.
+func (t *table) write(uses map[string]use) error {
+	raw, err := json.Marshal(map[string]map[string]use{t.part: uses})
 	if err != nil {
 		return err
 	}

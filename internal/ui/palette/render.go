@@ -242,9 +242,7 @@ func (m *Model) row(at int) string {
 			return s
 		}
 		s := renderHit(h, m.lay, sel, m.styles, m.deps.Theme)
-		if m.deps.Zones != nil {
-			s = m.deps.Zones.Mark(m.zonePrefix+zoneHit+h.key, s)
-		}
+		s = m.zones.Mark(zoneHit+h.key, s)
 		m.memo.Put(k, s)
 		return s
 	}
@@ -254,9 +252,7 @@ func (m *Model) row(at int) string {
 		return s
 	}
 	s := renderRow(r, m.lay, sel, m.styles, m.deps.Theme)
-	if m.deps.Zones != nil {
-		s = m.deps.Zones.Mark(m.zonePrefix+zoneRow+r.cmd.ID, s)
-	}
+	s = m.zones.Mark(zoneRow+r.cmd.ID, s)
 	m.memo.Put(k, s)
 	return s
 }

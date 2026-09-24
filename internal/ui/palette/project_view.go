@@ -185,9 +185,7 @@ func (m *projectModel) row(at int) string {
 		return s
 	}
 	s := renderProject(r, m.lay, sel, m.styles, m.deps.Theme)
-	if m.deps.Zones != nil {
-		s = m.deps.Zones.Mark(m.zone(m.shown[at]), s)
-	}
+	s = m.zones.Mark(m.zone(m.shown[at]), s)
 	m.memo.Put(k, s)
 	return s
 }
