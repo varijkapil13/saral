@@ -28,8 +28,9 @@ var update = flag.Bool("update", false, "rewrite the golden files")
 // so that a Deps somebody builds without a DraftsDir still cannot reach the
 // real drafts of whoever is running the suite.
 func TestMain(m *testing.M) {
-	var dirs []string
-	for _, env := range []string{"SARAL_CACHE_DIR", "SARAL_CONFIG_DIR"} {
+	envs := []string{"SARAL_CACHE_DIR", "SARAL_CONFIG_DIR"}
+	dirs := make([]string, 0, len(envs))
+	for _, env := range envs {
 		dir, err := os.MkdirTemp("", "saral-comment")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
