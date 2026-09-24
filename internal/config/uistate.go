@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/BurntSushi/toml"
 )
@@ -17,10 +16,6 @@ const uiStateFile = "ui.toml"
 // SplitScale is what a stored split is a share of: a sidebar taking a third of
 // its pane is 333.
 const SplitScale = 1000
-
-// uiWrite serialises the read-merge-write below, so two views choosing a split
-// at once cannot each write a file missing the other's.
-var uiWrite sync.Mutex
 
 // UIState is what this machine remembers about how a view is arranged.
 //
@@ -147,8 +142,11 @@ func mutateRemembered(scope ProfileScope, fn func(*Remembered)) error {
 	if err != nil {
 		return err
 	}
-	uiWrite.Lock()
-	defer uiWrite.Unlock()
+	unlock, err := lockFile(path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 
 	state := LoadUIState()
 	bySite := state.Remembered[scope.Site]
@@ -232,8 +230,11 @@ func SaveSplit(view string, share int) error {
 	if err != nil {
 		return err
 	}
-	uiWrite.Lock()
-	defer uiWrite.Unlock()
+	unlock, err := lockFile(path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 
 	state := LoadUIState()
 	if state.Splits == nil {
@@ -273,8 +274,11 @@ func SaveSort(view string, spec SortSpec) error {
 	if err != nil {
 		return err
 	}
-	uiWrite.Lock()
-	defer uiWrite.Unlock()
+	unlock, err := lockFile(path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 
 	state := LoadUIState()
 	if state.Sorts == nil {

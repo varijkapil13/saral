@@ -196,6 +196,7 @@ func build(opt options) (deps kernel.Deps, kopts []kernel.Option, notice string,
 		return deps, nil, notice, releaseCache, perr
 	}
 	deps.Site = profile.Site
+	notice = strings.Join(cfg.Warnings, " · ")
 	project, err := sessionProject(opt.project, profile.Project)
 	if err != nil {
 		return deps, nil, notice, releaseCache, err
@@ -222,16 +223,16 @@ func build(opt options) (deps kernel.Deps, kopts []kernel.Option, notice string,
 	if !firstRun {
 		client, cerr := clientFor(profile)
 		if cerr != nil {
-			notice = cerr.Error()
+			notice = strings.TrimPrefix(notice+" · "+cerr.Error(), " · ")
 		} else {
 			deps.Jira = client
 		}
 		// Opened whether or not the client was: rows from the last session are
 		// worth drawing even in a session that cannot reach the site at all.
 		var cacheNote string
-		deps.Cache, releaseCache, cacheNote = openCache(profile)
-		if notice == "" {
-			notice = cacheNote
+		deps.Cache, releaseCache, cacheNote = openCache(profile, profileScopes(cfg))
+		if cacheNote != "" {
+			notice = strings.TrimPrefix(notice+" · "+cacheNote, " · ")
 		}
 		deps.Memory = newMemory(profile.Site, profile.Email)
 	}
@@ -334,7 +335,11 @@ func viewIDs() []string {
 // Nothing here is fatal: a session that keeps no cache fetches everything it
 // shows, which still works. Another copy of Saral holding the file is the
 // ordinary way that happens, not a mistake, and so is an unwritable home.
-func openCache(p config.Profile) (cache app.Cache, release func(), notice string) {
+//
+// Opening is also when the file is kept in bounds: every scope no configured
+// profile names any more — a profile removed, or re-onboarded under another
+// email — is dropped, and this profile's own entries past their retention go.
+func openCache(p config.Profile, known []store.Scope) (cache app.Cache, release func(), notice string) {
 	release = func() {}
 	dir, err := config.CacheDir()
 	if err != nil {
@@ -343,14 +348,44 @@ func openCache(p config.Profile) (cache app.Cache, release func(), notice string
 	db, err := store.Open(filepath.Join(dir, cacheFile))
 	switch {
 	case errors.Is(err, store.ErrLocked):
-		return nil, release, "another copy of Saral has the cache open, so this session keeps none of its own"
+		return nil, release, "another copy of Saral has the cache open, so this session runs without one"
 	case err != nil:
 		return nil, release, "nothing will be cached this session: " + err.Error()
+	}
+	if aside := db.Recovered(); aside != "" {
+		notice = "the cache file could not be read, so it was moved to " + aside + " and started afresh"
 	}
 	// The account is the profile's email rather than its Jira account ID: the ID
 	// takes a round trip to learn, the first frame is drawn before one could have
 	// answered, and two profiles on one site differ by email anyway.
-	return app.NewCache(db, store.Scope{Site: p.Site, Account: p.Email}), func() { _ = db.Close() }, ""
+	scope := store.Scope{Site: p.Site, Account: p.Email}
+	dropOrphans(db, append(known, scope))
+	c := app.NewCache(db, scope)
+	_, _ = c.Sweep()
+	return c, func() { _ = db.Close() }, notice
+}
+
+// dropOrphans deletes every scope the file holds that is not one of keep. A
+// failure leaves the buckets for the next launch to try again, and costs this
+// one nothing but disk.
+func dropOrphans(db *store.DB, keep []store.Scope) {
+	held, err := db.Scopes()
+	if err != nil {
+		return
+	}
+	for _, s := range held {
+		if !slices.Contains(keep, s) {
+			_ = db.DropScope(s)
+		}
+	}
+}
+
+func profileScopes(cfg config.Config) []store.Scope {
+	out := make([]store.Scope, 0, len(cfg.Profiles))
+	for name := range cfg.Profiles {
+		out = append(out, store.Scope{Site: cfg.Profiles[name].Site, Account: cfg.Profiles[name].Email})
+	}
+	return out
 }
 
 // connect opens a client for credentials the caller already holds, which is what
@@ -405,17 +440,15 @@ func queryWriter(name string) func(app.SavedQueries) error {
 		if err != nil {
 			return err
 		}
-		cfg, err := config.LoadFile(path)
-		if err != nil {
-			return err
-		}
-		profile, err := profileFor(cfg, name)
-		if err != nil {
-			return err
-		}
-		profile.Queries = saved.All()
-		cfg.Profiles[profile.Name] = profile
-		return cfg.Save(path)
+		return config.UpdateFile(path, func(cfg *config.Config) error {
+			profile, err := profileFor(*cfg, name)
+			if err != nil {
+				return err
+			}
+			profile.Queries = saved.All()
+			cfg.Profiles[profile.Name] = profile
+			return nil
+		})
 	}
 }
 

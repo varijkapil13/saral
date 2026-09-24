@@ -662,7 +662,21 @@ held rather than replacing it, so a narrow read cannot blank a field it never as
 `PutBacklog` merge into it exactly as `PutRows` does, and `IssueCache.PutIssue` is the same merge for
 the one issue the detail pane read. And the issue bucket is one corpus rather than one per search,
 bounded to `app.DefaultIssueBound` (5,000) by dropping what was stored longest ago, so a long session
-cannot grow the file without limit.
+cannot grow the file without limit. Every other kind has a count too (`Kind.Retention`), and a write
+that takes a kind over its count trims it a tenth below, so a cache sitting at its bound walks the
+bucket once per tenth of it rather than on every write; `store.DB.Len` answers from a count the writes
+keep, which is exact for the reason `Generation` is. A search, a board or a backlog writes its entry
+and the issues it names in one transaction (`store.DB.PutAll`). `app.BoardPageCache` and
+`app.BacklogPageCache` store a walk one page at a time — only that page's issues are merged, and the
+key list is replaced by the first page and appended to by the rest — which is what a view calls per
+page; `PutBoard` and `PutBacklog` still store a whole snapshot.
+
+Opening the file is when it is kept in bounds between sessions (`openCache` in `cmd/saral`): every
+scope no profile in `config.toml` names is dropped (`store.DB.DropScope`), so removing a profile or
+re-onboarding under another email leaves nothing behind, and `DiskCache.Sweep` drops this profile's
+entries past their `Retention` age. A file bbolt cannot read as a database is moved aside to
+`cache.db.corrupt-<timestamp>` and a fresh one created, and the status line says so on that launch
+only. What is kept, where, and how to wipe it is in `docs/SETTINGS.md`.
 
 `Cache.Generation()` counts every write. Anything holding a derived copy of the cache — the local
 fuzzy index in P3.4 — compares one number to find out that its copy is behind, rather than walking the
@@ -672,8 +686,9 @@ index. An in-memory counter is a complete answer because bbolt holds the file ex
 process that has it open is the only writer there is.
 
 A session with nowhere to keep a cache carries a nil one and every caller draws without it: a first
-run has nothing on disk, another copy of Saral may be holding the file (`store.ErrLocked`, which must
-not stop the program starting), and a home directory is not always writable.
+run has nothing on disk, another copy of Saral may be holding the file (`store.ErrLocked` after a
+100ms wait, which must not stop the program starting and is said on the status line), and a home
+directory is not always writable.
 
 ## Rendering and performance
 
@@ -771,6 +786,7 @@ which is how `docs/DEMO.md` drives the program. `saral --version` prints the pat
 
 ```toml
 # ~/.config/saral/config.toml — saral-dev/ for a build from a checkout
+version = 1                              # the schema; a file with none is version 0
 active = "work"
 
 [profiles.work]
@@ -787,6 +803,22 @@ name = "Blockers"
 jql  = "priority = Highest AND resolution = EMPTY ORDER BY updated DESC"
 key  = 2                                 # the number key that runs it; omit for none
 ```
+
+**Versions and keys this build does not know.** `version` is the schema the file was written at.
+`parse` runs the entries of `config.migrations` from the file's version up to `config.SchemaVersion`
+before validating anything, so a layout change is a migration rather than a refusal. A key this
+build does not know is a warning on the status line rather than a fatal error — it is as likely a
+newer build's as a typo — and is dropped the next time the file is written; a key that looks like a
+secret (`token`, `password`, `api_token` and the rest) is still refused wherever it appears. A file
+whose version is newer than this build's is read but never rewritten: `Save` answers
+`config.ErrNewerConfig` rather than drop every key it does not know.
+
+**Writing.** Every read-merge-write of `config.toml` goes through `config.UpdateFile`, which holds an
+advisory lock (`github.com/gofrs/flock`) on a hidden `.config.toml.lock` beside it, so two copies of
+Saral cannot each write a file missing the other's change; `ui.toml`'s writers hold the same kind of
+lock on `.ui.toml.lock`. The write itself goes through a temporary file and a rename, follows a
+symlink first so a `config.toml` kept in a dotfiles repository stays a link, and syncs the directory
+after the rename.
 
 The queries are held by `app.SavedQueries` and validated by its rules rather than a second copy of
 them, so a file and a keypress cannot disagree about what a saved query is. The file refuses the two
@@ -816,7 +848,8 @@ survive somebody re-checking a token. The review screen says so rather than aski
 no second thing to choose between.
 
 A **share** rather than a column count, so the choice survives a window of another size. `SaveSplit`
-re-reads before it writes and holds a mutex over the pair, so one view's entry cannot lose another's;
+re-reads before it writes and holds the file lock over the pair, so one view's entry cannot lose
+another's, in this process or another;
 `LoadUIState` answers with nothing at all where it cannot read — a first run, an unwritable cache, a
 file edited into something TOML will not parse — because this is the program's own record of how a
 pane was left rather than anything a person wrote. Writing is a `tea.Cmd` like every other piece of

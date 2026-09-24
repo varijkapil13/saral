@@ -69,6 +69,44 @@ func (k Kind) TTL() time.Duration {
 	}
 }
 
+// Retention is how much of one kind the file keeps: at most Keep entries, none
+// older than MaxAge. A TTL says when an entry needs revalidating; this says when
+// it is no longer worth the disk, which for anything a user might reopen next
+// week is much later.
+type Retention struct {
+	Keep   int
+	MaxAge time.Duration
+}
+
+// retentionAge is how long an entry nobody has rewritten stays on disk. A month
+// covers a board visited once a sprint; past that the first frame it would draw
+// is more wrong than blank.
+const retentionAge = 30 * 24 * time.Hour
+
+// Retention is this kind's bound. The issue count is DefaultIssueBound unless a
+// DiskCache was built with another; the rest are per-entry counts sized well
+// past what a person opens between two sweeps.
+func (k Kind) Retention() Retention {
+	switch k {
+	case KindIssue:
+		return Retention{Keep: DefaultIssueBound, MaxAge: retentionAge}
+	case KindSearch:
+		return Retention{Keep: 200, MaxAge: retentionAge}
+	case KindBoard, KindBacklog:
+		return Retention{Keep: 50, MaxAge: retentionAge}
+	case KindLastBoard:
+		return Retention{Keep: 200, MaxAge: 3 * retentionAge}
+	default:
+		return Retention{Keep: 100, MaxAge: retentionAge}
+	}
+}
+
+// kinds is every kind a sweep walks.
+var kinds = []Kind{
+	KindIssue, KindSearch, KindFields, KindCreateMeta, KindBoardConfig,
+	KindVersions, KindCaps, KindBoard, KindBacklog, KindLastBoard,
+}
+
 // Snapshot is what a search left on disk the last time it ran: its rows, when
 // they were written, whether that was long enough ago to badge, and whether the
 // search had more pages than the rows account for.
@@ -254,6 +292,33 @@ type BacklogCache interface {
 	PutLastBacklogBoard(project string, boardID int64) error
 }
 
+// BoardPageCache stores a board one page at a time, so a walk over a board's
+// cards costs each page its own issues rather than a re-encode of every card
+// held so far.
+type BoardPageCache interface {
+	// PutBoardPage stores one page of a board. The shape — Config, QuickFilters
+	// and More — is taken from page as given and replaces what was stored;
+	// Issues is only this page's cards. The first page replaces the stored card
+	// order, and every later one appends to it, skipping a key already there.
+	PutBoardPage(boardID int64, page BoardSnapshot, first bool) error
+}
+
+// BacklogPageCache is BoardPageCache for a backlog.
+type BacklogPageCache interface {
+	// PutBacklogPage stores one page of a backlog on the terms PutBoardPage
+	// stores one of a board: the shape from page as given, Issues only this
+	// page's, the first page replacing the stored order and the rest appending.
+	PutBacklogPage(boardID int64, page BacklogSnapshot, first bool) error
+}
+
+// CacheClearer empties everything one profile keeps on disk.
+type CacheClearer interface {
+	// Clear drops every kind this profile has stored — issues, searches,
+	// boards, backlogs, probe answers and last-board pointers — and leaves
+	// every other profile's alone.
+	Clear() error
+}
+
 // IssueSnapshot is one issue as a previous read left it on disk, together with
 // when that read happened.
 type IssueSnapshot struct {
@@ -295,6 +360,10 @@ var (
 	_ BoardCache   = (*DiskCache)(nil)
 	_ BacklogCache = (*DiskCache)(nil)
 	_ IssueCache   = (*DiskCache)(nil)
+
+	_ BoardPageCache   = (*DiskCache)(nil)
+	_ BacklogPageCache = (*DiskCache)(nil)
+	_ CacheClearer     = (*DiskCache)(nil)
 )
 
 // CacheOption adjusts a DiskCache at construction.
@@ -375,38 +444,27 @@ func (c *DiskCache) PutRows(jql string, issues []jira.Issue, more bool) error {
 	if c == nil || c.db == nil || key == "" {
 		return nil
 	}
-	keys := make([]string, 0, len(issues))
-	for i := range issues {
-		if issues[i].Key != "" {
-			keys = append(keys, issues[i].Key)
-		}
-	}
-	if err := c.mergeIssues(issues, keys); err != nil {
+	keys := issueKeys(issues)
+	recs, err := c.merged(issues, keys)
+	if err != nil {
 		return err
 	}
 	entry, err := json.Marshal(wireSearch{Keys: keys, More: more})
 	if err != nil {
 		return fmt.Errorf("encoding the rows of a search: %w", err)
 	}
-	if err := c.db.Put(c.scope, string(KindSearch), store.Record{
-		Key: key, Value: entry, StoredAt: c.now(),
-	}); err != nil {
-		return err
-	}
-	c.gen.Add(1)
-	return nil
+	return c.commit(KindSearch, key, entry, recs)
 }
 
-// mergeIssues writes each issue over the copy already held, keeping every field
-// the fresh read did not ask about, and then brings the issue count back to the
-// bound.
-func (c *DiskCache) mergeIssues(issues []jira.Issue, keys []string) error {
+// merged is each issue written over the copy already held, keeping every field
+// the fresh read did not ask about, as the records to store.
+func (c *DiskCache) merged(issues []jira.Issue, keys []string) ([]store.Record, error) {
 	if len(issues) == 0 {
-		return nil
+		return nil, nil
 	}
 	held, err := c.db.GetAll(c.scope, string(KindIssue), keys)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	base := make(map[string]jira.Issue, len(held))
 	for i := range held {
@@ -425,16 +483,92 @@ func (c *DiskCache) mergeIssues(issues []jira.Issue, keys []string) error {
 		}
 		value, err := encodeIssue(MergeIssue(base[issues[i].Key], issues[i]))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		recs = append(recs, store.Record{Key: issues[i].Key, Value: value, StoredAt: now})
 	}
-	if err := c.db.Put(c.scope, string(KindIssue), recs...); err != nil {
+	return recs, nil
+}
+
+// commit stores an entry of one kind together with the issues it names, in one
+// transaction so that no reader sees an order naming issues not yet written,
+// and then brings both kinds back within their bounds.
+func (c *DiskCache) commit(kind Kind, key string, value []byte, issues []store.Record) error {
+	if err := c.db.PutAll(c.scope,
+		store.Write{Kind: string(KindIssue), Records: issues},
+		store.Write{Kind: string(kind), Records: []store.Record{{Key: key, Value: value, StoredAt: c.now()}}},
+	); err != nil {
+		return fmt.Errorf("writing %s %s: %w", kind, key, err)
+	}
+	if err := c.enforce(KindIssue); err != nil {
 		return err
 	}
-	if _, err := c.db.Trim(c.scope, string(KindIssue), c.bound); err != nil {
+	if err := c.enforce(kind); err != nil {
 		return err
 	}
+	c.gen.Add(1)
+	return nil
+}
+
+// keepOf is a kind's count bound, the issue bound being this cache's own.
+func (c *DiskCache) keepOf(k Kind) int {
+	if k == KindIssue {
+		return c.bound
+	}
+	return k.Retention().Keep
+}
+
+// enforce brings a kind back under its count once a write has taken it over,
+// and then a tenth further, so that a cache sitting at its bound walks the
+// bucket once every tenth of it rather than on every write.
+func (c *DiskCache) enforce(k Kind) error {
+	keep := c.keepOf(k)
+	n, err := c.db.Len(c.scope, string(k))
+	if err != nil || n <= keep {
+		return err
+	}
+	if _, err := c.db.Trim(c.scope, string(k), keep-keep/10); err != nil {
+		return err
+	}
+	c.gen.Add(1)
+	return nil
+}
+
+// Sweep drops what this profile keeps past each kind's Retention: every entry
+// older than its age, then the oldest of whatever is still over its count. It is
+// meant to run once as a session opens, and reports how many entries went.
+func (c *DiskCache) Sweep() (int, error) {
+	if c == nil || c.db == nil {
+		return 0, nil
+	}
+	now := c.now()
+	removed := 0
+	for _, k := range kinds {
+		n, err := c.db.Expire(c.scope, string(k), now.Add(-k.Retention().MaxAge))
+		if err != nil {
+			return removed, err
+		}
+		trimmed, err := c.db.Trim(c.scope, string(k), c.keepOf(k))
+		if err != nil {
+			return removed, err
+		}
+		removed += n + trimmed
+	}
+	if removed > 0 {
+		c.gen.Add(1)
+	}
+	return removed, nil
+}
+
+// Clear implements CacheClearer.
+func (c *DiskCache) Clear() error {
+	if c == nil || c.db == nil {
+		return nil
+	}
+	if err := c.db.DropScope(c.scope); err != nil {
+		return err
+	}
+	c.gen.Add(1)
 	return nil
 }
 
@@ -530,6 +664,9 @@ func (c *DiskCache) PutCaps(project string, caps jira.Capabilities) error {
 	}); err != nil {
 		return err
 	}
+	if err := c.enforce(KindCaps); err != nil {
+		return err
+	}
 	c.gen.Add(1)
 	return nil
 }
@@ -568,26 +705,16 @@ func (c *DiskCache) PutBoard(boardID int64, snap BoardSnapshot) error {
 	if c == nil || c.db == nil {
 		return nil
 	}
-	keys := make([]string, 0, len(snap.Issues))
-	for i := range snap.Issues {
-		if snap.Issues[i].Key != "" {
-			keys = append(keys, snap.Issues[i].Key)
-		}
-	}
-	if err := c.mergeIssues(snap.Issues, keys); err != nil {
+	keys := issueKeys(snap.Issues)
+	recs, err := c.merged(snap.Issues, keys)
+	if err != nil {
 		return err
 	}
 	entry, err := json.Marshal(wireBoard{Config: snap.Config, QuickFilters: snap.QuickFilters, Keys: keys, More: snap.More})
 	if err != nil {
 		return fmt.Errorf("encoding a board's shape and cards: %w", err)
 	}
-	if err := c.db.Put(c.scope, string(KindBoard), store.Record{
-		Key: boardKey(boardID), Value: entry, StoredAt: c.now(),
-	}); err != nil {
-		return err
-	}
-	c.gen.Add(1)
-	return nil
+	return c.commit(KindBoard, boardKey(boardID), entry, recs)
 }
 
 // ForgetBoard implements BoardCache.
@@ -600,6 +727,92 @@ func (c *DiskCache) ForgetBoard(boardID int64) error {
 	}
 	c.gen.Add(1)
 	return nil
+}
+
+// PutBoardPage implements BoardPageCache.
+func (c *DiskCache) PutBoardPage(boardID int64, page BoardSnapshot, first bool) error {
+	if c == nil || c.db == nil {
+		return nil
+	}
+	fresh := issueKeys(page.Issues)
+	recs, err := c.merged(page.Issues, fresh)
+	if err != nil {
+		return err
+	}
+	var keys []string
+	if !first {
+		var held wireBoard
+		if rec, ok, err := c.db.Get(c.scope, string(KindBoard), boardKey(boardID)); err == nil && ok {
+			_ = json.Unmarshal(rec.Value, &held)
+		}
+		keys = held.Keys
+	}
+	entry, err := json.Marshal(wireBoard{
+		Config: page.Config, QuickFilters: page.QuickFilters, Keys: appendNew(keys, fresh), More: page.More,
+	})
+	if err != nil {
+		return fmt.Errorf("encoding a board's shape and cards: %w", err)
+	}
+	return c.commit(KindBoard, boardKey(boardID), entry, recs)
+}
+
+// PutBacklogPage implements BacklogPageCache.
+func (c *DiskCache) PutBacklogPage(boardID int64, page BacklogSnapshot, first bool) error {
+	if c == nil || c.db == nil {
+		return nil
+	}
+	fresh := issueKeys(page.Issues)
+	recs, err := c.merged(page.Issues, fresh)
+	if err != nil {
+		return err
+	}
+	var keys []string
+	if !first {
+		var held wireBacklog
+		if rec, ok, err := c.db.Get(c.scope, string(KindBacklog), boardKey(boardID)); err == nil && ok {
+			_ = json.Unmarshal(rec.Value, &held)
+		}
+		keys = held.Keys
+	}
+	entry, err := json.Marshal(wireBacklog{
+		Config: page.Config, Sprints: page.Sprints, Field: page.Field, NoSprints: page.NoSprints,
+		Keys: appendNew(keys, fresh), More: page.More,
+	})
+	if err != nil {
+		return fmt.Errorf("encoding a backlog: %w", err)
+	}
+	return c.commit(KindBacklog, boardKey(boardID), entry, recs)
+}
+
+func issueKeys(issues []jira.Issue) []string {
+	keys := make([]string, 0, len(issues))
+	for i := range issues {
+		if issues[i].Key != "" {
+			keys = append(keys, issues[i].Key)
+		}
+	}
+	return keys
+}
+
+// appendNew appends the keys of fresh that held does not already name, in
+// order. A board answering the same card on two pages is a board that moved
+// between them, and the card belongs where it was first seen.
+func appendNew(held, fresh []string) []string {
+	if len(held) == 0 {
+		return fresh
+	}
+	seen := make(map[string]struct{}, len(held)+len(fresh))
+	for _, k := range held {
+		seen[k] = struct{}{}
+	}
+	for _, k := range fresh {
+		if _, dup := seen[k]; dup {
+			continue
+		}
+		seen[k] = struct{}{}
+		held = append(held, k)
+	}
+	return held
 }
 
 // LastBoard implements BoardCache.
@@ -647,13 +860,9 @@ func (c *DiskCache) PutBacklog(boardID int64, snap BacklogSnapshot) error {
 	if c == nil || c.db == nil {
 		return nil
 	}
-	keys := make([]string, 0, len(snap.Issues))
-	for i := range snap.Issues {
-		if snap.Issues[i].Key != "" {
-			keys = append(keys, snap.Issues[i].Key)
-		}
-	}
-	if err := c.mergeIssues(snap.Issues, keys); err != nil {
+	keys := issueKeys(snap.Issues)
+	recs, err := c.merged(snap.Issues, keys)
+	if err != nil {
 		return err
 	}
 	entry, err := json.Marshal(wireBacklog{
@@ -663,13 +872,7 @@ func (c *DiskCache) PutBacklog(boardID int64, snap BacklogSnapshot) error {
 	if err != nil {
 		return fmt.Errorf("encoding a backlog: %w", err)
 	}
-	if err := c.db.Put(c.scope, string(KindBacklog), store.Record{
-		Key: boardKey(boardID), Value: entry, StoredAt: c.now(),
-	}); err != nil {
-		return err
-	}
-	c.gen.Add(1)
-	return nil
+	return c.commit(KindBacklog, boardKey(boardID), entry, recs)
 }
 
 // ForgetBacklog implements BacklogCache.
@@ -726,6 +929,9 @@ func (c *DiskCache) putLastBoard(scope, project string, boardID int64) error {
 	}); err != nil {
 		return err
 	}
+	if err := c.enforce(KindLastBoard); err != nil {
+		return err
+	}
 	c.gen.Add(1)
 	return nil
 }
@@ -780,7 +986,14 @@ func (c *DiskCache) PutIssue(iss jira.Issue) error {
 	if c == nil || c.db == nil || iss.Key == "" {
 		return nil
 	}
-	if err := c.mergeIssues([]jira.Issue{iss}, []string{iss.Key}); err != nil {
+	recs, err := c.merged([]jira.Issue{iss}, []string{iss.Key})
+	if err != nil {
+		return err
+	}
+	if err := c.db.Put(c.scope, string(KindIssue), recs...); err != nil {
+		return err
+	}
+	if err := c.enforce(KindIssue); err != nil {
 		return err
 	}
 	c.gen.Add(1)

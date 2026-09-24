@@ -30,6 +30,7 @@ getting thirty per cent worse with room to spare.
 | RSS with 10k issues cached | < 60 MB | *measured, not guarded.* Nothing reads the number. The regression gate compares `B/op`, which is allocation and not residency, so it is not this |
 | Stripped binary | **< 15 MiB** | `ci.yml`'s size step |
 | Cache read for a view's first paint | < 5 ms | `BenchmarkCacheReadFirstPaint` |
+| Store one page of a board holding 5k issues | *measured, not guarded.* About 13 ms on an M2 Pro, nearly all of it the one fsync, against 264 ms for re-storing the whole board | `BenchmarkPutBoardPage_At5kIssues` against `BenchmarkPutBoard_At5kIssues`, over a real `DiskCache`. It is disk time, which a ceiling would measure the runner's disk by |
 | Rank 10k cached issues against a keystroke | **< 16 ms**, 1 allocation | `BenchmarkIndexSearch10k` and its two siblings |
 | Rebuild the local index over 10k cached issues | < 16 ms | `BenchmarkIndexRebuild10k` |
 | Resolve the date cascade over a timeline's worth of issues | **< 16 ms**, and linear in the issues | `BenchmarkResolveDates2k` against `BenchmarkResolveDates10k` |
@@ -368,7 +369,8 @@ needlessly.
 - Memoize row rendering keyed by `(updatedAt, width, selected, themeGen)`.
 - Reuse buffers; `strings.Builder` with `Grow` on hot paths.
 - No `fmt.Sprintf` in a per-row loop where concatenation or a builder will do.
-- Bound every cache. The issue cache is LRU with a configurable ceiling, default 5,000 issues.
+- Bound every cache. The issue cache drops what was written longest ago past a configurable ceiling,
+  default 5,000 issues, and every other kind has a count and an age (`app.Kind.Retention`).
 - Do not hold decoded JSON. Map to domain types at the adapter boundary and let the raw bytes go.
 - One goroutine per in-flight request, cancelled when the view closes. No worker pools, no timers
   that outlive their view.

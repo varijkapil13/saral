@@ -321,6 +321,45 @@ file rather than reconstructed from what one view's `terms.go` happens to keep. 
 profile yet) is told there is nowhere for it to have kept anything, the same "remembers nothing and
 says nothing" tolerance `LoadUIState` already gives a first run.
 
+| State | Setting | Where it is kept |
+|---|---|---|
+| `kernel.Deps.Cache`: what the site answered, kept so a first frame draws from disk | `session.cache`, a `KindAction` right after `session.memory`: drops everything this profile has cached | the cache directory's `cache.db`, scoped by site and account |
+
+`session.cache` is registered in `internal/ui/settings` and reaches the cache through
+`app.CacheClearer`, the same optional-interface assertion a view makes for `app.BoardCache`. A session
+with no cache (a first run, another copy holding the file) is told there is nothing to clear. What is
+on screen stays until it is read again; the next read of anything fetches it from the site.
+
+### What is kept on disk, and how to wipe it
+
+Two directories, both named for the build (`saral`, or `saral-dev` for a build from a checkout):
+
+| File | Directory | Holds | Kept for |
+|---|---|---|---|
+| `config.toml` | `$SARAL_CONFIG_DIR`, else `$XDG_CONFIG_HOME/saral`, else `~/.config/saral` | profiles, where each token comes from (never the token), saved queries, theme | until you edit it |
+| `.config.toml.lock` | beside `config.toml` | nothing — an advisory lock two copies of Saral take while writing | empty; safe to delete while Saral is not running |
+| `cache.db` | `$SARAL_CACHE_DIR`, else `$XDG_CACHE_HOME/saral`, else `~/.cache/saral` | per profile (site and account): issues, searches, boards, backlogs, capability probe answers, the last board each project drew | see below |
+| `cache.db.corrupt-<timestamp>` | beside `cache.db` | a cache file Saral could not read, moved aside when it started afresh | until you delete it |
+| `ui.toml`, `.ui.toml.lock` | the cache directory | split widths, sort orders, each profile's remembered view and filters | until `session.memory` or you delete it |
+
+What `cache.db` keeps, per profile (`app.Kind.Retention`):
+
+| Kind | At most | Dropped after |
+|---|---|---|
+| issues | 5,000 (`app.DefaultIssueBound`) | 30 days unwritten |
+| searches | 200 | 30 days |
+| boards, backlogs | 50 each | 30 days |
+| last board per project | 200 | 90 days |
+| capability answers and anything else | 100 | 30 days |
+
+A write that takes a kind over its count trims the oldest to a tenth below it; the ages are swept
+each time Saral opens. Opening also drops every profile's cache that `config.toml` no longer names —
+a profile removed, or set up again under another email.
+
+To wipe it: `session.cache` in settings clears the active profile's cache. To clear everything, quit
+every copy of Saral and delete `cache.db` (and any `cache.db.corrupt-*`); the next launch makes a new
+one. Deleting `ui.toml` forgets every remembered split, sort and filter.
+
 ### Stays a command *and* appears as a setting
 
 | Command | Why both |

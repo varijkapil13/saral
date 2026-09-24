@@ -182,11 +182,6 @@ func TestLoadFile_RefusesAFileThatIsWrongOrHoldsASecret(t *testing.T) {
 			contains: []string{"names no token source"},
 		},
 		{
-			name:     "a typo in a profile key is not silently ignored",
-			file:     "bad_unknown_key.toml",
-			contains: []string{"unknown key", "profiles.work.sight"},
-		},
-		{
 			name:     "a typo inside the token table is not silently ignored",
 			file:     "bad_unknown_token_key.toml",
 			contains: []string{"unknown key", "profiles.work.token.keychan"},
@@ -446,7 +441,8 @@ func TestSave_RoundTripsThroughLoadFileWithOwnerOnlyPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading back: %v", err)
 	}
-	layout := `active = "work"
+	layout := `version = 1
+active = "work"
 mouse = false
 
 [profiles."my.work"]
