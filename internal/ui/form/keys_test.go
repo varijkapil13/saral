@@ -23,6 +23,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"a one-line field open", keysText},
 		{"the long-text pane open", keysDoc},
 		{"the value chooser open", keysChoosing},
+		{"the leave prompt up", keysLeaving},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the form has %d key states and this test names %d", keyStates, len(named))
@@ -37,7 +38,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 
 func TestLiveKeys_FollowWhatTheFormIsShowing(t *testing.T) {
 	t.Parallel()
-	m := newWith(testDeps(nil), newSchemaCache(schemaTTL, time.Now), newDraftStore())
+	m := newWith(testDeps(t, nil), newSchemaCache(schemaTTL, time.Now))
 	seen := map[int]string{}
 	for _, tc := range []struct {
 		name  string
@@ -49,6 +50,7 @@ func TestLiveKeys_FollowWhatTheFormIsShowing(t *testing.T) {
 		{"one-line field", func() { m.edit = editText }, keysText},
 		{"long text", func() { m.edit = editDoc }, keysDoc},
 		{"value chooser", func() { m.edit = editChoose }, keysChoosing},
+		{"leave prompt", func() { m.edit, m.leaving = editNone, true }, keysLeaving},
 	} {
 		tc.enter()
 		set, gen := m.LiveKeys()
@@ -99,7 +101,7 @@ func wholeOf(set kernel.KeySet) string {
 // AllocsPerRun measures the whole process, so this one cannot run beside
 // anything else.
 func TestLiveKeys_CostNothingToAskFor(t *testing.T) {
-	m := newWith(testDeps(nil), newSchemaCache(schemaTTL, time.Now), newDraftStore())
+	m := newWith(testDeps(t, nil), newSchemaCache(schemaTTL, time.Now))
 	if got := testing.AllocsPerRun(100, func() { _, _ = m.LiveKeys() }); got != 0 {
 		t.Errorf("asking for the live keys allocates %.0f times; chromeFor asks on every frame, so the sets must be stored", got)
 	}

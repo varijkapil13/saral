@@ -48,11 +48,12 @@ func built(tb testing.TB, fields, w, h int) *Model {
 	tb.Helper()
 
 	d := kernel.Deps{
-		Caps:  jira.Capabilities{TimeZone: time.UTC},
-		Theme: kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
-		Now:   func() time.Time { return time.Date(2026, time.March, 5, 9, 0, 0, 0, time.UTC) },
+		DraftsDir: tb.TempDir(),
+		Caps:      jira.Capabilities{TimeZone: time.UTC},
+		Theme:     kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
+		Now:       func() time.Time { return time.Date(2026, time.March, 5, 9, 0, 0, 0, time.UTC) },
 	}
-	m := newWith(d, newSchemaCache(schemaTTL, time.Now), newDraftStore())
+	m := newWith(d, newSchemaCache(schemaTTL, time.Now))
 	next, _ := m.Update(kernel.SizeMsg{Width: w, Height: h})
 	m, _ = next.(*Model)
 	next, _ = m.Update(schemaLoadedMsg{gen: m.gen, schema: wideScreen(fields)})
@@ -128,6 +129,27 @@ func BenchmarkFormTypingIntoAField(b *testing.B) {
 	for i := range b.N {
 		next, _ := m.Update(keys[i%2])
 		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
+func BenchmarkFormPersonPickerFrame(b *testing.B) {
+	m := built(b, 8, 120, 40)
+	m.fields = append(m.fields, newField(meta("assignee", "Assignee", jira.FieldSchema{Type: "user", System: "assignee"}), time.UTC))
+	m.reindex()
+	m.relayout()
+	_ = m.openEditor(len(m.fields) - 1)
+	people := make([]jira.User, peopleLimit)
+	for i := range people {
+		people[i] = jira.User{AccountID: "acct-" + strconv.Itoa(i), DisplayName: "Person " + strconv.Itoa(i)}
+	}
+	m.peopleFound(peopleFoundMsg{gen: m.people.gen, people: people})
+	if len(m.choices) != peopleLimit {
+		b.Fatalf("the picker holds %d people, want %d", len(m.choices), peopleLimit)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
 		_ = m.View()
 	}
 }

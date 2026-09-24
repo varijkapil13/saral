@@ -31,20 +31,23 @@ const (
 func fullCaps() jira.Capabilities {
 	ok := jira.Capability{OK: true}
 	return jira.Capabilities{
-		Plans: ok, BulkMove: ok, Boards: ok, Attachments: ok, DeleteIssues: ok,
+		Plans: ok, BulkMove: ok, Boards: ok, Attachments: ok, DeleteIssues: ok, People: ok,
 		TimeZone: time.UTC,
 	}
 }
 
-func testDeps(client jira.Client) kernel.Deps {
+func testDeps(tb testing.TB, client jira.Client) kernel.Deps {
+	tb.Helper()
+
 	return kernel.Deps{
-		Jira:    client,
-		Caps:    fullCaps(),
-		Project: "PROJ",
-		Theme:   kernel.NewTheme(kernel.ThemeNoColor, true, kernel.ASCIIGlyphs()),
-		Zones:   zone.New(),
-		Site:    "example.atlassian.net",
-		Now:     func() time.Time { return time.Date(2026, time.March, 5, 9, 0, 0, 0, time.UTC) },
+		Jira:      client,
+		DraftsDir: tb.TempDir(),
+		Caps:      fullCaps(),
+		Project:   "PROJ",
+		Theme:     kernel.NewTheme(kernel.ThemeNoColor, true, kernel.ASCIIGlyphs()),
+		Zones:     zone.New(),
+		Site:      "example.atlassian.net",
+		Now:       func() time.Time { return time.Date(2026, time.March, 5, 9, 0, 0, 0, time.UTC) },
 	}
 }
 
@@ -69,7 +72,7 @@ type driver struct {
 func newDriver(t *testing.T, d kernel.Deps, w, h int) *driver {
 	t.Helper()
 
-	dr := &driver{t: t, m: newWith(d, newSchemaCache(schemaTTL, time.Now), newDraftStore())}
+	dr := &driver{t: t, m: newWith(d, newSchemaCache(schemaTTL, time.Now))}
 	dr.send(kernel.SizeMsg{Width: w, Height: h})
 	dr.send(kernel.FocusMsg{Focused: true})
 	dr.run(dr.m.Init())

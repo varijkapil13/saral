@@ -22,7 +22,7 @@ func newFormClock() *formClock {
 func TestForm_TwoDeliberateClicksOnARowDoNotOpenItsEditor(t *testing.T) {
 	t.Parallel()
 
-	d := testDeps(newFake(20))
+	d := testDeps(t, newFake(20))
 	clock := newFormClock()
 	d.Now = clock.now
 	dr := openOn(t, d, 100, 24, fakeStory)
@@ -45,7 +45,7 @@ func TestForm_TwoDeliberateClicksOnARowDoNotOpenItsEditor(t *testing.T) {
 func TestForm_TwoDeliberateClicksOnAValueDoNotTakeIt(t *testing.T) {
 	t.Parallel()
 
-	d := testDeps(newFake(20))
+	d := testDeps(t, newFake(20))
 	clock := newFormClock()
 	d.Now = clock.now
 	dr := openOn(t, d, 100, 24, fakeStory)

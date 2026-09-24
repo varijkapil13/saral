@@ -187,6 +187,9 @@ type headingKey struct {
 }
 
 func (m *Model) headingLine() string {
+	if m.leaving {
+		return m.leaveLine()
+	}
 	key := headingKey{
 		width: m.width, gen: m.styles.gen, name: m.chosen.Name,
 		project: m.project, note: m.note, busy: m.busy, loading: m.loading,
@@ -210,6 +213,18 @@ func (m *Model) heading() string {
 	default:
 		return head
 	}
+}
+
+// leaveLine is the leave prompt, standing in for the caption while it is up:
+// each answer is a zone as well as a key.
+func (m *Model) leaveLine() string {
+	sep := "  "
+	line := m.styles.banner.Render("Create this "+widget.Sanitize(m.chosen.Name)+" before leaving?") + sep +
+		m.mark(zoneLeaveCreate, "y create") + sep +
+		m.mark(zoneLeaveDiscard, "n discard") + sep +
+		m.mark(zoneLeaveKeep, "k keep for later") + sep +
+		m.mark(zoneLeaveStay, "esc stay")
+	return widget.PadTruncate(line, m.width, m.styles.glyphs.Ellipsis)
 }
 
 // warm renders the overscan into the memo so that the next scroll step is a
@@ -429,10 +444,16 @@ func (m *Model) chooserLines() []string {
 		head += "  enter takes one, esc is done"
 	}
 	out := []string{m.styles.accent.Render(m.fit(head)), m.filter.View()}
+	if m.noticeLines() > 0 {
+		out = append(out, m.peopleNotice())
+	}
 
 	visible := m.visibleChoices()
 	h := m.chooserHeight()
 	if len(visible) == 0 {
+		if m.people.loading {
+			return out
+		}
 		return append(out, m.styles.muted.Render("  nothing here matches"))
 	}
 	end := min(m.pickTop+h, len(visible))
@@ -458,6 +479,19 @@ func (m *Model) choiceRow(i, at int, multiple bool) string {
 	return m.mark(m.choiceZone(i), line)
 }
 
+// peopleNotice is what a person picker's search is doing: asking, refused, or
+// waiting for a name.
+func (m *Model) peopleNotice() string {
+	switch {
+	case m.people.fail != "":
+		return m.styles.problem.Render(m.fit("  " + m.styles.glyphs.Cross + " " + m.people.fail))
+	case m.people.loading:
+		return m.styles.muted.Render(m.fit("  looking people up on the site" + m.styles.glyphs.Ellipsis))
+	default:
+		return m.styles.muted.Render(m.fit("  type a name to look people up on the site"))
+	}
+}
+
 // exactly pads or clips a pane to the height it was given, so that the frame is
 // the size the kernel handed the view whatever the editor put in it.
 func (m *Model) exactly(lines []string, h int) []string {
@@ -480,3 +514,10 @@ func (m *Model) mark(id, line string) string { return m.zones.Mark(id, line) }
 func (m *Model) rowZone(i int) string    { return "row:" + strconv.Itoa(i) }
 func (m *Model) typeZone(i int) string   { return "type:" + strconv.Itoa(i) }
 func (m *Model) choiceZone(i int) string { return "choice:" + strconv.Itoa(i) }
+
+const (
+	zoneLeaveCreate  = "leave:y"
+	zoneLeaveDiscard = "leave:n"
+	zoneLeaveKeep    = "leave:k"
+	zoneLeaveStay    = "leave:stay"
+)

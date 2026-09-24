@@ -33,6 +33,11 @@ type keyMap struct {
 	Toggle kernel.Binding
 	Accept kernel.Binding
 	Done   kernel.Binding
+
+	LeaveCreate  kernel.Binding
+	LeaveDiscard kernel.Binding
+	LeaveKeep    kernel.Binding
+	LeaveStay    kernel.Binding
 }
 
 // defaultKeys is the form's keymap. Nothing here uses a bare letter the kernel
@@ -57,6 +62,11 @@ func defaultKeys() keyMap {
 		Done:     kernel.Bind([]string{"esc"}, "esc", "close the editor, keeping what is typed"),
 		Choose:   kernel.Bind([]string{"enter"}, "enter", "use this issue type"),
 		DocDone:  kernel.Bind([]string{"ctrl+d"}, "ctrl+d", "finish this text"),
+
+		LeaveCreate:  kernel.Bind([]string{"y"}, "y", "create the issue, then leave"),
+		LeaveDiscard: kernel.Bind([]string{"n"}, "n", "throw it away and leave"),
+		LeaveKeep:    kernel.Bind([]string{"k"}, "k", "keep it for the next time and leave"),
+		LeaveStay:    kernel.Bind([]string{"esc"}, "esc", "stay on the form"),
 	}
 }
 
@@ -88,6 +98,7 @@ const (
 	keysText
 	keysDoc
 	keysChoosing
+	keysLeaving
 	keyStates
 )
 
@@ -117,6 +128,13 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Acts: []kernel.Binding{kernel.Terse(k.Toggle, "pick"), kernel.Terse(k.Accept, "take it"), keepAndClose},
 		Full: [][]kernel.Binding{{k.Next, k.Prev, k.PageDown, k.PageUp}, {k.Toggle, k.Accept, k.Done}, {widget.KillLine}},
 	}
+	sets[keysLeaving] = kernel.KeySet{
+		Acts: []kernel.Binding{
+			kernel.Terse(k.LeaveCreate, "create"), kernel.Terse(k.LeaveDiscard, "discard"),
+			kernel.Terse(k.LeaveKeep, "keep"), kernel.Terse(k.LeaveStay, "stay"),
+		},
+		Full: [][]kernel.Binding{{k.LeaveCreate, k.LeaveDiscard, k.LeaveKeep, k.LeaveStay}},
+	}
 	return sets
 }()
 
@@ -127,6 +145,8 @@ var liveSets = func() [keyStates]kernel.KeySet {
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	state := keysFields
 	switch {
+	case m.leaving:
+		state = keysLeaving
 	case m.edit == editText:
 		state = keysText
 	case m.edit == editDoc:
@@ -156,10 +176,14 @@ const (
 	actToggle
 	actAccept
 	actDone
+	actLeaveCreate
+	actLeaveDiscard
+	actLeaveKeep
+	actLeaveStay
 )
 
 // tables turn the bindings into a keystroke lookup, built once per view.
-func (k keyMap) tables() (list, chooser map[string]action) {
+func (k keyMap) tables() (list, chooser, leave map[string]action) {
 	list = table(
 		binding{k.Up, actUp}, binding{k.Down, actDown},
 		binding{k.PageUp, actPageUp}, binding{k.PageDown, actPageDown},
@@ -173,7 +197,11 @@ func (k keyMap) tables() (list, chooser map[string]action) {
 		binding{k.Toggle, actToggle}, binding{k.Accept, actAccept},
 		binding{k.Done, actDone},
 	)
-	return list, chooser
+	leave = table(
+		binding{k.LeaveCreate, actLeaveCreate}, binding{k.LeaveDiscard, actLeaveDiscard},
+		binding{k.LeaveKeep, actLeaveKeep}, binding{k.LeaveStay, actLeaveStay},
+	)
+	return list, chooser, leave
 }
 
 type binding struct {

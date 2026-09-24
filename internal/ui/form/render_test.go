@@ -10,7 +10,7 @@ import (
 func TestRender_DrawsTheIssueTypePicker(t *testing.T) {
 	t.Parallel()
 
-	dr := newDriver(t, testDeps(newFake(20)), 100, 24)
+	dr := newDriver(t, testDeps(t, newFake(20)), 100, 24)
 	golden(t, "types_100x24.golden", dr.view())
 }
 
@@ -29,7 +29,7 @@ func TestRender_DrawsTheFormAtEveryWidth(t *testing.T) {
 		t.Run(size.name, func(t *testing.T) {
 			t.Parallel()
 
-			dr := openOn(t, testDeps(newFake(20)), size.w, size.h, fakeStory)
+			dr := openOn(t, testDeps(t, newFake(20)), size.w, size.h, fakeStory)
 			golden(t, size.name, dr.view())
 		})
 	}
@@ -38,7 +38,7 @@ func TestRender_DrawsTheFormAtEveryWidth(t *testing.T) {
 func TestRender_DrawsWhatIsWrongOnTheFieldItIsAbout(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	dr.focus("customfield_13401")
 	dr.key("enter")
 	dr.typeText("quite a few")
@@ -52,7 +52,7 @@ func TestRender_DrawsWhatIsWrongOnTheFieldItIsAbout(t *testing.T) {
 func TestRender_DrawsAPickerOverTheFields(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	dr.focus("priority")
 	dr.key("enter")
 
@@ -62,7 +62,7 @@ func TestRender_DrawsAPickerOverTheFields(t *testing.T) {
 func TestRender_DrawsTheFieldsThatAreNotOfferedWhenTheyAreOpened(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	dr.m.moveTo(len(dr.m.fields))
 	dr.key("enter")
 
@@ -72,7 +72,7 @@ func TestRender_DrawsTheFieldsThatAreNotOfferedWhenTheyAreOpened(t *testing.T) {
 func TestRender_KeepsEveryFrameTheSizeItWasGiven(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	for _, size := range [][2]int{{100, 24}, {72, 20}, {140, 30}, {40, 12}, {24, 5}} {
 		dr.send(kernel.SizeMsg{Width: size[0], Height: size[1]})
 		for _, open := range []string{"", "summary", "description", "priority"} {
@@ -92,7 +92,7 @@ func TestRender_KeepsEveryFrameTheSizeItWasGiven(t *testing.T) {
 func TestRender_DrawsOnlyTheRowsThatFit(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	dr.send(kernel.SizeMsg{Width: 100, Height: 6})
 
 	body := strings.Split(dr.view(), "\n")
@@ -109,7 +109,7 @@ func TestRender_DrawsOnlyTheRowsThatFit(t *testing.T) {
 func TestRender_ReusesARowItHasAlreadyDrawn(t *testing.T) {
 	t.Parallel()
 
-	dr := openOn(t, testDeps(newFake(20)), 100, 24, fakeStory)
+	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 	dr.m.rows.Reset()
 	_ = dr.m.View()
 	drawn := dr.m.rows.Len()
@@ -183,7 +183,7 @@ func TestWidestLabel_MeasuresAHiddenFieldNameOnScreenRatherThanInBytes(t *testin
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			dr := newDriver(t, testDeps(newFake(1)), 100, 24)
+			dr := newDriver(t, testDeps(t, newFake(1)), 100, 24)
 			dr.m.fields = nil
 			dr.m.hidden = []hiddenField{{name: tc.field, reason: "not on the create screen"}}
 			dr.m.relayout()
