@@ -2,7 +2,6 @@ package store
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -82,23 +81,52 @@ func (db *DB) Put(s Scope, kind string, recs ...Record) error {
 	if len(recs) == 0 {
 		return nil
 	}
+	if err := db.PutAll(s, Write{Kind: kind, Records: recs}); err != nil {
+		return fmt.Errorf("writing %d record(s) of %s: %w", len(recs), kind, err)
+	}
+	return nil
+}
+
+// Write is the records of one kind that a PutAll stores.
+type Write struct {
+	Kind    string
+	Records []Record
+}
+
+// PutAll stores the records of several kinds in one transaction, so a reader
+// sees all of them or none, and the file is synced once rather than once a
+// kind.
+func (db *DB) PutAll(s Scope, writes ...Write) error {
+	added := make([]int, len(writes))
 	err := db.bolt.Update(func(tx *bbolt.Tx) error {
-		bucket, err := tx.CreateBucketIfNotExists(s.Bucket(kind))
-		if err != nil {
-			return err
-		}
-		for _, rec := range recs {
-			if rec.Key == "" {
-				return errors.New("a record with no key cannot be stored")
+		for i, w := range writes {
+			added[i] = 0
+			if len(w.Records) == 0 {
+				continue
 			}
-			if err := bucket.Put([]byte(rec.Key), stamp(rec)); err != nil {
+			bucket, err := tx.CreateBucketIfNotExists(s.Bucket(w.Kind))
+			if err != nil {
 				return err
+			}
+			for _, rec := range w.Records {
+				if rec.Key == "" {
+					return fmt.Errorf("a record of %s with no key cannot be stored", w.Kind)
+				}
+				if bucket.Get([]byte(rec.Key)) == nil {
+					added[i]++
+				}
+				if err := bucket.Put([]byte(rec.Key), stamp(rec)); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("writing %d record(s) of %s: %w", len(recs), kind, err)
+		return err
+	}
+	for i, w := range writes {
+		db.adjust(s.Bucket(w.Kind), added[i])
 	}
 	return nil
 }
@@ -109,12 +137,18 @@ func (db *DB) Delete(s Scope, kind string, keys ...string) error {
 	if len(keys) == 0 {
 		return nil
 	}
+	name := s.Bucket(kind)
+	removed := 0
 	err := db.bolt.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(s.Bucket(kind))
+		removed = 0
+		bucket := tx.Bucket(name)
 		if bucket == nil {
 			return nil
 		}
 		for _, key := range keys {
+			if bucket.Get([]byte(key)) != nil {
+				removed++
+			}
 			if err := bucket.Delete([]byte(key)); err != nil {
 				return err
 			}
@@ -124,6 +158,7 @@ func (db *DB) Delete(s Scope, kind string, keys ...string) error {
 	if err != nil {
 		return fmt.Errorf("deleting %d key(s) of %s: %w", len(keys), kind, err)
 	}
+	db.adjust(name, -removed)
 	return nil
 }
 
@@ -161,43 +196,119 @@ func (db *DB) Each(s Scope, kind string, fn func(Record) bool) ([]string, error)
 }
 
 // Trim keeps the keep most recently written records of one kind and deletes the
-// rest, reporting how many went. A keep of zero or less empties the kind.
+// rest, reporting how many went. A keep of zero or less empties the kind. A
+// record too short to say when it was written is deleted whatever the bound:
+// it cannot be read, and left in place it would be walked over on every trim.
+//
+// A kind already known to be within the bound costs a map lookup and no
+// transaction at all, so a caller may trim after every write.
 //
 // It walks and deletes inside one write transaction, so a reader either sees the
 // bucket before the trim or after it, and the walk cannot be overtaken by a
 // write it is about to act on.
 func (db *DB) Trim(s Scope, kind string, keep int) (int, error) {
-	removed := 0
+	keep = max(keep, 0)
+	if n, err := db.Len(s, kind); err == nil && n <= keep {
+		return 0, nil
+	}
+	name := s.Bucket(kind)
+	removed, left := 0, 0
 	err := db.bolt.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(s.Bucket(kind))
+		removed, left = 0, 0
+		bucket := tx.Bucket(name)
 		if bucket == nil {
 			return nil
 		}
-		held := make([]Record, 0, bucket.Stats().KeyN)
+		var held []Record
+		var broken []string
 		cursor := bucket.Cursor()
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 			stored, err := stampOf(v)
 			if err != nil {
-				return err
+				broken = append(broken, string(k))
+				continue
 			}
 			held = append(held, Record{Key: string(k), StoredAt: stored})
 		}
-		if len(held) <= max(keep, 0) {
+		doomed := broken
+		if len(held) > keep {
+			// Oldest first, key order breaking a tie so that two records written in
+			// the same nanosecond do not evict in map order.
+			slices.SortFunc(held, func(a, b Record) int {
+				if !a.StoredAt.Equal(b.StoredAt) {
+					return a.StoredAt.Compare(b.StoredAt)
+				}
+				if a.Key < b.Key {
+					return -1
+				}
+				return 1
+			})
+			for _, rec := range held[:len(held)-keep] {
+				doomed = append(doomed, rec.Key)
+			}
+			left = keep
+		} else {
+			left = len(held)
+		}
+		for _, key := range doomed {
+			if err := bucket.Delete([]byte(key)); err != nil {
+				return err
+			}
+		}
+		removed = len(doomed)
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("trimming %s to %d: %w", kind, keep, err)
+	}
+	db.setCount(name, left)
+	return removed, nil
+}
+
+// Expire deletes every record of one kind written before cutoff, and every one
+// too short to say when it was written, reporting how many went. It looks
+// before it writes, so a kind with nothing old in it costs no write
+// transaction.
+func (db *DB) Expire(s Scope, kind string, cutoff time.Time) (int, error) {
+	name := s.Bucket(kind)
+	var doomed []string
+	err := db.bolt.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(name)
+		if bucket == nil {
 			return nil
 		}
-		// Oldest first, key order breaking a tie so that two records written in
-		// the same nanosecond do not evict in map order.
-		slices.SortFunc(held, func(a, b Record) int {
-			if !a.StoredAt.Equal(b.StoredAt) {
-				return a.StoredAt.Compare(b.StoredAt)
+		cursor := bucket.Cursor()
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			stored, err := stampOf(v)
+			if err != nil || stored.Before(cutoff) {
+				doomed = append(doomed, string(k))
 			}
-			if a.Key < b.Key {
-				return -1
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("expiring %s: %w", kind, err)
+	}
+	if len(doomed) == 0 {
+		return 0, nil
+	}
+	removed := 0
+	err = db.bolt.Update(func(tx *bbolt.Tx) error {
+		removed = 0
+		bucket := tx.Bucket(name)
+		if bucket == nil {
+			return nil
+		}
+		for _, key := range doomed {
+			v := bucket.Get([]byte(key))
+			if v == nil {
+				continue
 			}
-			return 1
-		})
-		for _, rec := range held[:len(held)-max(keep, 0)] {
-			if err := bucket.Delete([]byte(rec.Key)); err != nil {
+			// Rewritten since the look, and so no longer old.
+			if stored, err := stampOf(v); err == nil && !stored.Before(cutoff) {
+				continue
+			}
+			if err := bucket.Delete([]byte(key)); err != nil {
 				return err
 			}
 			removed++
@@ -205,8 +316,9 @@ func (db *DB) Trim(s Scope, kind string, keep int) (int, error) {
 		return nil
 	})
 	if err != nil {
-		return 0, fmt.Errorf("trimming %s to %d: %w", kind, keep, err)
+		return 0, fmt.Errorf("expiring %s: %w", kind, err)
 	}
+	db.adjust(name, -removed)
 	return removed, nil
 }
 

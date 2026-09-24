@@ -3,6 +3,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,9 +13,11 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/BurntSushi/toml"
+	"github.com/gofrs/flock"
 
 	"github.com/varijkapil13/saral/internal/app"
 )
@@ -37,11 +40,35 @@ var ErrNoProfile = errors.New("no such profile")
 // ErrSecretInFile reports that the file holds, or would hold, a literal token.
 var ErrSecretInFile = errors.New("a token must not be written into the config file")
 
+// ErrNewerConfig reports that the file on disk was written by a newer Saral,
+// which this one will read but not overwrite: every key it does not know would
+// be dropped by the rewrite.
+var ErrNewerConfig = errors.New("config.toml was written by a newer saral")
+
+// SchemaVersion is the layout this build writes as version = N. A file with no
+// version key is version 0, which is this layout written before it had one.
+const SchemaVersion = 1
+
+// migrations lifts a file from the version it is keyed by to the next one,
+// before anything is validated. A version with no entry needs no change.
+var migrations = map[int]func(*fileConfig, *toml.MetaData) error{}
+
+// lockWait is how long a read-merge-write waits for another copy of Saral to
+// finish its own before giving up.
+const lockWait = 2 * time.Second
+
 // Config is the whole file: the profiles and the settings shared by them.
 type Config struct {
 	Active   string
 	Profiles map[string]Profile
 	Mouse    bool
+	// newer is the version a file from a newer build declared, which Save
+	// refuses to overwrite; zero for any file this build can rewrite.
+	newer int
+	// Warnings are what parsing tolerated rather than refused: a key this
+	// build does not know, or a file from a newer one. Each is a sentence for
+	// the status line.
+	Warnings []string
 }
 
 // Profile is one Jira account on one site.
@@ -167,6 +194,7 @@ func LoadFile(path string) (Config, error) {
 }
 
 type fileConfig struct {
+	Version  int                    `toml:"version"`
 	Active   string                 `toml:"active"`
 	Mouse    *bool                  `toml:"mouse"`
 	Profiles map[string]fileProfile `toml:"profiles"`
@@ -204,10 +232,30 @@ func parse(data []byte) (Config, error) {
 		return Config{}, fmt.Errorf("invalid TOML: %w", err)
 	}
 
+	var warnings []string
+	newer := 0
+	switch {
+	case f.Version < 0:
+		return Config{}, fmt.Errorf("version = %d is not a schema version", f.Version)
+	case f.Version > SchemaVersion:
+		newer = f.Version
+		warnings = append(warnings, fmt.Sprintf(
+			"config.toml is version %d and this saral reads version %d: what it does not know is ignored, "+
+				"and it will not rewrite the file", f.Version, SchemaVersion))
+	}
+	for v := f.Version; v < SchemaVersion; v++ {
+		if migrate := migrations[v]; migrate != nil {
+			if err := migrate(&f, &md); err != nil {
+				return Config{}, fmt.Errorf("migrating from version %d: %w", v, err)
+			}
+		}
+	}
+
 	cfg := Config{
 		Active:   strings.TrimSpace(f.Active),
 		Profiles: make(map[string]Profile, len(f.Profiles)),
 		Mouse:    f.Mouse == nil || *f.Mouse,
+		newer:    newer,
 	}
 	for _, name := range slices.Sorted(maps.Keys(f.Profiles)) {
 		p, err := decodeProfile(&md, name, f.Profiles[name])
@@ -216,9 +264,12 @@ func parse(data []byte) (Config, error) {
 		}
 		cfg.Profiles[name] = p
 	}
-	if err := unknownKeys(md.Undecoded()); err != nil {
+	unknown, err := unknownKeys(md.Undecoded())
+	if err != nil {
 		return Config{}, err
 	}
+	warnings = append(warnings, unknown...)
+	cfg.Warnings = warnings
 	if _, ok := cfg.Profiles[cfg.Active]; cfg.Active != "" && !ok {
 		return Config{}, fmt.Errorf("active = %q but there is no [profiles.%s] section", cfg.Active, cfg.Active)
 	}
@@ -235,20 +286,25 @@ func undecodedUnder(md *toml.MetaData, prefix ...string) []toml.Key {
 	return found
 }
 
-func unknownKeys(keys []toml.Key) error {
+// unknownKeys refuses a key that looks like a secret and tolerates any other,
+// returning a warning for it. A key this build does not know is as likely a
+// newer build's as a typo, and a file that stops an older binary opening is
+// worse than one line on the status line.
+func unknownKeys(keys []toml.Key) ([]string, error) {
 	if len(keys) == 0 {
-		return nil
+		return nil, nil
 	}
 	for _, k := range keys {
 		if len(k) > 0 && slices.Contains(secretKeys, strings.ToLower(k[len(k)-1])) {
-			return fmt.Errorf("%s: %w", k, ErrSecretInFile)
+			return nil, fmt.Errorf("%s: %w", k, ErrSecretInFile)
 		}
 	}
 	names := make([]string, 0, len(keys))
 	for _, k := range keys {
 		names = append(names, k.String())
 	}
-	return fmt.Errorf("unknown key %s", strings.Join(names, ", "))
+	return []string{"config.toml: unknown key " + strings.Join(names, ", ") +
+		" is ignored, and dropped the next time saral writes the file"}, nil
 }
 
 func decodeProfile(md *toml.MetaData, name string, fp fileProfile) (Profile, error) {
@@ -326,10 +382,16 @@ func decodeToken(md *toml.MetaData, name string, prim toml.Primitive) (TokenSour
 		}
 		src.Command = argv
 	}
-	if err := unknownKeys(undecodedUnder(md, "profiles", name, "token")); err != nil {
-		return TokenSource{}, fmt.Errorf("profile %q: %w", name, err)
-	}
 	if n := src.count(); n != 1 {
+		// A misspelt source is the likeliest reason for the count, and naming it
+		// says more than the count does.
+		if typos := undecodedUnder(md, "profiles", name, "token"); len(typos) > 0 {
+			names := make([]string, 0, len(typos))
+			for _, k := range typos {
+				names = append(names, k.String())
+			}
+			return TokenSource{}, fmt.Errorf("profile %q: unknown key %s; %s", name, strings.Join(names, ", "), tokenForms(name))
+		}
 		return TokenSource{}, tokenSourceErr(name, countPhrase(n))
 	}
 	return src, nil
@@ -543,8 +605,15 @@ func (c Config) Get(name string) (Profile, error) {
 }
 
 // Save writes the config atomically, owner-readable only. It writes where each
-// token comes from and never the token itself.
+// token comes from and never the token itself. It refuses to overwrite a file a
+// newer Saral wrote, with ErrNewerConfig.
 func (c Config) Save(path string) error {
+	if c.newer > 0 {
+		return fmt.Errorf("%w (version %d); this one writes version %d", ErrNewerConfig, c.newer, SchemaVersion)
+	}
+	if v := versionOnDisk(path); v > SchemaVersion {
+		return fmt.Errorf("%w (version %d); this one writes version %d", ErrNewerConfig, v, SchemaVersion)
+	}
 	data, err := c.encode()
 	if err != nil {
 		return err
@@ -552,9 +621,75 @@ func (c Config) Save(path string) error {
 	return writeAtomic(path, data)
 }
 
+// versionOnDisk is the version key of the file at path, or zero when there is
+// no file or it says none.
+func versionOnDisk(path string) int {
+	data, err := os.ReadFile(path) //nolint:gosec // the caller's own config path
+	if err != nil {
+		return 0
+	}
+	var head struct {
+		Version int `toml:"version"`
+	}
+	if _, err := toml.Decode(string(data), &head); err != nil {
+		return 0
+	}
+	return head.Version
+}
+
+// UpdateFile is the read-merge-write every writer of config.toml does, held
+// under an advisory lock on the file so that two copies of Saral writing at once
+// cannot each write a file missing the other's change. fn edits what was read;
+// an error from it writes nothing.
+func UpdateFile(path string, fn func(*Config) error) error {
+	unlock, err := lockFile(path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	cfg, err := LoadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := fn(&cfg); err != nil {
+		return err
+	}
+	return cfg.Save(path)
+}
+
+// lockFile takes the advisory lock guarding path, which is a hidden file beside
+// it rather than path itself: the file is replaced by a rename on every save,
+// and a lock on a file that has been renamed over guards nothing.
+func lockFile(path string) (unlock func(), err error) {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, dirPerm); err != nil {
+		return nil, fmt.Errorf("creating %s: %w", dir, err)
+	}
+	lock := flock.New(filepath.Join(dir, "."+filepath.Base(path)+".lock"), flock.SetPermissions(filePerm))
+	ctx, cancel := context.WithTimeout(context.Background(), lockWait)
+	defer cancel()
+	ok, err := lock.TryLockContext(ctx, 10*time.Millisecond)
+	switch {
+	case err != nil && !errors.Is(err, context.DeadlineExceeded):
+		return nil, fmt.Errorf("locking %s: %w", path, err)
+	case !ok:
+		return nil, fmt.Errorf("another copy of saral is writing %s; try again", path)
+	}
+	return func() { _ = lock.Unlock() }, nil
+}
+
 // writeAtomic writes a file through a temporary one beside it, so an interrupted
 // write leaves what was there before rather than half of what replaces it.
+//
+// A symlink is followed first and its target is what gets replaced, so a
+// config.toml kept in a dotfiles repository stays a link into it. The directory
+// is synced after the rename, which is what makes the rename itself survive a
+// crash.
 func writeAtomic(path string, data []byte) error {
+	if target, err := filepath.EvalSymlinks(path); err == nil {
+		path = target
+	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return fmt.Errorf("creating %s: %w", dir, err)
@@ -570,6 +705,9 @@ func writeAtomic(path string, data []byte) error {
 	}
 	if err := os.Rename(tmp.Name(), path); err != nil {
 		return fmt.Errorf("replacing %s: %w", path, err)
+	}
+	if err := syncDir(dir); err != nil {
+		return fmt.Errorf("syncing %s: %w", dir, err)
 	}
 	return nil
 }
@@ -594,6 +732,7 @@ func (c Config) encode() ([]byte, error) {
 		return nil, fmt.Errorf("active = %q but there is no such profile", c.Active)
 	}
 	var b strings.Builder
+	fmt.Fprintf(&b, "version = %d\n", SchemaVersion)
 	if c.Active != "" {
 		fmt.Fprintf(&b, "active = %s\n", quote(c.Active))
 	}

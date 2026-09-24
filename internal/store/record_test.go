@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -313,5 +314,191 @@ func TestEach_SkipsARecordItCannotDecodeAndNamesIt(t *testing.T) {
 	}
 	if want := []string{"PROJ-2"}; fmt.Sprint(unreadable) != fmt.Sprint(want) {
 		t.Errorf("the walk reported %v as unreadable, want %v; a caller cannot heal or count what it is not told about", unreadable, want)
+	}
+}
+
+func writeRaw(t *testing.T, db *DB, key string, raw []byte) {
+	t.Helper()
+	if err := db.bolt.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists(scope.Bucket(kind))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(key), raw)
+	}); err != nil {
+		t.Fatalf("writing %s raw: %v", key, err)
+	}
+}
+
+// A value too short to carry its stamp used to abort the trim, and the trim runs
+// inside every write, so one such record failed every PutRows after it.
+func TestTrim_DeletesARecordItCannotReadInsteadOfFailing(t *testing.T) {
+	t.Parallel()
+
+	db := openTemp(t)
+	base := time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC)
+	writeRaw(t, db, "PROJ-0", []byte{1, 2, 3})
+	for i := 1; i <= 5; i++ {
+		key := fmt.Sprintf("PROJ-%d", i)
+		if err := db.Put(scope, kind, Record{Key: key, Value: []byte(key), StoredAt: base.Add(time.Duration(i) * time.Minute)}); err != nil {
+			t.Fatalf("Put %s: %v", key, err)
+		}
+	}
+
+	removed, err := db.Trim(scope, kind, 3)
+	if err != nil {
+		t.Fatalf("Trim stopped at a record it could not read: %v", err)
+	}
+	if removed != 3 {
+		t.Errorf("Trim removed %d, want the unreadable record and the two oldest", removed)
+	}
+	for i, want := range []bool{false, false, false, true, true, true} {
+		key := fmt.Sprintf("PROJ-%d", i)
+		present := false
+		_ = db.bolt.View(func(tx *bbolt.Tx) error {
+			present = tx.Bucket(scope.Bucket(kind)).Get([]byte(key)) != nil
+			return nil
+		})
+		if present != want {
+			t.Errorf("%s present = %t, want %t", key, present, want)
+		}
+	}
+	if n, _ := db.Len(scope, kind); n != 3 {
+		t.Errorf("Len = %d after the trim, want 3", n)
+	}
+}
+
+func TestTrim_AnUnreadableRecordGoesEvenUnderTheBound(t *testing.T) {
+	t.Parallel()
+
+	db := openTemp(t)
+	writeRaw(t, db, "PROJ-1", []byte{9})
+	if err := db.Put(scope, kind, Record{Key: "PROJ-2", Value: []byte("x"), StoredAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := db.Trim(scope, kind, 1)
+	if err != nil {
+		t.Fatalf("Trim: %v", err)
+	}
+	if removed != 1 {
+		t.Errorf("Trim removed %d, want the unreadable one", removed)
+	}
+	if _, ok, err := db.Get(scope, kind, "PROJ-2"); err != nil || !ok {
+		t.Errorf("the readable record went too (ok=%t, err=%v)", ok, err)
+	}
+}
+
+func TestLen_FollowsEveryWrite(t *testing.T) {
+	t.Parallel()
+
+	db := openTemp(t)
+	now := time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC)
+	check := func(step string, want int) {
+		t.Helper()
+		if n, err := db.Len(scope, kind); err != nil || n != want {
+			t.Errorf("after %s Len = %d (err %v), want %d", step, n, err, want)
+		}
+	}
+	check("nothing", 0)
+	for i := range 6 {
+		key := fmt.Sprintf("PROJ-%d", i)
+		if err := db.Put(scope, kind, Record{Key: key, Value: []byte(key), StoredAt: now.Add(time.Duration(i) * time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check("six puts", 6)
+	if err := db.Put(scope, kind, Record{Key: "PROJ-0", Value: []byte("again"), StoredAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	check("a rewrite of a held key", 6)
+	if err := db.Delete(scope, kind, "PROJ-5", "PROJ-9"); err != nil {
+		t.Fatal(err)
+	}
+	check("deleting one held and one absent key", 5)
+	if _, err := db.Trim(scope, kind, 4); err != nil {
+		t.Fatal(err)
+	}
+	check("a trim to four", 4)
+	if _, err := db.Expire(scope, kind, now.Add(150*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	check("expiring what was written before 02:30 past", 2)
+	if err := db.DropScope(scope); err != nil {
+		t.Fatal(err)
+	}
+	check("dropping the scope", 0)
+}
+
+func TestExpire_DropsWhatWasWrittenBeforeTheCutoffAndWhatCannotBeRead(t *testing.T) {
+	t.Parallel()
+
+	db := openTemp(t)
+	cutoff := time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC)
+	for key, at := range map[string]time.Time{
+		"PROJ-1": cutoff.Add(-time.Hour),
+		"PROJ-2": cutoff,
+		"PROJ-3": cutoff.Add(time.Hour),
+	} {
+		if err := db.Put(scope, kind, Record{Key: key, Value: []byte(key), StoredAt: at}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeRaw(t, db, "PROJ-4", []byte{1})
+
+	removed, err := db.Expire(scope, kind, cutoff)
+	if err != nil {
+		t.Fatalf("Expire: %v", err)
+	}
+	if removed != 2 {
+		t.Errorf("Expire removed %d, want PROJ-1 and the unreadable PROJ-4", removed)
+	}
+	var left []string
+	if _, err := db.Each(scope, kind, func(r Record) bool { left = append(left, r.Key); return true }); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(left) != "[PROJ-2 PROJ-3]" {
+		t.Errorf("left %v, want [PROJ-2 PROJ-3]", left)
+	}
+	if n, err := db.Expire(scope, "never-written", cutoff); err != nil || n != 0 {
+		t.Errorf("expiring a kind never written to: %d, %v", n, err)
+	}
+}
+
+func TestScopes_ListsEveryProfileAndDropScopeRemovesOnlyOne(t *testing.T) {
+	t.Parallel()
+
+	db := openTemp(t)
+	other := Scope{Site: scope.Site, Account: "someone.else@example.com"}
+	third := Scope{Site: "other.atlassian.net", Account: scope.Account}
+	now := time.Now()
+	for _, s := range []Scope{scope, other, third} {
+		for _, k := range []string{"issue", "search", "board"} {
+			if err := db.Put(s, k, Record{Key: "K", Value: []byte("v"), StoredAt: now}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	held, err := db.Scopes()
+	if err != nil {
+		t.Fatalf("Scopes: %v", err)
+	}
+	if len(held) != 3 {
+		t.Fatalf("Scopes = %v, want the three written", held)
+	}
+
+	if err := db.DropScope(other); err != nil {
+		t.Fatalf("DropScope: %v", err)
+	}
+	held, _ = db.Scopes()
+	if slices.Contains(held, other) || len(held) != 2 {
+		t.Errorf("after dropping %v Scopes = %v", other, held)
+	}
+	for _, s := range []Scope{scope, third} {
+		if _, ok, _ := db.Get(s, "search", "K"); !ok {
+			t.Errorf("dropping one profile removed %v's search", s)
+		}
+	}
+	if err := db.DropScope(Scope{Site: "nowhere", Account: "nobody"}); err != nil {
+		t.Errorf("dropping a scope with nothing stored: %v", err)
 	}
 }

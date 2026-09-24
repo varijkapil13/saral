@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -86,17 +87,91 @@ func TestOpen_FailsWhenThePathCannotBeCreated(t *testing.T) {
 	}
 }
 
-func TestOpen_FailsWhenTheFileIsNotADatabase(t *testing.T) {
+func TestOpen_MovesAFileThatIsNotADatabaseAsideAndStartsAfresh(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "cache.db")
-	if err := os.WriteFile(path, []byte("this was never a bbolt file"), filePerm); err != nil {
+	impostor := []byte("this was never a bbolt file")
+	if err := os.WriteFile(path, impostor, filePerm); err != nil {
 		t.Fatalf("writing the impostor: %v", err)
 	}
 
 	db, err := Open(path, WithLockTimeout(time.Second))
+	if err != nil {
+		t.Fatalf("an unreadable cache failed every launch instead of being replaced: %v", err)
+	}
+	aside := db.Recovered()
+	if err := db.Put(Scope{Site: "s", Account: "a"}, "issue", Record{Key: "K-1", Value: []byte("v")}); err != nil {
+		t.Errorf("the fresh cache cannot be written: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.HasPrefix(aside, path+".corrupt-") {
+		t.Fatalf("Recovered() = %q, want the file moved aside beside %s", aside, path)
+	}
+	kept, err := os.ReadFile(aside)
+	if err != nil {
+		t.Fatalf("the unreadable file is gone rather than kept for a look: %v", err)
+	}
+	if !bytes.Equal(kept, impostor) {
+		t.Errorf("the file moved aside holds %q, want what was there", kept)
+	}
+
+	again, err := Open(path)
+	if err != nil {
+		t.Fatalf("reopening the fresh cache: %v", err)
+	}
+	defer func() { _ = again.Close() }()
+	if again.Recovered() != "" {
+		t.Errorf("the second launch recovered again (%q), so the notice would be said every time", again.Recovered())
+	}
+}
+
+func TestOpen_AnUnreadableFileThatCannotBeMovedIsReported(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.db")
+	if err := os.WriteFile(path, []byte("this was never a bbolt file"), filePerm); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	if f, err := os.Create(filepath.Join(dir, "probe")); err == nil {
+		_ = f.Close()
+		t.Skip("this user can write a read-only directory, as root can")
+	}
+
+	db, err := Open(path, WithLockTimeout(time.Second))
 	if err == nil {
-		t.Fatalf("Open accepted a file that is not a database; closing: %v", db.Close())
+		_ = db.Close()
+		t.Fatal("Open reported success over a file it could neither read nor move")
+	}
+	if errors.Is(err, ErrLocked) {
+		t.Errorf("an unreadable file was reported as held elsewhere: %v", err)
+	}
+}
+
+func TestOpen_GivesUpOnAHeldFileWithoutBeingTold(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "cache.db")
+	held, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = held.Close() })
+
+	second, err := Open(path)
+	if !errors.Is(err, ErrLocked) {
+		if second != nil {
+			_ = second.Close()
+		}
+		t.Fatalf("a second opener with the default wait got %v, want ErrLocked", err)
 	}
 }
 

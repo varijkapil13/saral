@@ -110,10 +110,6 @@ func TestSavedQueries_TheFileIsHeldToTheSameRulesAsTheKeyboard(t *testing.T) {
 				"\n[[profiles.work.queries]]\nname = \"blockers\"\njql = \"assignee = currentUser()\"\n",
 			want: "two saved queries are called",
 		},
-		"a key nobody meant to write": {
-			queries: "\n[[profiles.work.queries]]\nname = \"Blockers\"\njql = \"priority = Highest\"\nslot = 2\n",
-			want:    "unknown key",
-		},
 	}
 
 	for name, tc := range tests {
