@@ -731,24 +731,32 @@ type IssueInput struct {
 // read that is a moment old drops whatever label somebody else added in that
 // moment, and an add or a remove cannot. A patch sets one form or the other,
 // never both.
+//
+// AddFixVersions and RemoveFixVersions are version IDs, edited the same way and
+// for the same reason: fix versions have no replacing form here at all, because
+// the one bulk assignment needs is the one that cannot drop a version somebody
+// else put on the issue.
 type IssuePatch struct {
-	Summary      *string
-	Description  *adf.Doc
-	Assignee     *string
-	Labels       *[]string
-	AddLabels    []string
-	RemoveLabels []string
-	PriorityID   *string
-	Due          *Date
-	Fields       FieldSet
-	Clear        []FieldRef
-	Notify       *bool
+	Summary           *string
+	Description       *adf.Doc
+	Assignee          *string
+	Labels            *[]string
+	AddLabels         []string
+	RemoveLabels      []string
+	AddFixVersions    []string
+	RemoveFixVersions []string
+	PriorityID        *string
+	Due               *Date
+	Fields            FieldSet
+	Clear             []FieldRef
+	Notify            *bool
 }
 
 // IsEmpty reports whether the patch would change nothing.
 func (p IssuePatch) IsEmpty() bool {
 	return p.Summary == nil && p.Description == nil && p.Assignee == nil &&
 		p.Labels == nil && len(p.AddLabels) == 0 && len(p.RemoveLabels) == 0 &&
+		len(p.AddFixVersions) == 0 && len(p.RemoveFixVersions) == 0 &&
 		p.PriorityID == nil && p.Due == nil &&
 		p.Fields.Len() == 0 && len(p.Clear) == 0
 }

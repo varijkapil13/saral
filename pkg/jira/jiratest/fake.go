@@ -1622,6 +1622,9 @@ func (f *Fake) fakeValidatePatch(in *jira.IssuePatch) error {
 	if err := fakeLabelEdits(in); err != nil {
 		return err
 	}
+	if err := f.fakeFixVersionEdits(in); err != nil {
+		return err
+	}
 	if in.PriorityID != nil && fakePriorityByID(*in.PriorityID) == nil {
 		return fakeInvalid("priority", fmt.Sprintf("no priority %q on this site", *in.PriorityID))
 	}
@@ -1686,6 +1689,7 @@ func (f *Fake) fakeApplyPatch(iss *jira.Issue, in *jira.IssuePatch) error {
 	for _, label := range in.RemoveLabels {
 		iss.Labels = slices.DeleteFunc(iss.Labels, func(held string) bool { return held == strings.TrimSpace(label) })
 	}
+	f.fakeApplyFixVersionEdits(iss, in)
 	if in.PriorityID != nil {
 		iss.Priority = fakePriorityByID(*in.PriorityID)
 	}

@@ -438,6 +438,47 @@ func fakeLabelEdits(in *jira.IssuePatch) error {
 	return nil
 }
 
+func (f *Fake) fakeFixVersionEdits(in *jira.IssuePatch) error {
+	if len(in.AddFixVersions) == 0 && len(in.RemoveFixVersions) == 0 {
+		return nil
+	}
+	if slices.ContainsFunc(in.Clear, func(ref jira.FieldRef) bool { return strings.TrimSpace(ref.ID) == "fixVersions" }) {
+		return fakeInvalid("fixVersions", "a patch clears the fix versions or edits them, not both")
+	}
+	if _, set := in.Fields.ByID("fixVersions"); set {
+		return fakeInvalid("fixVersions", "a patch replaces the fix versions or edits them, not both")
+	}
+	seen := make(map[string]bool, len(in.AddFixVersions)+len(in.RemoveFixVersions))
+	for _, id := range slices.Concat(in.AddFixVersions, in.RemoveFixVersions) {
+		trimmed := strings.TrimSpace(id)
+		switch {
+		case trimmed == "":
+			return fakeInvalid("fixVersions", "a fix version to add or remove has no id")
+		case seen[trimmed]:
+			return fakeInvalid("fixVersions", "this patch adds or removes version "+strconv.Quote(trimmed)+" twice")
+		}
+		if _, ok := f.versions[trimmed]; !ok {
+			return fakeInvalid("fixVersions", "version "+strconv.Quote(trimmed)+" does not exist")
+		}
+		seen[trimmed] = true
+	}
+	return nil
+}
+
+func (f *Fake) fakeApplyFixVersionEdits(iss *jira.Issue, in *jira.IssuePatch) {
+	for _, id := range in.AddFixVersions {
+		id = strings.TrimSpace(id)
+		if slices.ContainsFunc(iss.FixVersions, func(v jira.Version) bool { return v.ID == id }) {
+			continue
+		}
+		iss.FixVersions = append(iss.FixVersions, fakeCloneVersion(f.versions[id]))
+	}
+	for _, id := range in.RemoveFixVersions {
+		id = strings.TrimSpace(id)
+		iss.FixVersions = slices.DeleteFunc(iss.FixVersions, func(v jira.Version) bool { return v.ID == id })
+	}
+}
+
 func fakeRefOf(iss *jira.Issue) jira.IssueRef {
 	return jira.IssueRef{ID: iss.ID, Key: iss.Key, Summary: iss.Summary, Status: iss.Status, Type: iss.Type}
 }
