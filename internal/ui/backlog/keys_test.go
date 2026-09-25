@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
 // TestLiveKeys_EveryStateGolden holds every state the footer and the help
@@ -25,6 +26,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"confirming the move", keysConfirming},
 		{"a move in flight", keysMoving},
 		{"choosing the order", keysSorting},
+		{"/ taking a search", keysFinding},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the view has %d key states and this test names %d", keyStates, len(named))
@@ -167,6 +169,65 @@ func TestKeys_TheChooserWalksThroughEveryDestination(t *testing.T) {
 		t.Errorf("walking down past the last destination left it on %d, want %d", dr.m.destAt, want)
 	}
 	mustContain(t, dr.view(), "["+backlogName+"]")
+}
+
+// A stroke bound to two actions in one state does whichever the table was
+// built with last, and the other binding advertises a key that does not do it.
+func TestKeys_NoStrokeMeansTwoThingsInOneState(t *testing.T) {
+	t.Parallel()
+	browse, chooser, confirm, sorting, finding := defaultKeys().entries()
+	for name, entries := range map[string][]binding{
+		"browsing": browse, "choosing": chooser, "confirming": confirm, "sorting": sorting, "finding": finding,
+	} {
+		seen := map[string]action{}
+		for _, e := range entries {
+			for _, stroke := range e.b.Keys() {
+				if was, taken := seen[stroke]; taken && was != e.a {
+					t.Errorf("%s binds %q to two actions", name, stroke)
+				}
+				seen[stroke] = e.a
+			}
+		}
+		if len(seen) == 0 {
+			t.Errorf("%s binds nothing, so this check read nothing", name)
+		}
+	}
+}
+
+// The keys a state answers to are the keys it advertises.
+func TestKeys_EveryAdvertisedActionIsOneTheStateAnswers(t *testing.T) {
+	t.Parallel()
+	browse, chooser, confirm, sorting, finding := defaultKeys().tables()
+	for name, tc := range map[string]struct {
+		set   kernel.KeySet
+		table map[string]action
+	}{
+		"browsing":          {liveSets[keysBrowsing], browse},
+		"picked":            {liveSets[keysPicked], browse},
+		"narrowed":          {liveSets[keysPickedNarrowed], browse},
+		"choosing":          {liveSets[keysChoosing], chooser},
+		"confirming":        {liveSets[keysConfirming], confirm},
+		"sorting":           {liveSets[keysSorting], sorting},
+		"/ taking a search": {liveSets[keysFinding], finding},
+	} {
+		checked := 0
+		for _, column := range append([][]kernel.Binding{tc.set.Acts}, tc.set.Full...) {
+			for _, b := range column {
+				if b.Help() == widget.KillLine.Help() {
+					continue
+				}
+				for _, stroke := range b.Keys() {
+					checked++
+					if tc.table[stroke] == actNone {
+						t.Errorf("%s advertises %q as %q and does nothing with it", name, stroke, b.Help().Desc)
+					}
+				}
+			}
+		}
+		if checked == 0 {
+			t.Errorf("%s advertises nothing, so this check read nothing", name)
+		}
+	}
 }
 
 func actsOf(set kernel.KeySet) string {

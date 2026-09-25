@@ -12,14 +12,18 @@ backlog
 space pick or unpick this issue                       ↓/j  down         ctrl+d half page down ...
 v     pick every issue in this section                ↑/k  up           ctrl+u half page up
 m     move these issues to a sprint or the backlog    pgdn page down    g g    first row
-f     filter by a person, a status, a label           pgup page up      G      last row
+/     find an issue                                   pgup page up      G      last row
+o     only my issues
+f     filter by a person, a status, a label
 s     sort
 
 board
 enter open                                     ↓/j down               pgdn    page down                 ...
 m     move this issue to another column        ↑/k up                 pgup    page up
-b     another board of this project            ←/h previous column    g g     first card in this column
-f     filter by a person, a status, a label    →/l next column        G / g e last card in this column
+/     find a card                              ←/h previous column    g g     first card in this column
+o     only my issues                           →/l next column        G / g e last card in this column
+b     another board of this project
+f     filter by a person, a status, a label
 F 1-9 quick filters
 
 comment

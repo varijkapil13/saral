@@ -76,6 +76,47 @@ func init() {
 			return kernel.OpenThen(ViewID, SortMsg{})
 		},
 	})
+	for _, c := range []struct {
+		id, title string
+		key       kernel.Binding
+		where     rankWhere
+	}{
+		{"backlog.rank-up", "Rank this issue up", keys.RankUp, rankUp},
+		{"backlog.rank-down", "Rank this issue down", keys.RankDown, rankDown},
+		{"backlog.rank-top", "Rank this issue first in its section", keys.RankTop, rankTop},
+		{"backlog.rank-bottom", "Rank this issue last in its section", keys.RankBottom, rankBottom},
+	} {
+		kernel.RegisterCommand(kernel.Command{
+			ID:       c.id,
+			Title:    c.title,
+			Group:    "Backlog",
+			Requires: jira.CapBoards,
+			Keys:     []string{c.key.Help().Key},
+			Run:      func(kernel.Deps) tea.Cmd { return kernel.OpenThen(ViewID, RankMsg{Where: c.where}) },
+		})
+	}
+	kernel.RegisterCommand(kernel.Command{
+		ID:       "backlog.mine",
+		Title:    "Show only my issues in the backlog",
+		Group:    "Search",
+		Kind:     kernel.KindSearch,
+		Requires: jira.CapBoards,
+		Keys:     []string{keys.Mine.Help().Key},
+		Run: func(kernel.Deps) tea.Cmd {
+			return kernel.OpenThen(ViewID, MineMsg{})
+		},
+	})
+	kernel.RegisterCommand(kernel.Command{
+		ID:       "backlog.find",
+		Title:    "Find an issue in the backlog",
+		Group:    "Search",
+		Kind:     kernel.KindSearch,
+		Requires: jira.CapBoards,
+		Keys:     []string{keys.Find.Help().Key},
+		Run: func(kernel.Deps) tea.Cmd {
+			return kernel.OpenThen(ViewID, FindMsg{})
+		},
+	})
 	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that
 	// clears a filter is shown only by the state that has one to clear.
 	kernel.RegisterCommand(kernel.Command{

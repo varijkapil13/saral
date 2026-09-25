@@ -72,14 +72,20 @@ func planLayout(width, rows, columns int) layout {
 // the bar naming a term in force and the prompt a gesture in progress puts
 // under them.
 func (m *Model) rowsHeight() int {
-	h := m.height - chromeLines
+	h := m.height - chromeLines - m.sprintLines()
 	if len(m.terms) > 0 {
 		h--
 	}
-	if m.card != nil || m.moving || m.pendingFilter {
+	if m.prompting() {
 		h--
 	}
 	return max(h, 1)
+}
+
+// prompting reports that a line under the grid is taken by a gesture in
+// progress.
+func (m *Model) prompting() bool {
+	return m.card != nil || m.moving || m.pendingFilter || m.finding
 }
 
 // styles are the board's own, built once per theme generation because
@@ -238,9 +244,12 @@ func (m *Model) View() string {
 	m.relayout()
 	lines := m.lines[:0]
 	lines = append(lines, m.summaryLine())
+	if m.sprintLines() > 0 {
+		lines = append(lines, m.sprintLine())
+	}
 	barred := len(m.terms) > 0
 	if !m.drawable() {
-		h := m.height - 1
+		h := m.height - 1 - m.sprintLines()
 		if barred {
 			h--
 		}
@@ -263,7 +272,7 @@ func (m *Model) View() string {
 	if barred {
 		lines = append(lines, m.filterBar())
 	}
-	if m.card != nil || m.moving || m.pendingFilter {
+	if m.prompting() {
 		lines = append(lines, m.prompt())
 	}
 	m.lines = lines
@@ -697,6 +706,8 @@ func (m *Model) prompt() string {
 	switch {
 	case m.pendingFilter:
 		return m.quickFilterPrompt()
+	case m.finding:
+		return m.findPrompt()
 	case m.card != nil:
 		said := "move " + m.card.key + " from " + m.card.status + " to " +
 			m.plan.columns[m.card.target].name

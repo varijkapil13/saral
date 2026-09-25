@@ -1,6 +1,9 @@
 package backlog
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
+)
 
 var _ kernel.KeyReporter = (*Model)(nil)
 
@@ -46,6 +49,22 @@ type keyMap struct {
 	SortNext   kernel.Binding
 	SortChoose kernel.Binding
 	SortCancel kernel.Binding
+	// RankUp, RankDown, RankTop and RankBottom change an issue's rank within
+	// its section.
+	RankUp     kernel.Binding
+	RankDown   kernel.Binding
+	RankTop    kernel.Binding
+	RankBottom kernel.Binding
+	// Mine narrows the backlog to the account this session is signed in as, as
+	// an assignee term the chip bar names like any other.
+	Mine kernel.Binding
+	// Find types a search over the issues loaded, and FindNext and FindPrev walk
+	// what it matched once it is kept.
+	Find       kernel.Binding
+	FindNext   kernel.Binding
+	FindPrev   kernel.Binding
+	FindKeep   kernel.Binding
+	FindCancel kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -76,6 +95,17 @@ func defaultKeys() keyMap {
 		SortNext:   kernel.Bind([]string{"right", "l"}, "→/l", "next field"),
 		SortChoose: kernel.Bind([]string{"enter"}, "enter", "choose this order"),
 		SortCancel: kernel.Bind([]string{"esc"}, "esc", "leave the order as it is"),
+
+		RankUp:     kernel.Bind([]string{"K", "shift+up"}, "K", "rank this issue up"),
+		RankDown:   kernel.Bind([]string{"J", "shift+down"}, "J", "rank this issue down"),
+		RankTop:    kernel.Bind([]string{"{"}, "{", "rank this issue first in its section"),
+		RankBottom: kernel.Bind([]string{"}"}, "}", "rank this issue last in its section"),
+		Mine:       kernel.Bind([]string{"o"}, "o", "only my issues"),
+		Find:       kernel.Bind([]string{"/"}, "/", "find an issue"),
+		FindNext:   kernel.Bind([]string{"n"}, "n", "next issue found"),
+		FindPrev:   kernel.Bind([]string{"N"}, "N", "previous issue found"),
+		FindKeep:   kernel.Bind([]string{"enter"}, "enter", "keep this search"),
+		FindCancel: kernel.Bind([]string{"esc"}, "esc", "go back to where the search began"),
 	}
 }
 
@@ -91,8 +121,9 @@ func (k keyMap) browsing(picked, narrowed bool) kernel.KeySet {
 	move := kernel.Terse(k.Move, "move")
 	by := kernel.Terse(k.FilterBy, "filter by")
 	sort := kernel.Terse(k.Sort, "sort")
-	acts := []kernel.Binding{pick, all, move, by, sort}
-	actions := []kernel.Binding{k.Pick, k.PickAll, k.Move, k.FilterBy, k.Sort}
+	find, mine := kernel.Terse(k.Find, "find"), kernel.Terse(k.Mine, "mine")
+	acts := []kernel.Binding{pick, all, move, find, mine, by, sort}
+	actions := []kernel.Binding{k.Pick, k.PickAll, k.Move, k.Find, k.Mine, k.FilterBy, k.Sort}
 	if picked {
 		acts = append(acts, kernel.Terse(k.Unpick, "unpick all"))
 		actions = append(actions, k.Unpick)
@@ -106,7 +137,9 @@ func (k keyMap) browsing(picked, narrowed bool) kernel.KeySet {
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.HalfDown, k.HalfUp, k.Top, k.Bottom},
+			{k.RankUp, k.RankDown, k.RankTop, k.RankBottom},
 			actions,
+			{k.FindNext, k.FindPrev},
 		},
 	}
 }
@@ -125,6 +158,7 @@ const (
 	keysConfirming
 	keysMoving
 	keysSorting
+	keysFinding
 	keyStates
 )
 
@@ -158,6 +192,10 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		},
 		Full: [][]kernel.Binding{{k.SortPrev, k.SortNext}, {k.SortChoose, k.SortCancel}},
 	}
+	sets[keysFinding] = kernel.KeySet{
+		Acts: []kernel.Binding{kernel.Terse(k.FindKeep, "keep"), kernel.Terse(k.FindCancel, "cancel")},
+		Full: [][]kernel.Binding{{k.FindKeep, k.FindCancel}, {widget.KillLine}},
+	}
 	return sets
 }()
 
@@ -174,6 +212,8 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysConfirming
 	case m.mode == sorting:
 		state = keysSorting
+	case m.mode == finding:
+		state = keysFinding
 	case m.mode == movingIssues:
 		state = keysMoving
 	case len(m.picked) > 0 && len(m.terms) > 0:
@@ -213,33 +253,55 @@ const (
 	actSortNext
 	actSortChoose
 	actSortCancel
+	actRankUp
+	actRankDown
+	actRankTop
+	actRankBottom
+	actMine
+	actFind
+	actFindNext
+	actFindPrev
+	actFindKeep
+	actFindCancel
 )
 
 // tables turn the bindings into a keystroke lookup, built once. The bindings
 // stay the single source of truth for what a key does and for what the footer
 // says it does, and a keystroke costs one map probe rather than a walk over
 // every binding.
-func (k keyMap) tables() (browse, chooser, confirm, sorting map[string]action) {
-	browse = table(
-		binding{k.Down, actDown}, binding{k.Up, actUp},
-		binding{k.PageDown, actPageDown}, binding{k.PageUp, actPageUp},
-		binding{k.HalfDown, actHalfDown}, binding{k.HalfUp, actHalfUp},
-		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
-		binding{k.Pick, actPick}, binding{k.PickAll, actPickGroup},
-		binding{k.Unpick, actClear}, binding{k.Move, actMove},
-		binding{k.FilterBy, actFilterBy}, binding{k.Unfilter, actClearFilter},
-		binding{k.Sort, actSort},
-	)
-	chooser = table(
-		binding{k.Next, actDown}, binding{k.Prev, actUp},
-		binding{k.Choose, actChoose}, binding{k.Back, actBack},
-	)
-	confirm = table(binding{k.Confirm, actConfirm}, binding{k.Back, actBack})
-	sorting = table(
-		binding{k.SortPrev, actSortPrev}, binding{k.SortNext, actSortNext},
-		binding{k.SortChoose, actSortChoose}, binding{k.SortCancel, actSortCancel},
-	)
-	return browse, chooser, confirm, sorting
+func (k keyMap) tables() (browse, chooser, confirm, sorting, finding map[string]action) {
+	b, c, cf, so, fi := k.entries()
+	return table(b...), table(c...), table(cf...), table(so...), table(fi...)
+}
+
+// entries are the tables as lists, which is what lets a test see a stroke bound
+// twice in one of them: a map keeps whichever came last.
+func (k keyMap) entries() (browse, chooser, confirm, sorting, finding []binding) {
+	browse = []binding{
+		{k.Down, actDown}, {k.Up, actUp},
+		{k.PageDown, actPageDown}, {k.PageUp, actPageUp},
+		{k.HalfDown, actHalfDown}, {k.HalfUp, actHalfUp},
+		{k.Go, actGo}, {k.Top, actTop}, {k.Bottom, actBottom},
+		{k.Pick, actPick}, {k.PickAll, actPickGroup},
+		{k.Unpick, actClear}, {k.Move, actMove},
+		{k.FilterBy, actFilterBy}, {k.Unfilter, actClearFilter},
+		{k.Sort, actSort},
+		{k.RankUp, actRankUp}, {k.RankDown, actRankDown},
+		{k.RankTop, actRankTop}, {k.RankBottom, actRankBottom},
+		{k.Mine, actMine}, {k.Find, actFind},
+		{k.FindNext, actFindNext}, {k.FindPrev, actFindPrev},
+	}
+	chooser = []binding{
+		{k.Next, actDown}, {k.Prev, actUp},
+		{k.Choose, actChoose}, {k.Back, actBack},
+	}
+	confirm = []binding{{k.Confirm, actConfirm}, {k.Back, actBack}}
+	sorting = []binding{
+		{k.SortPrev, actSortPrev}, {k.SortNext, actSortNext},
+		{k.SortChoose, actSortChoose}, {k.SortCancel, actSortCancel},
+	}
+	finding = []binding{{k.FindKeep, actFindKeep}, {k.FindCancel, actFindCancel}}
+	return browse, chooser, confirm, sorting, finding
 }
 
 type binding struct {

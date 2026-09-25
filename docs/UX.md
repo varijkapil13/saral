@@ -398,6 +398,8 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 | click a value's name inside a chip under the rows | drop just that value |
 | click a chip's `×` | drop the whole facet the chip names |
 | wheel | scroll the pane under the pointer, not the focused one |
+| drag a card within its column, or a backlog issue within its section | rank it beside the card it was dropped on, the same as `K`/`J` |
+| drag a card to another column | move it there, the same as `m` and `enter` |
 | drag the column between two panes | move the boundary; the panes follow the pointer and the ratio is kept |
 | click the line that names the search | show its JQL and offer to change it, the same as `e` |
 | click the footer's root cell | go back to that root, the same as `esc` from a pushed view |
@@ -679,6 +681,48 @@ A move the site no longer offers by then says so in the list rather than choosin
 the facts line under the title opens the list its sidebar row opens. The sidebar draws the type as a
 row of its own and the status and priority with their icons, and an issue opened by key alone shows
 each fact's icon with a placeholder until the read lands — `unknown` if it never does.
+
+## Working a board and a backlog
+
+The board and the backlog answer the same few gestures with the same keys, so a hand that learnt one
+has learnt the other. Every one of them is also a palette command and, where there is something to
+point at, a pointer gesture.
+
+| key | board | backlog |
+|---|---|---|
+| `K` / `J` (or `shift+↑` / `shift+↓`) | rank the card above the one before it, below the one after it | the same, within the section |
+| `{` / `}` | rank it first or last in its column | first or last in its section |
+| `H` / `L` (or `shift+←` / `shift+→`) | move the card to the previous or next column, in one stroke | — |
+| `o` | only my issues | only my issues |
+| `/`, then `n` / `N` | find a card by key or words of its summary, then the next and the one before | the same over the rows |
+
+**A rank is drawn before the site answers and taken back if it refuses.** The site's own order lags
+a rank write (`docs/API-NOTES.md`), so nothing re-reads to confirm: the card moves on screen, the
+write goes out naming the card now beside it, and a refusal — a token without *Schedule Issues*, a
+rate limit, a transport failure, or a 207 naming the card — puts it back before the card that followed
+it and says why. Steps taken while one is out are not sent beside it: the next goes once the first is
+answered, naming where the card is on screen by then, so `K K K` cannot reach the site out of order.
+A board with no rank field is ordered by its filter and says so rather than pretending to move a
+card, and so does a backlog sorted by a field of its own: a rank there would not show where it went.
+`}` waits for the rest of a board still loading, because the last card loaded is not the last card.
+
+**`H` and `L` are `m`, an arrow and `enter` in one stroke.** They go through the same transition
+read, so a move whose screen needs a field opens the issue pane on that move exactly as a drop does.
+
+**`o` is a term, not a mode.** It puts the account this session is signed in as in force as the only
+assignee — replacing any other person already there and leaving the other facets alone — so the chip
+bar names it, `ctrl+g` clears it and a second `o` takes it off. The account is asked for once, the
+first time.
+
+**`/` walks what is loaded.** Typing moves the cursor to the first match from where the search
+began; `enter` keeps the search for `n` and `N`, which wrap at either end, and `esc` puts the cursor
+back where it was and forgets it. Like `f`, it cannot see a card the read has not brought back yet.
+
+**A Scrum board's running sprint gets a line of its own** under the board's name: its goal, how many
+days it has left in the site's time zone, and a bar of how much of it is done. Done is the board's last
+mapped column, never a status category, and the bar counts the board's estimate where the board
+estimates and any card carries one, cards otherwise. Each column's rule already carries its estimate
+total; the backlog puts each section's total on the section's head, in the estimation field's own name.
 
 ## Rendering rules for modern terminals
 

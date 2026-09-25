@@ -129,6 +129,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/attach` | `TestBudget_AttachRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/attach` | `TestBudget_AttachScrollingCostsTheSameOnTwoThousandFilesAsOnTwenty` |
 | `internal/ui/backlog` | `TestBudget_BacklogAMemoMissCostsOneRowAndNotAWindow` |
+| `internal/ui/backlog` | `TestBudget_BacklogFindAllocatesNothingPerRow` |
 | `internal/ui/backlog` | `TestBudget_BacklogFullRedrawAt200x60` |
 | `internal/ui/backlog` | `TestBudget_BacklogKeystrokeToFrameAtTenThousandIssues` |
 | `internal/ui/backlog` | `TestBudget_BacklogPickingAnIssueCostsOneRowAndTheFrame` |
@@ -136,13 +137,16 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/backlog` | `TestBudget_BacklogRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/backlog` | `TestBudget_BacklogScrollingCostsTheSameOnTenThousandRowsAsOnTwenty` |
 | `internal/ui/backlog` | `TestBudget_BacklogScrollingCostsTheSameUnderATermInForce` |
+| `internal/ui/backlog` | `TestBudget_BacklogSectionTotalsCostNothingPerFrame` |
 | `internal/ui/board` | `TestBudget_ABoardMemoMissCostsTwoLinesAndNotAScreen` |
 | `internal/ui/board` | `TestBudget_BoardCardsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/board` | `TestBudget_BoardColumnsAreVirtualizedAsWellAsItsRows` |
+| `internal/ui/board` | `TestBudget_BoardFindAllocatesNothingPerCard` |
 | `internal/ui/board` | `TestBudget_BoardFullRedrawAt200x60` |
 | `internal/ui/board` | `TestBudget_BoardKeystrokeToFrame` |
 | `internal/ui/board` | `TestBudget_BoardScrollCostsTheFrameAndNothingElse` |
 | `internal/ui/board` | `TestBudget_BoardScrollingCostsTheSameUnderATermInForce` |
+| `internal/ui/board` | `TestBudget_BoardSprintHeaderCostsNothingPerFrame` |
 | `internal/ui/comment` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/comment` | `TestBudget_KeystrokeToFrameOnATenThousandCommentThread` |
 | `internal/ui/comment` | `TestBudget_ScrollingCostsTheSameOnTenThousandCommentsAsOnTwenty` |

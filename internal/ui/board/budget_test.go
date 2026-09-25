@@ -51,6 +51,23 @@ func TestBudget_BoardScrollingCostsTheSameUnderATermInForce(t *testing.T) {
 	}
 }
 
+// The sprint's own header is on every frame of a Scrum board, so it costs a
+// steady-state frame nothing: the frame string is still the one allocation.
+func TestBudget_BoardSprintHeaderCostsNothingPerFrame(t *testing.T) {
+	sprint := testing.Benchmark(BenchmarkBoardViewSprint5k).AllocsPerOp()
+	if sprint > 1 {
+		t.Errorf("a steady-state frame with the sprint header up allocates %d times, want the frame string and nothing else", sprint)
+	}
+}
+
+// Finding the next card walks what is loaded without allocating per card:
+// n on a board of thousands must stay a keystroke, not a garbage collection.
+func TestBudget_BoardFindAllocatesNothingPerCard(t *testing.T) {
+	if got := testing.Benchmark(BenchmarkBoardFind5k).AllocsPerOp(); got > 0 {
+		t.Errorf("walking five thousand cards for the next match allocates %d times, want none", got)
+	}
+}
+
 // The columns are virtualized as well as the rows, which is the axis a list view
 // does not have: a board of fifty columns draws the handful that fit.
 func TestBudget_BoardColumnsAreVirtualizedAsWellAsItsRows(t *testing.T) {

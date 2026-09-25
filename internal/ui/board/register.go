@@ -20,6 +20,20 @@ type NextBoardMsg struct{}
 // NextSprintMsg asks the board to draw the next of the sprints it is running.
 type NextSprintMsg struct{}
 
+// RankMsg ranks the card under the cursor within its column, ShiftMsg lands it
+// in the column beside it, MineMsg toggles only-my-issues and FindMsg opens the
+// search: each is exported so the palette reaches the gesture its key does.
+type RankMsg struct{ Where rankWhere }
+
+// ShiftMsg is described with RankMsg.
+type ShiftMsg struct{ By int }
+
+// MineMsg is described with RankMsg.
+type MineMsg struct{}
+
+// FindMsg is described with RankMsg.
+type FindMsg struct{}
+
 // ClearFilterMsg drops every term the filter picker put in force. It is
 // exported so the palette reaches the gesture ctrl+g does rather than a second
 // implementation of it.
@@ -76,6 +90,49 @@ func init() {
 		Keys:     []string{keys.Sprint.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
 			return kernel.OpenThen(ViewID, NextSprintMsg{})
+		},
+	})
+	for _, c := range []struct {
+		id, title string
+		key       kernel.Binding
+		msg       tea.Msg
+	}{
+		{"board.rank-up", "Rank this card up", keys.RankUp, RankMsg{Where: rankUp}},
+		{"board.rank-down", "Rank this card down", keys.RankDown, RankMsg{Where: rankDown}},
+		{"board.rank-top", "Rank this card first in its column", keys.RankTop, RankMsg{Where: rankTop}},
+		{"board.rank-bottom", "Rank this card last in its column", keys.RankBottom, RankMsg{Where: rankBottom}},
+		{"board.shift-left", "Move this card to the previous column", keys.ShiftLeft, ShiftMsg{By: -1}},
+		{"board.shift-right", "Move this card to the next column", keys.ShiftRight, ShiftMsg{By: 1}},
+	} {
+		kernel.RegisterCommand(kernel.Command{
+			ID:       c.id,
+			Title:    c.title,
+			Group:    "Board",
+			Requires: jira.CapBoards,
+			Keys:     []string{c.key.Help().Key},
+			Run:      func(kernel.Deps) tea.Cmd { return kernel.OpenThen(ViewID, c.msg) },
+		})
+	}
+	kernel.RegisterCommand(kernel.Command{
+		ID:       "board.mine",
+		Title:    "Show only my issues on the board",
+		Group:    "Search",
+		Kind:     kernel.KindSearch,
+		Requires: jira.CapBoards,
+		Keys:     []string{keys.Mine.Help().Key},
+		Run: func(kernel.Deps) tea.Cmd {
+			return kernel.OpenThen(ViewID, MineMsg{})
+		},
+	})
+	kernel.RegisterCommand(kernel.Command{
+		ID:       "board.find",
+		Title:    "Find a card on the board",
+		Group:    "Search",
+		Kind:     kernel.KindSearch,
+		Requires: jira.CapBoards,
+		Keys:     []string{keys.Find.Help().Key},
+		Run: func(kernel.Deps) tea.Cmd {
+			return kernel.OpenThen(ViewID, FindMsg{})
 		},
 	})
 	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that
