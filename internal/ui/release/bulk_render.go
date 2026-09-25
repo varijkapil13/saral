@@ -77,7 +77,8 @@ func (b *Bulk) View() string {
 		return ""
 	}
 	chrome := b.chromeLines()
-	lines := append(b.lines[:0], chrome[0], chrome[1])
+	lines := b.lines[:0]
+	lines = append(lines, chrome[0], chrome[1])
 	switch b.state {
 	case bulkQuery, bulkReading:
 		lines = b.appendQuery(lines, b.fit)

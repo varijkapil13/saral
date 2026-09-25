@@ -98,8 +98,8 @@ func inSprint(t *testing.T, f *jiratest.Fake, sp jira.Sprint) []string {
 		t.Fatalf("reading %s back: %v", sp.Name, err)
 	}
 	out := make([]string, 0, len(page.Items))
-	for _, iss := range page.Items {
-		out = append(out, iss.Key)
+	for i := range page.Items {
+		out = append(out, page.Items[i].Key)
 	}
 	return out
 }

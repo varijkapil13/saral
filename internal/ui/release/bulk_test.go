@@ -61,7 +61,8 @@ func carrying(t *testing.T, f *jiratest.Fake, versionID string) []string {
 	}
 	var out []string
 	for {
-		for _, iss := range page.Items {
+		for i := range page.Items {
+			iss := &page.Items[i]
 			if slices.ContainsFunc(iss.FixVersions, func(v jira.Version) bool { return v.ID == versionID }) {
 				out = append(out, iss.Key)
 			}
@@ -77,9 +78,9 @@ func carrying(t *testing.T, f *jiratest.Fake, versionID string) []string {
 
 func versionByID(t *testing.T, id string) jira.Version {
 	t.Helper()
-	for _, v := range seededVersions {
-		if v.ID == id {
-			return v
+	for i := range seededVersions {
+		if seededVersions[i].ID == id {
+			return seededVersions[i]
 		}
 	}
 	t.Fatalf("no seeded version %s", id)

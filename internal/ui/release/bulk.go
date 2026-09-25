@@ -153,7 +153,7 @@ func (b *Bulk) stop() {
 	}
 }
 
-func (b *Bulk) begin() (context.Context, int) {
+func (b *Bulk) begin() (ctx context.Context, gen int) {
 	b.stop()
 	b.gen++
 	ctx, cancel := context.WithCancel(context.Background())
@@ -241,7 +241,8 @@ func readMatches(ctx context.Context, s jira.Searcher, jql, versionID string, re
 		skipped, seen := 0, 0
 		for {
 			for i := range page.Items {
-				if seen++; seen > bulkCap {
+				seen++
+				if seen > bulkCap {
 					return failedMsg{gen: gen, what: whatQuery, err: errTooMany}
 				}
 				iss := page.Items[i]

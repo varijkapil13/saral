@@ -2616,8 +2616,8 @@ func fakeClauseValues(iss *jira.Issue, field string) []string {
 		return iss.Labels
 	case "fixversion":
 		out := make([]string, 0, 2*len(iss.FixVersions))
-		for _, v := range iss.FixVersions {
-			out = append(out, v.ID, v.Name)
+		for i := range iss.FixVersions {
+			out = append(out, iss.FixVersions[i].ID, iss.FixVersions[i].Name)
 		}
 		return out
 	default:
