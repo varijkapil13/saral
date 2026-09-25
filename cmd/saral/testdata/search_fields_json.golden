@@ -1,0 +1,31 @@
+{
+  "issues": [
+    {
+      "key": "PROJ-1",
+      "id": "20001",
+      "url": "https://example.atlassian.net/browse/PROJ-1",
+      "status": {
+        "id": "10202",
+        "name": "Building",
+        "category": "indeterminate"
+      },
+      "fields": {
+        "customfield_13401": {
+          "name": "Story Points",
+          "value": 2
+        }
+      }
+    },
+    {
+      "key": "PROJ-2",
+      "id": "20002",
+      "url": "https://example.atlassian.net/browse/PROJ-2",
+      "status": {
+        "id": "10203",
+        "name": "Shipped",
+        "category": "done"
+      }
+    }
+  ],
+  "more": true
+}

@@ -1,0 +1,28 @@
+key	PROJ-1
+url	https://example.atlassian.net/browse/PROJ-1
+project	PROJ
+type	Epic
+status	Building
+summary	Add the nightly export
+priority	Normal
+resolution	
+assignee	Grace Hopper
+reporter	Alan Turing
+labels	frontend
+components	
+fixVersions	
+parent	
+subtasks	
+links	
+due	
+created	2025-03-02T10:00:00Z
+updated	2025-03-02T12:00:00Z
+resolved	
+timeTracking	
+Rank	0|i00001:
+Story Points	2
+
+Add the nightly export.
+
+- Filed against PROJ-1.
+- Only happens for accounts created before the migration.

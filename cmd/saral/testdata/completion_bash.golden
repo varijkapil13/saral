@@ -1,0 +1,31 @@
+# bash completion for saral. Load it with: source <(saral completion bash)
+_saral() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local cmd="" sub="" word i valued=" --description-file --field --fields --file --glyphs --limit --log --parent --poll --profile --project --scheme --summary --theme --type -m "
+    for ((i = 1; i < COMP_CWORD; i++)); do
+        word="${COMP_WORDS[i]}"
+        if [[ "$valued" == *" $word "* ]]; then ((i++)); continue; fi
+        [[ "$word" == -* ]] && continue
+        if [[ -z "$cmd" ]]; then cmd="$word"; continue; fi
+        [[ -z "$sub" ]] && sub="$word"
+        break
+    done
+    local words="" flags=""
+    case "$cmd:$sub" in
+        :) words="assign comment completion doctor help issue open search transition version list board backlog sprints releases timeline plans settings"; flags="--glyphs --log --mouse --poll --profile --project --scheme --theme --version" ;;
+        assign:*) words=""; flags="--log --profile --project" ;;
+        comment:add) words=""; flags="--file --log -m --profile --project" ;;
+        comment:*) words="add"; flags="" ;;
+        completion:*) words="bash zsh fish"; flags="" ;;
+        issue:create) words=""; flags="--description-file --json --log --parent --profile --project --summary --type" ;;
+        issue:view) words=""; flags="--json --log --profile --project" ;;
+        issue:*) words="create view"; flags="" ;;
+        open:*) words=""; flags="--log --print --profile --project" ;;
+        search:*) words=""; flags="--fields --json --limit --log --profile --project" ;;
+        transition:*) words=""; flags="--field --log --profile --project" ;;
+    esac
+    [[ "$cur" == -* ]] && words="$flags"
+    [[ -n "$words" ]] && COMPREPLY=($(compgen -W "$words" -- "$cur"))
+    return 0
+}
+complete -o default -F _saral saral

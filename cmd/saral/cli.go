@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strings"
 )
@@ -52,8 +53,16 @@ func exitCodeOf(err error) int {
 
 type invocation struct {
 	opt    options
+	stdin  io.Reader
 	stdout io.Writer
 	stderr io.Writer
+}
+
+func (inv *invocation) input() io.Reader {
+	if inv.stdin == nil {
+		return os.Stdin
+	}
+	return inv.stdin
 }
 
 // subcommand registers itself from an init() in its own file.
