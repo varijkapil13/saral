@@ -74,9 +74,11 @@ that people usually go back to the browser for:
   the version off them. You can also put a version on, or take it off, every issue a JQL query
   matches.
 - **Sprints and boards.** The board shows the running sprint with its goal, days left and a progress
-  bar. You can rank cards, move them between columns with one key, and complete a sprint with a
-  choice of where its open issues go.
-- **Bulk moves.** Move a set of issues between sprints and the backlog, or between projects with
+  bar. You can rank cards, move them between columns with one key, group the board into swimlanes by
+  assignee or parent, create an issue straight into a column, and complete a sprint with a choice of
+  where its open issues go.
+- **Bulk changes.** Pick several cards on the board and assign, label or move them in one go. Move a
+  set of issues between sprints and the backlog, or between projects with
   the cross-project move wizard, which maps statuses and fields and tells you which fields the
   move would drop.
 - **Timeline.** Bars built from real start and end dates, with sprint and version markers, and a

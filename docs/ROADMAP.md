@@ -1282,8 +1282,11 @@ Wave 3 — the features a daily driver was missing:
 - [x] **P10.15 — Board and backlog workflow** · [#161](https://github.com/varijkapil13/saral/pull/161) · **owns** `internal/ui/board/**`, `internal/ui/backlog/**`
   Rank reorder (`K`/`J`, `{`/`}`, drag), one-stroke column moves (`H`/`L`), only my issues (`M`),
   find (`/`, `n`/`N`), points per backlog section and a sprint header with a progress bar.
-- [ ] **P10.15b — Swimlanes, inline create, board multi-select** · [#164](https://github.com/varijkapil13/saral/pull/164) · **owns** `internal/ui/board/**`, `internal/ui/backlog/**`, `internal/ui/form/**`
-  The three items P10.15 left out. Open.
+- [x] **P10.15b — Swimlanes, inline create, board multi-select** · [#164](https://github.com/varijkapil13/saral/pull/164) · **owns** `internal/ui/board/**`, `internal/ui/backlog/**`, `internal/ui/form/**`
+  Swimlanes by assignee or parent (`w`, fold with `z`/`Z`, remembered per board), inline create
+  from a board column or sprint section (`c`, via `form.NewWith`), and board multi-select
+  (`space`/`v`/`x`) with bulk assign (`@`), label (`+`) and move (`m`). Also fixes a backlog crash
+  when a re-read returned fewer issues.
 - [x] **P10.16 — Issue collaboration** · [#162](https://github.com/varijkapil13/saral/pull/162) · **owns** `internal/ui/issue/**` (new files)
   Copy key (`y`), copy link (`Y`), open in browser (`o`) from the pane, list, board and backlog;
   sheets for links (`L`), worklogs (`w`) and watchers (`W`); clone from the palette.
@@ -1294,6 +1297,10 @@ Wave 3 — the features a daily driver was missing:
 - [x] **P10.18 — Scriptable CLI** · [#160](https://github.com/varijkapil13/saral/pull/160) · **owns** `cmd/saral/**` (new files), `docs/CLI.md`
   `issue view|create`, `search`, `transition`, `comment add`, `assign`, `open` and `completion`, with
   tab-separated output and a documented JSON schema.
+
+- [ ] **P10.21 — Rows refreshed after a write in the issue pane** · branch `fix/p10.21-list-after-transition`
+  The list, board and backlog under the issue pane still show the old status after a transition
+  there. In progress.
 
 Wave 4:
 

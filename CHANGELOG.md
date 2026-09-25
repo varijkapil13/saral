@@ -52,6 +52,13 @@ such change is listed under **Changed**.
 - Board and backlog: rank reorder (`K`/`J`, `{`/`}`, drag), one-stroke column moves (`H`/`L`),
   only my issues (`M`), find (`/`, then `n`/`N`), points per backlog section, and a sprint header
   with the goal, days left and a progress bar.
+- Board swimlanes by assignee or parent (`w`), with lanes folded by `z`, `Z` or a click, and the
+  choice remembered per board.
+- Create an issue from where you are (`c`): in a board column it lands in the running sprint and
+  that column, in a backlog sprint section it lands in that sprint.
+- Pick several cards on the board (`space`, `v` for a whole column, `x` to let go) and assign them
+  (`@`), label them (`+`) or move them (`m`) in one go, with a confirmation and a report of what
+  did not change.
 - Completing a sprint asks where its open issues go: the backlog, the next sprint, or a new one.
   The sprints view shows the running sprint's dates, days left and progress.
 - **Bulk fix-version assignment**: `b` on the release list puts a version on, or takes it off, every
@@ -77,6 +84,7 @@ such change is listed under **Changed**.
 - A card move on the board updates that card in place and no longer cancels loading the rest of
   the board; a refused move puts the card back and says why.
 - WIP limits are drawn only where the board enforces them.
+- The backlog no longer crashes when a re-read brings back fewer issues with the cursor near the end.
 - The view you asked for at startup opens once the site confirms you may use it.
 - The palette no longer re-reads the whole cache on every open, and saving its history no longer
   stalls a frame.
