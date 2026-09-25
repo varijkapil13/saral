@@ -151,11 +151,46 @@ func (d *drafts) read(k draftKey) string {
 	return string(b)
 }
 
+// basePath is where the fingerprint of the body an edit's draft was written
+// against is kept, beside the draft.
+func (d *drafts) basePath(k draftKey) string {
+	path := d.path(k)
+	if path == "" {
+		return ""
+	}
+	return strings.TrimSuffix(path, ".md") + ".base"
+}
+
+// readBase is the fingerprint kept with a draft, "" when none was.
+func (d *drafts) readBase(k draftKey) string {
+	path := d.basePath(k)
+	if path == "" {
+		return ""
+	}
+	b, err := os.ReadFile(path) //nolint:gosec // the path is built from safeName segments under the drafts directory
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
 // write keeps the text, replacing whatever was there. The file is written
 // beside its target and renamed over it, so a crash half way through leaves
 // the previous draft rather than a truncated one.
-func (d *drafts) write(k draftKey, text string) error {
-	path := d.path(k)
+func (d *drafts) write(k draftKey, text, base string) error {
+	if err := d.writeFile(d.path(k), text); err != nil {
+		return err
+	}
+	if base == "" {
+		if path := d.basePath(k); path != "" {
+			_ = os.Remove(path)
+		}
+		return nil
+	}
+	return d.writeFile(d.basePath(k), base)
+}
+
+func (d *drafts) writeFile(path, text string) error {
 	if path == "" {
 		return nil
 	}
@@ -187,5 +222,6 @@ func (d *drafts) write(k draftKey, text string) error {
 func (d *drafts) discard(k draftKey) {
 	if path := d.path(k); path != "" {
 		_ = os.Remove(path)
+		_ = os.Remove(d.basePath(k))
 	}
 }

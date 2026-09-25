@@ -35,6 +35,13 @@ type draft struct {
 	Description     json.RawMessage `json:"description,omitempty"`
 	DescriptionText *string         `json:"descriptionText,omitempty"`
 
+	// Picks, Docs and Pending are custom rows' edits by field id: the values a
+	// choice or person row holds, a document row's reconciled ADF, and a
+	// document row's inline text not yet kept.
+	Picks   map[string][]draftOption   `json:"picks,omitempty"`
+	Docs    map[string]json.RawMessage `json:"docs,omitempty"`
+	Pending map[string]string          `json:"pending,omitempty"`
+
 	Base       app.EditBase `json:"base,omitzero"`
 	LabelsBase *[]string    `json:"labelsBase,omitempty"`
 }
@@ -46,8 +53,17 @@ type namedID struct {
 	Label string `json:"label"`
 }
 
+// draftOption is one value a custom choice row holds, a cascade's second level
+// under Children.
+type draftOption struct {
+	ID       string        `json:"id"`
+	Label    string        `json:"label"`
+	Children []draftOption `json:"children,omitempty"`
+}
+
 func (d draft) isEmpty() bool {
-	return len(d.Values) == 0 && len(d.Choices) == 0 && len(d.Description) == 0 && d.DescriptionText == nil
+	return len(d.Values) == 0 && len(d.Choices) == 0 && len(d.Description) == 0 && d.DescriptionText == nil &&
+		len(d.Picks) == 0 && len(d.Docs) == 0 && len(d.Pending) == 0
 }
 
 // draftStore keeps drafts under one directory, one file per issue per site.

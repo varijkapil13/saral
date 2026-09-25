@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/pkg/adf"
@@ -14,12 +15,9 @@ import (
 // place does and what shape its value takes in a patch.
 //
 // rkStatic covers every field this build has no editor for at all — a
-// platform fact, a related issue, a custom field nothing here has a kind for.
-// rkChoice, rkPerson and rkStatus are priority, assignee and status: this
-// build's whole editable set is {rkText, rkLabels, rkDate, rkDoc, rkChoice,
-// rkPerson, rkStatus}. A future option or user-typed custom field discovered
-// from FieldSchema rather than named by a fixed id is still out of scope — see
-// docs/FIELDS.md P8.
+// platform fact, a related issue, a custom field whose shape has no editor.
+// rkChoice, rkPerson and rkStatus are priority, assignee and status; rkField is
+// a custom field the issue's own screen lists, whose editor customKind picks.
 type rowKind uint8
 
 const (
@@ -31,6 +29,7 @@ const (
 	rkChoice
 	rkPerson
 	rkStatus
+	rkField
 )
 
 // editableKind reports whether this build can edit a row of this kind at all.
@@ -39,16 +38,17 @@ const (
 // fact and is why this is spelled out rather than folded into fetched alone.
 func (k rowKind) editableKind() bool {
 	switch k {
-	case rkText, rkLabels, rkDate, rkDoc, rkChoice, rkPerson, rkStatus:
+	case rkText, rkLabels, rkDate, rkDoc, rkChoice, rkPerson, rkStatus, rkField:
 		return true
 	default:
 		return false
 	}
 }
 
-// fieldRow is one field this build knows how to edit in place: the summary,
-// the description, the labels and the due date. Every other field the sidebar
-// draws is a static line with no row of its own — see cursorRow.
+// fieldRow is one field this build knows how to edit in place: the seven of
+// editableRowSpecs and the custom fields the issue's screen lists. Every other
+// field the sidebar draws is a static line with no row of its own — see
+// cursorRow.
 //
 // fetched is the load-bearing one. It carries jira.Issue.Requested's answer for
 // this field: false means the read never asked about it, so the value on
@@ -96,6 +96,15 @@ type fieldRow struct {
 
 	// pending is inline-editor text not yet kept with ctrl+s: not sent, but drafted.
 	pending *string
+
+	// custom, meta and loc belong to an rkField row: the editor its schema
+	// earned, the screen's own entry for it, and the zone a time is typed in.
+	// picked and originalPicked are a choice or person row's values.
+	custom         customKind
+	meta           jira.FieldMeta
+	loc            *time.Location
+	picked         []jira.Option
+	originalPicked []jira.Option
 }
 
 func newFieldRow(id, label string, kind rowKind, iss jira.Issue) fieldRow {
@@ -161,6 +170,8 @@ func (r *fieldRow) dirty() bool {
 		return r.value != r.original
 	case rkChoice, rkPerson:
 		return r.chosenID != r.originalID
+	case rkField:
+		return r.customDirty()
 	default:
 		// rkStatus never joins the dirty set: a status change is a workflow
 		// action applied through the transition endpoint the moment it is
@@ -189,7 +200,7 @@ func (r *fieldRow) documentNow() adf.Doc {
 
 // display is the value shown on the row.
 func (r *fieldRow) display() string {
-	if r.kind == rkDoc {
+	if r.isDoc() {
 		return describeDoc(r.documentNow())
 	}
 	return r.value
@@ -198,7 +209,7 @@ func (r *fieldRow) display() string {
 // before renders the value the site holds, for the "was …" a dirty row shows
 // beside its new value when there is room.
 func (r *fieldRow) before() string {
-	if r.kind == rkDoc {
+	if r.isDoc() {
 		return describeDoc(r.doc)
 	}
 	return r.original
@@ -248,6 +259,8 @@ func (r *fieldRow) into(out *jira.IssuePatch) error {
 	case rkPerson:
 		id := r.chosenID
 		out.Assignee = &id
+	case rkField:
+		return r.customInto(out)
 	}
 	return nil
 }
@@ -290,10 +303,8 @@ func splitLabels(s string) []string {
 	return out
 }
 
-// editableRowSpecs is the fields this build offers a row for, in the order
-// they are built. Every other field the sidebar draws — every platform fact
-// beyond these seven, every related issue, every custom field — is a cursorRow
-// with no fieldRow behind it: navigable, and read-only.
+// editableRowSpecs is the fixed fields this build offers a row for, in the
+// order they are built; customRows adds the screen's own custom fields.
 var editableRowSpecs = []struct {
 	id, label string
 	kind      rowKind

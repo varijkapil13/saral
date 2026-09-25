@@ -2,6 +2,7 @@ package issue
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strconv"
@@ -176,9 +177,13 @@ func (m *Model) edits() draft {
 	out.Base.Updated = m.baseAt
 	for i := range m.rows {
 		row := &m.rows[i]
-		if row.kind == rkDoc && row.pending != nil {
+		if row.pending != nil {
 			text := *row.pending
-			out.DescriptionText = &text
+			if row.kind == rkDoc {
+				out.DescriptionText = &text
+			} else {
+				out.Pending = setIn(out.Pending, row.id, text)
+			}
 		}
 		if !row.dirty() {
 			continue
@@ -210,14 +215,32 @@ func (m *Model) edits() draft {
 				out.Choices = map[string]namedID{}
 			}
 			out.Choices[row.id] = namedID{ID: row.chosenID, Label: row.value}
+		case rkField:
+			m.customEdit(&out, row)
 		default:
 			out.Values[row.id] = row.value
 		}
 	}
+	out = withHeld(out, m.held)
 	if len(out.Values) == 0 {
 		out.Values = nil
 	}
 	return out
+}
+
+func (m *Model) customEdit(out *draft, row *fieldRow) {
+	switch {
+	case row.custom == ckDoc && row.cleared:
+		out.Values[row.id] = ""
+	case row.custom == ckDoc:
+		if body, err := adf.Marshal(*row.edited); err == nil {
+			out.Docs = setIn(out.Docs, row.id, json.RawMessage(body))
+		}
+	case row.custom.chooses():
+		out.Picks = setIn(out.Picks, row.id, toDraftOptions(row.picked))
+	default:
+		out.Values[row.id] = row.value
+	}
 }
 
 func (m *Model) editBase() app.EditBase {
@@ -235,13 +258,14 @@ func (m *Model) applyEdits(d draft) {
 			row.base = was
 		}
 	}
+	m.held = withHeld(m.heldFor(d), m.held)
 	for id, value := range d.Values {
 		row := m.rowByID(id)
 		if row == nil || !row.fetched {
 			continue
 		}
 		rebase(row)
-		if row.kind == rkDoc {
+		if row.isDoc() {
 			row.cleared, row.edited = true, nil
 			continue
 		}
@@ -257,6 +281,31 @@ func (m *Model) applyEdits(d draft) {
 		}
 		rebase(row)
 		row.chosenID, row.value = choice.ID, choice.Label
+	}
+	for id, picks := range d.Picks {
+		row := m.rowByID(id)
+		if row == nil || !row.fetched || row.kind != rkField {
+			continue
+		}
+		rebase(row)
+		row.picked = fromDraftOptions(picks)
+		row.value = pickedText(row.picked)
+	}
+	for id, body := range d.Docs {
+		row := m.rowByID(id)
+		if row == nil || !row.fetched || !row.isDoc() {
+			continue
+		}
+		if doc, ok := unmarshalDoc(body); ok {
+			rebase(row)
+			row.edited, row.cleared = &doc, false
+		}
+	}
+	for id, text := range d.Pending {
+		if row := m.rowByID(id); row != nil && row.fetched && row.isDoc() {
+			held := text
+			row.pending = &held
+		}
 	}
 	if !d.Base.Updated.IsZero() {
 		m.baseAt = d.Base.Updated
@@ -294,12 +343,8 @@ func (m *Model) rebaseRows() {
 			problems[m.rows[i].id] = m.rows[i].problem
 		}
 	}
-	fresh := buildFieldRows(m.issue)
-	for i := range fresh {
-		_, listed := m.edit.Order(fresh[i].id)
-		fresh[i].listed = listed
-	}
-	m.rows = fresh
+	m.rows = m.buildRows()
+	m.held = draft{}
 	m.applyEdits(kept)
 	for i := range m.rows {
 		if m.rows[i].dirty() {
@@ -343,8 +388,23 @@ func (m *Model) flagMoved() int {
 }
 
 func (m *Model) anyPending() bool {
-	row := m.rowByID("description")
-	return row != nil && row.pending != nil
+	for i := range m.rows {
+		if m.rows[i].pending != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// buildRows is every row the issue in hand earns: the seven fixed ones and the
+// custom fields its screen lists, each marked listed or not.
+func (m *Model) buildRows() []fieldRow {
+	rows := append(buildFieldRows(m.issue), m.customRows(nil)...)
+	for i := range rows {
+		_, listed := m.edit.Order(rows[i].id)
+		rows[i].listed = listed
+	}
+	return rows
 }
 
 // relist refreshes which rows editmeta names, without touching the values a
@@ -356,6 +416,12 @@ func (m *Model) relist() {
 		_, listed := m.edit.Order(m.rows[i].id)
 		m.rows[i].listed = listed
 	}
+	added := m.customRows(func(id string) bool { return m.rowByID(id) != nil })
+	if len(added) == 0 {
+		return
+	}
+	m.rows = append(m.rows, added...)
+	m.placeHeld()
 }
 
 func (m *Model) keepDraft() tea.Cmd {
@@ -367,11 +433,8 @@ func (m *Model) keepDraft() tea.Cmd {
 
 // discardAll puts every row back to what the site holds and removes the draft.
 func (m *Model) discardAll() tea.Cmd {
-	m.rows = buildFieldRows(m.issue)
-	for i := range m.rows {
-		_, listed := m.edit.Order(m.rows[i].id)
-		m.rows[i].listed = listed
-	}
+	m.rows = m.buildRows()
+	m.held = draft{}
 	m.draftRestored, m.moved = false, 0
 	if err := m.drafts.discard(m.deps.Site, m.issue.Key); err != nil {
 		return kernel.Warn(err.Error())
@@ -423,6 +486,7 @@ func (m *Model) saveDirty() tea.Cmd {
 	}
 	patch, err := m.buildPatch()
 	if err != nil {
+		m.markFieldProblems(err)
 		m.saveFail, _ = jira.Reason(err)
 		return kernel.Fail(err)
 	}
@@ -457,10 +521,18 @@ func (m *Model) saveResult(msg savedMsg) tea.Cmd {
 // discardCmd drops the draft of a write that landed. Description text still
 // open in the inline editor was never part of that write, so it stays.
 func (m *Model) discardCmd() tea.Cmd {
-	left := draft{Key: m.issue.Key, Site: m.deps.Site}
-	if row := m.rowByID("description"); row != nil && row.pending != nil {
+	left := withHeld(draft{Key: m.issue.Key, Site: m.deps.Site}, m.held)
+	for i := range m.rows {
+		row := &m.rows[i]
+		if row.pending == nil {
+			continue
+		}
 		text := *row.pending
-		left.DescriptionText = &text
+		if row.kind == rkDoc {
+			left.DescriptionText = &text
+		} else {
+			left.Pending = setIn(left.Pending, row.id, text)
+		}
 	}
 	if err := m.drafts.save(left); err != nil {
 		return kernel.Warn(err.Error())
@@ -527,9 +599,7 @@ func (m *Model) undoRow() tea.Cmd {
 	if row == nil || (!row.dirty() && row.pending == nil) {
 		return kernel.Warn("nothing to revert here")
 	}
-	fresh := newFieldRow(row.id, row.label, row.kind, m.issue)
-	fresh.listed, fresh.problem = row.listed, ""
-	*row = fresh
+	*row = m.resetRow(row)
 	return m.keepDraft()
 }
 
@@ -591,6 +661,10 @@ func (m *Model) actOnCursor() tea.Cmd {
 		return m.openPersonPicker(row)
 	case rkStatus:
 		return m.openStatusPicker()
+	case rkField:
+		if cmd, opened := m.startCustomEdit(row); opened {
+			return cmd
+		}
 	}
 	m.stage = sideTyping
 	m.input.SetValue(row.value)
@@ -612,7 +686,7 @@ func (m *Model) typingKey(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		row.value = strings.TrimSpace(m.input.Value())
-		return m.keepDraft()
+		return join(m.keepDraft(), m.finishTyped(row))
 	case "esc":
 		m.stage = sideBrowse
 		m.input.Blur()
@@ -635,6 +709,8 @@ func (m *Model) currentEditRow() *fieldRow {
 }
 
 func (m *Model) startDocEdit(row *fieldRow) tea.Cmd {
+	m.docRow = row.id
+	m.mention.Close()
 	m.docArea = newDocArea()
 	m.docSeed = adf.Markdown(row.documentNow())
 	if row.pending != nil {
@@ -654,17 +730,25 @@ const pendingSaveAfter = 400 * time.Millisecond
 type pendingFlushMsg struct{ gen int }
 
 func (m *Model) docEditKey(msg tea.KeyPressMsg) tea.Cmd {
-	switch msg.String() {
-	case "ctrl+s":
+	var cmd tea.Cmd
+	switch {
+	case msg.String() == "ctrl+s":
+		m.mention.Close()
 		return m.commitDocEdit()
-	case "esc":
+	case m.mention.Key(msg, &m.docArea):
+	case msg.String() == "esc":
 		m.stage = sideBrowse
 		m.docArea.Blur()
 		m.holdPending()
-		return join(m.keepDraft(), kernel.Status("the description text is kept; e opens it again, x throws it away"))
+		what := "the description text"
+		if row := m.rowByID(m.docRow); row != nil && row.kind == rkField {
+			what = "the " + row.label + " text"
+		}
+		return join(m.keepDraft(), kernel.Status(what+" is kept; e opens it again, x throws it away"))
+	default:
+		m.docArea, cmd = m.docArea.Update(msg)
 	}
-	var cmd tea.Cmd
-	m.docArea, cmd = m.docArea.Update(msg)
+	cmd = join(cmd, kernel.Reply(m.mention.Track(&m.docArea, m.after), m.addr))
 	m.holdPending()
 	m.pendingGen++
 	gen := m.pendingGen
@@ -672,7 +756,7 @@ func (m *Model) docEditKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 func (m *Model) holdPending() {
-	row := m.rowByID("description")
+	row := m.rowByID(m.docRow)
 	if row == nil {
 		return
 	}
@@ -692,7 +776,7 @@ func (m *Model) pendingFlush(msg pendingFlushMsg) tea.Cmd {
 }
 
 func (m *Model) commitDocEdit() tea.Cmd {
-	row := m.rowByID("description")
+	row := m.rowByID(m.docRow)
 	if row == nil {
 		m.stage = sideBrowse
 		m.docArea.Blur()

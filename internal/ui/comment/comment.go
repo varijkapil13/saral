@@ -4,6 +4,8 @@ package comment
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -14,6 +16,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/mention"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -138,6 +141,14 @@ type Model struct {
 	// nothing does not rewrite the file.
 	draft       string
 	draftFailed bool
+	// draftBase fingerprints the comment body an edit's draft was written
+	// against; stale is a restored draft whose base the site has since moved,
+	// which sends only once the author has been told.
+	draftBase string
+	stale     bool
+
+	mention mention.State
+	after   func(time.Duration, func() tea.Msg) tea.Cmd
 
 	lines    []string
 	head     []string
@@ -205,6 +216,7 @@ func build(d kernel.Deps, key string) *Model {
 		issue:  strings.TrimSpace(key),
 		editor: newEditor(),
 		addr:   kernel.NewAddr(),
+		after:  tickAfter,
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
@@ -214,6 +226,17 @@ func build(d kernel.Deps, key string) *Model {
 	m.clicks = widget.NewClicks(d.Now)
 	m.browse, m.confirm = m.keys.tables()
 	return m
+}
+
+func tickAfter(d time.Duration, fn func() tea.Msg) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return fn() })
+}
+
+// bodyBase is the fingerprint an edit's draft is checked against.
+func bodyBase(d adf.Doc) string {
+	raw, _ := adf.Marshal(d)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:12])
 }
 
 func newEditor() textarea.Model {
@@ -315,6 +338,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		cmd = m.key(msg)
+
+	case mention.DueMsg, mention.FoundMsg:
+		cmd = m.mentionMsg(msg)
 
 	case tea.MouseClickMsg:
 		cmd = m.click(msg)
@@ -510,9 +536,19 @@ func (m *Model) openEditor(id string, c jira.Comment) tea.Cmd {
 	seeded := adf.MarkdownWith(c.Body, editorOptions)
 	restored := m.drafts.read(m.draftKey())
 	text := seeded
+	current := ""
+	if id != "" {
+		current = bodyBase(c.Body)
+	}
+	m.draftBase, m.stale = current, false
 	if restored != "" {
 		text = restored
+		if id != "" && restored != seeded {
+			m.draftBase = m.drafts.readBase(m.draftKey())
+			m.stale = m.draftBase != current
+		}
 	}
+	m.mention.Close()
 	m.draft = text
 	m.editor.SetValue(text)
 	m.editor.MoveToEnd()
@@ -520,6 +556,8 @@ func (m *Model) openEditor(id string, c jira.Comment) tea.Cmd {
 	_ = m.editor.Focus()
 
 	switch {
+	case m.stale:
+		return kernel.Warn(staleNote)
 	case restored != "" && restored != seeded:
 		return kernel.Warn("this is the draft you left, not what the site holds")
 	case id != "":
@@ -542,6 +580,7 @@ func (m *Model) editSelected() tea.Cmd {
 // point of a draft: esc is not a way to lose an afternoon's wording.
 func (m *Model) closeEditor() tea.Cmd {
 	cmd := m.keepDraft(m.editor.Value())
+	m.mention.Close()
 	m.mode, m.editing, m.sending = browsing, "", false
 	m.editor.Blur()
 	m.editor.Reset()
@@ -562,7 +601,7 @@ func (m *Model) keepDraft(text string) tea.Cmd {
 	if strings.TrimSpace(text) == "" {
 		m.drafts.discard(m.draftKey())
 	} else {
-		err = m.drafts.write(m.draftKey(), text)
+		err = m.drafts.write(m.draftKey(), text, m.draftBase)
 	}
 	if err == nil || m.draftFailed {
 		return nil
@@ -586,6 +625,12 @@ func (m *Model) send() tea.Cmd {
 	text := m.editor.Value()
 	if strings.TrimSpace(text) == "" {
 		return kernel.Warn("there is nothing here to send yet")
+	}
+	if m.stale {
+		m.stale = false
+		m.draftBase = bodyBase(m.original)
+		m.draft = ""
+		return join(m.keepDraft(text), kernel.Warn(staleSendNote))
 	}
 	var (
 		body adf.Doc
@@ -701,6 +746,7 @@ type layout struct {
 	head     int
 	thread   int
 	prompt   int
+	suggest  int
 	composer int
 	chrome   int
 	editor   int
@@ -736,6 +782,8 @@ func (m *Model) divide(head int) layout {
 			lay.composer = rest - 1
 		}
 		rest -= lay.composer
+		lay.suggest = min(m.mention.Height(), max(rest-1, 0))
+		rest -= lay.suggest
 		if lay.composer >= 2 {
 			lay.chrome = 1
 		}
@@ -1045,18 +1093,21 @@ func (m *Model) editorKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch {
 	case kernel.Matches(msg, m.keys.Send):
 		return m.send()
-	case kernel.Matches(msg, m.keys.Cancel):
+	case kernel.Matches(msg, m.keys.Cancel) && !m.mention.Open():
 		return m.closeEditor()
 	}
 	if m.sending {
 		return nil
 	}
 	var cmd tea.Cmd
-	m.editor, cmd = m.editor.Update(msg)
+	if !m.mention.Key(msg, &m.editor) {
+		m.editor, cmd = m.editor.Update(msg)
+	}
+	cmd = join(cmd, kernel.Reply(m.mention.Track(&m.editor, m.after), m.addr, m.holder))
 	// The composer grows with the draft, and the thread above it gives up the
 	// lines: the layout is re-derived on the keystroke rather than per frame.
 	m.relayout()
-	return tea.Batch(cmd, m.keepDraft(m.editor.Value()))
+	return join(cmd, m.keepDraft(m.editor.Value()))
 }
 
 // confirmKey answers the delete confirmation. Only the key the prompt names
@@ -1153,6 +1204,9 @@ func (m *Model) View() string {
 	lines = append(lines, m.headLines(lay.head)...)
 	lines = m.appendThread(lines, lay.thread)
 	lines = append(lines, m.prompt[:lay.prompt]...)
+	if lay.suggest > 0 {
+		lines = append(lines, m.mention.Lines(m.width, m.mentionLook())[:lay.suggest]...)
+	}
 	lines = m.appendComposer(lines, lay)
 	m.lines = lines
 	return strings.Join(lines, "\n")

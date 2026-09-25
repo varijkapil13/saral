@@ -144,15 +144,18 @@ here is which fields it will open and why.
 A sidebar row is one of seven kinds this build knows how to edit — text (`summary`), labels
 (`labels`), date (`duedate`), the document `description` is (opened in the description region rather
 than in the sidebar), single choice (`priority`), person (`assignee`) and status (`status`, through
-`Transitions`) — or it is `rkStatic`: read, drawn, on the cursor, and refused with one word. There is
-no eighth answer.
+`Transitions`), or a custom field the screen lists (`rkField`, below) — or it is `rkStatic`: read,
+drawn, on the cursor, and refused with one word.
 
-**A row's kind is fixed by its id, not discovered from `FieldSchema`.** The seven ids above are the
-whole of `editableRowSpecs`; nothing walks the custom field catalogue looking for a `date`- or
-`option`-typed field to add an eighth one, which is a deliberate narrowing of what `docs/UX.md`'s
-design describes ("date … and any date custom field editmeta marks", "any option custom field editmeta
-gives `AllowedValues` for") — rebasing a *discovered* row's edits across a reload without a fixed id to
-key it by is real work neither packet has spent, and stays called out as left for a later one.
+**The seven fixed rows are keyed by id; custom rows are discovered from editmeta.** Beyond
+`editableRowSpecs`, every custom field editmeta lists with a `set` operation gets an `rkField` row
+whose editor (`customKind`) comes from `FieldSchema` — `Type`, `Items` and the plugin key's suffix
+(`:textarea`, `:url`) — and, for a choice, from `AllowedValues`. The field id is the key a row's edit
+is rebased by across a reload, the same way the seven are. A custom row exists only once editmeta has
+answered, so a draft's edits for one are held (`Model.held`) until it does, and written back into
+every draft save in the meantime rather than dropped. A value whose shape does not match the editor —
+a document field sent as a string — leaves the field a static line rather than an editor that would
+overwrite it. Plugin bookkeeping fields never get a row.
 
 **Editable is fetched *and* listed *and* a kind this build knows**, all three, checked in that order
 by `fieldRow.editable()` — except `status`, which answers `true` unconditionally, because a transition
@@ -168,7 +171,7 @@ available to you right now" when there is nothing to offer rather than refusing 
   rebuilding the rows from scratch at that point would throw typing away. Priority's own inline list is
   read straight out of this: `editmeta.Fields[i].AllowedValues` for the id, so opening it costs no
   request of its own — there is no `jira.FilterVocabulary.Priorities` call anywhere in this pane.
-- **the kind** is the seven above. A row failing this one is not a row editmeta forgot; it is a row
+- **the kind** is the seven above or a custom field's `customKind`. A row failing this one is not a row editmeta forgot; it is a row
   this build has no editor for at all, and the two read the same to a person pressing enter on it —
   `read-only` — because a user cannot act on the difference and a false distinction there would be a
   door with a "these three exits will open once the roof is rebuilt" sign on it.
@@ -179,11 +182,11 @@ options can share a label and a display name is not what a patch sends; the draf
 same pair, under a `choices` map beside the plain `values` one, so a priority or an assignee edit
 survives a crash exactly as a text row's does.
 
-**The seven rows persist across every reload; nothing else does.** `fieldRow` is rebuilt whenever the
+**The editable rows persist across every reload; nothing else does.** `fieldRow` is rebuilt whenever the
 issue reloads (`rebaseRows`, run for the first read, `r`, `R`, and a conflict's own reread alike),
 capturing whatever the user had already typed and putting it back on top — the same shape P2.3's
 `rebase` had for the pushed editor, moved here rather than rewritten. Every other row the sidebar draws
-— every platform fact beyond these seven, every related issue, every custom field — is a `cursorRow`
+— every platform fact beyond these seven, every related issue, every custom field without an editor — is a `cursorRow`
 with no persistent state of its own: navigable, because docs/UX.md asks the cursor to reach every row
 and not only the editable ones, and re-derived on every render rather than kept, because there is
 nothing about it that could go stale between one frame and the next.

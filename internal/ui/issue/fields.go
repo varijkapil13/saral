@@ -408,7 +408,12 @@ func (r *rows) pickerLines() {
 			style = r.m.styles.selected
 		}
 		text := opt.label
-		if opt.id == p.currentID {
+		switch {
+		case p.multi && p.on[opt.id]:
+			text = "[x] " + text
+		case p.multi:
+			text = "[ ] " + text
+		case opt.id == p.currentID:
 			text += "  (current)"
 		}
 		labels[i] = prefix + style.Render(clip(text, max(r.width-4, 8), t.Glyphs.Ellipsis))
@@ -420,6 +425,9 @@ func (r *rows) pickerLines() {
 	}
 	if p.fail != "" {
 		r.note(p.fail)
+	}
+	if p.multi {
+		r.note("enter toggles, esc keeps what is ticked")
 	}
 }
 
@@ -512,16 +520,25 @@ func (r *rows) ref(ref *jira.IssueRef, keyW, statusW int) {
 // disappearing without a count cannot give.
 func (r *rows) custom() {
 	pinned, rest, hidden, empty := r.m.customFields(r.valueRoom())
+	draw := func(v named) {
+		if v.row {
+			if row := r.m.rowByID(v.id); row != nil {
+				r.editableField(row)
+				return
+			}
+		}
+		r.field(v.id, v.label, v.text)
+	}
 	if len(pinned) > 0 {
 		r.heading("Pinned")
 		for _, v := range pinned {
-			r.field(v.id, v.label, v.text)
+			draw(v)
 		}
 	}
 	if len(rest) > 0 {
 		r.heading("Fields")
 		for _, v := range rest {
-			r.field(v.id, v.label, v.text)
+			draw(v)
 		}
 	}
 	if empty > 0 {
@@ -540,6 +557,9 @@ func (r *rows) valueRoom() int { return max(r.width-labelWidth-2, 8) }
 type named struct {
 	id, label, text string
 	order           int
+	// row is set for a field this build can edit in place, which is drawn
+	// from its fieldRow rather than from text.
+	row bool
 }
 
 // noScreenOrder marks a field editmeta did not name, which is most of them on
@@ -590,7 +610,22 @@ func (m *Model) customFields(room int) (pinned, rest []named, hidden, empty int)
 		if at, on := m.edit.Order(id); on {
 			order = at
 		}
-		values = append(values, named{id: id, label: firstNonEmpty(ref.Name, id), text: text, order: order})
+		_, editable := m.customRow(id)
+		values = append(values, named{id: id, label: firstNonEmpty(ref.Name, id), text: text, order: order, row: editable})
+	}
+	for i := range m.rows {
+		row := &m.rows[i]
+		if row.kind != rkField || (!row.editable() && !row.dirty()) {
+			continue
+		}
+		if slices.ContainsFunc(values, func(v named) bool { return v.id == row.id }) {
+			continue
+		}
+		order := noScreenOrder
+		if at, on := m.edit.Order(row.id); on {
+			order = at
+		}
+		values = append(values, named{id: row.id, label: row.label, order: order, row: true})
 	}
 	slices.SortFunc(values, func(a, b named) int {
 		if a.order != b.order {
@@ -605,11 +640,26 @@ func (m *Model) customFields(room int) (pinned, rest []named, hidden, empty int)
 		case !known, ref.Schema.Custom == "", !m.read(id):
 			continue
 		}
-		if _, has := m.issue.Fields.ByID(id); !has {
+		if _, has := m.issue.Fields.ByID(id); has {
+			continue
+		}
+		if _, drawn := m.customRow(id); !drawn {
 			empty++
 		}
 	}
 	return pinned, rest, hidden, empty
+}
+
+// customRow is the custom field's own row when it is one that is drawn as a
+// row: editable now, or holding an edit.
+func (m *Model) customRow(id string) (*fieldRow, bool) {
+	for i := range m.rows {
+		row := &m.rows[i]
+		if row.id == id && row.kind == rkField {
+			return row, row.editable() || row.dirty()
+		}
+	}
+	return nil, false
 }
 
 // splitPinned pulls the pinned ids out of values, in the order pinnedIDs names
