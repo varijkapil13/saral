@@ -209,8 +209,8 @@ func TestBoard_ATransitionNeedingAScreenIsHandedToThePaneThatCanFillOne(t *testi
 	if len(dr.pushes) != 1 {
 		t.Fatalf("%d views were pushed, want the transition pane", len(dr.pushes))
 	}
-	if got := dr.pushes[0].ID; got != issue.MoveViewID {
-		t.Errorf("pushed %q, want %q", got, issue.MoveViewID)
+	if got := dr.pushes[0].ID; got != issue.ViewID {
+		t.Errorf("pushed %q, want the issue pane, opened on the move", got)
 	}
 	if dr.m.card != nil {
 		t.Error("the card is still in hand after the gesture was handed on")
@@ -223,14 +223,14 @@ func TestBoard_ACardPutBackAsksTheSiteForNothing(t *testing.T) {
 	t.Parallel()
 	fake := newFake(9)
 	dr := newDriver(t, testDeps(fake), 120, 20)
-	before := len(fake.Calls())
+	before := len(viewCalls(fake))
 
 	dr.key("m", "l", "ctrl+g")
 
 	if dr.m.card != nil {
 		t.Error("the card is still in hand")
 	}
-	if got := fake.Calls()[before:]; len(got) != 0 {
+	if got := viewCalls(fake)[before:]; len(got) != 0 {
 		t.Errorf("the site was asked for %v after a card was put back", got)
 	}
 	if got := dr.column(0); !slices.Contains(got, "PROJ-3") {
@@ -245,11 +245,11 @@ func TestBoard_DroppingACardWhereItCameFromAsksForNothing(t *testing.T) {
 	t.Parallel()
 	fake := newFake(9)
 	dr := newDriver(t, testDeps(fake), 120, 20)
-	before := len(fake.Calls())
+	before := len(viewCalls(fake))
 
 	dr.key("m", "enter")
 
-	if got := fake.Calls()[before:]; len(got) != 0 {
+	if got := viewCalls(fake)[before:]; len(got) != 0 {
 		t.Errorf("the site was asked for %v to move a card to where it already is", got)
 	}
 	mustContain(t, dr.lastStatus().Text, "already in")
@@ -481,6 +481,7 @@ func TestBoard_TogglingAQuickFilterNarrowsTheCardsAndTogglingItAgainRestoresThem
 		jiratest.WithMe(me),
 		jiratest.WithIssues(append(base, mine)),
 	)
+	scheduleAll(fake, "PROJ", append(keysOf(base), mine.Key))
 	dr := newDriver(t, testDeps(fake), 120, 20)
 
 	if len(dr.m.quickFilters) != 2 {
@@ -699,6 +700,7 @@ func TestBoard_TheDigitAfterFReachesTheBoardRatherThanRunningASavedQuery(t *test
 		jiratest.WithMe(me),
 		jiratest.WithIssues(append(base, mine)),
 	)
+	scheduleAll(fake, "PROJ", append(keysOf(base), mine.Key))
 	saved, err := app.NewSavedQueries(app.SavedQuery{Name: "everything", JQL: "project = PROJ", Slot: 1})
 	if err != nil {
 		t.Fatal(err)

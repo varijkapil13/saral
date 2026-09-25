@@ -2,16 +2,26 @@ package board
 
 import (
 	"context"
+	"errors"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 // pageSize is how many cards one request asks for. A column is virtualized, so
 // the number that matters is that it is several screens' worth.
 const pageSize = 100
+
+const sprintLimit = 50
+
+type site interface {
+	jira.BoardReader
+	jira.SprintReader
+	jira.SprintIssueReader
+}
 
 // step is which of the three reads the board is waiting on. A board is three
 // questions — which boards, what this one looks like, what is on it — and an
@@ -23,6 +33,7 @@ const (
 	stepIdle step = iota
 	stepBoards
 	stepConfig
+	stepSprints
 	stepIssues
 )
 
@@ -48,7 +59,12 @@ type issuesMsg struct {
 	// first is the page that answers the read; every page after it is appended
 	// to what the first drew, so a board longer than one page fills in behind
 	// an instant first paint rather than stopping at it.
-	first bool
+	first     bool
+	fields    []string
+	sprints   []jira.Sprint
+	sprint    jira.Sprint
+	noSprints bool
+	stored    error
 }
 
 // moreFailedMsg is a page past the first that did not arrive. The board keeps
@@ -71,10 +87,24 @@ type movesMsg struct {
 
 // movedMsg is a transition that landed.
 type movedMsg struct {
-	gen  int
-	key  string
-	to   string
-	from string
+	gen    int
+	key    string
+	to     string
+	from   string
+	status jira.Status
+}
+
+type moveFailedMsg struct {
+	gen int
+	key string
+	err error
+}
+
+type rereadMsg struct {
+	gen   int
+	key   string
+	issue jira.Issue
+	err   error
 }
 
 // failedMsg is any read or write that brought nothing back. The error travels
@@ -106,45 +136,114 @@ func config(ctx context.Context, reader jira.BoardReader, boardID int64, gen int
 	}
 }
 
+type cardsQuery struct {
+	plan         plan
+	quickFilters []string
+	probe        bool
+	sprints      []jira.Sprint
+	noSprints    bool
+	sprint       int64
+}
+
 // cards fills the board, through the read that applies the board's own saved
 // filter and column mapping at the site. Nothing here composes a query: the
 // filter behind a board is JQL only the site can run, and a board rebuilt out of
 // its statuses is a different board.
 //
+// A board that runs sprints shows its active sprint and nothing else, so its
+// cards are that sprint's; whether it runs them is the sprint read's answer and
+// never the board's type, which docs/API-NOTES.md says nothing may branch on.
+//
 // It asks for the narrow field set a card draws plus the board's own estimation
 // field, never for a wildcard, and it carries the board's sub-query and
 // whichever of the board's own quick filters are toggled on, which are the two
 // parts of a board the endpoint leaves to the caller.
-func cards(ctx context.Context, reader jira.BoardReader, search *app.Search, p plan, quickFilters []string, gen int) tea.Cmd {
+func cards(ctx context.Context, reader site, search *app.Search, q cardsQuery, gen int) tea.Cmd {
 	return func() tea.Msg {
-		wanted, err := search.Resolve(ctx, p.projection())
+		wanted, err := search.Resolve(ctx, q.plan.projection())
 		if err != nil {
 			return failedMsg{gen: gen, step: stepIssues, err: err}
 		}
-		page, err := reader.BoardIssues(ctx, p.boardID, jira.BoardQuery{
+		out := issuesMsg{
+			gen: gen, missing: wanted.Missing, first: true, fields: wanted.IDs,
+			sprints: q.sprints, noSprints: q.noSprints,
+		}
+		if q.probe {
+			out.sprints, out.noSprints, err = activeSprints(ctx, reader, q.plan.boardID)
+			if err != nil {
+				return failedMsg{gen: gen, step: stepSprints, err: err}
+			}
+		}
+		query := jira.BoardQuery{
 			Fields:       wanted.IDs,
-			SubQuery:     p.subQuery,
-			QuickFilters: quickFilters,
+			SubQuery:     q.plan.subQuery,
+			QuickFilters: q.quickFilters,
 			MaxResults:   pageSize,
-		})
+		}
+		var page jira.Page[jira.Issue]
+		switch {
+		case out.noSprints:
+			page, err = reader.BoardIssues(ctx, q.plan.boardID, query)
+		case len(out.sprints) == 0:
+			return out
+		default:
+			out.sprint = pickSprint(out.sprints, q.sprint)
+			page, err = reader.SprintIssues(ctx, q.plan.boardID, out.sprint.ID, query)
+		}
 		if err != nil {
 			return failedMsg{gen: gen, step: stepIssues, err: err}
 		}
-		return issuesMsg{gen: gen, page: page, missing: wanted.Missing, first: true}
+		out.page = page
+		return out
 	}
 }
 
-// moreCards follows a page's own cursor to the next one. The board endpoint
-// answers a hundred at a time and this view used to stop there, so a board
-// with more than a hundred cards showed the first hundred for ever, and the
-// plus on the count was the only sign of the rest.
-func moreCards(ctx context.Context, page jira.Page[jira.Issue], gen int) tea.Cmd {
+// activeSprints reads a 400 as a board that runs no sprints, the way
+// backlog.openSprints does.
+func activeSprints(ctx context.Context, r jira.SprintReader, boardID int64) (sprints []jira.Sprint, noSprints bool, err error) {
+	page, err := r.Sprints(ctx, boardID, jira.SprintActive)
+	var invalid *jira.ValidationError
+	if errors.As(err, &invalid) {
+		return nil, true, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	all, err := jira.Collect(ctx, page, sprintLimit)
+	if err != nil {
+		return nil, false, err
+	}
+	out := make([]jira.Sprint, 0, len(all))
+	for _, sp := range all {
+		if sp.State == jira.SprintActive {
+			out = append(out, sp)
+		}
+	}
+	return out, false, nil
+}
+
+func pickSprint(sprints []jira.Sprint, want int64) jira.Sprint {
+	for _, sp := range sprints {
+		if sp.ID == want {
+			return sp
+		}
+	}
+	return sprints[0]
+}
+
+// moreCards writes the page in hand before reading the next, so a walk's pages
+// reach the cache in order.
+func moreCards(ctx context.Context, page jira.Page[jira.Issue], gen int, put func() error) tea.Cmd {
 	return func() tea.Msg {
+		var stored error
+		if put != nil {
+			stored = put()
+		}
 		next, err := page.Next(ctx)
 		if err != nil {
 			return moreFailedMsg{gen: gen, err: err}
 		}
-		return issuesMsg{gen: gen, page: next}
+		return issuesMsg{gen: gen, page: next, stored: stored}
 	}
 }
 
@@ -154,7 +253,7 @@ func moves(ctx context.Context, mover jira.Mover, key string, column, gen int) t
 	return func() tea.Msg {
 		found, err := mover.Transitions(ctx, key)
 		if err != nil {
-			return failedMsg{gen: gen, step: stepIssues, err: err}
+			return moveFailedMsg{gen: gen, key: key, err: err}
 		}
 		return movesMsg{gen: gen, key: key, column: column, moves: found}
 	}
@@ -163,14 +262,36 @@ func moves(ctx context.Context, mover jira.Mover, key string, column, gen int) t
 // apply moves an issue by transition id. A status is not writable on Jira, so a
 // column change is a workflow move and never a field set — and the transition is
 // named by the id the site gave it, never by the status it lands on.
-func apply(ctx context.Context, mover jira.Mover, key, transitionID, to, from string, gen int) tea.Cmd {
+func apply(ctx context.Context, mover jira.Mover, key string, tr jira.Transition, to, from string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		if err := mover.Transition(ctx, key, transitionID, jira.IssuePatch{}); err != nil {
-			return failedMsg{gen: gen, step: stepIssues, err: err}
+		if err := mover.Transition(ctx, key, tr.ID, jira.IssuePatch{}); err != nil {
+			return moveFailedMsg{gen: gen, key: key, err: err}
 		}
-		return movedMsg{gen: gen, key: key, to: to, from: from}
+		return movedMsg{gen: gen, key: key, to: to, from: from, status: tr.To}
 	}
 }
+
+// reread does not search: the index trails a write.
+func reread(ctx context.Context, reader jira.IssueReader, key string, fields []string, gen int) tea.Cmd {
+	return func() tea.Msg {
+		iss, err := reader.IssueFields(ctx, key, fields)
+		return rereadMsg{gen: gen, key: key, issue: iss, err: err}
+	}
+}
+
+func stored(put func() error) tea.Cmd {
+	if put == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		if err := put(); err != nil {
+			return kernel.Warn(storeFailed + err.Error())()
+		}
+		return nil
+	}
+}
+
+const storeFailed = "this board could not be stored for next time: "
 
 // withCancel makes a command release its context however it ends. The cancel is
 // also held on the model so that the next request can cut this one short.

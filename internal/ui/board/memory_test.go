@@ -10,6 +10,9 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
+// termsMemoryKey is where the terms are kept for the project testDeps names.
+const termsMemoryKey = "terms:PROJ"
+
 // fakeMemory is a kernel.Memory in a map — the real one is a profile-scoped
 // file below internal/config, which a view may not import.
 type fakeMemory struct{ state map[string]string }
@@ -148,7 +151,7 @@ func TestTookQuickFilters_ReappliesARememberedSelectionAndReloadsCards(t *testin
 
 	fake := newFake(6)
 	dr := newDriver(t, withMemory(testDeps(fake), mem), 120, 20)
-	before := countCalls(fake, "BoardIssues")
+	before := countCalls(fake, "SprintIssues")
 
 	dr.send(quickFiltersMsg{gen: dr.m.gen, filters: qfs})
 
@@ -158,7 +161,7 @@ func TestTookQuickFilters_ReappliesARememberedSelectionAndReloadsCards(t *testin
 	if dr.m.qfOn[10] {
 		t.Error("a quick filter never remembered came on by itself")
 	}
-	if got := countCalls(fake, "BoardIssues") - before; got == 0 {
+	if got := countCalls(fake, "SprintIssues") - before; got == 0 {
 		t.Error("the cards were not re-read once a remembered quick filter came on")
 	}
 }

@@ -43,6 +43,9 @@ type plan struct {
 	// read because the endpoint that applies a board's filter does not apply
 	// this: without it the done column is every issue the project ever finished.
 	subQuery string
+	// constraint is what the columns' min and max count, and whether they are
+	// limits at all: a board keeps both numbers after turning its limits off.
+	constraint jira.ColumnConstraint
 }
 
 func newPlan(cfg jira.BoardConfig) plan {
@@ -54,6 +57,8 @@ func newPlan(cfg jira.BoardConfig) plan {
 		byStatus: make(map[string]int, len(cfg.Columns)*4),
 		ordering: cfg.Ordering(),
 		subQuery: strings.TrimSpace(cfg.SubQuery),
+
+		constraint: cfg.Constraint,
 	}
 	if cfg.Estimates() {
 		p.estimate, p.estimates = cfg.Estimation.Field, true

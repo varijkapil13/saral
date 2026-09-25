@@ -54,12 +54,6 @@ issue
 │ C    comment          │
 └───────────────────────┘
 
-issue.move
-┌───────────────────────┐
-│ What can be done here │
-│ enter  choose         │
-└───────────────────────┘
-
 list
 ┌──────────────────────────────────────────────┐
 │ What can be done here                        │

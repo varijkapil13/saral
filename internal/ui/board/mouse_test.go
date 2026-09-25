@@ -75,7 +75,7 @@ func TestBoardMouse_APressAndReleaseOnOneCardIsNotAMove(t *testing.T) {
 	d := testDeps(fake)
 	dr := newDriver(t, d, 120, 20)
 	at := zoneOf(t, d, dr, cardZone("PROJ-6"))
-	before := len(fake.Calls())
+	before := len(viewCalls(fake))
 
 	dr.send(tea.MouseClickMsg{X: at.StartX, Y: at.StartY, Button: tea.MouseLeft})
 	dr.send(tea.MouseReleaseMsg{X: at.StartX, Y: at.StartY, Button: tea.MouseLeft})
@@ -83,7 +83,7 @@ func TestBoardMouse_APressAndReleaseOnOneCardIsNotAMove(t *testing.T) {
 	if dr.m.card != nil {
 		t.Error("a click took a card off the board")
 	}
-	if got := fake.Calls()[before:]; len(got) != 0 {
+	if got := viewCalls(fake)[before:]; len(got) != 0 {
 		t.Errorf("a click asked the site for %v", got)
 	}
 	if got := dr.column(0); !slices.Contains(got, "PROJ-6") {

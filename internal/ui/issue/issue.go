@@ -164,6 +164,8 @@ type Model struct {
 	meCancel          context.CancelFunc
 	pendingAssignSelf bool
 
+	openMove string
+
 	search *app.Search
 	cache  app.Cache
 	gen    int
@@ -296,7 +298,13 @@ func (m *Model) keepIssue(iss jira.Issue) tea.Cmd {
 }
 
 // Init reads the issue, and lets the thread read its own.
-func (m *Model) Init() tea.Cmd { return tea.Batch(m.fetch(), m.thread.Init()) }
+func (m *Model) Init() tea.Cmd {
+	var move tea.Cmd
+	if m.openMove != "" {
+		move = m.openStatusPicker()
+	}
+	return tea.Batch(m.fetch(), m.thread.Init(), move)
+}
 
 // Update handles one message.
 func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {

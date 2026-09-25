@@ -440,5 +440,4 @@ var threadSteps = func() [stepCount]tea.KeyPressMsg {
 // The detail pane's own LiveKeys, further down this file, is what actually
 // answers for the keys that work: which region has the keyboard and the
 // sidebar's own editing state both move it, and a single registered keySet
-// cannot express either. The transition picker it opens is a separate view and
-// answers for itself in edit_keys.go.
+// cannot express either.

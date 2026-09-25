@@ -63,9 +63,10 @@ var keyOwners = map[string]string{
 	"backlog.filter-by": backlog.ViewID,
 	"backlog.sort":      backlog.ViewID,
 
-	"board.move-issue": board.ViewID,
-	"board.next":       board.ViewID,
-	"board.open":       board.ViewID,
+	"board.move-issue":  board.ViewID,
+	"board.next":        board.ViewID,
+	"board.next-sprint": board.ViewID,
+	"board.open":        board.ViewID,
 
 	"plans.open":    plan.ViewID,
 	"plans.sources": plan.ViewID,

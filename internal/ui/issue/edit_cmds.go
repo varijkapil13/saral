@@ -9,7 +9,7 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// editFailedMsg is anything the transition picker or the $EDITOR handoff asked
+// editFailedMsg is anything the status picker or the $EDITOR handoff asked
 // for and did not get. The error travels whole so the wording the user sees is
 // the error's own.
 type editFailedMsg struct {

@@ -354,6 +354,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.marksBuilt, m.noteCountSet = false, false
 		m.summary, m.heading, m.ruler, m.detail = "", "", "", ""
 
+	case kernel.SetMouseMsg:
+		m.termsGen++
+		m.memo.Reset()
+		m.marksBuilt = false
+		m.summary, m.heading, m.ruler, m.detail = "", "", "", ""
+
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.memo.Reset()
@@ -524,7 +530,11 @@ func (m *Model) reproject(project string) tea.Cmd {
 	if project == m.deps.Project {
 		return nil
 	}
+	was := m.deps.Project
 	m.deps.Project = project
+	var said tea.Cmd
+	m.terms, said = filterbar.Reproject(m.deps, ViewID, was, m.terms)
+	m.termsGen++
 	m.jql, m.title = defaultQuery(project)
 	m.issues, m.rows, m.loaded, m.badge = nil, m.rows[:0], false, ""
 	m.res, m.fields = app.Resolution{}, app.DateFields{}
@@ -535,7 +545,7 @@ func (m *Model) reproject(project string) tea.Cmd {
 	m.buildNotes()
 	m.reaxis(true)
 	m.fromCache()
-	return m.load()
+	return tea.Batch(said, m.load())
 }
 
 func (m *Model) landed(msg loadedMsg) tea.Cmd {

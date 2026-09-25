@@ -48,6 +48,7 @@ var (
 	_ kernel.KeyCapturer = (*Model)(nil)
 	_ kernel.Addressed   = (*Model)(nil)
 	_ kernel.Blocker     = (*Model)(nil)
+	_ kernel.BackClaimer = (*Model)(nil)
 )
 
 // site is the narrow slice of the port one read of the backlog needs.
@@ -134,6 +135,9 @@ type Model struct {
 	boards  []jira.Board
 	boardAt int
 	config  jira.BoardConfig
+	// done is the statuses of the config's last mapped column, nil when it maps
+	// none, in which case the status category decides.
+	done    map[string]bool
 	sprints []jira.Sprint
 	// noSprints is the site's own sentence for a board that has none — a Kanban
 	// board — and "" otherwise. It is what the header says in place of a count,
@@ -172,8 +176,15 @@ type Model struct {
 	// pendingSort is the order chosen while the rest of the backlog was still
 	// being read, and reading marks that walk. A sort has to have every issue
 	// before it means anything — see applySortChoice.
-	pendingSort sortChoice
-	reading     bool
+	pendingSort   sortChoice
+	reading       bool
+	sortAfterRead bool
+	pickAfterRead bool
+	pendingGroup  int64
+
+	writes *writer
+	// pendingPut rides on the next page's read, so pages are written in order.
+	pendingPut func() error
 
 	cursor    int
 	top       int
@@ -225,6 +236,7 @@ func New(d kernel.Deps) kernel.View {
 		cache:  d.Cache,
 		picked: make(map[string]bool),
 		byKey:  make(map[string]int),
+		writes: &writer{},
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
@@ -290,10 +302,12 @@ func (m *Model) fromCache() {
 // switch know only the one board a snapshot names, while nextBoard already
 // holds the site's own list and must not collapse it down to one.
 func (m *Model) applyBacklogSnapshot(snap app.BacklogSnapshot) {
-	m.config = snap.Config
+	m.config, m.done = snap.Config, doneStatuses(snap.Config)
 	m.sprints, m.field, m.noSprints = snap.Sprints, snap.Field, snap.NoSprints
 	m.issues, m.page, m.missing = snap.Issues, jira.Page[jira.Issue]{}, nil
-	m.loaded, m.stale, m.absent = true, snap.Stale, ""
+	// A snapshot stored part way through a walk carries no cursor to page on
+	// from, so the rest of the backlog is only reached by reading it again.
+	m.loaded, m.stale, m.absent = true, snap.Stale || snap.More, ""
 	m.reindex()
 	m.relayout()
 	m.regroup()
@@ -306,6 +320,13 @@ func (m *Model) applyBacklogSnapshot(snap app.BacklogSnapshot) {
 func (m *Model) WantsRawKeys() bool {
 	return m.mode == choosing || m.mode == confirming || m.mode == sorting
 }
+
+// backKeys are the kernel's own back strokes, which reach the backlog only while
+// WantsBack claims them.
+var backKeys = kernel.DefaultGlobalKeys().Back.Keys()
+
+// WantsBack claims esc while terms narrow the backlog, so esc clears them.
+func (m *Model) WantsBack() bool { return len(m.terms) > 0 && m.mode == browsing }
 
 // BlocksClose refuses to throw away a move that is part way through. The chunks
 // already accepted have moved and the rest have not, and a program that exits
@@ -345,6 +366,11 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		// Losing the keyboard is not being closed: the palette opening over a
 		// board still being read must not cancel the read.
 		m.focused = msg.Focused
+
+	case kernel.SetMouseMsg:
+		m.termsGen++
+		m.memo.Reset()
+		m.head = ""
 
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
@@ -575,15 +601,19 @@ func (m *Model) reproject(project string) tea.Cmd {
 		abandoned = "the move into " + m.mv.name + " was left after " + strconv.Itoa(m.mv.moved) +
 			" of " + count(len(m.mv.keys), "issue") + ": this session moved to another project"
 	}
+	was := m.deps.Project
 	m.deps.Project = project
+	var said tea.Cmd
+	m.terms, said = filterbar.Reproject(m.deps, ViewID, was, m.terms)
+	m.termsGen++
 	m.boardAt = 0
 	m.forget()
 	m.said = abandoned
 	m.fromCache()
 	if m.loaded && !m.stale {
-		return nil
+		return said
 	}
-	return m.load()
+	return tea.Batch(said, m.load())
 }
 
 // forget drops everything that belonged to the board on screen. A project or a
@@ -595,7 +625,7 @@ func (m *Model) forget() {
 	m.byKey = make(map[string]int)
 	m.picked = make(map[string]bool)
 	m.page, m.missing = jira.Page[jira.Issue]{}, nil
-	m.config, m.field = jira.BoardConfig{}, jira.FieldRef{}
+	m.config, m.field, m.done = jira.BoardConfig{}, jira.FieldRef{}, nil
 	m.cursor, m.top = 0, 0
 	m.loaded, m.stale, m.failure, m.absent, m.said = false, false, nil, "", ""
 	m.mode = browsing
@@ -632,6 +662,7 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 	}
 	m.loading, m.loaded, m.stale, m.boardIDHint = false, true, false, 0
 	m.boards, m.boardAt, m.config = msg.boards, msg.boardAt, msg.config
+	m.done = doneStatuses(msg.config)
 	m.sprints, m.field, m.noSprints = msg.sprints, msg.field, msg.noSprints
 	m.issues, m.page, m.missing = msg.page.Items, msg.page, msg.missing
 	m.head = ""
@@ -647,7 +678,7 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 	m.reindex()
 	m.relayout()
 	m.regroup()
-	return tea.Batch(m.rememberLastBacklogBoard(), m.storeBacklog(), m.pageAheadIfNeeded())
+	return tea.Batch(m.rememberLastBacklogBoard(), m.storeThen(m.pagePut(msg.page.Items, true), m.pageAheadIfNeeded))
 }
 
 // rememberLastBacklogBoard writes which board this project's backlog is
@@ -664,23 +695,55 @@ func (m *Model) rememberLastBacklogBoard() tea.Cmd {
 	return nil
 }
 
-// storeBacklog writes this backlog's shape and issues, so the next time it is
-// opened draws from disk before anything is asked of the site. It runs after
-// every page rather than only once the walk over a backlog's issues is done,
-// so a walk cut short still leaves something to draw from.
-func (m *Model) storeBacklog() tea.Cmd {
-	held, ok := m.backlogCache()
-	if !ok || len(m.boards) == 0 {
+// pagePut is run off the update loop. A cache that keeps no pages is written
+// whole, on the first page and at the end of the walk only.
+func (m *Model) pagePut(items []jira.Issue, first bool) func() error {
+	if len(m.boards) == 0 {
 		return nil
 	}
-	err := held.PutBacklog(m.config.BoardID, app.BacklogSnapshot{
-		Config: m.config, Sprints: m.sprints, Field: m.field, NoSprints: m.noSprints,
-		Issues: m.issues, More: m.page.HasMore(),
-	})
-	if err != nil {
-		return kernel.Warn("this backlog could not be stored for next time: " + err.Error())
+	if paged, ok := m.cache.(app.BacklogPageCache); ok && paged != nil {
+		snap := m.snapshot(slices.Clone(items))
+		boardID := m.config.BoardID
+		return m.writes.put(m.gen, first, func() error { return paged.PutBacklogPage(boardID, snap, first) })
 	}
-	return nil
+	if !first && m.page.HasMore() {
+		return nil
+	}
+	return m.wholePut()
+}
+
+func (m *Model) movedPut(keys []string) func() error {
+	if len(m.boards) == 0 {
+		return nil
+	}
+	paged, ok := m.cache.(app.BacklogPageCache)
+	if !ok || paged == nil {
+		return m.wholePut()
+	}
+	moved := make([]jira.Issue, 0, len(keys))
+	for _, key := range keys {
+		if at, held := m.byKey[key]; held {
+			moved = append(moved, m.issues[at])
+		}
+	}
+	snap, boardID := m.snapshot(moved), m.config.BoardID
+	return m.writes.put(m.gen, false, func() error { return paged.PutBacklogPage(boardID, snap, false) })
+}
+
+func (m *Model) wholePut() func() error {
+	held, ok := m.backlogCache()
+	if !ok {
+		return nil
+	}
+	snap, boardID := m.snapshot(slices.Clone(m.issues)), m.config.BoardID
+	return m.writes.put(m.gen, true, func() error { return held.PutBacklog(boardID, snap) })
+}
+
+func (m *Model) snapshot(issues []jira.Issue) app.BacklogSnapshot {
+	return app.BacklogSnapshot{
+		Config: m.config, Sprints: slices.Clone(m.sprints), Field: m.field, NoSprints: m.noSprints,
+		Issues: issues, More: m.page.HasMore(),
+	}
 }
 
 func (m *Model) boardsReason() string {
@@ -700,11 +763,15 @@ func (m *Model) tookPage(msg pagedMsg) tea.Cmd {
 	m.reindex()
 	m.relayout()
 	m.regroup()
-	stored := m.storeBacklog()
-	if m.reading {
-		return tea.Batch(stored, m.readRest())
+	var said tea.Cmd
+	if msg.stored != nil {
+		said = kernel.Warn("this backlog could not be stored for next time: " + msg.stored.Error())
 	}
-	return tea.Batch(stored, m.pageAheadIfNeeded())
+	next := m.pageAheadIfNeeded
+	if m.reading {
+		next = m.readRest
+	}
+	return tea.Batch(said, m.storeThen(m.pagePut(msg.page.Items, false), next))
 }
 
 // readRest walks what is left of the backlog for a sort that has been chosen
@@ -717,10 +784,19 @@ func (m *Model) readRest() tea.Cmd {
 			return nil
 		}
 		ctx, gen := m.begin()
-		return m.reply(nextPage(ctx, m.page, gen))
+		return m.reply(nextPage(ctx, m.page, gen, m.takePut()))
 	}
 	m.reading = false
-	return m.setSort(m.pendingSort)
+	var cmd tea.Cmd
+	if m.sortAfterRead {
+		m.sortAfterRead = false
+		cmd = m.setSort(m.pendingSort)
+	}
+	if m.pickAfterRead {
+		m.pickAfterRead = false
+		m.pickSection(m.pendingGroup)
+	}
+	return cmd
 }
 
 // failed keeps a backlog that is already drawn on screen, badged stale rather
@@ -734,6 +810,7 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 		return nil
 	}
 	m.loading = false
+	m.reading, m.sortAfterRead, m.pickAfterRead = false, false, false
 	if len(m.rows) > 0 {
 		m.stale = true
 	} else {
@@ -753,7 +830,22 @@ func (m *Model) pageAheadIfNeeded() tea.Cmd {
 		return nil
 	}
 	ctx, gen := m.begin()
-	return m.reply(nextPage(ctx, m.page, gen))
+	return m.reply(nextPage(ctx, m.page, gen, m.takePut()))
+}
+
+func (m *Model) storeThen(put func() error, next func() tea.Cmd) tea.Cmd {
+	m.pendingPut = put
+	cmd := next()
+	if put := m.takePut(); put != nil {
+		return tea.Batch(stored(put), cmd)
+	}
+	return cmd
+}
+
+func (m *Model) takePut() func() error {
+	put := m.pendingPut
+	m.pendingPut = nil
+	return put
 }
 
 // --- grouping ---------------------------------------------------------------
@@ -769,11 +861,11 @@ func (m *Model) reindex() {
 // backlog for everything else.
 //
 // An issue is placed by the sprint ids on its own sprint value, and the section
-// it lands in is the first of them this board has open. Issues whose status is
-// in the done category are left out altogether: finished work is neither in a
-// sprint you can plan nor waiting to be scheduled. The category is the one on
-// the status, which the port resolved from statusCategory rather than from a
-// name anybody can translate.
+// it lands in is the first of them this board has open. Issues the board counts
+// as done are left out altogether: finished work is neither in a sprint you can
+// plan nor waiting to be scheduled. Done is the board's last column with a
+// status mapped to it, never the status category, which a board whose last
+// column is not the done-category one disagrees with (docs/API-NOTES.md).
 func (m *Model) regroup() {
 	under := m.under()
 	m.groups = m.groups[:0]
@@ -788,7 +880,7 @@ func (m *Model) regroup() {
 	m.groups = append(m.groups, group{name: backlogName})
 	last := len(m.groups) - 1
 	for i := range m.issues {
-		if m.issues[i].Status.Category == jira.CategoryDone {
+		if m.finished(&m.issues[i]) {
 			continue
 		}
 		if !matchesTerms(&m.issues[i], m.terms) {
@@ -807,6 +899,28 @@ func (m *Model) regroup() {
 	m.orderIssues()
 	m.rebuildRows()
 	m.restore(under)
+}
+
+func (m *Model) finished(iss *jira.Issue) bool {
+	if m.done == nil {
+		return iss.Status.Category == jira.CategoryDone
+	}
+	return m.done[iss.Status.ID]
+}
+
+func doneStatuses(cfg jira.BoardConfig) map[string]bool {
+	for c := len(cfg.Columns) - 1; c >= 0; c-- {
+		ids := cfg.Columns[c].StatusIDs
+		if len(ids) == 0 {
+			continue
+		}
+		out := make(map[string]bool, len(ids))
+		for _, id := range ids {
+			out[strings.TrimSpace(id)] = true
+		}
+		return out
+	}
+	return nil
 }
 
 // rank puts each section in the board's own order, where the board has one.
@@ -925,11 +1039,30 @@ func (m *Model) pick() {
 	}
 }
 
-func (m *Model) pickGroup() {
+// pickGroup reads the rest of the backlog first: a section is only whole once
+// the walk is.
+func (m *Model) pickGroup() tea.Cmd {
 	if m.cursor < 0 || m.cursor >= len(m.rows) {
+		return nil
+	}
+	g := m.groups[m.rows[m.cursor].group]
+	if !m.page.HasMore() {
+		m.pickSection(g.id)
+		return nil
+	}
+	m.pendingGroup, m.pickAfterRead, m.reading = g.id, true, true
+	return tea.Batch(
+		kernel.Status("reading the rest of the backlog first, so every issue in "+g.name+" is picked"),
+		m.readRest())
+}
+
+// pickSection names the section by sprint id, not index: a regroup moves it.
+func (m *Model) pickSection(id int64) {
+	at := slices.IndexFunc(m.groups, func(g group) bool { return g.id == id })
+	if at < 0 {
 		return
 	}
-	g := &m.groups[m.rows[m.cursor].group]
+	g := &m.groups[at]
 	all := len(g.issues) > 0
 	for _, at := range g.issues {
 		if !m.picked[m.issues[at].Key] {
@@ -1072,11 +1205,13 @@ func (m *Model) chunkMoved(msg movedMsg) tea.Cmd {
 	if !m.current(msg.gen) || m.mv == nil || msg.at != m.mv.done {
 		return nil
 	}
-	m.applyMoved(m.mv.chunk(m.mv.done))
+	chunk := m.mv.chunk(m.mv.done)
+	m.applyMoved(chunk)
+	kept := stored(m.movedPut(chunk))
 	m.mv.done++
 	m.mv.moved += msg.moved
 	if m.mv.done < m.mv.chunks {
-		return m.nextChunk()
+		return tea.Batch(kept, m.nextChunk())
 	}
 	said := "moved " + count(m.mv.moved, "issue") + " into " + m.mv.name
 	m.said, m.mode = said, browsing
@@ -1084,7 +1219,7 @@ func (m *Model) chunkMoved(msg movedMsg) tea.Cmd {
 		delete(m.picked, key)
 	}
 	m.endMove()
-	return kernel.Status(said)
+	return tea.Batch(kept, kernel.Status(said))
 }
 
 // moveFailed reports the half that moved and the half that did not, in the
@@ -1193,6 +1328,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case browsing:
 	}
+	if m.WantsBack() && slices.Contains(backKeys, stroke) {
+		return m.clearFilter()
+	}
 	if m.pendingGo {
 		m.pendingGo = false
 		if stroke == "g" {
@@ -1223,8 +1361,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.pick()
 		return m.moveTo(m.cursor + 1)
 	case actPickGroup:
-		m.pickGroup()
-		return nil
+		return m.pickGroup()
 	case actClear:
 		m.clearPicks()
 		return nil

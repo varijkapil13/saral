@@ -430,7 +430,8 @@ terms in force — one key rather than two to learn — and the palette carries 
 rows*. The footer offers `ctrl+g` whenever there is a term or a filter to clear. `esc` does the same:
 in a root view it is the kernel's, and clears only the status line, unless the view implements
 `kernel.BackClaimer` and its `WantsBack()` says yes — which the list does exactly while something is
-narrowing its rows.
+narrowing its rows, and the board and the backlog while a term is in force (not while a card is in
+hand or a move is being chosen).
 
 **The divider is a column of blank, and it is deliberate that it stays blank.** The boundary between
 the issue pane's description and its sidebar is one column wide and carries no rule, because the
@@ -635,8 +636,7 @@ row that opens onto nothing.
 ## Assigning, and changing status
 
 Priority, the assignee and status are rows too, and each opens an inline list directly beneath itself
-— the same list `moveModel` used to push as its own screen for a transition, now drawn in place for
-all three — rather than a text field, because none of the three is free text. The list takes the
+rather than a text field, because none of the three is free text. The list takes the
 keyboard while it is open (`esc` cancels it, `enter` chooses the row under its own cursor, a click
 does the same) and filters as it is typed into.
 
@@ -651,17 +651,15 @@ list at all for the latter two. A token without *Browse users and groups* is tol
 capability's own words rather than shown an empty list.
 
 **Status is a workflow action, not a value waiting on `s`.** Choosing a transition off its list asks
-for any field the transition's own screen requires, exactly as `moveModel`'s pushed screen used to, and
-then a named confirmation — *"Move PROJ-12 to In Progress and save 2 changes?"* — naming the move and
+for any field the transition's own screen requires, and then a named confirmation — *"Move PROJ-12 to In Progress and save 2 changes?"* — naming the move and
 however many other rows are dirty at the same time, because `Transition` takes fields exactly as
 `UpdateIssue` does and a status change carries the rest of the dirty set in the one request rather than
-two. `t` (and the palette's *Change this issue's status*) open it from wherever the cursor already is,
-the existing binding `moveModel` used.
+two. `t` (and the palette's *Change this issue's status*) open it from wherever the cursor already is.
 
-**`moveModel` itself is not gone.** The board still pushes it directly for a card whose drag needs a
-screen the board has no sidebar to draw inline in — see `internal/ui/board`'s own use of
-`issue.NewMove` — so the type, its keys and its own tests are untouched; only the issue pane's route to
-the same gesture now draws it in place instead of pushing it.
+**A card dropped on the board whose move needs a screen** opens the issue pane on that very move:
+the board pushes `issue.New(…, issue.WithTransition(id))`, which opens this same status list and, once
+the issue's moves have been read, chooses that transition, so its screen is the first thing on screen.
+A move the site no longer offers by then says so in the list rather than choosing another.
 
 ## Rendering rules for modern terminals
 

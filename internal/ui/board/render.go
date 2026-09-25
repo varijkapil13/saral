@@ -498,16 +498,21 @@ func (m *Model) caption(col int) string {
 		style = m.styles.aimed
 	}
 	numbers := m.styles.muted
-	if breached(c, n) {
+	if m.overLimit(col) {
 		numbers = m.styles.warning
 	}
 	return padCells(style.Render(name)+" "+numbers.Render(count), m.lay.cell,
 		m.deps.Theme.Glyphs.Ellipsis)
 }
 
-// breached reports that a column holds fewer or more cards than the board says
-// it should.
-func breached(c planColumn, n int) bool {
+// overLimit reports that a column holds fewer or more cards than the board
+// says it should, counted the way the board counts them. A board whose limits
+// are off keeps the numbers and enforces neither.
+func (m *Model) overLimit(col int) bool {
+	if !m.plan.constraint.Enforced() || col < 0 || col >= len(m.wip) {
+		return false
+	}
+	c, n := m.plan.columns[col], m.wip[col]
 	return (c.min != nil && n < *c.min) || (c.max != nil && n > *c.max)
 }
 
@@ -557,6 +562,7 @@ type summaryKey struct {
 	estimates   bool
 	checked     int64
 	filters     string
+	sprint      string
 }
 
 func (m *Model) summaryKey() summaryKey {
@@ -564,9 +570,9 @@ func (m *Model) summaryKey() summaryKey {
 		board: m.boardName(), width: m.width, gen: m.styles.gen,
 		columns: len(m.plan.columns), cards: len(m.issues), unmapped: m.unmapped,
 		filteredOut: m.filteredOut, shown: m.lay.cols, boards: len(m.all), more: m.more,
-		loading: m.loading, loaded: m.loaded, failed: m.failure != nil, stale: m.stale,
+		loading: m.loading, loaded: m.loaded, failed: m.failure != nil, stale: m.stale || m.aged(),
 		ordering: m.plan.ordering, estimates: m.plan.estimates,
-		checked: m.checked.UnixNano(), filters: m.quickFilterLine(),
+		checked: m.checked.UnixNano(), filters: m.quickFilterLine(), sprint: m.sprintLabel(),
 	}
 }
 
@@ -607,6 +613,9 @@ func (m *Model) boardTitle() string {
 		name = "Board"
 	} else if len(m.all) > 1 {
 		name += " (" + strconv.Itoa(m.at+1) + " of " + strconv.Itoa(len(m.all)) + ")"
+	}
+	if sprint := m.sprintLabel(); sprint != "" {
+		name += " · " + sprint
 	}
 	if line := m.quickFilterLine(); line != "" {
 		name += " · " + line
@@ -668,7 +677,7 @@ func (m *Model) counts() string {
 		parts = parts[:len(parts)-1]
 	}
 	line := strings.Join(parts, sep)
-	if m.stale {
+	if m.stale || m.aged() {
 		line += " " + m.deps.Theme.StaleBadge.Render(staleLabel)
 	}
 	return line
@@ -749,6 +758,9 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 	case !m.ready || len(m.plan.columns) == 0:
 		lines = append(lines, m.say("  "+m.boardName()+" has no columns mapped."),
 			m.say("  A board with no status in any column has nothing to draw."))
+	case m.noActiveSprint():
+		lines = append(lines, m.say("  "+m.boardName()+" has no sprint running."),
+			m.say("  Its issues wait in the backlog until one starts."))
 	case m.filteredOut > 0:
 		lines = append(lines, m.say("  Every card this board maps a column to is hidden by the filter in force."))
 	default:
@@ -764,10 +776,11 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 // shared "Loading…" would make a wrong project key, a board that cannot be read
 // and a refused search into one screen that looks like a hang.
 var asking = [...]string{
-	stepIdle:   "Reading this board",
-	stepBoards: "Asking which boards draw on this project",
-	stepConfig: "Reading this board's columns",
-	stepIssues: "Searching for the issues on this board",
+	stepIdle:    "Reading this board",
+	stepBoards:  "Asking which boards draw on this project",
+	stepConfig:  "Reading this board's columns",
+	stepSprints: "Asking which sprint this board is running",
+	stepIssues:  "Searching for the issues on this board",
 }
 
 // appendFailure is what the pane says instead of a grid: the reason in the
@@ -786,10 +799,11 @@ func (m *Model) appendFailure(lines []string, h int) []string {
 }
 
 var failedAt = [...]string{
-	stepIdle:   "This board could not be read.",
-	stepBoards: "The boards on this project could not be read.",
-	stepConfig: "This board's columns could not be read.",
-	stepIssues: "The issues on this board could not be read.",
+	stepIdle:    "This board could not be read.",
+	stepBoards:  "The boards on this project could not be read.",
+	stepConfig:  "This board's columns could not be read.",
+	stepSprints: "The sprints on this board could not be read.",
+	stepIssues:  "The issues on this board could not be read.",
 }
 
 func (m *Model) say(s string) string  { return m.styles.muted.Render(s) }

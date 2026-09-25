@@ -31,6 +31,7 @@ getting thirty per cent worse with room to spare.
 | Stripped binary | **< 15 MiB** | `ci.yml`'s size step |
 | Cache read for a view's first paint | < 5 ms | `BenchmarkCacheReadFirstPaint` |
 | Store one page of a board holding 5k issues | *measured, not guarded.* About 13 ms on an M2 Pro, nearly all of it the one fsync, against 264 ms for re-storing the whole board | `BenchmarkPutBoardPage_At5kIssues` against `BenchmarkPutBoard_At5kIssues`, over a real `DiskCache`. It is disk time, which a ceiling would measure the runner's disk by |
+| Walk a 2,000-card board into the cache | *measured, not guarded.* About 38 ms for the walk on an M2 Pro, of which about 2.6 ms is spent inside `Update`; storing every card held on every page used to put about 62 ms of a 68 ms walk inside it | `BenchmarkBoardPageLoads_IntoADiskCache` in `cmd/saral`, the one package allowed to build a real `DiskCache` next to a view. The writes run in commands, one page at a time, so the number that matters is `update-ns/op` |
 | Rank 10k cached issues against a keystroke | **< 16 ms**, 1 allocation | `BenchmarkIndexSearch10k` and its two siblings |
 | Rebuild the local index over 10k cached issues | < 16 ms | `BenchmarkIndexRebuild10k` |
 | Resolve the date cascade over a timeline's worth of issues | **< 16 ms**, and linear in the issues | `BenchmarkResolveDates2k` against `BenchmarkResolveDates10k` |

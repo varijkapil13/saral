@@ -85,6 +85,6 @@ func init() {
 // travels as a broadcast rather than as a pointer.
 func open(msg tea.Msg) func(kernel.Deps) tea.Cmd {
 	return func(kernel.Deps) tea.Cmd {
-		return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(msg))
+		return kernel.OpenThen(ViewID, msg)
 	}
 }

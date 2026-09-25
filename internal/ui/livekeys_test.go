@@ -52,7 +52,6 @@ var keyReporters = map[string]func(kernel.Deps) kernel.View{
 	comment.ViewID:     comment.New,
 	onboarding.ViewID:  onboarding.New,
 	issue.ViewID:       func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
-	issue.MoveViewID:   func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
 	attach.ViewID:      newAttach,
 	backlog.ViewID:     backlog.New,
 	board.ViewID:       board.New,
@@ -153,7 +152,6 @@ func TestLiveKeys_AFreshlyBuiltViewAdvertisesSomething(t *testing.T) {
 // own states to this; what belongs here is the record of which views have one at
 // all, so that the next view cannot quietly join them.
 var actionFree = map[string]string{
-	issue.MoveViewID:  "a transition in flight refuses every key until the site answers",
 	onboarding.ViewID: "a step being checked against the site refuses enter and shift+tab both",
 	attach.ViewID:     "a pane with nothing attached, on a token that may not attach, has nothing to offer but the way out",
 }
@@ -222,11 +220,10 @@ func TestLiveKeys_EveryAdvertisedActionCanBeClicked(t *testing.T) {
 // Every scope in the key registry has to appear in exactly one half, so the next
 // view fails this until somebody has decided which.
 var closers = map[string]func(kernel.Deps) kernel.View{
-	filter.ViewID:    func(d kernel.Deps) kernel.View { return filter.New(d) },
-	form.ViewID:      form.New,
-	comment.ViewID:   comment.New,
-	issue.ViewID:     func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
-	issue.MoveViewID: func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
+	filter.ViewID:  func(d kernel.Deps) kernel.View { return filter.New(d) },
+	form.ViewID:    form.New,
+	comment.ViewID: comment.New,
+	issue.ViewID:   func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
 	// Neither of these registers a view spec, so a push with the issue or the
 	// issues it is about is the only way either is ever on screen.
 	attach.ViewID: newAttach,
@@ -343,7 +340,6 @@ var answerable = map[string]func(kernel.Deps) kernel.View{
 	comment.ViewID:    comment.New,
 	onboarding.ViewID: onboarding.New,
 	issue.ViewID:      func(d kernel.Deps) kernel.View { return issue.New(d, seed()) },
-	issue.MoveViewID:  func(d kernel.Deps) kernel.View { return issue.NewMove(d, seed()) },
 	attach.ViewID:     newAttach,
 	backlog.ViewID:    backlog.New,
 	board.ViewID:      board.New,

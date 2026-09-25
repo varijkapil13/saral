@@ -226,7 +226,7 @@ func TestBoardRender_EveryCardFillsItsColumn(t *testing.T) {
 func TestBoardRender_ABreachedColumnLimitIsDrawnDifferently(t *testing.T) {
 	t.Parallel()
 	two := 2
-	cfg := jira.BoardConfig{BoardID: 1, Name: "Ledger", Columns: []jira.Column{
+	cfg := jira.BoardConfig{BoardID: 1, Name: "Ledger", Constraint: jira.ConstraintIssueCount, Columns: []jira.Column{
 		{Name: "Waiting", StatusIDs: []string{"10201"}},
 		{Name: "Under way", StatusIDs: []string{"10202"}, Max: &two},
 	}}
@@ -235,7 +235,7 @@ func TestBoardRender_ABreachedColumnLimitIsDrawnDifferently(t *testing.T) {
 		{Key: "PROJ-2", Summary: "two", Status: jira.Status{ID: "10202"}},
 		{Key: "PROJ-3", Summary: "three", Status: jira.Status{ID: "10202"}},
 	}
-	under := jira.BoardConfig{BoardID: 1, Name: "Ledger", Columns: []jira.Column{
+	under := jira.BoardConfig{BoardID: 1, Name: "Ledger", Constraint: jira.ConstraintIssueCount, Columns: []jira.Column{
 		{Name: "Waiting", StatusIDs: []string{"10201"}},
 		{Name: "Under way", StatusIDs: []string{"10202"}},
 	}}
@@ -245,11 +245,44 @@ func TestBoardRender_ABreachedColumnLimitIsDrawnDifferently(t *testing.T) {
 	if breachedFrame == plainFrame {
 		t.Error("a column holding three cards against its own limit of two is drawn exactly as one with no limit")
 	}
-	if !breached(planColumn{max: &two}, 3) {
-		t.Error("three cards against a maximum of two is not reported as a breach")
+}
+
+func TestBoard_ColumnLimitsCountTheWayTheBoardCountsThem(t *testing.T) {
+	t.Parallel()
+	two := 2
+	columns := []jira.Column{
+		{Name: "Waiting", StatusIDs: []string{"10201"}},
+		{Name: "Under way", StatusIDs: []string{"10202"}, Max: &two},
 	}
-	if breached(planColumn{}, 3) {
-		t.Error("a column with neither limit was reported as breaching one")
+	story := jira.IssueType{ID: "10001", Name: "Story"}
+	sub := jira.IssueType{ID: "10003", Name: "Sub-task", Subtask: true}
+	issues := []jira.Issue{
+		{Key: "PROJ-1", Summary: "one", Type: story, Status: jira.Status{ID: "10202"}},
+		{Key: "PROJ-2", Summary: "two", Type: story, Status: jira.Status{ID: "10202"}},
+		{Key: "PROJ-3", Summary: "three", Type: sub, Status: jira.Status{ID: "10202"}},
+	}
+	for _, tc := range []struct {
+		name       string
+		constraint jira.ColumnConstraint
+		terms      filter.Terms
+		want       bool
+	}{
+		{"a board that counts issues", jira.ConstraintIssueCount, nil, true},
+		{"a board whose limits are off", jira.ConstraintNone, nil, false},
+		{"a board that reports no constraint", "", nil, false},
+		{"a board that leaves sub-tasks out", jira.ConstraintIssueCountExclSubs, nil, false},
+		{"a filter hiding cards the limit still counts", jira.ConstraintIssueCount,
+			filter.Terms{{Facet: filter.FacetType, ID: story.ID, Label: story.Name}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := jira.BoardConfig{BoardID: 1, Name: "Ledger", Constraint: tc.constraint, Columns: columns}
+			_, dr := stocked(t, cfg, issues, 100, 16)
+			dr.m.setTerms(tc.terms)
+			if got := dr.m.overLimit(1); got != tc.want {
+				t.Errorf("over its limit = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 

@@ -39,7 +39,7 @@ func init() {
 		Group: "Plans",
 		Keys:  []string{keys.Open.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SourcesMsg{}))
+			return kernel.OpenThen(ViewID, SourcesMsg{})
 		},
 	})
 }

@@ -4,6 +4,7 @@ package board
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ var (
 	_ kernel.Addressed   = (*Model)(nil)
 	_ kernel.KeyCapturer = (*Model)(nil)
 	_ kernel.KeyReporter = (*Model)(nil)
+	_ kernel.BackClaimer = (*Model)(nil)
 )
 
 // held is the card that has been taken off the board and not yet landed. It is
@@ -97,7 +99,16 @@ type Model struct {
 	cols        [][]int
 	unmapped    int
 	filteredOut int
-	more        bool
+	// wip counts what the board's own limit counts: terms do not hide from it.
+	wip  []int
+	more bool
+
+	sprints      []jira.Sprint
+	sprint       jira.Sprint
+	noSprints    bool
+	sprintsKnown bool
+	fields       []string
+	writes       *writer
 	// dataGen counts the rebuilds of cols, because a slice cannot be part of the
 	// comparable key the chrome is memoized on.
 	dataGen int
@@ -155,6 +166,12 @@ type Model struct {
 	qfCancel context.CancelFunc
 	addr     kernel.Addr
 
+	// A move has its own context so it neither cancels the walk nor is
+	// cancelled by it.
+	moveGen  int
+	moveCtx  context.Context
+	moveStop context.CancelFunc
+
 	zones   widget.Zoner
 	clicks  *widget.Clicks
 	drag    widget.Drag
@@ -170,11 +187,18 @@ type Model struct {
 // between for anything else to take.
 func (m *Model) WantsRawKeys() bool { return m.pendingFilter }
 
+// backKeys are the kernel's own back strokes, which reach the board only while
+// WantsBack claims them.
+var backKeys = kernel.DefaultGlobalKeys().Back.Keys()
+
+// WantsBack claims esc while terms narrow the board, so esc clears them.
+func (m *Model) WantsBack() bool { return len(m.terms) > 0 && m.card == nil && !m.moving }
+
 // New builds the board. It draws nothing of the site in its first frame: which
 // columns a board has is an answer, and the frame before that answer says which
 // question is outstanding rather than a spinner.
 func New(d kernel.Deps) kernel.View {
-	m := &Model{deps: d, addr: kernel.NewAddr(), cache: d.Cache}
+	m := &Model{deps: d, addr: kernel.NewAddr(), cache: d.Cache, writes: &writer{}}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
@@ -242,7 +266,14 @@ func (m *Model) applyBoardSnapshot(snap app.BoardSnapshot) {
 	m.applyRecalledQuickFilters()
 	m.issues = snap.Issues
 	m.more = snap.More
-	m.loaded, m.stale, m.checked = true, snap.Stale, snap.StoredAt
+	m.sprints, m.noSprints = snap.Sprints, snap.NoSprints
+	m.sprint, m.sprintsKnown = jira.Sprint{}, snap.NoSprints || snap.Sprint != 0
+	if at := slices.IndexFunc(snap.Sprints, func(sp jira.Sprint) bool { return sp.ID == snap.Sprint }); at >= 0 {
+		m.sprint = snap.Sprints[at]
+	}
+	// A snapshot stored part way through a walk carries no cursor to page on
+	// from, so the rest of the board is only reached by reading it again.
+	m.loaded, m.stale, m.checked = true, snap.Stale || snap.More, snap.StoredAt
 	m.place()
 }
 
@@ -270,7 +301,15 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.resize(msg.Width, msg.Height)
 
 	case kernel.FocusMsg:
+		back := msg.Focused && !m.focused
 		m.focused = msg.Focused
+		if back && m.aged() && !m.stale && !m.loading && !m.moving {
+			cmd = m.refresh(false)
+		}
+
+	case kernel.SetMouseMsg:
+		m.dataGen++
+		m.forget()
 
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
@@ -296,6 +335,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case NextBoardMsg:
 		cmd = m.nextBoard()
 
+	case NextSprintMsg:
+		cmd = m.nextSprint()
+
 	case boardsMsg:
 		cmd = m.tookBoards(msg)
 
@@ -319,6 +361,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case movedMsg:
 		cmd = m.moved(msg)
+
+	case moveFailedMsg:
+		cmd = m.moveFailed(msg)
+
+	case rereadMsg:
+		cmd = m.reread(msg)
 
 	case failedMsg:
 		cmd = m.failed(msg)
@@ -353,6 +401,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 func (m *Model) Close() {
 	m.stop()
 	m.stopQuickFilters()
+	m.stopMove()
 }
 
 // --- fetching ---------------------------------------------------------------
@@ -375,8 +424,27 @@ func (m *Model) stop() {
 		m.cancel()
 		m.cancel = nil
 	}
-	m.loading, m.moving = false, false
+	m.loading = false
 	m.step = stepIdle
+}
+
+func (m *Model) beginMove() (ctx context.Context, gen int) {
+	m.stopMove()
+	m.moveGen++
+	ctx, cancel := context.WithCancel(context.Background())
+	m.moveCtx, m.moveStop = ctx, cancel
+	m.moving = true
+	return ctx, m.moveGen
+}
+
+func (m *Model) stopMove() {
+	if m.moveStop != nil {
+		m.moveStop()
+		m.moveStop = nil
+	}
+	m.moveCtx = nil
+	m.moving = false
+	m.moveGen++
 }
 
 // stopQuickFilters cancels only the quick-filter read in flight, if there is
@@ -418,12 +486,23 @@ func (m *Model) loadConfig() tea.Cmd {
 	return m.reply(config(ctx, m.deps.Jira, m.all[m.at].ID, gen))
 }
 
-func (m *Model) loadCards() tea.Cmd {
+// loadCards re-reads which sprints are running too: one may have ended.
+func (m *Model) loadCards() tea.Cmd { return m.readCards(true) }
+
+func (m *Model) readCards(probe bool) tea.Cmd {
 	if m.deps.Jira == nil || m.search == nil || !m.ready {
 		return nil
 	}
+	q := cardsQuery{
+		plan: m.plan, quickFilters: m.activeQuickFilterJQL(),
+		probe: probe || !m.sprintsKnown, sprints: m.sprints, noSprints: m.noSprints,
+		sprint: m.wantedSprint(),
+	}
 	ctx, gen := m.begin(stepIssues)
-	return m.reply(cards(ctx, m.deps.Jira, m.search, m.plan, m.activeQuickFilterJQL(), gen))
+	if q.probe {
+		m.step = stepSprints
+	}
+	return m.reply(cards(ctx, m.deps.Jira, m.search, q, gen))
 }
 
 // loadQuickFilters reads the board's own quick filters, alongside cards and
@@ -477,18 +556,28 @@ func (m *Model) reproject(project string) tea.Cmd {
 	if project == m.deps.Project {
 		return nil
 	}
+	was := m.deps.Project
 	m.deps.Project = project
+	var said tea.Cmd
+	m.terms, said = filterbar.Reproject(m.deps, ViewID, was, m.terms)
+	m.stopMove()
 	m.all, m.at, m.ready = nil, 0, false
 	m.issues, m.cols, m.unmapped = nil, nil, 0
 	m.curCol, m.curRow, m.colTop, m.rowTop = 0, 0, 0, nil
 	m.card, m.loaded, m.checked = nil, false, time.Time{}
 	m.stale, m.rawConfig, m.boardIDHint = false, jira.BoardConfig{}, 0
+	m.forgetSprints()
+	m.place()
 	m.forget()
 	m.fromCache()
 	if m.loaded && !m.stale {
-		return nil
+		return said
 	}
-	return m.load()
+	return tea.Batch(said, m.load())
+}
+
+func (m *Model) forgetSprints() {
+	m.sprints, m.sprint, m.noSprints, m.sprintsKnown = nil, jira.Sprint{}, false, false
 }
 
 func (m *Model) tookBoards(msg boardsMsg) tea.Cmd {
@@ -537,6 +626,9 @@ func (m *Model) tookConfig(msg configMsg) tea.Cmd {
 	}
 	m.loading, m.step = false, stepIdle
 	m.rawConfig = msg.cfg
+	if msg.cfg.BoardID != m.plan.boardID {
+		m.forgetSprints()
+	}
 	m.plan, m.ready, m.stale = newPlan(msg.cfg), true, false
 	m.quickFilters, m.qfOn = nil, nil
 	m.card = nil
@@ -563,22 +655,27 @@ func (m *Model) rememberLastBoard(boardID int64) tea.Cmd {
 	return nil
 }
 
-// storeBoard writes this board's shape and cards, so the next time it is
-// opened draws from disk before anything is asked of the site. It runs after
-// every page rather than only once the walk over a board's cards is done, so a
-// walk cut short still leaves something to draw from.
-func (m *Model) storeBoard() tea.Cmd {
-	held, ok := m.boardCache()
-	if !ok || !m.ready {
+// pagePut is run off the update loop. A cache that keeps no pages is written
+// whole, on the first page and at the end of the walk only.
+func (m *Model) pagePut(items []jira.Issue, first bool) func() error {
+	if !m.ready {
 		return nil
 	}
-	err := held.PutBoard(m.plan.boardID, app.BoardSnapshot{
-		Config: m.rawConfig, QuickFilters: m.quickFilters, Issues: m.issues, More: m.more,
-	})
-	if err != nil {
-		return kernel.Warn("this board could not be stored for next time: " + err.Error())
+	snap := app.BoardSnapshot{
+		Config: m.rawConfig, QuickFilters: slices.Clone(m.quickFilters), More: m.more,
+		Sprints: slices.Clone(m.sprints), Sprint: m.sprint.ID, NoSprints: m.noSprints,
 	}
-	return nil
+	boardID := m.plan.boardID
+	if paged, ok := m.cache.(app.BoardPageCache); ok && paged != nil {
+		snap.Issues = slices.Clone(items)
+		return m.writes.put(m.gen, first, func() error { return paged.PutBoardPage(boardID, snap, first) })
+	}
+	held, ok := m.boardCache()
+	if !ok || (!first && m.more) {
+		return nil
+	}
+	snap.Issues = slices.Clone(m.issues)
+	return m.writes.put(m.gen, true, func() error { return held.PutBoard(boardID, snap) })
 }
 
 func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
@@ -589,19 +686,23 @@ func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
 	var said tea.Cmd
 	if msg.first {
 		m.loading, m.loaded, m.step = false, true, stepIdle
-		m.issues, m.missing = msg.page.Items, msg.missing
+		m.issues, m.missing, m.fields = msg.page.Items, msg.missing, msg.fields
+		m.sprints, m.sprint, m.noSprints, m.sprintsKnown = msg.sprints, msg.sprint, msg.noSprints, true
 		m.checked = m.now()
-		said = m.saidMissing()
+		said = tea.Batch(m.saidMissing(), m.saidSprints())
 	} else {
 		m.issues = append(m.issues, msg.page.Items...)
+	}
+	if msg.stored != nil {
+		said = tea.Batch(said, kernel.Warn(storeFailed+msg.stored.Error()))
 	}
 	m.more, m.stale = msg.page.HasMore(), false
 	m.place()
 	m.forget()
 	m.restore(under)
-	stored := m.storeBoard()
+	put := m.pagePut(msg.page.Items, msg.first)
 	if !m.more {
-		return tea.Batch(said, stored)
+		return tea.Batch(said, stored(put))
 	}
 	// Each page is a read of its own, under the generation the first one opened:
 	// withCancel released the context that read used the moment it answered, so
@@ -611,7 +712,7 @@ func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
 	// first page must not swap those cards for a spinner to fetch the next.
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	return tea.Batch(said, stored, m.reply(moreCards(ctx, msg.page, msg.gen)))
+	return tea.Batch(said, m.reply(moreCards(ctx, msg.page, msg.gen, put)))
 }
 
 // moreFailed keeps the board that is on screen. The pages that arrived are
@@ -643,9 +744,8 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
-	m.loading, m.moving, m.step = false, false, stepIdle
-	m.card = nil
-	if m.ready {
+	m.loading, m.step = false, stepIdle
+	if m.ready && (len(m.issues) > 0 || !m.checked.IsZero()) {
 		m.stale = true
 	} else {
 		m.failure, m.failStep = msg.err, msg.step
@@ -659,6 +759,8 @@ func (m *Model) nextBoard() tea.Cmd {
 		return nil
 	}
 	m.at = (m.at + 1) % len(m.all)
+	m.stopMove()
+	m.forgetSprints()
 	m.ready, m.issues, m.cols, m.unmapped, m.stale = false, nil, nil, 0, false
 	m.quickFilters, m.qfOn = nil, nil
 	m.curCol, m.curRow, m.colTop, m.rowTop = 0, 0, 0, nil
@@ -684,12 +786,17 @@ func (m *Model) place() {
 	m.dataGen++
 	m.unmapped, m.filteredOut = 0, 0
 	if !m.ready {
-		m.cols, m.rowTop = nil, nil
+		m.cols, m.rowTop, m.wip = nil, nil, nil
 		return
 	}
 	if len(m.cols) != len(m.plan.columns) {
 		m.cols = make([][]int, len(m.plan.columns))
 	}
+	if len(m.wip) != len(m.plan.columns) {
+		m.wip = make([]int, len(m.plan.columns))
+	}
+	clear(m.wip)
+	subtasks := m.plan.constraint.CountsSubtasks()
 	if len(m.rowTop) != len(m.plan.columns) {
 		grown := make([]int, len(m.plan.columns))
 		copy(grown, m.rowTop)
@@ -703,6 +810,9 @@ func (m *Model) place() {
 		if !mapped {
 			m.unmapped++
 			continue
+		}
+		if subtasks || !m.issues[i].Type.Subtask {
+			m.wip[at]++
 		}
 		if !matchesTerms(&m.issues[i], m.terms) {
 			m.filteredOut++
@@ -898,9 +1008,8 @@ func (m *Model) drop() tea.Cmd {
 		return kernel.Warn("there is no Jira connection in this session")
 	}
 	key, target := m.card.key, m.card.target
-	ctx, gen := m.begin(stepIssues)
-	m.moving = true
-	return m.reply(moves(ctx, m.deps.Jira, key, target, gen))
+	ctx, gen := m.beginMove()
+	return kernel.Reply(moves(ctx, m.deps.Jira, key, target, gen), m.addr)
 }
 
 // tookMoves picks the transition that lands the issue in the column it was
@@ -908,10 +1017,10 @@ func (m *Model) drop() tea.Cmd {
 // name is not an identity, so the target column's status ids are what a
 // transition is matched against.
 func (m *Model) tookMoves(msg movesMsg) tea.Cmd {
-	if !m.current(msg.gen) {
+	if msg.gen != m.moveGen {
 		return nil
 	}
-	m.moving, m.step = false, stepIdle
+	m.moving = false
 	if m.card == nil || m.card.key != msg.key {
 		return nil
 	}
@@ -928,9 +1037,6 @@ func (m *Model) tookMoves(msg movesMsg) tea.Cmd {
 		return kernel.Warn("no workflow move takes " + msg.key + " from " + from + " into " + name +
 			"; the columns a board draws and the moves a workflow allows are two different things")
 	}
-	// A transition insisting on a field cannot be made blind, so the pane that
-	// fills a transition screen is handed the issue rather than a value being
-	// guessed for it.
 	if needsScreen(tr) {
 		iss := m.byKey(msg.key)
 		m.putBack()
@@ -939,7 +1045,7 @@ func (m *Model) tookMoves(msg movesMsg) tea.Cmd {
 		}
 		return tea.Batch(
 			kernel.Status(tr.Name+" needs more than a column, so it is being asked for"),
-			kernel.Push(issue.MoveViewID, iss.Key, issue.NewMove(m.deps, *iss)),
+			kernel.Push(issue.ViewID, iss.Key, issue.New(m.deps, *iss, issue.WithTransition(tr.ID))),
 		)
 	}
 	if m.deps.Jira == nil {
@@ -947,9 +1053,8 @@ func (m *Model) tookMoves(msg movesMsg) tea.Cmd {
 		return kernel.Warn("there is no Jira connection in this session")
 	}
 	from := m.plan.columns[m.card.from].name
-	ctx, gen := m.begin(stepIssues)
-	m.moving = true
-	return m.reply(apply(ctx, m.deps.Jira, msg.key, tr.ID, name, from, gen))
+	ctx, gen := m.beginMove()
+	return kernel.Reply(apply(ctx, m.deps.Jira, msg.key, tr, name, from, gen), m.addr)
 }
 
 // moveInto is the first transition landing in a column. First rather than best:
@@ -973,17 +1078,61 @@ func (m *Model) byKey(key string) *jira.Issue {
 	return nil
 }
 
+// moved re-reads only the one card: a board read starts from its first page
+// and the cursor would go with it.
 func (m *Model) moved(msg movedMsg) tea.Cmd {
-	if !m.current(msg.gen) {
+	if msg.gen != m.moveGen {
 		return nil
 	}
-	m.moving, m.step, m.card = false, stepIdle, nil
+	m.moving, m.card = false, nil
 	m.drag.Cancel()
+	said := kernel.Status(msg.key + " moved from " + msg.from + " to " + msg.to)
+	iss := m.byKey(msg.key)
+	if iss == nil {
+		m.forget()
+		return said
+	}
+	iss.Status = msg.status
+	m.place()
 	m.forget()
-	return tea.Batch(
-		kernel.Status(msg.key+" moved from "+msg.from+" to "+msg.to),
-		m.loadCards(),
-	)
+	m.restore(msg.key)
+	return tea.Batch(said, stored(m.pagePut([]jira.Issue{*iss}, false)), m.rereadCard(msg.key))
+}
+
+func (m *Model) rereadCard(key string) tea.Cmd {
+	if m.deps.Jira == nil || len(m.fields) == 0 || m.moveCtx == nil {
+		return nil
+	}
+	return kernel.Reply(reread(m.moveCtx, m.deps.Jira, key, m.fields, m.moveGen), m.addr)
+}
+
+func (m *Model) reread(msg rereadMsg) tea.Cmd {
+	if msg.gen != m.moveGen {
+		return nil
+	}
+	if msg.err != nil {
+		reason, _ := jira.Reason(msg.err)
+		return kernel.Warn(msg.key + " moved, but reading it back failed: " + reason)
+	}
+	at := slices.IndexFunc(m.issues, func(iss jira.Issue) bool { return iss.Key == msg.key })
+	if at < 0 {
+		return nil
+	}
+	under := m.selectedKey()
+	m.issues[at] = msg.issue
+	m.place()
+	m.forget()
+	m.restore(under)
+	return stored(m.pagePut([]jira.Issue{msg.issue}, false))
+}
+
+func (m *Model) moveFailed(msg moveFailedMsg) tea.Cmd {
+	if msg.gen != m.moveGen {
+		return nil
+	}
+	m.moving = false
+	m.putBack()
+	return kernel.Fail(msg.err)
 }
 
 // --- input ------------------------------------------------------------------
@@ -992,6 +1141,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	stroke := msg.String()
 	if m.moving {
 		return nil
+	}
+	if m.WantsBack() && slices.Contains(backKeys, stroke) {
+		return m.clearFilter()
 	}
 	if m.card != nil {
 		switch m.holding[stroke] {
@@ -1024,7 +1176,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			if !m.toggleQuickFilter(n) {
 				return kernel.Warn("no quick filter is bound to " + strconv.Itoa(n))
 			}
-			return m.loadCards()
+			return m.readCards(false)
 		}
 	}
 	switch m.browsing[stroke] {
@@ -1052,6 +1204,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.pickUp()
 	case actBoard:
 		return m.nextBoard()
+	case actSprint:
+		return m.nextSprint()
 	case actFilter:
 		if len(m.quickFilters) == 0 {
 			return kernel.Warn("this board has no quick filters")
@@ -1246,4 +1400,71 @@ func (m *Model) boardName() string {
 		return name
 	}
 	return m.plan.name
+}
+
+// --- sprints ----------------------------------------------------------------
+
+func sprintMemoryKey(boardID int64) string { return "sprint:" + strconv.FormatInt(boardID, 10) }
+
+func (m *Model) wantedSprint() int64 {
+	if m.sprint.ID != 0 {
+		return m.sprint.ID
+	}
+	if enc, ok := kernel.Recall(m.deps, ViewID, sprintMemoryKey(m.plan.boardID)); ok {
+		if id, err := strconv.ParseInt(enc, 10, 64); err == nil {
+			return id
+		}
+	}
+	return 0
+}
+
+func (m *Model) saidSprints() tea.Cmd {
+	if len(m.sprints) < 2 {
+		return nil
+	}
+	if _, chosen := kernel.Recall(m.deps, ViewID, sprintMemoryKey(m.plan.boardID)); chosen {
+		return nil
+	}
+	return kernel.Status(strconv.Itoa(len(m.sprints)) + " sprints are running on this board; " +
+		defaultKeys().Sprint.Help().Key + " shows the next")
+}
+
+func (m *Model) nextSprint() tea.Cmd {
+	if m.moving || m.card != nil {
+		return nil
+	}
+	switch {
+	case m.noSprints:
+		return kernel.Warn("this board runs no sprints")
+	case len(m.sprints) < 2:
+		return kernel.Warn("this board is running one sprint at most, so there is no other to show")
+	}
+	at := slices.IndexFunc(m.sprints, func(sp jira.Sprint) bool { return sp.ID == m.sprint.ID })
+	m.sprint = m.sprints[(at+1)%len(m.sprints)]
+	kernel.Keep(m.deps, ViewID, sprintMemoryKey(m.plan.boardID), strconv.FormatInt(m.sprint.ID, 10))
+	m.issues, m.more = nil, false
+	m.curRow = 0
+	m.place()
+	m.forget()
+	return m.readCards(false)
+}
+
+func (m *Model) sprintLabel() string {
+	if m.sprint.ID == 0 {
+		return ""
+	}
+	label := widget.Sanitize(m.sprint.Name)
+	if n := len(m.sprints); n > 1 {
+		at := slices.IndexFunc(m.sprints, func(sp jira.Sprint) bool { return sp.ID == m.sprint.ID })
+		label += " (" + strconv.Itoa(at+1) + " of " + strconv.Itoa(n) + " running)"
+	}
+	return label
+}
+
+func (m *Model) noActiveSprint() bool {
+	return m.sprintsKnown && !m.noSprints && len(m.sprints) == 0
+}
+
+func (m *Model) aged() bool {
+	return m.loaded && !m.checked.IsZero() && m.now().Sub(m.checked) > app.KindBoard.TTL()
 }

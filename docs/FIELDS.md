@@ -156,8 +156,8 @@ key it by is real work neither packet has spent, and stays called out as left fo
 
 **Editable is fetched *and* listed *and* a kind this build knows**, all three, checked in that order
 by `fieldRow.editable()` — except `status`, which answers `true` unconditionally, because a transition
-is a workflow action rather than a field a screen lists, and `moveModel`'s own list already says "no
-move available to you right now" when there is nothing to offer rather than refusing the row itself:
+is a workflow action rather than a field a screen lists, and the status list already says "no move
+available to you right now" when there is nothing to offer rather than refusing the row itself:
 
 - **fetched** is `Issue.Requested.Has(id)`, the same mask P2.3's fetch-edit-PUT cycle already refuses
   to write outside of. A row seeded narrow — a list row's six fields, a card's fewer still — is
