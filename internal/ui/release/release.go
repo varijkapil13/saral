@@ -23,3 +23,7 @@ const ViewID = "releases"
 // pushed with a version, which is why it registers no view spec: a registry
 // constructor has no version to open over.
 const FlowViewID = "release.flow"
+
+// BulkViewID is the name the assignment screen's keys are registered under. It
+// is pushed with a version, for the reason the flow is.
+const BulkViewID = "release.bulk"

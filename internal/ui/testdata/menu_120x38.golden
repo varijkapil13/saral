@@ -86,13 +86,14 @@ release.flow
 └───────────────────────────────────────────────┘
 
 releases
-┌────────────────────────────────┐
-│ What can be done here          │
-│ enter  release this version    │
-│ n      new version             │
-│ e      edit this version       │
-│ A      archive or unarchive it │
-└────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│ What can be done here                   │
+│ enter  release this version             │
+│ n      new version                      │
+│ e      edit this version                │
+│ A      archive or unarchive it          │
+│ b      put it on issues, or take it off │
+└─────────────────────────────────────────┘
 
 settings
 ┌───────────────────────────┐

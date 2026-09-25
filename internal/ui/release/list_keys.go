@@ -35,6 +35,9 @@ type keyMap struct {
 	// unarchived by the same stroke, because it is one flag and a second key
 	// would be a second thing to learn.
 	Archive kernel.Binding
+	// Assign opens the screen that puts the version on the issues a query
+	// matches, or takes it off them.
+	Assign kernel.Binding
 
 	NextField kernel.Binding
 	PrevField kernel.Binding
@@ -59,6 +62,7 @@ func defaultKeys() keyMap {
 		New:     kernel.Bind([]string{"n"}, "n", "new version"),
 		Edit:    kernel.Bind([]string{"e"}, "e", "edit this version"),
 		Archive: kernel.Bind([]string{"A"}, "A", "archive or unarchive it"),
+		Assign:  kernel.Bind([]string{"b"}, "b", "put it on issues, or take it off"),
 
 		NextField: kernel.Bind([]string{"tab", "down"}, "tab", "next field"),
 		PrevField: kernel.Bind([]string{"shift+tab", "up"}, "shift+tab", "previous field"),
@@ -89,24 +93,25 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	k := defaultKeys()
 	create, edit := kernel.Terse(k.New, "new"), kernel.Terse(k.Edit, "edit")
 	archive := kernel.Terse(k.Archive, "archive")
+	assign := kernel.Terse(k.Assign, "assign")
 	motions := [][]kernel.Binding{
 		{k.Down, k.Up, k.PageDown, k.PageUp, k.Top, k.Bottom},
 	}
 
 	var sets [keyStates]kernel.KeySet
 	sets[keysBrowsing] = kernel.KeySet{
-		Acts: []kernel.Binding{kernel.Terse(k.Release, "release"), create, edit, archive},
+		Acts: []kernel.Binding{kernel.Terse(k.Release, "release"), create, edit, archive, assign},
 		Full: append(append([][]kernel.Binding(nil), motions...),
-			[]kernel.Binding{k.Release, k.New, k.Edit, k.Archive}),
+			[]kernel.Binding{k.Release, k.New, k.Edit, k.Archive, k.Assign}),
 	}
 	// While the site is being asked what is open on a version, releasing is the
 	// one thing that cannot be done: the count is what the decision is made
 	// against. Everything else still works, so the row says so rather than
 	// falling back to the globals.
 	sets[keysCounting] = kernel.KeySet{
-		Acts: []kernel.Binding{create, edit, archive},
+		Acts: []kernel.Binding{create, edit, archive, assign},
 		Full: append(append([][]kernel.Binding(nil), motions...),
-			[]kernel.Binding{k.New, k.Edit, k.Archive}),
+			[]kernel.Binding{k.New, k.Edit, k.Archive, k.Assign}),
 	}
 	sets[keysEditing] = kernel.KeySet{
 		Acts: []kernel.Binding{kernel.Terse(k.Save, "save"), kernel.Terse(k.Cancel, "leave it")},
@@ -152,6 +157,7 @@ const (
 	actNew
 	actEdit
 	actArchive
+	actAssign
 	actNextField
 	actPrevField
 	actSave
@@ -167,6 +173,7 @@ func (k keyMap) tables() (browsing, editor map[string]action) {
 		binding[action]{k.Bottom, actBottom},
 		binding[action]{k.Release, actRelease}, binding[action]{k.New, actNew},
 		binding[action]{k.Edit, actEdit}, binding[action]{k.Archive, actArchive},
+		binding[action]{k.Assign, actAssign},
 	)
 	editor = table(
 		binding[action]{k.NextField, actNextField}, binding[action]{k.PrevField, actPrevField},

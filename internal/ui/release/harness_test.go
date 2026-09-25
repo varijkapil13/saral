@@ -312,6 +312,8 @@ func zoner(dr *driver) interface{ ID(string) string } {
 		return v.zones
 	case *Flow:
 		return v.zones
+	case *Bulk:
+		return v.zones
 	default:
 		dr.t.Fatalf("a %T marks no zones", dr.m)
 		return nil

@@ -38,6 +38,9 @@ type keyMap struct {
 
 	Yes kernel.Binding
 	No  kernel.Binding
+	// NextDest and PrevDest choose where a completion sends the open issues.
+	NextDest kernel.Binding
+	PrevDest kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -62,6 +65,9 @@ func defaultKeys() keyMap {
 
 		Yes: kernel.Bind([]string{"y"}, "y", "go ahead"),
 		No:  kernel.Bind([]string{"esc"}, "esc", "leave it alone"),
+
+		NextDest: kernel.Bind([]string{"tab", "down", "j"}, "tab", "where the open issues go"),
+		PrevDest: kernel.Bind([]string{"shift+tab", "up", "k"}, "shift+tab", "back a choice"),
 	}
 }
 
@@ -99,6 +105,7 @@ const (
 	keysClosed
 	keysForm
 	keysConfirm
+	keysConfirmComplete
 	keysWorking
 	keyStates
 )
@@ -147,6 +154,10 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Acts: []kernel.Binding{k.Yes, k.No},
 		Full: [][]kernel.Binding{{k.Yes, k.No}},
 	}
+	sets[keysConfirmComplete] = kernel.KeySet{
+		Acts: []kernel.Binding{k.Yes, k.NextDest, k.No},
+		Full: [][]kernel.Binding{{k.NextDest, k.PrevDest}, {k.Yes, k.No}},
+	}
 	// A write in flight answers nothing of its own, and the footer then shows
 	// the globals alone, which is the truth.
 	sets[keysWorking] = kernel.KeySet{}
@@ -167,6 +178,8 @@ func (m *Model) keyState() keyState {
 		return keysWorking
 	case m.state == filling:
 		return keysForm
+	case m.state == confirming && m.pending.op == opComplete:
+		return keysConfirmComplete
 	case m.state == confirming:
 		return keysConfirm
 	case len(m.boards) == 0:
@@ -205,6 +218,8 @@ const (
 	actDiscard
 	actYes
 	actNo
+	actNextDest
+	actPrevDest
 )
 
 // tables turn the bindings into a keystroke lookup, built once per view. The
@@ -224,7 +239,10 @@ func (k keyMap) tables() (rows, form, confirm map[string]action) {
 		binding{k.Field, actNextField}, binding{k.PrevField, actPrevField},
 		binding{k.Save, actSave}, binding{k.Discard, actDiscard},
 	)
-	confirm = table(binding{k.Yes, actYes}, binding{k.No, actNo})
+	confirm = table(
+		binding{k.Yes, actYes}, binding{k.No, actNo},
+		binding{k.NextDest, actNextDest}, binding{k.PrevDest, actPrevDest},
+	)
 	return rows, form, confirm
 }
 

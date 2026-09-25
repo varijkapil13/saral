@@ -1622,6 +1622,9 @@ func (f *Fake) fakeValidatePatch(in *jira.IssuePatch) error {
 	if err := fakeLabelEdits(in); err != nil {
 		return err
 	}
+	if err := f.fakeFixVersionEdits(in); err != nil {
+		return err
+	}
 	if in.PriorityID != nil && fakePriorityByID(*in.PriorityID) == nil {
 		return fakeInvalid("priority", fmt.Sprintf("no priority %q on this site", *in.PriorityID))
 	}
@@ -1686,6 +1689,7 @@ func (f *Fake) fakeApplyPatch(iss *jira.Issue, in *jira.IssuePatch) error {
 	for _, label := range in.RemoveLabels {
 		iss.Labels = slices.DeleteFunc(iss.Labels, func(held string) bool { return held == strings.TrimSpace(label) })
 	}
+	f.fakeApplyFixVersionEdits(iss, in)
 	if in.PriorityID != nil {
 		iss.Priority = fakePriorityByID(*in.PriorityID)
 	}
@@ -2232,7 +2236,7 @@ type fakeQueryPlan struct {
 
 var fakeJQLFields = []string{
 	"project", "key", "issuekey", "status", "issuetype", "type",
-	"priority", "assignee", "reporter", "labels",
+	"priority", "assignee", "reporter", "labels", "fixversion",
 }
 
 var fakeJQLOrders = []string{
@@ -2610,6 +2614,12 @@ func fakeClauseValues(iss *jira.Issue, field string) []string {
 		return []string{iss.Reporter.AccountID, iss.Reporter.DisplayName}
 	case "labels":
 		return iss.Labels
+	case "fixversion":
+		out := make([]string, 0, 2*len(iss.FixVersions))
+		for i := range iss.FixVersions {
+			out = append(out, iss.FixVersions[i].ID, iss.FixVersions[i].Name)
+		}
+		return out
 	default:
 		return nil
 	}

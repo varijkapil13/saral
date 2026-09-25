@@ -33,6 +33,8 @@ type (
 	ArchiveMsg struct{}
 	// ShipMsg opens the release flow over the version under the cursor.
 	ShipMsg struct{}
+	// AssignMsg opens the assignment screen over the version under the cursor.
+	AssignMsg struct{}
 )
 
 // mode is what the list is doing.
@@ -57,6 +59,9 @@ type Model struct {
 	day     jira.Date
 	loading bool
 	loaded  bool
+	// stale is a list drawn from the cache that no read has confirmed yet, or
+	// one a read failed over the top of.
+	stale   bool
 	failure error
 	what    string
 	checked time.Time
@@ -102,14 +107,19 @@ func New(d kernel.Deps) kernel.View {
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.form = newForm()
+	m.fromCache()
 	m.relayout()
 	return m
 }
 
 // Init reads the project's versions, and only where there is a project and a
-// site to read them from.
+// site to read them from — and not at all while a stored list is inside its
+// TTL.
 func (m *Model) Init() tea.Cmd {
 	if m.deps.Jira == nil || strings.TrimSpace(m.deps.Project) == "" {
+		return nil
+	}
+	if m.loaded && !m.stale {
 		return nil
 	}
 	return m.load()
@@ -151,6 +161,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.head, m.sum = "", ""
 		m.relayout()
 
+	case kernel.SetMouseMsg:
+		m.rows.Reset()
+
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.rows.Reset()
@@ -160,10 +173,10 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.reproject(msg.Project)
 
 	case kernel.RefreshMsg:
-		cmd = m.load()
+		cmd = m.refresh(msg.Purge)
 
 	case versionsMsg:
-		m.tookVersions(msg)
+		cmd = m.tookVersions(msg)
 
 	case savedMsg:
 		cmd = m.tookSave(msg)
@@ -172,7 +185,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.tookCount(msg)
 
 	case releasedMsg:
-		m.tookRelease(msg)
+		cmd = m.tookRelease(msg)
 
 	case failedMsg:
 		cmd = m.failed(msg)
@@ -188,6 +201,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case ShipMsg:
 		cmd = m.startRelease()
+
+	case AssignMsg:
+		cmd = m.startAssign()
 
 	case tea.KeyPressMsg:
 		cmd = m.key(msg)
@@ -233,10 +249,12 @@ func (m *Model) reproject(project string) tea.Cmd {
 	}
 	m.deps.Project = project
 	m.stop()
-	m.versions, m.loaded, m.failure = nil, false, nil
+	m.versions, m.loaded, m.stale, m.failure = nil, false, false, nil
 	m.cursor, m.top = 0, 0
 	m.mode, m.saving, m.counting = browsing, false, ""
 	m.sum = ""
+	m.fromCache()
+	m.relayout()
 	m.rebuildCells()
 	return m.load()
 }
@@ -284,18 +302,19 @@ func (m *Model) current(gen int) bool { return gen == m.gen }
 // tookVersions replaces the rows and keeps the reader's place: the cursor goes
 // back onto the version it was on, by id, rather than onto whatever row number
 // it happened to be.
-func (m *Model) tookVersions(msg versionsMsg) {
+func (m *Model) tookVersions(msg versionsMsg) tea.Cmd {
 	if !m.current(msg.gen) {
-		return
+		return nil
 	}
 	under := m.selectedID()
-	m.loading, m.loaded, m.failure = false, true, nil
+	m.loading, m.loaded, m.failure, m.stale = false, true, nil, false
 	m.checked = m.now()
 	m.versions = msg.versions
 	m.head, m.sum = "", ""
 	m.relayout()
 	m.rebuildCells()
 	m.moveOnto(under)
+	return m.keep()
 }
 
 func (m *Model) tookSave(msg savedMsg) tea.Cmd {
@@ -313,7 +332,7 @@ func (m *Model) tookSave(msg savedMsg) tea.Cmd {
 	if msg.created {
 		verb = "created"
 	}
-	return kernel.Status(msg.version.Name + " " + verb + ".")
+	return tea.Batch(kernel.Status(msg.version.Name+" "+verb+"."), m.keep())
 }
 
 // tookCount pushes the flow, which is the only thing that wanted the number.
@@ -339,11 +358,12 @@ func (m *Model) tookCount(msg countedMsg) tea.Cmd {
 // tookRelease patches the row the flow shipped. It is a broadcast rather than a
 // refetch, because a refetch would throw the reader's place away for one row
 // that is already in hand.
-func (m *Model) tookRelease(msg releasedMsg) {
+func (m *Model) tookRelease(msg releasedMsg) tea.Cmd {
 	m.put(msg.version)
 	m.sum = ""
 	m.rebuildCells()
 	m.moveOnto(msg.version.ID)
+	return m.keep()
 }
 
 // failed keeps the refusal in the pane as well as on the status line: a status
@@ -355,6 +375,9 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	}
 	m.loading, m.saving, m.counting = false, false, ""
 	m.failure, m.what = msg.err, msg.what
+	if msg.what == whatVersions && len(m.versions) > 0 {
+		m.stale = true
+	}
 	m.sum = ""
 	return kernel.Fail(msg.err)
 }
@@ -484,6 +507,26 @@ func (m *Model) startRelease() tea.Cmd {
 	return m.reply(countOpen(ctx, m.deps.Jira, v.ID, gen))
 }
 
+// startAssign pushes the screen that puts the version on the issues a query
+// matches, or takes it off them. An archived version is refused: Jira will not
+// put one on an issue.
+func (m *Model) startAssign() tea.Cmd {
+	if m.saving || m.mode == editing {
+		return nil
+	}
+	v, ok := m.selected()
+	if !ok {
+		return nil
+	}
+	switch {
+	case m.deps.Jira == nil:
+		return kernel.Warn("there is no Jira connection in this session")
+	case v.Archived:
+		return kernel.Warn(v.Name + " is archived; unarchive it with A before putting it on issues")
+	}
+	return kernel.Push(BulkViewID, "Issues on "+v.Name, NewBulk(m.deps, v))
+}
+
 func (m *Model) save() tea.Cmd {
 	in, err := m.form.versionInput(m.deps.Project)
 	if err != "" {
@@ -543,6 +586,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.startEdit()
 	case actArchive:
 		return m.toggleArchive()
+	case actAssign:
+		return m.startAssign()
 	case actNone, actNextField, actPrevField, actSave, actCancel:
 	}
 	return nil
@@ -563,7 +608,7 @@ func (m *Model) editKey(msg tea.KeyPressMsg) tea.Cmd {
 	case actCancel:
 		return m.cancelEdit()
 	case actNone, actUp, actDown, actPageUp, actPageDown, actGo, actTop, actBottom,
-		actRelease, actNew, actEdit, actArchive:
+		actRelease, actNew, actEdit, actArchive, actAssign:
 	}
 	m.form.typed(msg)
 	return nil

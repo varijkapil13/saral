@@ -148,7 +148,9 @@ worklogs, watchers and `ServerInfo` each sit behind a role of their own in `pkg/
 `IssueReader`, `SprintIssueReader`, `Ranker`, `Linker`, `Worklogger`, `WatcherManager`,
 `ServerInfoReader` — and none is in `SessionClient` until a view calls it: the packet that lands that
 view widens the composite. The board brought in `SprintIssueReader` (a Scrum board shows its running
-sprint) and `IssueReader` (a moved card is read back by key rather than through a search). `*cloud.Client` and `*jiratest.Fake` both implement the whole port.
+sprint, and the sprints view counts a running sprint's progress and reads what is open before a
+completion moves it) and `IssueReader` (a moved card is read back by key rather than through a
+search). `*cloud.Client` and `*jiratest.Fake` both implement the whole port.
 
 ### Filtering by a person, and by the site's own words
 
@@ -657,22 +659,27 @@ Stale-while-revalidate, as it actually runs:
    failure over the top of it — is badged with `Theme.StaleBadge` rather than cleared. Seeing
    yesterday's rows beats seeing none.
 
-`internal/ui/list`, `internal/ui/timeline`, `internal/ui/board` and `internal/ui/backlog` all follow
-this in full, including step 2's skip of the site entirely while a snapshot is still fresh.
+`internal/ui/list`, `internal/ui/timeline`, `internal/ui/board`, `internal/ui/backlog`,
+`internal/ui/sprint` and `internal/ui/release` all follow this in full, including step 2's skip of
+the site entirely while a snapshot is still fresh. The sprints view still reads its running sprints'
+progress on every open: that is issue data, and nothing stores it. The versions list never stores an
+open count, because a count is what a release decision turns on and is always read at the moment of
+the release.
 `internal/ui/issue` follows steps 1 and 4 only: a cached issue is too cheap a read, and too easy to
 have gone stale from a write made in the detail pane itself, for skipping the fetch to be worth the
 next keystroke landing on data nobody re-checked — so it always asks again once it is on screen, and
 what the cache buys it is the frame before that answer, not a skipped round trip.
 
 TTLs by kind, from `Kind.TTL()`: fields and createmeta 24h, board config and the capability probe 1h,
-versions 10m, board and backlog 30s (a board or a backlog is a search in a column layout, and the
+versions 10m, a project's sprint list 1m, board and backlog 30s (a board or a backlog is a search in a column layout, and the
 cards move at a search's pace, not the configuration's), issue 60s, search 30s. All refreshable on
 demand; `R` also drops the stored answer rather than only refetching. The probe's hour is a judgement
 about cost rather than about change: a permission scheme moves about as often as a field catalogue
 does, but being wrong about it offers a view that 403s or hides one that would have worked, which a
 stale field catalogue does not.
 
-`app.CapsCache`, `app.BoardCache`, `app.BacklogCache` and `app.IssueCache` are each a second, smaller
+`app.CapsCache`, `app.BoardCache`, `app.BacklogCache`, `app.IssueCache`, `app.SprintsCache` and
+`app.VersionsCache` are each a second, smaller
 interface over the same file rather than more methods on `Cache`, because each is optional in both
 directions: a session with nowhere to keep one draws from a live read alone, and a `Cache` that is
 only a map of rows stays a `Cache`. A view asks for the one it needs with a type assertion and works

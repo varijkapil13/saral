@@ -76,6 +76,7 @@ func TestKindTTL_IsTheTableTheProjectPublishes(t *testing.T) {
 		KindCreateMeta:  24 * time.Hour,
 		KindBoardConfig: time.Hour,
 		KindVersions:    10 * time.Minute,
+		KindSprints:     time.Minute,
 		KindIssue:       60 * time.Second,
 		KindSearch:      30 * time.Second,
 	}

@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -98,6 +99,33 @@ func scrollOver(b *testing.B, n int) {
 		}
 		next, _ := m.Update(key)
 		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
+// BenchmarkSprintsFirstPaintFromCache is a session opening onto the sprints
+// view with a stored list: the constructor reads it and the first frame is
+// drawn from it, with nothing behind the view to ask.
+func BenchmarkSprintsFirstPaintFromCache(b *testing.B) {
+	cache := newMemCache()
+	cache.held["PROJ"] = app.SprintsSnapshot{
+		Boards:  []jira.Board{{ID: 1, Name: "PROJ board"}},
+		Sprints: many(200),
+		Closed:  true,
+	}
+	d := kernel.Deps{
+		Caps:    fullCaps(),
+		Project: "PROJ",
+		Theme:   kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
+		Now:     func() time.Time { return time.Date(2026, time.March, 5, 9, 0, 0, 0, time.UTC) },
+		Cache:   cache,
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		view, _ := New(d).(*Model)
+		next, _ := view.Update(kernel.SizeMsg{Width: 120, Height: 40})
+		m, _ := next.(*Model)
 		_ = m.View()
 	}
 }

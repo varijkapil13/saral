@@ -102,14 +102,14 @@ enter choose what happens to the open issues    ↓/j down    1-9          saved
                                                             R            refetch everything
 
 releases
-enter release this version       ↓/j  down             1-9          saved query           ctrl+k commands
-n     new version                ↑/k  up               g            where to go           ?      help
-e     edit this version          pgdn page down        g 1-9        switch view           q      quit
-A     archive or unarchive it    pgup page up          ctrl+, / g s settings
-                                 g g  first version    g i          jump to an issue
-                                 G    last version     esc          back
-                                                       r            refresh
-                                                       R            refetch everything
+enter release this version                ↓/j  down             1-9          saved query           ctrl+k commands
+n     new version                         ↑/k  up               g            where to go           ?      help
+e     edit this version                   pgdn page down        g 1-9        switch view           q      quit
+A     archive or unarchive it             pgup page up          ctrl+, / g s settings
+b     put it on issues, or take it off    g g  first version    g i          jump to an issue
+                                          G    last version     esc          back
+                                                                r            refresh
+                                                                R            refetch everything
 
 settings
 enter apply, open or run    ↓ move      1-9          saved query           ctrl+k commands

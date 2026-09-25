@@ -196,3 +196,42 @@ func TestSprints_TheWheelScrollsWithoutMovingTheSelection(t *testing.T) {
 		t.Errorf("the wheel is at %d after going down and back up, want 0", dr.m.top)
 	}
 }
+
+// Each place a completion can send the open issues is a click target, and a
+// click chooses it without answering the question.
+func TestSprints_ClickingADestinationChoosesItAndGoesNoFurther(t *testing.T) {
+	t.Parallel()
+
+	f := newFake()
+	d := testDeps(f)
+	dr := seededWith(t, d, f, "PROJ-1", "PROJ-3")
+	dr.key("c")
+	last := len(dr.m.pending.dests) - 1
+	pressOn(t, d, dr, destZone(last))
+	if dr.m.pending.at != last || dr.m.state != confirming {
+		t.Fatalf("the click left choice %d in state %d, want choice %d still asking", dr.m.pending.at, dr.m.state, last)
+	}
+	if n := countCalls(f, "CompleteSprint") + countCalls(f, "CreateSprint"); n != 0 {
+		t.Errorf("choosing a destination wrote %d times", n)
+	}
+}
+
+// Turning the mouse off mid-session drops the rows memoized with markers in
+// them, so the next frame carries none.
+func TestSprints_TurningTheMouseOffDropsTheMarkedRows(t *testing.T) {
+	t.Parallel()
+
+	mgr := zone.New()
+	t.Cleanup(mgr.Close)
+	d := plainDeps(newFake())
+	d.Zones = mgr
+	dr := newDriver(t, d, 120, 20)
+	if !strings.ContainsRune(dr.m.View(), '\x1b') {
+		t.Fatal("the mouse-on frame carries no marker, so this proves nothing")
+	}
+	mgr.SetEnabled(false)
+	dr.send(kernel.SetMouseMsg{Enabled: false})
+	if frame := dr.m.View(); strings.ContainsRune(frame, '\x1b') {
+		t.Errorf("a marker survived turning the mouse off:\n%q", frame)
+	}
+}

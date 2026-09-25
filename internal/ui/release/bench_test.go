@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -196,3 +197,90 @@ func flowScrollOver(b *testing.B, targets int) {
 
 func BenchmarkFlowSteadyScroll2000(b *testing.B) { flowScrollOver(b, 2000) }
 func BenchmarkFlowSteadyScroll20(b *testing.B)   { flowScrollOver(b, 20) }
+
+// BenchmarkReleasesFirstPaintFromCache is a session opening onto the versions
+// list with a stored list: the constructor reads it and the first frame is drawn
+// from it, with nothing behind the view to ask.
+func BenchmarkReleasesFirstPaintFromCache(b *testing.B) {
+	cache := newMemCache()
+	cache.held["PROJ"] = app.VersionsSnapshot{Versions: benchVersions(200)}
+	d := kernel.Deps{
+		Caps:    fullCaps(),
+		Project: "PROJ",
+		Theme:   kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
+		Now:     func() time.Time { return time.Date(2026, time.March, 5, 9, 0, 0, 0, time.UTC) },
+		Cache:   cache,
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		view, _ := New(d).(*Model)
+		next, _ := view.Update(kernel.SizeMsg{Width: 120, Height: 40})
+		_ = next.View()
+	}
+}
+
+// bulkStocked is the assignment screen holding a preview of n issues, arrived as
+// the message a read would have produced.
+func bulkStocked(tb testing.TB, n, w, h int) *Bulk {
+	tb.Helper()
+	mgr := zone.New()
+	tb.Cleanup(mgr.Close)
+	d := kernel.Deps{
+		Caps:    fullCaps(),
+		Project: "PROJ",
+		Theme:   kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
+		Zones:   mgr,
+	}
+	b, _ := NewBulk(d, jira.Version{ID: "60001", Name: "release-1.1"}).(*Bulk)
+	next, _ := b.Update(kernel.SizeMsg{Width: w, Height: h})
+	b, _ = next.(*Bulk)
+	b.state = bulkReading
+	todo := make([]jira.Issue, n)
+	for i := range todo {
+		todo[i] = jira.Issue{Key: "PROJ-" + strconv.Itoa(i+1), Summary: "the work of week " + strconv.Itoa(i%52)}
+	}
+	next, _ = b.Update(bulkReadMsg{gen: b.gen, todo: todo, skipped: 3})
+	b, _ = next.(*Bulk)
+	_ = b.View()
+	return b
+}
+
+func BenchmarkBulkScroll1000(b *testing.B) { bulkScroll(b, bulkCap) }
+
+func BenchmarkBulkScroll20(b *testing.B) { bulkScroll(b, 20) }
+
+func bulkScroll(b *testing.B, n int) {
+	m := bulkStocked(b, n, 120, 40)
+	var down, up tea.Msg = keyPress("down"), keyPress("up")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		key := down
+		if i%2 == 1 {
+			key = up
+		}
+		next, _ := m.Update(key)
+		m, _ = next.(*Bulk)
+		_ = m.View()
+	}
+}
+
+// BenchmarkBulkWalk walks a fresh row into view on every frame, going back to
+// the top at the bottom so every iteration is a miss.
+func BenchmarkBulkWalk(b *testing.B) {
+	m := bulkStocked(b, bulkCap, 120, 40)
+	var down, top tea.Msg = keyPress("down"), keyPress("pgup")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		next, _ := m.Update(down)
+		m, _ = next.(*Bulk)
+		_ = m.View()
+		if m.cursor >= len(m.items)-1 {
+			m.cursor, m.top = 0, 0
+			next, _ = m.Update(top)
+			m, _ = next.(*Bulk)
+		}
+	}
+}

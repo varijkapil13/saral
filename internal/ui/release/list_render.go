@@ -359,6 +359,7 @@ type summaryKey struct {
 	saving     bool
 	editing    bool
 	creating   bool
+	stale      bool
 	checked    int64
 }
 
@@ -375,6 +376,7 @@ func (m *Model) summaryKey() summaryKey {
 		loading: m.loading, loaded: m.loaded, failed: m.failure != nil,
 		counting: m.counting != "", saving: m.saving,
 		editing: m.mode == editing, creating: m.mode == editing && m.form.id == "",
+		stale:   m.stale,
 		checked: m.checked.UnixNano(),
 	}
 }
@@ -418,10 +420,17 @@ func (m *Model) summaryLine() string {
 	if key.versions > 0 && m.anyUncounted() {
 		b.WriteString(" · open counts are read when a version is released")
 	}
-	m.sum = m.styles.muted.Render(ansi.Truncate(b.String(), max(m.width, 8), m.deps.Theme.Glyphs.Ellipsis))
+	m.sum = m.styles.muted.Render(b.String())
+	if key.stale {
+		m.sum += " " + m.deps.Theme.StaleBadge.Render(staleLabel)
+	}
+	m.sum = ansi.Truncate(m.sum, max(m.width, 8), m.deps.Theme.Glyphs.Ellipsis)
 	m.sumAt = key
 	return m.sum
 }
+
+// staleLabel is a word and not a glyph, the way the list's is.
+const staleLabel = "stale"
 
 func (m *Model) anyUncounted() bool {
 	for i := range m.versions {

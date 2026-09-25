@@ -1,0 +1,16 @@
+  Put 2.0 on issues
+----------------------------------------------------------------------------------------------------
+  12 issues match; 3 already carry 2.0 and are left alone. 2.0 goes on 9 issues:
+  PROJ-1      Add the nightly export                                                                
+  PROJ-2      Rework webhook retries                                                                
+  PROJ-3      Investigate the onboarding wizard                                                     
+  PROJ-5      Retire the audit trail                                                                
+  PROJ-6      Speed up session expiry                                                               
+  PROJ-7      Fix the search index                                                                  
+  PROJ-9      Rework the mobile layout                                                              
+  PROJ-10     Investigate the release checklist                                                     
+  PROJ-11     Document the login flow                                                               
+
+
+
+  y puts it on 9 issues · e changes the query · esc leaves

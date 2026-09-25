@@ -62,7 +62,7 @@ type apiIssueRef struct {
 // value for it, which is how a label is added without writing the whole list.
 type apiIssueWrite struct {
 	Fields     map[string]json.RawMessage `json:"fields,omitempty"`
-	Update     map[string][]apiEditOp     `json:"update,omitempty"`
+	Update     map[string]any             `json:"update,omitempty"`
 	Transition *apiTransitionRef          `json:"transition,omitempty"`
 }
 
@@ -500,7 +500,29 @@ func patchFields(in jira.IssuePatch) (map[string]json.RawMessage, error) {
 //
 // A label is one word to Jira and it refuses one with a space in it, so that is
 // refused here, where the patch can still say which label it was.
-func patchUpdate(in jira.IssuePatch) (map[string][]apiEditOp, error) {
+func patchUpdate(in jira.IssuePatch) (map[string]any, error) {
+	labels, err := labelOps(in)
+	if err != nil {
+		return nil, err
+	}
+	versions, err := fixVersionOps(in)
+	if err != nil {
+		return nil, err
+	}
+	if labels == nil && versions == nil {
+		return nil, nil
+	}
+	out := make(map[string]any, 2)
+	if labels != nil {
+		out["labels"] = labels
+	}
+	if versions != nil {
+		out["fixVersions"] = versions
+	}
+	return out, nil
+}
+
+func labelOps(in jira.IssuePatch) ([]apiEditOp, error) {
 	if len(in.AddLabels) == 0 && len(in.RemoveLabels) == 0 {
 		return nil, nil
 	}
@@ -538,7 +560,44 @@ func patchUpdate(in jira.IssuePatch) (map[string][]apiEditOp, error) {
 			ops = append(ops, group.op(trimmed))
 		}
 	}
-	return map[string][]apiEditOp{"labels": ops}, nil
+	return ops, nil
+}
+
+// fixVersionOps is the fix-version half of the update object, by version id.
+// A patch that also sets or clears fixVersions outright is refused: the site
+// would apply both and the order it picks is not one a caller can rely on.
+func fixVersionOps(in jira.IssuePatch) ([]apiVersionVerb, error) {
+	if len(in.AddFixVersions) == 0 && len(in.RemoveFixVersions) == 0 {
+		return nil, nil
+	}
+	if slices.ContainsFunc(in.Clear, func(ref jira.FieldRef) bool { return strings.TrimSpace(ref.ID) == "fixVersions" }) {
+		return nil, invalidField("fixVersions", "a patch clears the fix versions or edits them, not both")
+	}
+	if _, set := in.Fields.ByID("fixVersions"); set {
+		return nil, invalidField("fixVersions", "a patch replaces the fix versions or edits them, not both")
+	}
+	ops := make([]apiVersionVerb, 0, len(in.AddFixVersions)+len(in.RemoveFixVersions))
+	seen := make(map[string]bool, cap(ops))
+	for _, group := range []struct {
+		ids []string
+		op  func(string) apiVersionVerb
+	}{
+		{in.AddFixVersions, func(id string) apiVersionVerb { return apiVersionVerb{Add: &apiVersionRef{ID: id}} }},
+		{in.RemoveFixVersions, func(id string) apiVersionVerb { return apiVersionVerb{Remove: &apiVersionRef{ID: id}} }},
+	} {
+		for _, id := range group.ids {
+			trimmed := strings.TrimSpace(id)
+			switch {
+			case trimmed == "":
+				return nil, invalidField("fixVersions", "a fix version to add or remove has no id")
+			case seen[trimmed]:
+				return nil, invalidField("fixVersions", "this patch adds or removes version "+strconv.Quote(trimmed)+" twice")
+			}
+			seen[trimmed] = true
+			ops = append(ops, group.op(trimmed))
+		}
+	}
+	return ops, nil
 }
 
 // addFieldSet encodes the custom and system fields a caller carried in a

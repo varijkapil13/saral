@@ -101,3 +101,35 @@ func TestBudget_ReleaseFlowFullRedrawAt200x60(t *testing.T) {
 		t.Errorf("a full redraw at 200x60 took %s, want under the 4ms in docs/PERFORMANCE.md", per)
 	}
 }
+
+func TestBudget_ReleasesFirstPaintFromCache(t *testing.T) {
+	res := testing.Benchmark(BenchmarkReleasesFirstPaintFromCache)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("painting the first frame from cache took %s, want it inside a frame; "+
+			"the whole warm start-up budget it sits under is 60ms", per)
+	}
+}
+
+// The assignment preview is virtualized and its rows and chrome memoized, so a
+// thousand issues cost a steady frame what twenty cost.
+func TestBudget_BulkScrollingCostsTheSameOnAThousandIssuesAsOnTwenty(t *testing.T) {
+	big := testing.Benchmark(BenchmarkBulkScroll1000)
+	small := testing.Benchmark(BenchmarkBulkScroll20)
+	bigAllocs, smallAllocs := big.AllocsPerOp(), small.AllocsPerOp()
+	t.Logf("a steady frame: %d allocations over 1000 issues, %d over 20", bigAllocs, smallAllocs)
+	if bigAllocs > smallAllocs {
+		t.Errorf("a 1000-issue preview allocates %d per frame against %d for 20; the render is not virtualized",
+			bigAllocs, smallAllocs)
+	}
+	if bigAllocs > 2 {
+		t.Errorf("a steady-state frame allocates %d times, want the memo to carry all but the frame and the keystroke",
+			bigAllocs)
+	}
+}
+
+func TestBudget_BulkKeystrokeToFrame(t *testing.T) {
+	res := testing.Benchmark(BenchmarkBulkWalk)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("keystroke to frame took %s over a thousand issues, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+}

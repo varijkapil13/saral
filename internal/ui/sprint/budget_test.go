@@ -56,3 +56,13 @@ func TestBudget_SprintRowsAreMemoizedSoAFrameCostsNothingToRedraw(t *testing.T) 
 		t.Errorf("a memoized row allocates %.1f times, want none", got)
 	}
 }
+
+// The constructor reads the cache, so a first frame from a stored list is on the
+// frame budget: it is what a warm start draws before the site has said anything.
+func TestBudget_SprintsFirstPaintFromCache(t *testing.T) {
+	res := testing.Benchmark(BenchmarkSprintsFirstPaintFromCache)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("painting the first frame from cache took %s, want it inside a frame; "+
+			"the whole warm start-up budget it sits under is 60ms", per)
+	}
+}
