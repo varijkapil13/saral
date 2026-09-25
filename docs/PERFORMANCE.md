@@ -144,6 +144,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/board` | `TestBudget_BoardFindAllocatesNothingPerCard` |
 | `internal/ui/board` | `TestBudget_BoardFullRedrawAt200x60` |
 | `internal/ui/board` | `TestBudget_BoardKeystrokeToFrame` |
+| `internal/ui/board` | `TestBudget_BoardLanesCostNothingOffAndABoundedAmountOn` |
 | `internal/ui/board` | `TestBudget_BoardScrollCostsTheFrameAndNothingElse` |
 | `internal/ui/board` | `TestBudget_BoardScrollingCostsTheSameUnderATermInForce` |
 | `internal/ui/board` | `TestBudget_BoardSprintHeaderCostsNothingPerFrame` |

@@ -637,3 +637,23 @@ func TestOpenSprints_OnlyAValidationErrorMeansNoSprints(t *testing.T) {
 		}
 	}
 }
+
+// The rows index the issues they were built over, so a re-read that brings back
+// fewer of them must not be asked which issue a stale row was on.
+func TestBacklog_ARereadWithFewerIssuesKeepsTheCursorOnARow(t *testing.T) {
+	t.Parallel()
+	site := &createSite{Fake: newFake(12)}
+	dr := newDriver(t, testDeps(site), 120, 30)
+	last := dr.m.issues[len(dr.m.issues)-1].Key
+	dr.cursorTo("row:" + last)
+	site.set(func() { site.hide = last })
+
+	dr.send(kernel.RefreshMsg{})
+
+	if _, held := dr.m.byKey[last]; held {
+		t.Fatalf("the re-read still holds %s", last)
+	}
+	if dr.m.cursor < 0 || dr.m.cursor >= len(dr.m.rows) {
+		t.Errorf("the cursor is on row %d of %d", dr.m.cursor, len(dr.m.rows))
+	}
+}

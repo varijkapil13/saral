@@ -90,12 +90,12 @@ func (p plan) columnOf(statusID string) (int, bool) {
 
 // projection is what a card needs: a list row's fields, the two more the
 // filter picker's own facets need beyond that (reporter and labels — the
-// other four are already in ListProjection), plus the estimation field when
-// the board has one. The id comes from the board configuration, so no
-// customfield is written down and a board that does not estimate asks for
-// nothing extra.
+// other four are already in ListProjection), the parent a swimlane groups by
+// and the project a create lands in, plus the estimation field when the board
+// has one. The id comes from the board configuration, so no customfield is
+// written down and a board that does not estimate asks for nothing extra.
 func (p plan) projection() app.Projection {
-	proj := app.ListProjection().With("reporter", "labels")
+	proj := app.ListProjection().With("reporter", "labels", "parent", "project")
 	if !p.estimates {
 		return proj
 	}

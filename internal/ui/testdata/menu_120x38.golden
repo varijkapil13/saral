@@ -10,6 +10,7 @@ backlog
 │ space  pick or unpick this issue                    │
 │ v      pick every issue in this section             │
 │ m      move these issues to a sprint or the backlog │
+│ c      create an issue in this section              │
 │ /      find an issue                                │
 │ M      only my issues                               │
 │ f      filter by a person, a status, a label        │
@@ -21,6 +22,7 @@ board
 │ What can be done here                        │
 │ enter  open                                  │
 │ m      move this issue to another column     │
+│ c      create an issue in this column        │
 │ /      find a card                           │
 │ M      only my issues                        │
 │ b      another board of this project         │

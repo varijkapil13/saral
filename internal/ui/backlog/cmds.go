@@ -25,6 +25,9 @@ type loadedMsg struct {
 	field   jira.FieldRef
 	page    jira.Page[jira.Issue]
 	missing []string
+	// fields is the ids the page was read with, which a single issue read back
+	// after a create asks for too.
+	fields []string
 	// noSprints is the site's own sentence for a board that has none — a Kanban
 	// board answers the sprint read with a 400 — and "" for a board that has
 	// sprints, or none open. It is not a failure: the backlog is still read.
@@ -132,19 +135,7 @@ func read(ctx context.Context, s site, search *app.Search, project string, at in
 			return out
 		}
 		out.field = field.Ref()
-		// The rank field is named by the board configuration, by id, so it is
-		// added to the projection rather than looked up by a name. Reporter and
-		// labels join it for the same reason board.plan.projection widens it:
-		// filter.FacetReporter and FacetLabel match against this read's own
-		// issues, and ListProjection alone leaves both fields unread.
-		projection := app.ListProjection().With(out.field.ID, "reporter", "labels")
-		if config.RankFieldID != "" {
-			projection = projection.With(config.RankFieldID)
-		}
-		if est := estimateOf(config); est.ID != "" {
-			projection = projection.With(est.ID)
-		}
-		wanted, err := search.Resolve(ctx, projection)
+		wanted, err := search.Resolve(ctx, projectionOf(out.field, config))
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
@@ -156,9 +147,26 @@ func read(ctx context.Context, s site, search *app.Search, project string, at in
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
-		out.page, out.missing = page, wanted.Missing
+		out.page, out.missing, out.fields = page, wanted.Missing, wanted.IDs
 		return out
 	}
+}
+
+// projectionOf is what one read of a board's backlog asks for. The rank field is
+// named by the board configuration, by id, so it is added to the projection
+// rather than looked up by a name. Reporter and labels join it for the same
+// reason board.plan.projection widens it: filter.FacetReporter and FacetLabel
+// match against this read's own issues, and ListProjection alone leaves both
+// fields unread. The project is what an issue created from a section is made in.
+func projectionOf(sprint jira.FieldRef, config jira.BoardConfig) app.Projection {
+	projection := app.ListProjection().With(sprint.ID, "reporter", "labels", "project")
+	if config.RankFieldID != "" {
+		projection = projection.With(config.RankFieldID)
+	}
+	if est := estimateOf(config); est.ID != "" {
+		projection = projection.With(est.ID)
+	}
+	return projection
 }
 
 // indexOfBoard is the position of a board id in a list the site just answered

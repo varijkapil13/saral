@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +68,8 @@ type driver struct {
 	statuses []kernel.StatusMsg
 	pops     int
 	casts    []kernel.BroadcastMsg
+	// elsewhere is every answer addressed to a view other than the form.
+	elsewhere []kernel.ReplyMsg
 }
 
 func newDriver(t *testing.T, d kernel.Deps, w, h int) *driver {
@@ -129,6 +132,10 @@ func (d *driver) run(cmd tea.Cmd) {
 		// The kernel takes the envelope off a view's own answer and hands the
 		// message inside to the view the address names. There is one view here.
 		if reply, addressed := msg.(kernel.ReplyMsg); addressed {
+			if !slices.Contains(reply.To, d.m.addr) {
+				d.elsewhere = append(d.elsewhere, reply)
+				continue
+			}
 			msg = reply.Msg
 		}
 		switch msg := msg.(type) {

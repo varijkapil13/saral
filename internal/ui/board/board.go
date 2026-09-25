@@ -14,6 +14,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/filter"
+	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -35,6 +36,8 @@ var (
 	_ kernel.KeyCapturer = (*Model)(nil)
 	_ kernel.KeyReporter = (*Model)(nil)
 	_ kernel.BackClaimer = (*Model)(nil)
+	_ kernel.Blocker     = (*Model)(nil)
+	_ kernel.CloseAsker  = (*Model)(nil)
 )
 
 // held is the card that has been taken off the board and not yet landed. It is
@@ -46,6 +49,8 @@ type held struct {
 	from   int
 	row    int
 	target int
+	// set is every picked card in hand at once rather than the one keyed.
+	set bool
 }
 
 // Model is the board.
@@ -170,6 +175,35 @@ type Model struct {
 	sprintHead string
 	sprintAt   sprintKey
 
+	// laneMode is the grouping in force for the board laneFor names, recalled
+	// once per board. lanes, laneOf and folded are rebuilt by place.
+	laneMode    laneMode
+	laneFor     int64
+	laneKnown   bool
+	lanes       []lane
+	laneOf      []int
+	laneTop     int
+	laneLines   int
+	foldedLanes map[string]bool
+	folded      [][]int
+	blankRow    string
+
+	// picked is the multi-select, by key; bulk is a change to it being asked
+	// for, confirmed or run.
+	picked map[string]bool
+	bulk   *bulk
+	inAsk  map[string]action
+	inSure map[string]action
+	inRun  map[string]action
+
+	creating  *creation
+	landingTo *creation
+	landGen   int
+	landStop  context.CancelFunc
+	// landed are issues this board created and put on screen before the site's
+	// index could return them; a read that lacks one keeps it.
+	landed []string
+
 	step     step
 	loading  bool
 	loaded   bool
@@ -205,15 +239,18 @@ type Model struct {
 // It is not claimed for the g prefix: the kernel buffers that one itself and
 // hands the view both strokes in a single dispatch, so there is no keypress in
 // between for anything else to take.
-func (m *Model) WantsRawKeys() bool { return m.pendingFilter || m.finding }
+func (m *Model) WantsRawKeys() bool {
+	return m.pendingFilter || m.finding || (m.bulk != nil && m.bulk.stage != stageRunning)
+}
 
 // backKeys are the kernel's own back strokes, which reach the board only while
 // WantsBack claims them.
 var backKeys = kernel.DefaultGlobalKeys().Back.Keys()
 
-// WantsBack claims esc while terms narrow the board, so esc clears them.
+// WantsBack claims esc while cards are picked or terms narrow the board, so esc
+// lets go of the picks first and the terms after.
 func (m *Model) WantsBack() bool {
-	return len(m.terms) > 0 && m.card == nil && !m.moving && !m.finding
+	return (len(m.terms) > 0 || len(m.picked) > 0) && m.card == nil && !m.moving && !m.finding && m.bulk == nil
 }
 
 // New builds the board. It draws nothing of the site in its first frame: which
@@ -227,6 +264,7 @@ func New(d kernel.Deps) kernel.View {
 	m.styles = newStyles(m.deps.Theme)
 	m.cards = newCardCache(cardCacheLimit)
 	m.browsing, m.holding, m.inFind = defaultKeys().tables()
+	m.inAsk, m.inSure, m.inRun = defaultKeys().bulkTables()
 	m.find = newFindInput()
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
@@ -378,6 +416,33 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case FindMsg:
 		cmd = m.startFind()
 
+	case LanesMsg:
+		cmd = m.cycleLanes()
+
+	case FoldMsg:
+		cmd = m.foldLane()
+
+	case CreateMsg:
+		cmd = m.startCreate()
+
+	case AssignMsg:
+		cmd = m.startAssign()
+
+	case LabelMsg:
+		cmd = m.startLabel()
+
+	case form.CreatedMsg:
+		cmd = m.created(msg)
+
+	case landedMsg:
+		cmd = m.tookLanding(msg)
+
+	case peopleMsg:
+		cmd = m.tookPeople(msg)
+
+	case bulkStepMsg:
+		cmd = m.bulkStepped(msg)
+
 	case rankMsg:
 		cmd = m.ranked(msg)
 
@@ -449,6 +514,11 @@ func (m *Model) Close() {
 	m.stopQuickFilters()
 	m.stopMove()
 	m.stopRank()
+	m.stopLanding()
+	if m.bulk != nil {
+		m.bulk.stopAsking()
+		m.bulk.stopRun()
+	}
 }
 
 // --- fetching ---------------------------------------------------------------
@@ -609,6 +679,7 @@ func (m *Model) reproject(project string) tea.Cmd {
 	m.terms, said = filterbar.Reproject(m.deps, ViewID, was, m.terms)
 	m.stopMove()
 	m.dropRank()
+	m.letGoOfBoard()
 	m.needle, m.finding = "", false
 	m.all, m.at, m.ready = nil, 0, false
 	m.issues, m.cols, m.unmapped = nil, nil, 0
@@ -623,6 +694,16 @@ func (m *Model) reproject(project string) tea.Cmd {
 		return said
 	}
 	return tea.Batch(said, m.load())
+}
+
+// letGoOfBoard drops what belongs to the cards on screen and no others: the
+// picks, a bulk change not yet running and the created issues kept past a read.
+func (m *Model) letGoOfBoard() {
+	m.picked, m.landed = nil, nil
+	if m.bulk != nil && m.bulk.stage != stageRunning {
+		m.bulk.stopAsking()
+		m.bulk = nil
+	}
 }
 
 func (m *Model) forgetSprints() {
@@ -735,11 +816,14 @@ func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
 	var said tea.Cmd
 	if msg.first {
 		m.loading, m.loaded, m.step = false, true, stepIdle
+		was := m.issues
 		m.issues, m.missing, m.fields = msg.page.Items, msg.missing, msg.fields
+		m.carryLanded(was)
 		m.sprints, m.sprint, m.noSprints, m.sprintsKnown = msg.sprints, msg.sprint, msg.noSprints, true
 		m.checked = m.now()
 		said = tea.Batch(m.saidMissing(), m.saidSprints())
 	} else {
+		m.dropArrived(msg.page.Items)
 		m.issues = append(m.issues, msg.page.Items...)
 	}
 	if msg.stored != nil {
@@ -804,12 +888,13 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 }
 
 func (m *Model) nextBoard() tea.Cmd {
-	if len(m.all) < 2 {
+	if len(m.all) < 2 || m.bulk != nil {
 		return nil
 	}
 	m.at = (m.at + 1) % len(m.all)
 	m.stopMove()
 	m.dropRank()
+	m.letGoOfBoard()
 	m.forgetSprints()
 	m.ready, m.issues, m.cols, m.unmapped, m.stale = false, nil, nil, 0, false
 	m.quickFilters, m.qfOn = nil, nil
@@ -855,6 +940,11 @@ func (m *Model) place() {
 	for i := range m.cols {
 		m.cols[i] = m.cols[i][:0]
 	}
+	m.recallLanes()
+	var seen map[string]int
+	if m.lanesOn() {
+		seen = m.beginLanes()
+	}
 	for i := range m.issues {
 		at, mapped := m.plan.columnOf(m.issues[i].Status.ID)
 		if !mapped {
@@ -869,7 +959,16 @@ func (m *Model) place() {
 			continue
 		}
 		m.cols[at] = append(m.cols[at], i)
+		if seen != nil {
+			m.joinLane(seen, i)
+		}
 	}
+	if seen != nil {
+		m.layLanes()
+	} else {
+		m.dropLanes()
+	}
+	m.prunePicked()
 	m.relayout()
 	m.clamp()
 }
@@ -943,6 +1042,10 @@ func (m *Model) follow() {
 		}
 		m.colTop = min(max(m.colTop, 0), max(len(m.cols)-m.lay.cols, 0))
 	}
+	if m.lanesOn() {
+		m.followLanes()
+		return
+	}
 	h := m.rowsHeight()
 	top := m.rowTopAt(m.curCol)
 	switch {
@@ -998,7 +1101,7 @@ func (m *Model) moveTo(col, row int) {
 // pickUp takes the card under the cursor off the board. It is the keyboard half
 // of a drag and writes the same state the pointer does.
 func (m *Model) pickUp() tea.Cmd {
-	if m.moving || m.card != nil || m.finding {
+	if m.moving || m.card != nil || m.finding || m.bulk != nil {
 		return nil
 	}
 	iss := m.issueAt(m.curCol, m.curRow)
@@ -1189,6 +1292,9 @@ func (m *Model) moveFailed(msg moveFailedMsg) tea.Cmd {
 
 func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	stroke := msg.String()
+	if m.bulk != nil {
+		return m.bulkKey(msg)
+	}
 	if m.moving {
 		return nil
 	}
@@ -1196,6 +1302,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.findKey(msg)
 	}
 	if m.WantsBack() && slices.Contains(backKeys, stroke) {
+		if len(m.picked) > 0 {
+			return m.unpickAll()
+		}
 		return m.clearFilter()
 	}
 	if m.card != nil {
@@ -1205,6 +1314,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		case actRight:
 			m.aim(m.card.target + 1)
 		case actDrop:
+			if m.card.set {
+				return m.dropSet()
+			}
 			return m.drop()
 		case actCancel:
 			m.putBack()
@@ -1257,6 +1369,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	case actOpen:
 		return m.open()
 	case actPick:
+		if len(m.picked) > 0 {
+			return m.pickUpSet()
+		}
 		return m.pickUp()
 	case actBoard:
 		return m.nextBoard()
@@ -1291,7 +1406,26 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.findAgain(1)
 	case actFindPrev:
 		return m.findAgain(-1)
-	case actNone, actDrop, actCancel, actFindKeep, actFindCancel:
+	case actLanes:
+		return m.cycleLanes()
+	case actFold:
+		return m.foldLane()
+	case actFoldAll:
+		return m.foldAll()
+	case actCreate:
+		return m.startCreate()
+	case actToggle:
+		return m.togglePick()
+	case actPickColumn:
+		return m.pickColumn()
+	case actUnpick:
+		return m.unpickAll()
+	case actAssign:
+		return m.startAssign()
+	case actLabel:
+		return m.startLabel()
+	case actNone, actDrop, actCancel, actFindKeep, actFindCancel,
+		actAccept, actDecline, actPrev, actNext, actRun, actHalt:
 	}
 	return nil
 }
@@ -1310,16 +1444,26 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if msg.Button != tea.MouseLeft {
 		return nil
 	}
+	if m.bulk != nil {
+		return nil
+	}
 	if m.card != nil {
 		// A press while a card is in hand aims it, so a keyboard pick-up can be
 		// landed with the pointer and the two gestures stay one thing.
 		if col, over := m.columnUnder(msg); over {
 			m.aim(col)
+			if m.card.set {
+				return m.dropSet()
+			}
 			return m.drop()
 		}
 		return nil
 	}
 	m.drag.Cancel()
+	if cmd, folded := m.clickLane(msg); folded {
+		m.clicks.Forget()
+		return cmd
+	}
 	if cmd, dropped := m.clickTerm(msg); dropped {
 		m.clicks.Forget()
 		return cmd
@@ -1380,6 +1524,9 @@ func (m *Model) released(msg tea.MouseReleaseMsg) tea.Cmd {
 	if col, over := m.columnUnder(msg); over {
 		m.aim(col)
 	}
+	if m.card.set {
+		return m.dropSet()
+	}
 	return m.drop()
 }
 
@@ -1388,6 +1535,18 @@ func (m *Model) released(msg tea.MouseReleaseMsg) tea.Cmd {
 // row, outside the grid — it falls back to the focused one, the same column a
 // keypress would scroll.
 func (m *Model) wheel(msg tea.MouseWheelMsg) {
+	if m.lanesOn() {
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			m.laneTop -= widget.WheelStep
+		case tea.MouseWheelDown:
+			m.laneTop += widget.WheelStep
+		default:
+			return
+		}
+		m.clampLanes()
+		return
+	}
 	col, ok := m.columnUnder(msg)
 	if !ok {
 		col = m.curCol
@@ -1406,17 +1565,14 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 // cardUnder is the card the pointer is over, by zone lookup over what is
 // actually drawn.
 func (m *Model) cardUnder(msg tea.MouseMsg) (col, row int, ok bool) {
-	h := m.rowsHeight()
-	for c := m.colTop; c < min(m.colTop+m.lay.cols, len(m.cols)); c++ {
-		top := m.rowTopAt(c)
-		for r := top; r < min(top+h, m.columnLen(c)); r++ {
-			iss := m.issueAt(c, r)
-			if iss != nil && m.zones.Hit(cardZone(iss.Key), msg) {
-				return c, r, true
-			}
+	m.eachDrawn(func(c, r int) bool {
+		iss := m.issueAt(c, r)
+		if iss != nil && m.zones.Hit(cardZone(iss.Key), msg) {
+			col, row, ok = c, r, true
 		}
-	}
-	return 0, 0, false
+		return ok
+	})
+	return col, row, ok
 }
 
 // columnUnder is the column the pointer is over. The strip is one zone from its
@@ -1448,6 +1604,7 @@ func (m *Model) relayout() {
 	}
 	m.lay = lay
 	m.blank = strings.Repeat(" ", max(lay.cell, 0))
+	m.blankRow = strings.Repeat(" ", max(lay.width, 0))
 	m.forget()
 }
 
@@ -1458,6 +1615,9 @@ func (m *Model) forget() {
 	m.cards.reset()
 	m.gridValid = false
 	m.summary, m.head, m.rule, m.sprintHead = "", "", "", ""
+	for i := range m.lanes {
+		m.lanes[i].head = ""
+	}
 }
 
 func (m *Model) now() time.Time {
@@ -1507,7 +1667,7 @@ func (m *Model) saidSprints() tea.Cmd {
 }
 
 func (m *Model) nextSprint() tea.Cmd {
-	if m.moving || m.card != nil || m.finding {
+	if m.moving || m.card != nil || m.finding || m.bulk != nil {
 		return nil
 	}
 	switch {
@@ -1520,6 +1680,7 @@ func (m *Model) nextSprint() tea.Cmd {
 	m.sprint = m.sprints[(at+1)%len(m.sprints)]
 	kernel.Keep(m.deps, ViewID, sprintMemoryKey(m.plan.boardID), strconv.FormatInt(m.sprint.ID, 10))
 	m.dropRank()
+	m.letGoOfBoard()
 	m.issues, m.more = nil, false
 	m.curRow = 0
 	m.place()

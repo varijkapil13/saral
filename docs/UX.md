@@ -400,6 +400,7 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 | wheel | scroll the pane under the pointer, not the focused one |
 | drag a card within its column, or a backlog issue within its section | rank it beside the card it was dropped on, the same as `K`/`J` |
 | drag a card to another column | move it there, the same as `m` and `enter` |
+| click a swimlane's header | fold or unfold that lane, the same as `z` |
 | drag the column between two panes | move the boundary; the panes follow the pointer and the ratio is kept |
 | click the line that names the search | show its JQL and offer to change it, the same as `e` |
 | click the footer's root cell | go back to that root, the same as `esc` from a pushed view |
@@ -432,8 +433,9 @@ terms in force — one key rather than two to learn — and the palette carries 
 rows*. The footer offers `ctrl+g` whenever there is a term or a filter to clear. `esc` does the same:
 in a root view it is the kernel's, and clears only the status line, unless the view implements
 `kernel.BackClaimer` and its `WantsBack()` says yes — which the list does exactly while something is
-narrowing its rows, and the board and the backlog while a term is in force (not while a card is in
-hand or a move is being chosen).
+narrowing its rows, the board and the backlog while a term is in force, and the board while cards
+are picked, which esc lets go of before it clears a term (not while a card is in hand or a move is
+being chosen).
 
 **The divider is a column of blank, and it is deliberate that it stays blank.** The boundary between
 the issue pane's description and its sidebar is one column wide and carries no rule, because the
@@ -713,6 +715,10 @@ point at, a pointer gesture.
 | `H` / `L` (or `shift+←` / `shift+→`) | move the card to the previous or next column, in one stroke | — |
 | `M` | only my issues | only my issues |
 | `/`, then `n` / `N` | find a card by key or words of its summary, then the next and the one before | the same over the rows |
+| `c` | create an issue in the column under the cursor | create an issue in the section under the cursor |
+| `w`, `z`, `Z` | swimlanes: none, by assignee, by parent; fold the cursor's lane; fold or open every lane | — |
+| `space`, `v`, `x` / `esc` | pick a card, pick the whole column, let go of every pick | pick an issue, pick the section, let go (`x`) |
+| `@`, `+`, `m` | assign, add a label to, or move every picked card — or the card under the cursor when none is | `m` moves the picked issues |
 
 **A rank is drawn before the site answers and taken back if it refuses.** The site's own order lags
 a rank write (`docs/API-NOTES.md`), so nothing re-reads to confirm: the card moves on screen, the
@@ -741,6 +747,44 @@ days it has left in the site's time zone, and a bar of how much of it is done. D
 mapped column, never a status category, and the bar counts the board's estimate where the board
 estimates and any card carries one, cards otherwise. Each column's rule already carries its estimate
 total; the backlog puts each section's total on the section's head, in the estimation field's own name.
+
+**Swimlanes group the rows, never the columns.** `w` steps through none, by assignee and by parent,
+and the choice is kept per board. The parent is the issue's own parent field, which is where both a
+company-managed epic and a team-managed parent arrive, so nothing reads an epic-link custom field.
+People are ordered by name and parents by the first of their cards the board ranks; the lane of
+nobody's cards — *Unassigned*, *No parent* — comes last. Each lane's header names it and counts its
+cards, and is a zone a click folds. A folded lane keeps counting in its column's caption, the estimate
+under it and the count on the top line; its cards leave what `j`, `k` and `/` walk until it is opened
+again. A lane a term empties is not drawn at all. A rank stays inside the lane: `K` on a lane's first
+card says so rather than ranking it past a card of another lane, and a drag from one lane to another
+is refused, because what moves a card between lanes is its assignee or its parent, not its rank. The
+lane headers are drawn inside the grid's own memo, so a steady frame costs the frame string whether
+lanes are on or off.
+
+**`c` creates where the cursor is.** It opens the create form already answered: the project and issue
+type of the card under the cursor (never a subtask type, which needs a parent the column cannot give),
+and on a Scrum board the sprint on screen, which the form's heading names. The form reports the issue
+it made back to the view that opened it. The site creates every issue in the backlog, so the board
+moves it into the sprint on screen, then through the workflow move into the column when it was created
+in another one — or into the issue pane when that move needs a field, as a drop does — and reads it
+back. A column no move reaches is said so, with where the issue is instead. A refusal at any step says
+how far the issue got. The backlog does the same for a sprint section and nothing for its own. The
+site's index trails a create by seconds, so a re-read that has not caught up does not take the new
+card off again.
+
+**A bulk change is asked for, confirmed, then run one card at a time.** `space` picks the card under
+the cursor and steps on, `v` picks the whole column (or lets it go when it is all picked already), and
+`x` or `esc` lets every pick go. `@` asks who: nothing typed offers this session's account and nobody,
+anything typed is asked of the site. `+` asks for a label, which cannot contain a space. `m` with
+cards picked takes them all in hand, aimed with the same `h`/`l`. Each ends on a named confirmation —
+*assign 3 cards to Grace Hopper?* — that only `enter` or `y` runs. The run shows how far it has got,
+refuses every other key, and `ctrl+g` stops it after the card in flight. A move reads each card's own
+transitions, so a card whose workflow does not reach the column, or whose move needs a field, is
+reported rather than guessed at. An assignee is saved against the one the card was read with, so a
+change somebody else made in between is a refusal and not an overwrite; a label is added, never
+replaced. The report names what changed and which cards did not and why; the cards that did not stay
+picked for the same gesture to try again. Quitting mid-run is held: the run stops after the card in
+flight and the quit goes ahead once it has answered.
 
 ## Around an issue: sharing, links, time, watchers, copies
 

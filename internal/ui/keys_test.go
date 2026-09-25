@@ -74,6 +74,7 @@ var keyOwners = map[string]string{
 	"backlog.rank-bottom": backlog.ViewID,
 	"backlog.mine":        backlog.ViewID,
 	"backlog.find":        backlog.ViewID,
+	"backlog.create":      backlog.ViewID,
 
 	"board.move-issue":  board.ViewID,
 	"board.next":        board.ViewID,
@@ -87,6 +88,11 @@ var keyOwners = map[string]string{
 	"board.shift-right": board.ViewID,
 	"board.mine":        board.ViewID,
 	"board.find":        board.ViewID,
+	"board.lanes":       board.ViewID,
+	"board.fold-lane":   board.ViewID,
+	"board.create":      board.ViewID,
+	"board.assign":      board.ViewID,
+	"board.label":       board.ViewID,
 
 	"plans.open":    plan.ViewID,
 	"plans.sources": plan.ViewID,

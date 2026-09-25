@@ -182,7 +182,7 @@ func BenchmarkCardRender(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		_ = renderCard(iss, m.lay.cell, false, false, m.styles, m.deps.Theme, m.plan)
+		_ = renderCard(iss, m.lay.cell, cardLook{}, m.styles, m.deps.Theme, m.plan)
 	}
 }
 
@@ -248,5 +248,73 @@ func BenchmarkBoardFind5k(b *testing.B) {
 		if _, _, ok := m.nextMatch(m.curCol, m.curRow, 1, false); !ok {
 			b.Fatal("the needle was not found")
 		}
+	}
+}
+
+// lanedBoard is the marked board with its cards spread over eight people and
+// drawn in a lane each.
+func lanedBoard(tb testing.TB, cards int) *Model {
+	tb.Helper()
+	m := marked(tb, 4, cards, 120, 40)
+	for i := range m.issues {
+		u := jira.User{AccountID: "acct-" + strconv.Itoa(i%8), DisplayName: "Person " + strconv.Itoa(i%8)}
+		m.issues[i].Assignee = &u
+	}
+	m.laneFor, m.laneKnown, m.laneMode = m.plan.boardID, true, lanesByAssignee
+	m.place()
+	m.forget()
+	if len(m.lanes) != 8 || !strings.Contains(m.View(), "Person 0") {
+		tb.Fatal("the board is not drawn in lanes, so this benchmark proves nothing")
+	}
+	return m
+}
+
+// BenchmarkBoardView5k is a steady-state frame of five thousand cards with
+// lanes off, the half of the lanes guard that says they cost nothing unused.
+func BenchmarkBoardView5k(b *testing.B) {
+	m := marked(b, 4, 5000, 120, 40)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = m.View()
+	}
+}
+
+// BenchmarkBoardView5kLanes is the same frame drawn in eight lanes.
+func BenchmarkBoardView5kLanes(b *testing.B) {
+	m := lanedBoard(b, 5000)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = m.View()
+	}
+}
+
+// BenchmarkBoardWalk5kLanes walks the cursor down a column of a board in lanes,
+// back to the top at the bottom for the reason BenchmarkBoardWalk10k does.
+func BenchmarkBoardWalk5kLanes(b *testing.B) {
+	m := lanedBoard(b, 5000)
+	var down, top tea.Msg = keyPress("j"), keyPress("home")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		next, _ := m.Update(down)
+		m, _ = next.(*Model)
+		_ = m.View()
+		if m.curRow >= m.columnLen(m.curCol)-1 {
+			next, _ = m.Update(top)
+			m, _ = next.(*Model)
+		}
+	}
+}
+
+// BenchmarkBoardPlaceLanes5k is what regrouping five thousand cards costs: a
+// fold, a read landing, a term changing.
+func BenchmarkBoardPlaceLanes5k(b *testing.B) {
+	m := lanedBoard(b, 5000)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		m.place()
 	}
 }

@@ -1,16 +1,20 @@
 looking at the board
-  acts   enter open · m move · / find · M mine · b board · f filter by · F 1-9 quick filters
+  acts   enter open · m move · c create · / find · M mine · b board · f filter by · F 1-9 quick filters
   full   [↓/j down, ↑/k up, ←/h previous column, →/l next column]
   full   [pgdn page down, pgup page up, g g first card in this column, G / g e last card in this column]
   full   [H move this card to the previous column, L move this card to the next column, K rank this card up, J rank this card down, { rank this card first in its column, } rank this card last in its column]
   full   [enter open, m move this issue to another column, / find a card, M only my issues, b another board of this project, s another sprint running on this board, f filter by a person, a status, a label, F 1-9 quick filters, y copy the key, Y copy the link, o open in browser]
+  full   [space pick or unpick this card, v pick every card in this column, @ assign the picked cards, + add a label to the picked cards]
+  full   [c create an issue in this column, w swimlanes: none, by assignee, by parent, z fold or unfold this lane, Z fold or unfold every lane]
   full   [n next card found, N previous card found]
 a board narrowed by a term
-  acts   enter open · m move · / find · M mine · b board · f filter by · F 1-9 quick filters · ctrl+g clear
+  acts   enter open · m move · c create · / find · M mine · b board · f filter by · F 1-9 quick filters · ctrl+g clear
   full   [↓/j down, ↑/k up, ←/h previous column, →/l next column]
   full   [pgdn page down, pgup page up, g g first card in this column, G / g e last card in this column]
   full   [H move this card to the previous column, L move this card to the next column, K rank this card up, J rank this card down, { rank this card first in its column, } rank this card last in its column]
   full   [enter open, m move this issue to another column, / find a card, M only my issues, b another board of this project, s another sprint running on this board, f filter by a person, a status, a label, F 1-9 quick filters, y copy the key, Y copy the link, o open in browser, ctrl+g clear filter]
+  full   [space pick or unpick this card, v pick every card in this column, @ assign the picked cards, + add a label to the picked cards]
+  full   [c create an issue in this column, w swimlanes: none, by assignee, by parent, z fold or unfold this lane, Z fold or unfold every lane]
   full   [n next card found, N previous card found]
 a card in hand
   acts   enter move it here · ctrl+g put it back
@@ -25,3 +29,36 @@ F waiting for its digit
   acts   enter keep · esc cancel
   full   [enter keep this search, esc go back to where the search began]
   full   [alt+k delete to end of line]
+cards picked
+  acts   m move them · @ assign · + label · space pick · x unpick all
+  full   [↓/j down, ↑/k up, ←/h previous column, →/l next column]
+  full   [pgdn page down, pgup page up, g g first card in this column, G / g e last card in this column]
+  full   [H move this card to the previous column, L move this card to the next column, K rank this card up, J rank this card down, { rank this card first in its column, } rank this card last in its column]
+  full   [enter open, m move this issue to another column, / find a card, M only my issues, b another board of this project, s another sprint running on this board, f filter by a person, a status, a label, F 1-9 quick filters, y copy the key, Y copy the link, o open in browser]
+  full   [space pick or unpick this card, v pick every card in this column, @ assign the picked cards, + add a label to the picked cards, x unpick every card]
+  full   [c create an issue in this column, w swimlanes: none, by assignee, by parent, z fold or unfold this lane, Z fold or unfold every lane]
+  full   [n next card found, N previous card found]
+cards picked on a board narrowed by a term
+  acts   m move them · @ assign · + label · space pick · x unpick all · ctrl+g clear
+  full   [↓/j down, ↑/k up, ←/h previous column, →/l next column]
+  full   [pgdn page down, pgup page up, g g first card in this column, G / g e last card in this column]
+  full   [H move this card to the previous column, L move this card to the next column, K rank this card up, J rank this card down, { rank this card first in its column, } rank this card last in its column]
+  full   [enter open, m move this issue to another column, / find a card, M only my issues, b another board of this project, s another sprint running on this board, f filter by a person, a status, a label, F 1-9 quick filters, y copy the key, Y copy the link, o open in browser, ctrl+g clear filter]
+  full   [space pick or unpick this card, v pick every card in this column, @ assign the picked cards, + add a label to the picked cards, x unpick every card]
+  full   [c create an issue in this column, w swimlanes: none, by assignee, by parent, z fold or unfold this lane, Z fold or unfold every lane]
+  full   [n next card found, N previous card found]
+@ asking who the cards go to
+  acts   enter choose · esc cancel
+  full   [↑ previous person, ↓ next person]
+  full   [enter take this, esc cancel]
+  full   [alt+k delete to end of line]
++ asking for the label
+  acts   enter add it · esc cancel
+  full   [enter take this, esc cancel]
+  full   [alt+k delete to end of line]
+a bulk change waiting for its go-ahead
+  acts   enter go ahead · esc leave them as they are
+  full   [enter go ahead, esc cancel]
+a bulk change running
+  acts   ctrl+g stop
+  full   [ctrl+g stop after the card in flight]

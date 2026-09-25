@@ -136,3 +136,28 @@ func TestBudget_BoardCardsAreMemoizedSoAFrameCostsNothingToRedraw(t *testing.T) 
 		t.Errorf("a memoized grid line allocates %.1f times, want none", got)
 	}
 }
+
+// Lanes cost a steady-state frame nothing whether they are on or off: the
+// frame string is the one allocation either way, because the lane headers are
+// composed inside the grid's own memo. A step down a column in lanes rebuilds
+// the window the way it does without them, and is held to the same kind of
+// ceiling: 79 on an M2 Pro when this was set.
+func TestBudget_BoardLanesCostNothingOffAndABoundedAmountOn(t *testing.T) {
+	off := testing.Benchmark(BenchmarkBoardView5k).AllocsPerOp()
+	on := testing.Benchmark(BenchmarkBoardView5kLanes).AllocsPerOp()
+	if off > 1 {
+		t.Errorf("a steady-state frame of 5k cards with lanes off allocates %d times, want the frame string alone", off)
+	}
+	if on > 1 {
+		t.Errorf("a steady-state frame of 5k cards in lanes allocates %d times, want the frame string alone", on)
+	}
+	walk := testing.Benchmark(BenchmarkBoardWalk5kLanes).AllocsPerOp()
+	t.Logf("a step down a column in lanes: %d allocations, ceiling 90", walk)
+	if walk > 90 {
+		t.Errorf("a step down a column in lanes allocates %d times, over the ceiling of 90", walk)
+	}
+	if res := testing.Benchmark(BenchmarkBoardWalk5kLanes); time.Duration(res.NsPerOp()) > 16*time.Millisecond {
+		t.Errorf("a keystroke to frame in lanes took %s, want under the 16ms in docs/PERFORMANCE.md",
+			time.Duration(res.NsPerOp()))
+	}
+}
