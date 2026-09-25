@@ -128,7 +128,7 @@ gets closed before anything ships.
 
 ## The size budget
 
-`docs/PERFORMANCE.md` caps the stripped binary at 15 MiB, and `ci.yml` checks one target. The release
+`docs/PERFORMANCE.md` caps the stripped binary at 16 MiB, and `ci.yml` checks one target. The release
 build reports all four, because `report_sizes` is on:
 
 | Target | Binary | Archive |
