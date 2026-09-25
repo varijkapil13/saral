@@ -1,6 +1,7 @@
 package board
 
 import (
+	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
@@ -90,7 +91,7 @@ func defaultKeys() keyMap {
 		RankBottom: kernel.Bind([]string{"}"}, "}", "rank this card last in its column"),
 		ShiftLeft:  kernel.Bind([]string{"H", "shift+left"}, "H", "move this card to the previous column"),
 		ShiftRight: kernel.Bind([]string{"L", "shift+right"}, "L", "move this card to the next column"),
-		Mine:       kernel.Bind([]string{"o"}, "o", "only my issues"),
+		Mine:       kernel.Bind([]string{"M"}, "M", "only my issues"),
 		Find:       kernel.Bind([]string{"/"}, "/", "find a card"),
 		FindNext:   kernel.Bind([]string{"n"}, "n", "next card found"),
 		FindPrev:   kernel.Bind([]string{"N"}, "N", "previous card found"),
@@ -110,7 +111,7 @@ func (k keyMap) browsing(narrowed bool) kernel.KeySet {
 		kernel.Terse(k.Board, "board"), kernel.Terse(k.FilterBy, "filter by"),
 		kernel.Terse(k.Filters, "quick filters"),
 	}
-	actions := []kernel.Binding{k.Open, k.Pick, k.Find, k.Mine, k.Board, k.Sprint, k.FilterBy, k.Filters}
+	actions := append([]kernel.Binding{k.Open, k.Pick, k.Find, k.Mine, k.Board, k.Sprint, k.FilterBy, k.Filters}, issue.ShareBindings...)
 	if narrowed {
 		acts = append(acts, kernel.Terse(k.Unfilter, "clear"))
 		actions = append(actions, k.Unfilter)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/filter"
+	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
@@ -388,6 +389,11 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		// Losing the keyboard is not being closed: the palette opening over a
 		// board still being read must not cancel the read.
 		m.focused = msg.Focused
+
+	case issue.ShareMsg:
+		if m.focused {
+			cmd = issue.Share(m.deps, msg.Act, m.underKey())
+		}
 
 	case kernel.SetMouseMsg:
 		m.termsGen++
@@ -1038,6 +1044,13 @@ func (m *Model) under() string {
 	return m.issues[r.issue].Key
 }
 
+func (m *Model) underKey() string {
+	if m.cursor < 0 || m.cursor >= len(m.rows) || m.rows[m.cursor].head {
+		return ""
+	}
+	return m.issues[m.rows[m.cursor].issue].Key
+}
+
 func (m *Model) restore(what string) {
 	if what != "" {
 		for i := range m.rows {
@@ -1390,6 +1403,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		if stroke == "g" {
 			return m.moveTo(0)
 		}
+	}
+	if act := issue.ShareStroke(stroke); act != issue.ShareNone {
+		return issue.Share(m.deps, act, m.underKey())
 	}
 	switch m.acts[stroke] {
 	case actDown:

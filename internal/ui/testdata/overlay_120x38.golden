@@ -13,7 +13,7 @@ space pick or unpick this issue                       ↓/j  down         ctrl+d
 v     pick every issue in this section                ↑/k  up           ctrl+u half page up
 m     move these issues to a sprint or the backlog    pgdn page down    g g    first row
 /     find an issue                                   pgup page up      G      last row
-o     only my issues
+M     only my issues
 f     filter by a person, a status, a label
 s     sort
 
@@ -21,7 +21,7 @@ board
 enter open                                     ↓/j down               pgdn    page down                 ...
 m     move this issue to another column        ↑/k up                 pgup    page up
 /     find a card                              ←/h previous column    g g     first card in this column
-o     only my issues                           →/l next column        G / g e last card in this column
+M     only my issues                           →/l next column        G / g e last card in this column
 b     another board of this project
 f     filter by a person, a status, a label
 F 1-9 quick filters
@@ -57,19 +57,19 @@ enter use this issue type    ↓/j  down         1-9          saved query       
                                                R            refetch everything
 
 issue
-tab next pane          @ assign    1-9          saved query           ctrl+k commands
-e   edit fields                    g            where to go           ?      help
-E   open in $EDITOR                g 1-9        switch view           q      quit
-t   change status                  ctrl+, / g s settings
-C   comment                        g i          jump to an issue
-                                   esc          back
-                                   r            refresh
-                                   R            refetch everything
+tab next pane          @ assign             1-9          saved query           ctrl+k commands
+e   edit fields        y copy the key       g            where to go           ?      help
+E   open in $EDITOR    Y copy the link      g 1-9        switch view           q      quit
+t   change status      o open in browser    ctrl+, / g s settings
+C   comment            L links              g i          jump to an issue
+                       w log time           esc          back
+                       W watchers           r            refresh
+                                            R            refetch everything
 
 list
-enter open                                     ↓/j  down         ctrl+d  half page down ...
-f     filter by a person, a status, a label    ↑/k  up           ctrl+u  half page up
-/     filter                                   pgdn page down    g g     first row
+enter open                                     ↓/j  down         ctrl+d  half page down    y copy the key    ...
+f     filter by a person, a status, a label    ↑/k  up           ctrl+u  half page up      Y copy the link
+/     filter                                   pgdn page down    g g     first row         o open in browser
 a     all issues                               pgup page up      G / g e last row
 e     edit this search
 s     sort

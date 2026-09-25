@@ -333,7 +333,7 @@ func TestMine_OToggleIsAnAssigneeTermTheBarNames(t *testing.T) {
 	fake := newFake(12, jiratest.WithMe(ada))
 	dr := newDriver(t, testDeps(fake), 120, 20)
 
-	dr.key("o")
+	dr.key("M")
 	want := filter.Term{Facet: filter.FacetAssignee, ID: ada.AccountID, Label: ada.DisplayName}
 	if !dr.m.terms.Has(want) || len(dr.m.terms) != 1 {
 		t.Fatalf("o put %v in force, want only %v", dr.m.terms, want)
@@ -347,7 +347,7 @@ func TestMine_OToggleIsAnAssigneeTermTheBarNames(t *testing.T) {
 	}
 	mustContain(t, dr.view(), "Ada Lovelace")
 
-	dr.key("o")
+	dr.key("M")
 	if len(dr.m.terms) != 0 {
 		t.Errorf("a second o left %v in force", dr.m.terms)
 	}
@@ -377,14 +377,14 @@ func TestMine_ASiteThatWillNotSayWhoThisIsIsReported(t *testing.T) {
 			fake := newFake(6, jiratest.WithMe(ada))
 			dr := newDriver(t, testDeps(fake), 120, 20)
 			fake.FailNext(err)
-			dr.key("o")
+			dr.key("M")
 			if len(dr.m.terms) != 0 {
 				t.Errorf("a refused Me put %v in force", dr.m.terms)
 			}
 			if got := dr.lastStatus().Level; got != kernel.LevelError {
 				t.Errorf("the refusal was reported at level %v", got)
 			}
-			dr.key("o")
+			dr.key("M")
 			if len(dr.m.terms) != 1 {
 				t.Error("o did not ask again after a refusal")
 			}

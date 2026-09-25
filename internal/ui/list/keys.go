@@ -1,6 +1,7 @@
 package list
 
 import (
+	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
@@ -106,10 +107,10 @@ func (k keyMap) browsing(narrowed bool) kernel.KeySet {
 	sort, save := kernel.Terse(k.Sort, "sort"), kernel.Terse(k.Save, "save")
 	by := kernel.Terse(k.FilterBy, "filter by")
 	acts := []kernel.Binding{k.Open, by, k.Filter, all, search, sort, save}
-	actions := []kernel.Binding{k.Open, k.FilterBy, k.Filter, k.All, k.Edit, k.Sort, k.Save}
+	actions := append([]kernel.Binding{k.Open, k.FilterBy, k.Filter, k.All, k.Edit, k.Sort, k.Save}, issue.ShareBindings...)
 	if narrowed {
 		acts = []kernel.Binding{k.Open, by, k.Filter, kernel.Terse(k.Unfilter, "clear"), all, search, sort, save}
-		actions = []kernel.Binding{k.Open, k.FilterBy, k.Filter, k.Unfilter, k.All, k.Edit, k.Sort, k.Save}
+		actions = append([]kernel.Binding{k.Open, k.FilterBy, k.Filter, k.Unfilter, k.All, k.Edit, k.Sort, k.Save}, issue.ShareBindings...)
 	}
 	return kernel.KeySet{
 		Acts: acts,

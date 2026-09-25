@@ -232,6 +232,7 @@ func (k keyMap) keySet() kernel.KeySet {
 			{k.HalfDown, k.HalfUp, k.Top, k.Bottom, k.PrevPane, k.Expands,
 				k.Sidebar, k.Describe, k.Reset},
 			{k.Pane, k.Edit, k.Act, k.Editor, k.Save, k.UndoRow, k.UndoAll, k.Assign, k.Move, k.Comments},
+			collabKeys,
 		},
 	}
 }
@@ -273,7 +274,7 @@ var sideLiveSets = func() [lkCount]kernel.KeySet {
 	commentsDirtyActs := []kernel.Binding{kernel.Terse(k.Save, "save"), k.UndoAll}
 	commentsDirtyFull := []kernel.Binding{k.Save, k.UndoAll}
 	restActs := []kernel.Binding{kernel.Terse(k.Move, "status"), k.Comments}
-	restFull := []kernel.Binding{k.Assign, k.Move, k.Comments}
+	restFull := append([]kernel.Binding{k.Assign, k.Move, k.Comments}, collabKeys...)
 
 	build := func(dirty bool, editActs, editFull []kernel.Binding) kernel.KeySet {
 		acts := append(append([]kernel.Binding{}, baseActs...), editActs...)

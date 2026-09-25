@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -93,7 +94,7 @@ func TestKeys_EveryAdvertisedActionIsOneTheStateAnswers(t *testing.T) {
 						continue
 					}
 					for _, stroke := range b.Keys() {
-						if tc.table[stroke] == actNone {
+						if tc.table[stroke] == actNone && issue.ShareStroke(stroke) == issue.ShareNone {
 							t.Errorf("%q is advertised as %q and the dispatcher does nothing with it",
 								stroke, b.Help().Desc)
 						}

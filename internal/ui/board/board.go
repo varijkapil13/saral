@@ -334,6 +334,11 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.dataGen++
 		m.forget()
 
+	case issue.ShareMsg:
+		if m.focused {
+			cmd = issue.Share(m.deps, msg.Act, m.selectedKey())
+		}
+
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
@@ -1226,6 +1231,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 			}
 			return m.readCards(false)
 		}
+	}
+	if act := issue.ShareStroke(stroke); act != issue.ShareNone {
+		return issue.Share(m.deps, act, m.selectedKey())
 	}
 	switch m.browsing[stroke] {
 	case actUp:

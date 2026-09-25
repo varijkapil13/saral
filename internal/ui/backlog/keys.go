@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
@@ -100,7 +101,7 @@ func defaultKeys() keyMap {
 		RankDown:   kernel.Bind([]string{"J", "shift+down"}, "J", "rank this issue down"),
 		RankTop:    kernel.Bind([]string{"{"}, "{", "rank this issue first in its section"),
 		RankBottom: kernel.Bind([]string{"}"}, "}", "rank this issue last in its section"),
-		Mine:       kernel.Bind([]string{"o"}, "o", "only my issues"),
+		Mine:       kernel.Bind([]string{"M"}, "M", "only my issues"),
 		Find:       kernel.Bind([]string{"/"}, "/", "find an issue"),
 		FindNext:   kernel.Bind([]string{"n"}, "n", "next issue found"),
 		FindPrev:   kernel.Bind([]string{"N"}, "N", "previous issue found"),
@@ -123,7 +124,7 @@ func (k keyMap) browsing(picked, narrowed bool) kernel.KeySet {
 	sort := kernel.Terse(k.Sort, "sort")
 	find, mine := kernel.Terse(k.Find, "find"), kernel.Terse(k.Mine, "mine")
 	acts := []kernel.Binding{pick, all, move, find, mine, by, sort}
-	actions := []kernel.Binding{k.Pick, k.PickAll, k.Move, k.Find, k.Mine, k.FilterBy, k.Sort}
+	actions := append([]kernel.Binding{k.Pick, k.PickAll, k.Move, k.Find, k.Mine, k.FilterBy, k.Sort}, issue.ShareBindings...)
 	if picked {
 		acts = append(acts, kernel.Terse(k.Unpick, "unpick all"))
 		actions = append(actions, k.Unpick)

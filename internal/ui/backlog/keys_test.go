@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
@@ -218,7 +219,7 @@ func TestKeys_EveryAdvertisedActionIsOneTheStateAnswers(t *testing.T) {
 				}
 				for _, stroke := range b.Keys() {
 					checked++
-					if tc.table[stroke] == actNone {
+					if tc.table[stroke] == actNone && issue.ShareStroke(stroke) == issue.ShareNone {
 						t.Errorf("%s advertises %q as %q and does nothing with it", name, stroke, b.Help().Desc)
 					}
 				}
