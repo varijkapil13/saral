@@ -187,9 +187,9 @@ type Model struct {
 // between for anything else to take.
 func (m *Model) WantsRawKeys() bool { return m.pendingFilter }
 
-// backKey is the kernel's own back stroke, which reaches the board only while
-// WantsBack claims it.
-var backKey = kernel.DefaultGlobalKeys().Back
+// backKeys are the kernel's own back strokes, which reach the board only while
+// WantsBack claims them.
+var backKeys = kernel.DefaultGlobalKeys().Back.Keys()
 
 // WantsBack claims esc while terms narrow the board, so esc clears them.
 func (m *Model) WantsBack() bool { return len(m.terms) > 0 && m.card == nil && !m.moving }
@@ -1142,7 +1142,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.moving {
 		return nil
 	}
-	if m.WantsBack() && kernel.Matches(msg, backKey) {
+	if m.WantsBack() && slices.Contains(backKeys, stroke) {
 		return m.clearFilter()
 	}
 	if m.card != nil {

@@ -318,9 +318,9 @@ func (m *Model) WantsRawKeys() bool {
 	return m.mode == choosing || m.mode == confirming || m.mode == sorting
 }
 
-// backKey is the kernel's own back stroke, which reaches the backlog only while
-// WantsBack claims it.
-var backKey = kernel.DefaultGlobalKeys().Back
+// backKeys are the kernel's own back strokes, which reach the backlog only while
+// WantsBack claims them.
+var backKeys = kernel.DefaultGlobalKeys().Back.Keys()
 
 // WantsBack claims esc while terms narrow the backlog, so esc clears them.
 func (m *Model) WantsBack() bool { return len(m.terms) > 0 && m.mode == browsing }
@@ -1318,7 +1318,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case browsing:
 	}
-	if m.WantsBack() && kernel.Matches(msg, backKey) {
+	if m.WantsBack() && slices.Contains(backKeys, stroke) {
 		return m.clearFilter()
 	}
 	if m.pendingGo {
