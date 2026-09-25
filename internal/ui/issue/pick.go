@@ -444,7 +444,7 @@ func (m *Model) applyTransition() tea.Cmd {
 	}
 	m.stage = sideSaving
 	ctx, gen := m.beginPick()
-	return kernel.Reply(applyMove(ctx, m.deps.Jira, m.issue.Key, p.move.ID, patch, gen), m.addr)
+	return kernel.Reply(applyMove(ctx, m.deps.Jira, m.issue.Key, p.move.ID, m.editBase(), patch, gen), m.addr)
 }
 
 func (m *Model) moveDone(msg moveDoneMsg) tea.Cmd {
@@ -477,8 +477,8 @@ func (m *Model) pickFailed(msg editFailedMsg) tea.Cmd {
 	var conflict *jira.ConflictError
 	if errors.As(msg.err, &conflict) {
 		m.closePicker()
-		m.saveFail = "changed on the site while you edited; your changes are kept, review and save again"
-		return m.fetch()
+		m.saveFail = conflictNote
+		return join(m.fetch(), kernel.Warn(m.saveFail))
 	}
 	m.pick.loading, m.stage = false, sidePicking
 	if m.pick.kind == rkStatus {

@@ -4,32 +4,32 @@ editing an issue's fields
     full   [tab pane, e edit, E open in $EDITOR, t status, C comment]
     full   [tab next pane, e edit fields, E open in $EDITOR, @ assign, t change status, C comment]
   browsing, the description focused, dirty
-    acts   tab pane · e edit · E open in $EDITOR · s save · backspace undo · U undo all · t status · C comment
-    full   [tab pane, e edit, E open in $EDITOR, s save, backspace undo, U undo all, t status, C comment]
-    full   [tab next pane, e edit fields, E open in $EDITOR, s save changes, backspace undo this, U undo all, @ assign, t change status, C comment]
+    acts   tab pane · e edit · E open in $EDITOR · s save · x revert · X revert all · t status · C comment
+    full   [tab pane, e edit, E open in $EDITOR, s save, x revert, X revert all, t status, C comment]
+    full   [tab next pane, e edit fields, E open in $EDITOR, s save changes, x revert this, X revert all, @ assign, t change status, C comment]
   browsing, the fields focused
     acts   tab pane · enter edit · t status · C comment
     full   [tab pane, enter edit, t status, C comment]
     full   [tab next pane, enter edit this row, e edit fields, @ assign, t change status, C comment]
   browsing, the fields focused, dirty
-    acts   tab pane · enter edit · s save · backspace undo · U undo all · t status · C comment
-    full   [tab pane, enter edit, s save, backspace undo, U undo all, t status, C comment]
-    full   [tab next pane, enter edit this row, e edit fields, s save changes, backspace undo this, U undo all, @ assign, t change status, C comment]
+    acts   tab pane · enter edit · s save · x revert · X revert all · t status · C comment
+    full   [tab pane, enter edit, s save, x revert, X revert all, t status, C comment]
+    full   [tab next pane, enter edit this row, e edit fields, s save changes, x revert this, X revert all, @ assign, t change status, C comment]
   browsing, the thread focused
     acts   tab pane · t status · C comment
     full   [tab pane, t status, C comment]
     full   [tab next pane, @ assign, t change status, C comment]
   browsing, the thread focused, dirty
-    acts   tab pane · s save · backspace undo · U undo all · t status · C comment
-    full   [tab pane, s save, backspace undo, U undo all, t status, C comment]
-    full   [tab next pane, s save changes, backspace undo this, U undo all, @ assign, t change status, C comment]
+    acts   tab pane · s save · X revert all · t status · C comment
+    full   [tab pane, s save, X revert all, t status, C comment]
+    full   [tab next pane, s save changes, X revert all, @ assign, t change status, C comment]
   a row taking typing
     acts   enter keep this value · esc leave it alone
     full   [enter keep this value, esc leave it alone]
     full   [alt+k delete to end of line]
   the description textarea open
-    acts   ctrl+s keep this description · esc leave it alone
-    full   [ctrl+s keep this description, esc leave it alone]
+    acts   ctrl+s keep this description · esc put it aside
+    full   [ctrl+s keep this description, esc put it aside]
     full   [alt+k delete to end of line]
   an inline list open
     acts   enter choose · esc cancel

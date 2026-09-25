@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -85,6 +86,16 @@ type fieldRow struct {
 	// problem is the message Jira attached to this field when it refused the
 	// write, so a rejection is shown in the field's own words.
 	problem string
+
+	// base fingerprints the site's value this row's edit was made against, and
+	// baseLabels is the list a labels edit is diffed against: both are kept from
+	// the read the edit began on, not the latest one, or a rebase would take
+	// somebody else's change for the user's.
+	base       string
+	baseLabels []string
+
+	// pending is inline-editor text not yet kept with ctrl+s: not sent, but drafted.
+	pending *string
 }
 
 func newFieldRow(id, label string, kind rowKind, iss jira.Issue) fieldRow {
@@ -114,6 +125,10 @@ func newFieldRow(id, label string, kind rowKind, iss jira.Issue) fieldRow {
 	}
 	row.originalID = row.chosenID
 	row.value = row.original
+	row.base = app.Fingerprint(iss, id)
+	if kind == rkLabels {
+		row.baseLabels = slices.Clone(iss.Labels)
+	}
 	return row
 }
 
@@ -210,8 +225,7 @@ func (r *fieldRow) into(out *jira.IssuePatch) error {
 		}
 		out.Summary = &value
 	case rkLabels:
-		labels := splitLabels(r.value)
-		out.Labels = &labels
+		out.AddLabels, out.RemoveLabels = labelDiff(r.baseLabels, splitLabels(r.value))
 	case rkDate:
 		if strings.TrimSpace(r.value) == "" {
 			out.Clear = append(out.Clear, jira.FieldRef{ID: r.id})
@@ -247,6 +261,20 @@ func notRead(row *fieldRow) error {
 		Field:   row.id,
 		Message: row.label + " was not read with this issue, so writing it would empty whatever is really there",
 	}}}
+}
+
+func labelDiff(was, now []string) (add, remove []string) {
+	for _, l := range now {
+		if !slices.Contains(was, l) {
+			add = append(add, l)
+		}
+	}
+	for _, l := range was {
+		if !slices.Contains(now, l) {
+			remove = append(remove, l)
+		}
+	}
+	return add, remove
 }
 
 // splitLabels reads the comma-separated form a label list is typed in. Jira

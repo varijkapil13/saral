@@ -58,6 +58,7 @@ type Model struct {
 	issue       jira.Issue
 	labels      app.FieldLabels
 	loadedIssue bool
+	loadFailed  bool
 
 	// edit is the site's own answer to which fields belong on this issue's
 	// screen right now. A read that never arrives — it failed, or this build
@@ -135,6 +136,18 @@ type Model struct {
 	// one the user is in the middle of typing.
 	saveFail      string
 	draftRestored bool
+	// baseAt is the updated stamp of the read the dirty set was made against,
+	// and moved how many dirty rows the last read found the site had changed.
+	baseAt time.Time
+	moved  int
+
+	// docSeed is what the inline editor opened with and docLosses what editing
+	// this document as markdown costs; pendingGen counts keystrokes in it, so
+	// only the last pause of a burst writes the draft.
+	docSeed    string
+	docLosses  []string
+	pendingGen int
+
 	// editGen counts every keystroke a typing row or the description textarea
 	// takes, which is what tells the sidebar's own memo a frame has to be
 	// rebuilt when neither the cursor nor the stage has moved.
@@ -142,6 +155,7 @@ type Model struct {
 
 	drafts     draftStore
 	launch     editorLauncher
+	after      func(time.Duration, func() tea.Msg) tea.Cmd
 	saveGen    int
 	saveCancel context.CancelFunc
 	docGen     int
@@ -191,6 +205,15 @@ func withLauncher(l editorLauncher) modelOption {
 	return func(m *Model) { m.launch = l }
 }
 
+// withAfter replaces the timer the inline editor's draft writes wait on.
+func withAfter(after func(time.Duration, func() tea.Msg) tea.Cmd) modelOption {
+	return func(m *Model) { m.after = after }
+}
+
+func tickAfter(d time.Duration, fn func() tea.Msg) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return fn() })
+}
+
 // withDrafts replaces where drafts are kept.
 func withDrafts(s draftStore) modelOption {
 	return func(m *Model) { m.drafts = s }
@@ -213,6 +236,7 @@ func New(d kernel.Deps, seed jira.Issue, opts ...modelOption) kernel.View {
 		addr:   kernel.NewAddr(),
 		input:  newSideInput(),
 		launch: launchEditor,
+		after:  tickAfter,
 	}
 	if share, chosen := config.LoadUIState().Split(ViewID); chosen {
 		m.split = split(share)
@@ -339,10 +363,14 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case loadedMsg:
 		if m.current(msg.gen) {
-			m.issue, m.labels, m.loadedIssue = msg.issue, msg.labels, true
+			m.issue, m.labels, m.loadedIssue, m.loadFailed = msg.issue, msg.labels, true, false
 			m.dataGen++
 			m.rebaseRows()
 			cmd = m.keepIssue(msg.issue)
+			if m.moved > 0 {
+				m.saveFail = movedNote(m.moved)
+				cmd = join(cmd, join(m.keepDraft(), kernel.Warn(m.saveFail)))
+			}
 		}
 
 	case editMetaMsg:
@@ -354,8 +382,13 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case failedMsg:
 		if m.current(msg.gen) {
+			m.loadFailed = true
+			m.dataGen++
 			cmd = kernel.Fail(msg.err)
 		}
+
+	case pendingFlushMsg:
+		cmd = m.pendingFlush(msg)
 
 	case savedMsg:
 		cmd = m.saveResult(msg)
@@ -449,7 +482,7 @@ func (m *Model) fetch() tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	return join(
-		kernel.Reply(load(ctx, m.search, m.issue.Key, m.gen), m.addr),
+		kernel.Reply(load(ctx, m.search, m.deps.Jira, m.issue.Key, m.gen), m.addr),
 		kernel.Reply(loadEditMeta(ctx, m.deps.Jira, m.issue.Key, m.gen), m.addr),
 	)
 }
@@ -840,6 +873,9 @@ func (m *Model) clicked(msg tea.MouseClickMsg) tea.Cmd {
 	if cmd, hit := m.clickDirtyLine(msg); hit {
 		return cmd
 	}
+	if cmd, hit := m.clickFact(msg); hit {
+		return cmd
+	}
 	if m.grabDivider(msg) {
 		return nil
 	}
@@ -892,6 +928,34 @@ func (m *Model) clickDirtyLine(msg tea.MouseClickMsg) (tea.Cmd, bool) {
 		return m.undoAll(), true
 	}
 	return nil, false
+}
+
+// clickFact answers a click on the header's status, priority or assignee by
+// opening the list the sidebar row of the same name opens.
+func (m *Model) clickFact(msg tea.MouseClickMsg) (tea.Cmd, bool) {
+	if m.stage != sideBrowse {
+		return nil, false
+	}
+	switch {
+	case m.zones.Hit(zoneFactStatus, msg):
+		return m.openStatusPicker(), true
+	case m.zones.Hit(zoneFactPriority, msg):
+		return m.openRow("priority"), true
+	case m.zones.Hit(zoneFactAssignee, msg):
+		return m.openAssigneePicker(), true
+	}
+	return nil, false
+}
+
+// openRow puts the cursor on a sidebar row and acts on it, the way enter on it
+// would.
+func (m *Model) openRow(id string) tea.Cmd {
+	at := m.sideRowIndex(id)
+	if at < 0 {
+		return kernel.Warn("read-only")
+	}
+	m.focus, m.cursor = regionDetails, at
+	return m.actOnCursor()
 }
 
 // clickRow puts the cursor on the row under the pointer, and opens it on a

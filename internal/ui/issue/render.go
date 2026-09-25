@@ -200,7 +200,7 @@ func (m *Model) dirtyLine() string {
 	if m.draftRestored {
 		return m.styles.selected.Render("unsaved changes from earlier restored") + "  " +
 			m.zones.Mark(zoneDirtySave, m.styles.muted.Render("s save")) + m.styles.muted.Render(" · ") +
-			m.zones.Mark(zoneDirtyUndoAll, m.styles.muted.Render("U discard"))
+			m.zones.Mark(zoneDirtyUndoAll, m.styles.muted.Render("X discard"))
 	}
 	n := m.dirtyCount()
 	if n == 0 {
@@ -208,8 +208,8 @@ func (m *Model) dirtyLine() string {
 	}
 	return m.styles.selected.Render(pluralChanges(n)+" unsaved") + "  " +
 		m.zones.Mark(zoneDirtySave, m.styles.muted.Render("s save")) + m.styles.muted.Render(" · ") +
-		m.zones.Mark(zoneDirtyUndo, m.styles.muted.Render("backspace undo this")) + m.styles.muted.Render(" · ") +
-		m.zones.Mark(zoneDirtyUndoAll, m.styles.muted.Render("U undo all"))
+		m.zones.Mark(zoneDirtyUndo, m.styles.muted.Render("x revert this")) + m.styles.muted.Render(" · ") +
+		m.zones.Mark(zoneDirtyUndoAll, m.styles.muted.Render("X revert all"))
 }
 
 // leavePrompt is what the header shows while AskClose is waiting on an answer.
@@ -223,6 +223,10 @@ func (m *Model) leavePrompt() string {
 // headerFacts builds the header's summary line. compact is asked for only
 // once the full names have measured too wide for the pane, and it stands an
 // icon in for the type, the status category and the priority.
+//
+// The status, the priority and the assignee are click targets, marked before
+// the line is truncated so a mark is never cut in half: each opens the list the
+// sidebar row of the same name does.
 func (m *Model) headerFacts(compact bool) []string {
 	t := m.deps.Theme
 	facts := make([]string, 0, 5)
@@ -231,10 +235,15 @@ func (m *Model) headerFacts(compact bool) []string {
 	// issue's already does, and nesting that inside one outer muted.Render
 	// would have the outer reset code cut the colour off partway through
 	// rather than stopping cleanly at the status.
-	add := func(s string, style lipgloss.Style) {
-		if s != "" {
-			facts = append(facts, style.Render(s))
+	add := func(s string, style lipgloss.Style, zone string) {
+		if s == "" {
+			return
 		}
+		s = style.Render(s)
+		if zone != "" {
+			s = m.zones.Mark(zone, s)
+		}
+		facts = append(facts, s)
 	}
 	// The type and the status carry their icons at every width: the shape is the
 	// part a reader takes in without reading. compact gives up the status's
@@ -242,19 +251,40 @@ func (m *Model) headerFacts(compact bool) []string {
 	// The priority has no icon that is not its first letter, and a letter
 	// standing alone among the facts read as a fact of its own; it keeps its
 	// name.
-	add(withIcon(t.Glyphs.TypeGlyph(m.issue.Type), m.issue.Type.Name), m.styles.muted)
+	add(m.factOrPending(t.Glyphs.TypeGlyph(m.issue.Type), m.issue.Type.Name), m.styles.muted, "")
 	status := statusLabel(m.issue.Status)
 	if compact {
 		status = m.issue.Status.Name
 	}
-	add(withIcon(t.Glyphs.CategoryGlyph(m.issue.Status.Category), status), m.styles.category(m.issue.Status.Category))
-	add(priorityName(m.issue), m.styles.muted)
-	add(assigneeName(m.issue, "unassigned"), m.styles.muted)
+	add(m.factOrPending(t.Glyphs.CategoryGlyph(m.issue.Status.Category), status), m.styles.category(m.issue.Status.Category), zoneFactStatus)
+	add(priorityName(m.issue), m.styles.muted, zoneFactPriority)
+	add(assigneeName(m.issue, "unassigned"), m.styles.muted, zoneFactAssignee)
 	if when := formatWhen(m.issue.Updated, m.location()); when != "" {
-		add("updated "+when, m.styles.muted)
+		add("updated "+when, m.styles.muted, "")
 	}
 	return facts
 }
+
+// factOrPending is a fact with its icon, or — for an issue opened by key alone,
+// before the read that names its type and status has answered — the icon with
+// a placeholder, so the line does not reflow when it lands. A read that failed
+// says so rather than waiting on one that is not coming.
+func (m *Model) factOrPending(icon, text string) string {
+	if text != "" || m.loadedIssue {
+		return withIcon(icon, text)
+	}
+	if m.loadFailed {
+		return withIcon(icon, "unknown")
+	}
+	return withIcon(icon, m.deps.Theme.Glyphs.Ellipsis)
+}
+
+// The header facts a click opens a list from.
+const (
+	zoneFactStatus   = "fact:status"
+	zoneFactPriority = "fact:priority"
+	zoneFactAssignee = "fact:assignee"
+)
 
 // statusLabel names the status and, where it adds something, the category it
 // belongs to. A site's own status names carry no board position — "Building"
@@ -316,10 +346,18 @@ func (m *Model) View() string {
 // itself, so there is nothing left for this region's own offset to do while it
 // is open.
 func (m *Model) docEditContent(w, h int) content {
+	head := 0
+	if len(m.docLosses) > 0 && h > 1 {
+		head = 1
+	}
 	m.docArea.SetWidth(max(w, 1))
-	m.docArea.SetHeight(max(h, 1))
-	text := m.docArea.View()
-	lines := strings.Split(text, "\n")
+	m.docArea.SetHeight(max(h-head, 1))
+	area := strings.Split(m.docArea.View(), "\n")
+	lines := make([]string, 0, head+len(area))
+	if head > 0 {
+		lines = append(lines, clip(m.styles.fail.Render(lossSentence(m.docLosses)), w, m.deps.Theme.Glyphs.Ellipsis))
+	}
+	lines = append(lines, area...)
 	widths := make([]int, len(lines))
 	widest := 0
 	for i, line := range lines {
@@ -334,6 +372,9 @@ func (m *Model) docEditContent(w, h int) content {
 // and does not escape prose — so putting it on screen puts ## and ** there too.
 func (m *Model) descLines(width int) content {
 	if !m.loadedIssue && len(m.issue.Description.Content) == 0 {
+		if m.loadFailed {
+			return m.oneLine(width, "The issue could not be read.")
+		}
 		return m.oneLine(width, "Reading the issue"+m.deps.Theme.Glyphs.Ellipsis)
 	}
 	r := richtext.Render(m.issue.Description, richtext.Options{

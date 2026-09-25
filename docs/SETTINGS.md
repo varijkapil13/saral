@@ -211,6 +211,7 @@ you could enter from an issue and not get out of. The kernel builds it through t
 
     Glyphs                    ( ) nerd font  (•) unicode  ( ) ascii
       unicode by default; nerd font icons need a Nerd Font installed
+      ◆ ● ■ ▲ ▪ ○ ○ ◐ ● ◌ • → ✓ ✗ · … ◌ • ▸ ▾ ◆ █ ░ │ ─ ╭ ╮ ╰ ╯ ⠋ ⠙ …
 
     Mouse                     [✓] on
       clicking, dragging the split, the right-click menu  (saved to config.toml)
@@ -291,7 +292,7 @@ go; `SwitchTheme` and `SwitchScheme` stay exactly as they are and become the set
 
 | State | Setting | Where it is kept |
 |---|---|---|
-| `Profile.Glyphs` | `appearance.glyphs`, choice of nerd font/unicode/ascii | profile |
+| `Profile.Glyphs` | `appearance.glyphs`, choice of nerd font/unicode/ascii; the line under it draws every icon of the tier in force | profile |
 | `Config.Mouse` | `appearance.mouse`, toggle | config.toml, shared |
 
 Glyphs already switches cleanly: `NewTheme` takes a `Glyphs` and a `ThemeMsg` carries the rebuilt

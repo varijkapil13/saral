@@ -4,8 +4,9 @@ o Story | o Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00
 |Details                                                                        
 |->Summary      Retire the nightly export                                       
 |  Description  5 lines                                                         
-|  Status       Triage                                                          
-|  Priority     Urgent                                                          
+|  Type         o Story                                                         
+|  Status       o Triage                                                        
+|  Priority     U Urgent                                                        
 |  Assignee     unassigned                                                      
 |  Project      PROJ PROJ Project                                               
 |  Reporter     Grace Hopper                                                    
@@ -15,6 +16,5 @@ o Story | o Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00
 |  Fix versions 2.0                                                             
 |  5 more, all empty                                                            
 |  1 more, hidden as Jira's own bookkeeping                                     
-|                                                                               
 |                                                                               
 |                                                                               

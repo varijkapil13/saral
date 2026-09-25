@@ -10,6 +10,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.8
 	github.com/gofrs/flock v0.13.1
 	github.com/lrstanley/bubblezone/v2 v2.0.0
+	github.com/mattn/go-shellwords v1.0.15
 	github.com/zalando/go-keyring v0.2.8
 	go.etcd.io/bbolt v1.5.0
 	golang.org/x/sync v0.23.0

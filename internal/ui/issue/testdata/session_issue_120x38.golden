@@ -5,8 +5,9 @@ o Story | o Triage (to do) | Urgent | Ada Lovelace | updated 03 Mar 2025 04:00
 |Rework the mobile layout.                                                      |Details                                
 |                                                                               |->Summary      Rework the mobile layout
 |- Filed against PROJ-9.                                                        |  Description  4 lines                 
-|- Small change, but it touches the shared client.                              |  Status       Triage                  
-|                                                                               |  Priority     Urgent                  
+|- Small change, but it touches the shared client.                              |  Type         o Story                 
+|                                                                               |  Status       o Triage                
+|                                                                               |  Priority     U Urgent                
 |                                                                               |  Assignee     Ada Lovelace            
 |                                                                               |  Project      PROJ PROJ Project       
 |                                                                               |  Reporter     Grace Hopper            
@@ -21,7 +22,6 @@ o Story | o Triage (to do) | Urgent | Ada Lovelace | updated 03 Mar 2025 04:00
 |                                                                               |> Sam Tester | 02 Mar 2026 09:00       
 |                                                                               |    A comment worth a line or two, and 
 |                                                                               |    a second sentence to wrap.         
-|                                                                               |                                       
 |                                                                               |                                       
 |                                                                               |                                       
 |                                                                               |                                       

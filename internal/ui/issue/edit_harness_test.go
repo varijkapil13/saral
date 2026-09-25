@@ -297,7 +297,7 @@ func patchFieldNames(in jira.IssuePatch) []string {
 		{"summary", in.Summary != nil},
 		{"description", in.Description != nil},
 		{"assignee", in.Assignee != nil},
-		{"labels", in.Labels != nil},
+		{"labels", in.Labels != nil || len(in.AddLabels) > 0 || len(in.RemoveLabels) > 0},
 		{"priority", in.PriorityID != nil},
 		{"duedate", in.Due != nil},
 	} {

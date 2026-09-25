@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -31,7 +32,11 @@ type draft struct {
 	// Description is the document $EDITOR produced, kept as ADF because that is
 	// what was reconciled against the original and re-rendering it as markdown
 	// would put it through a second lossy trip.
-	Description json.RawMessage `json:"description,omitempty"`
+	Description     json.RawMessage `json:"description,omitempty"`
+	DescriptionText *string         `json:"descriptionText,omitempty"`
+
+	Base       app.EditBase `json:"base,omitzero"`
+	LabelsBase *[]string    `json:"labelsBase,omitempty"`
 }
 
 // namedID is one chosen option, kept as the identifier a patch sends and the
@@ -42,7 +47,7 @@ type namedID struct {
 }
 
 func (d draft) isEmpty() bool {
-	return len(d.Values) == 0 && len(d.Choices) == 0 && len(d.Description) == 0
+	return len(d.Values) == 0 && len(d.Choices) == 0 && len(d.Description) == 0 && d.DescriptionText == nil
 }
 
 // draftStore keeps drafts under one directory, one file per issue per site.
