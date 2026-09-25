@@ -22,7 +22,7 @@ getting thirty per cent worse with room to spare.
 | Cold start → first paint (warm cache) | < 60 ms | *measured, not guarded.* `hyperfine` on `saral --bench-first-paint`. Warming the cache needs a site, so CI cannot; the in-process half is `TestBudget_FirstPaintFromCache` |
 | Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the timeline, the palette, the form, settings and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, and the regression gate reads the same means, so p99 is still unmeasured here and stays on the list below |
 | Scroll a 10k-row list | 1 allocation a frame | the frame string `View` returns, and nothing behind it. Asserted with the mouse on, under a kept filter and under terms in force |
-| Scroll any other list | the frame and the lines the keystroke changed | every view that scrolls asserts `allocs/op` against a ceiling and against the same view at twenty rows: the backlog, the board, the comment thread, the attachment pane, the filter picker, the form, the move confirm screen, the palette, plans, releases, sprints and the timeline |
+| Scroll any other list | the frame and the lines the keystroke changed | every view that scrolls asserts `allocs/op` against a ceiling and against the same view at twenty rows: the backlog, the board, the comment thread, the attachment pane, the filter picker, the form, the move confirm screen, the palette, plans, releases, the fix-version assignment preview, sprints and the timeline |
 | Pan a chart across a thousand years of calendar | the allocations and the bytes that ten years costs, and **< 16 ms** a frame over either span | the timeline is the one view that scrolls in two dimensions. `TestBudget_TimelinePanningCostsTheSameOverAThousandYearsAsOverTen` compares the two runs on the counts and the bytes, holds the count to a ceiling of 1700 besides, and holds each frame's time against the budget rather than against the other run |
 | Frame allocations at 200×60 | ceilings in `internal/ui/kernel/budget_test.go` | 297 for a frame, 310 for a keystroke and its frame, 324 with the mouse on, each held to a ceiling about a tenth above |
 | An overlay over the same frame | ceilings in the same table | 629 for the `?` overlay, 800 for the right-click menu, 1532 for the destinations behind a latched `g`. None is a steady state — nothing repaints one until the next key — and each has a benchmark of its own, so a number here is one the table checks. The destinations box measured 1120 while it listed only the view slots; the gestures the prefix completes on its own — `g i` and `g s` — are two more rows and a wider title column, and every row of the box pays that width |
@@ -194,9 +194,12 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/plan` | `TestBudget_PlansKeystrokeToFrame` |
 | `internal/ui/plan` | `TestBudget_PlansScrollingCostsTheSameOnTwoThousandPlansAsOnTwenty` |
 | `internal/ui/plan` | `TestBudget_PlansStandingStillCostsTheFrameAndNothingElse` |
+| `internal/ui/release` | `TestBudget_BulkKeystrokeToFrame` |
+| `internal/ui/release` | `TestBudget_BulkScrollingCostsTheSameOnAThousandIssuesAsOnTwenty` |
 | `internal/ui/release` | `TestBudget_ReleaseFlowFullRedrawAt200x60` |
 | `internal/ui/release` | `TestBudget_ReleaseFlowScrollingCostsTheSameOnTwoThousandVersionsAsOnTwenty` |
 | `internal/ui/release` | `TestBudget_ReleasesAMemoMissCostsTheRowsThatMovedAndNotAWindow` |
+| `internal/ui/release` | `TestBudget_ReleasesFirstPaintFromCache` |
 | `internal/ui/release` | `TestBudget_ReleasesFullRedrawAt200x60` |
 | `internal/ui/release` | `TestBudget_ReleasesKeystrokeToFrame` |
 | `internal/ui/release` | `TestBudget_ReleasesRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
@@ -209,6 +212,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/settings` | `TestBudget_SettingsRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/sprint` | `TestBudget_SprintRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/sprint` | `TestBudget_SprintScrollingCostsTheSameOnTwoThousandSprintsAsOnTwenty` |
+| `internal/ui/sprint` | `TestBudget_SprintsFirstPaintFromCache` |
 | `internal/ui/sprint` | `TestBudget_SprintsFullRedrawAt200x60` |
 | `internal/ui/sprint` | `TestBudget_SprintsKeystrokeToFrame` |
 | `internal/ui/timeline` | `TestBudget_TimelineAMemoMissCostsThreeRowsAndNotAWindow` |

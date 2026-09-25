@@ -1,11 +1,11 @@
 reading the versions
-  acts   enter release · n new · e edit · A archive
+  acts   enter release · n new · e edit · A archive · b assign
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G last version]
-  full   [enter release this version, n new version, e edit this version, A archive or unarchive it]
+  full   [enter release this version, n new version, e edit this version, A archive or unarchive it, b put it on issues, or take it off]
 counting what is open on one
-  acts   n new · e edit · A archive
+  acts   n new · e edit · A archive · b assign
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G last version]
-  full   [n new version, e edit this version, A archive or unarchive it]
+  full   [n new version, e edit this version, A archive or unarchive it, b put it on issues, or take it off]
 typing a version
   acts   ctrl+s save · esc leave it
   full   [tab next field, shift+tab previous field]

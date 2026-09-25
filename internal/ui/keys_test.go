@@ -72,6 +72,7 @@ var keyOwners = map[string]string{
 	"plans.sources": plan.ViewID,
 
 	"releases.archive": release.ViewID,
+	"releases.assign":  release.ViewID,
 	"releases.edit":    release.ViewID,
 	"releases.new":     release.ViewID,
 	"releases.open":    release.ViewID,

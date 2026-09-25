@@ -1,0 +1,15 @@
+  Put 2.0 on issues
+----------------------------------------------------------------------------------------------------
+  Which issues, as JQL:
+  > project = "PROJ"                                                                                
+
+  The query could not be run.
+  Field 'nope' does not exist or you do not have permission to view it.
+
+  enter shows what would change · tab takes it off instead · esc leaves
+
+
+
+
+
+

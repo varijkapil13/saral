@@ -38,6 +38,10 @@ func newFlow(d kernel.Deps) kernel.View {
 	return release.NewFlow(d, jira.Version{ID: "10100", ProjectID: "10000", Name: "1.4.0"}, 3, nil)
 }
 
+func newBulk(d kernel.Deps) kernel.View {
+	return release.NewBulk(d, jira.Version{ID: "10100", ProjectID: "10000", Name: "1.4.0"})
+}
+
 // keyReporters names the model that answers for each registered key scope. The
 // kernel cannot hold the views to this — it may not import one — and a view
 // checking itself is the drift, so the sweep lives here, above every view and
@@ -59,6 +63,7 @@ var keyReporters = map[string]func(kernel.Deps) kernel.View{
 	plan.ViewID:        newPlan,
 	release.ViewID:     release.New,
 	release.FlowViewID: newFlow,
+	release.BulkViewID: newBulk,
 	sprint.ViewID:      sprint.New,
 	timeline.ViewID:    timeline.New,
 }
@@ -231,6 +236,8 @@ var closers = map[string]func(kernel.Deps) kernel.View{
 	// The release screen is pushed by the versions list with the version and the
 	// count; nothing opens it by name.
 	release.FlowViewID: newFlow,
+	// The assignment screen is pushed by the versions list with the version.
+	release.BulkViewID: newBulk,
 	// Both of these hold a footer slot, so nothing pushes them and neither Close is
 	// ever called; they are here because withdrawing the method is theirs to do.
 	board.ViewID: board.New,
@@ -349,6 +356,8 @@ var answerable = map[string]func(kernel.Deps) kernel.View{
 	// The release screen is pushed with its count already read, so the only answer
 	// it waits for is the release it sends.
 	release.FlowViewID: newFlow,
+	// The assignment screen asks for the query's matches and sends the chunks.
+	release.BulkViewID: newBulk,
 	sprint.ViewID:      sprint.New,
 	timeline.ViewID:    timeline.New,
 }

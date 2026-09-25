@@ -2236,7 +2236,7 @@ type fakeQueryPlan struct {
 
 var fakeJQLFields = []string{
 	"project", "key", "issuekey", "status", "issuetype", "type",
-	"priority", "assignee", "reporter", "labels",
+	"priority", "assignee", "reporter", "labels", "fixversion",
 }
 
 var fakeJQLOrders = []string{
@@ -2614,6 +2614,12 @@ func fakeClauseValues(iss *jira.Issue, field string) []string {
 		return []string{iss.Reporter.AccountID, iss.Reporter.DisplayName}
 	case "labels":
 		return iss.Labels
+	case "fixversion":
+		out := make([]string, 0, 2*len(iss.FixVersions))
+		for _, v := range iss.FixVersions {
+			out = append(out, v.ID, v.Name)
+		}
+		return out
 	default:
 		return nil
 	}

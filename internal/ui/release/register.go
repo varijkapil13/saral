@@ -25,6 +25,7 @@ func init() {
 	})
 	kernel.RegisterKeys(ViewID, keys.keySet())
 	kernel.RegisterKeys(FlowViewID, defaultFlowKeys().keySet())
+	kernel.RegisterKeys(BulkViewID, defaultBulkKeys().keySet())
 
 	kernel.RegisterCommand(kernel.Command{
 		ID:    "releases.open",
@@ -48,6 +49,10 @@ func init() {
 		{
 			id: "releases.release", title: "Release the version you are on",
 			key: keys.Release, msg: ShipMsg{},
+		},
+		{
+			id: "releases.assign", title: "Put the version you are on on issues, or take it off them",
+			key: keys.Assign, msg: AssignMsg{},
 		},
 	} {
 		kernel.RegisterCommand(kernel.Command{

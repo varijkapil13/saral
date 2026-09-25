@@ -22,10 +22,12 @@ palette
  Issues  enter run it  esc close                                          ctrl+k
 plans
  Issues  enter sources                                              ? ctrl+k esc
+release.bulk
+ Issues  enter preview  tab on/off  esc leave                             ctrl+k
 release.flow
  Issues  enter choose                                               ? ctrl+k esc
 releases
- Issues  enter release  n new  e edit  A archive                    ? ctrl+k esc
+ Issues  enter release  n new  e edit  A archive  b assign          ? ctrl+k esc
 settings
  Issues  enter apply, open or run                                   ? ctrl+k esc
 sprints
