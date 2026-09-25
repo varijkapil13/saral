@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -23,6 +24,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"a card in hand", keysHolding},
 		{"a move out with the site", keysMoving},
 		{"F waiting for its digit", keysPickingFilter},
+		{"/ taking a search", keysFinding},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the board has %d key states and this test names %d", keyStates, len(named))
@@ -73,7 +75,7 @@ func TestLiveKeys_FollowWhatTheBoardIsDoing(t *testing.T) {
 // names and the dispatcher drops is the drift the registry exists to prevent.
 func TestKeys_EveryAdvertisedActionIsOneTheStateAnswers(t *testing.T) {
 	t.Parallel()
-	browsing, holding := defaultKeys().tables()
+	browsing, holding, finding := defaultKeys().tables()
 	for name, tc := range map[string]struct {
 		set   kernel.KeySet
 		table map[string]action
@@ -81,11 +83,15 @@ func TestKeys_EveryAdvertisedActionIsOneTheStateAnswers(t *testing.T) {
 		"looking at the board":       {set: liveSets[keysBrowsing], table: browsing},
 		"a board narrowed by a term": {set: liveSets[keysNarrowed], table: browsing},
 		"a card in hand":             {set: liveSets[keysHolding], table: holding},
+		"/ taking a search":          {set: liveSets[keysFinding], table: finding},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			for _, column := range append([][]kernel.Binding{tc.set.Acts}, tc.set.Full...) {
 				for _, b := range column {
+					if b.Help() == widget.KillLine.Help() {
+						continue
+					}
 					for _, stroke := range b.Keys() {
 						if tc.table[stroke] == actNone {
 							t.Errorf("%q is advertised as %q and the dispatcher does nothing with it",
@@ -111,12 +117,35 @@ func TestKeys_NothingTheKernelKeepsIsBoundHere(t *testing.T) {
 			reserved[stroke] = b.Help().Desc
 		}
 	}
-	browsing, holding := defaultKeys().tables()
+	browsing, holding, _ := defaultKeys().tables()
 	for name, table := range map[string]map[string]action{"looking at the board": browsing, "a card in hand": holding} {
 		for stroke := range table {
 			if why, taken := reserved[stroke]; taken {
 				t.Errorf("%s binds %q, which the kernel keeps for %s and never forwards", name, stroke, why)
 			}
+		}
+	}
+}
+
+// A stroke bound to two actions in one state does whichever the table was
+// built with last, and the other binding advertises a key that does not do it.
+func TestKeys_NoStrokeMeansTwoThingsInOneState(t *testing.T) {
+	t.Parallel()
+	browsing, holding, finding := defaultKeys().entries()
+	for name, entries := range map[string][]binding{
+		"looking at the board": browsing, "a card in hand": holding, "/ taking a search": finding,
+	} {
+		seen := map[string]action{}
+		for _, e := range entries {
+			for _, stroke := range e.b.Keys() {
+				if was, taken := seen[stroke]; taken && was != e.a {
+					t.Errorf("%s binds %q to two actions", name, stroke)
+				}
+				seen[stroke] = e.a
+			}
+		}
+		if len(seen) == 0 {
+			t.Errorf("%s binds nothing, so this check read nothing", name)
 		}
 	}
 }

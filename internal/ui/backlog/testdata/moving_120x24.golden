@@ -1,5 +1,5 @@
   PROJ board | 2 open sprints | 93 of 140 issues
-> v Backlog | 93 issues                                                                                                 
+> v Backlog | 93 issues | 209 Story Points                                                                              
   + o PROJ-1    Add the nightly export                                                  ~ Building      Grace Hopper    
   + o PROJ-3    Investigate the onboarding wizard                                       o Triage        Ada Lovelace    
   + o PROJ-4    Document CSV import                                                     ~ Building      unassigned      
@@ -19,6 +19,6 @@
   + o PROJ-25   Document the onboarding wizard                                          ~ Building      Grace Hopper    
   + o PROJ-27   Speed up the audit trail                                                o Triage        Ada Lovelace    
   + o PROJ-28   Fix session expiry                                                      ~ Building      unassigned      
-  Rank order. Rows cannot be reordered here: nothing can write a rank.
+  Rank order. K, J, { and } change it within a section.
   93 issues picked
   moving 93 issues into Sprint 2 | batch 1 of 2, 0 moved

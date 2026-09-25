@@ -1,0 +1,24 @@
+  PROJ board | 2 open sprints | 20 of 30 issues
+  v Sprint 2 | active | 0 issues                                                                                        
+  v Sprint 3 | future | 0 issues                                                                                        
+  v Backlog | 20 issues | 43 Story Points                                                                               
+>   o PROJ-1   Add the nightly export                                                   ~ Building      Grace Hopper    
+    o PROJ-3   Investigate the onboarding wizard                                        o Triage        Ada Lovelace    
+    o PROJ-4   Document CSV import                                                      ~ Building      unassigned      
+    o PROJ-6   Speed up session expiry                                                  o Triage        Ada Lovelace    
+    o PROJ-7   Fix the search index                                                     ~ Building      Grace Hopper    
+    o PROJ-9   Rework the mobile layout                                                 o Triage        Ada Lovelace    
+    o PROJ-10  Investigate the release checklist                                        ~ Building      Grace Hopper    
+    o PROJ-12  Retire the nightly export                                                o Triage        unassigned      
+    o PROJ-13  Speed up webhook retries                                                 ~ Building      Grace Hopper    
+    o PROJ-15  Add CSV import                                                           o Triage        Ada Lovelace    
+    o PROJ-16  Rework the audit trail                                                   ~ Building      unassigned      
+    o PROJ-18  Document the search index                                                o Triage        Ada Lovelace    
+    o PROJ-19  Retire invoice rounding                                                  ~ Building      Grace Hopper    
+    o PROJ-21  Fix the release checklist                                                o Triage        Ada Lovelace    
+    o PROJ-22  Add the login flow                                                       ~ Building      Grace Hopper    
+    o PROJ-24  Investigate webhook retries                                              o Triage        unassigned      
+    o PROJ-25  Document the onboarding wizard                                           ~ Building      Grace Hopper    
+    o PROJ-27  Speed up the audit trail                                                 o Triage        Ada Lovelace    
+  Rank order. K, J, { and } change it within a section.
+/export                                                       

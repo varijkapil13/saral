@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
@@ -65,6 +66,7 @@ const (
 	confirming
 	movingIssues
 	sorting
+	finding
 )
 
 // group is one section: an open sprint, or the backlog itself as the last one.
@@ -74,6 +76,10 @@ type group struct {
 	name   string
 	state  jira.SprintState
 	issues []int
+	// points is the board's estimate summed over issues, and pointed says
+	// whether any of them carries one.
+	points  float64
+	pointed bool
 }
 
 // row is one drawn line: a section head, or an issue inside one.
@@ -122,6 +128,7 @@ type Model struct {
 	inChooser map[string]action
 	inConfirm map[string]action
 	inSort    map[string]action
+	inFind    map[string]action
 
 	width, height int
 	lay           layout
@@ -144,10 +151,12 @@ type Model struct {
 	// and what a move into a sprint is refused with.
 	noSprints string
 	field     jira.FieldRef
-	issues    []jira.Issue
-	byKey     map[string]int
-	page      jira.Page[jira.Issue]
-	missing   []string
+	// estimate is the field the board estimates in, zero when it does not.
+	estimate jira.FieldRef
+	issues   []jira.Issue
+	byKey    map[string]int
+	page     jira.Page[jira.Issue]
+	missing  []string
 
 	groups []group
 	rows   []row
@@ -221,6 +230,18 @@ type Model struct {
 	// which half finished.
 	said string
 
+	inFlight *ranking
+	rankGen  int
+	rankStop context.CancelFunc
+
+	me       *jira.User
+	askingMe bool
+
+	find     textinput.Model
+	needle   string
+	findMiss bool
+	findFrom int
+
 	focused bool
 }
 
@@ -246,7 +267,8 @@ func New(d kernel.Deps) kernel.View {
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.bar = filterbar.New(m.zones)
-	m.acts, m.inChooser, m.inConfirm, m.inSort = defaultKeys().tables()
+	m.acts, m.inChooser, m.inConfirm, m.inSort, m.inFind = defaultKeys().tables()
+	m.find = newFindInput()
 	m.sort = loadSort(ViewID)
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
@@ -302,7 +324,7 @@ func (m *Model) fromCache() {
 // switch know only the one board a snapshot names, while nextBoard already
 // holds the site's own list and must not collapse it down to one.
 func (m *Model) applyBacklogSnapshot(snap app.BacklogSnapshot) {
-	m.config, m.done = snap.Config, doneStatuses(snap.Config)
+	m.config, m.done, m.estimate = snap.Config, doneStatuses(snap.Config), estimateOf(snap.Config)
 	m.sprints, m.field, m.noSprints = snap.Sprints, snap.Field, snap.NoSprints
 	m.issues, m.page, m.missing = snap.Issues, jira.Page[jira.Issue]{}, nil
 	// A snapshot stored part way through a walk carries no cursor to page on
@@ -318,7 +340,7 @@ func (m *Model) applyBacklogSnapshot(snap app.BacklogSnapshot) {
 // digits for the saved queries, so the two questions this view asks could be
 // answered by nobody.
 func (m *Model) WantsRawKeys() bool {
-	return m.mode == choosing || m.mode == confirming || m.mode == sorting
+	return m.mode == choosing || m.mode == confirming || m.mode == sorting || m.mode == finding
 }
 
 // backKeys are the kernel's own back strokes, which reach the backlog only while
@@ -406,6 +428,21 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case SortMsg:
 		cmd = m.startSort()
+
+	case RankMsg:
+		cmd = m.reorder(msg.Where)
+
+	case FindMsg:
+		cmd = m.startFind()
+
+	case MineMsg:
+		cmd = m.toggleMine()
+
+	case rankMsg:
+		cmd = m.ranked(msg)
+
+	case meMsg:
+		cmd = m.tookMe(msg)
 
 	case sortSaveFailedMsg:
 		cmd = m.reportSortSaveFailed(msg)
@@ -625,7 +662,9 @@ func (m *Model) forget() {
 	m.byKey = make(map[string]int)
 	m.picked = make(map[string]bool)
 	m.page, m.missing = jira.Page[jira.Issue]{}, nil
-	m.config, m.field, m.done = jira.BoardConfig{}, jira.FieldRef{}, nil
+	m.config, m.field, m.done, m.estimate = jira.BoardConfig{}, jira.FieldRef{}, nil, jira.FieldRef{}
+	m.dropRank()
+	m.needle, m.findMiss = "", false
 	m.cursor, m.top = 0, 0
 	m.loaded, m.stale, m.failure, m.absent, m.said = false, false, nil, "", ""
 	m.mode = browsing
@@ -662,7 +701,7 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 	}
 	m.loading, m.loaded, m.stale, m.boardIDHint = false, true, false, 0
 	m.boards, m.boardAt, m.config = msg.boards, msg.boardAt, msg.config
-	m.done = doneStatuses(msg.config)
+	m.done, m.estimate = doneStatuses(msg.config), estimateOf(msg.config)
 	m.sprints, m.field, m.noSprints = msg.sprints, msg.field, msg.noSprints
 	m.issues, m.page, m.missing = msg.page.Items, msg.page, msg.missing
 	m.head = ""
@@ -895,6 +934,12 @@ func (m *Model) regroup() {
 			}
 		}
 		m.groups[at].issues = append(m.groups[at].issues, i)
+		if m.estimate.ID != "" {
+			if n, ok := m.issues[i].Fields.Number(m.estimate); ok {
+				m.groups[at].points += n
+				m.groups[at].pointed = true
+			}
+		}
 	}
 	m.orderIssues()
 	m.rebuildRows()
@@ -906,6 +951,13 @@ func (m *Model) finished(iss *jira.Issue) bool {
 		return iss.Status.Category == jira.CategoryDone
 	}
 	return m.done[iss.Status.ID]
+}
+
+func estimateOf(cfg jira.BoardConfig) jira.FieldRef {
+	if !cfg.Estimates() {
+		return jira.FieldRef{}
+	}
+	return cfg.Estimation.Field
 }
 
 func doneStatuses(cfg jira.BoardConfig) map[string]bool {
@@ -1324,6 +1376,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.confirmKey(stroke)
 	case sorting:
 		return m.sortKey(stroke)
+	case finding:
+		return m.findKey(msg)
 	case movingIssues:
 		return nil
 	case browsing:
@@ -1373,8 +1427,24 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.clearFilter()
 	case actSort:
 		return m.startSort()
+	case actRankUp:
+		return m.reorder(rankUp)
+	case actRankDown:
+		return m.reorder(rankDown)
+	case actRankTop:
+		return m.reorder(rankTop)
+	case actRankBottom:
+		return m.reorder(rankBottom)
+	case actMine:
+		return m.toggleMine()
+	case actFind:
+		return m.startFind()
+	case actFindNext:
+		return m.findAgain(1)
+	case actFindPrev:
+		return m.findAgain(-1)
 	case actNone, actChoose, actBack, actConfirm,
-		actSortPrev, actSortNext, actSortChoose, actSortCancel:
+		actSortPrev, actSortNext, actSortChoose, actSortCancel, actFindKeep, actFindCancel:
 	}
 	return nil
 }
@@ -1432,7 +1502,7 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 			return nil
 		}
 		return nil
-	case sorting:
+	case sorting, finding:
 		return nil
 	case movingIssues:
 		return nil
@@ -1478,6 +1548,9 @@ func (m *Model) release(msg tea.MouseReleaseMsg) tea.Cmd {
 	m.drag.Cancel()
 	if m.mode != browsing || m.mover == nil {
 		return nil
+	}
+	if cmd := m.dropWithin(from, msg); cmd != nil {
+		return cmd
 	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.rows)); i++ {
 		if !m.rows[i].head || !m.zones.Hit(m.zoneOf(i), msg) {
@@ -1559,9 +1632,7 @@ func (m *Model) board() jira.Board {
 
 // A board with no rank field is ordered by its saved filter, and reading that
 // filter is not something this session can do — so the rows are in an order this
-// program chose and the pane says which. A board that does rank still offers no
-// reorder of its own: the port has no way to write a rank, and a gesture that
-// silently did nothing would be worse than the sentence.
+// program chose and the pane says which.
 //
 // A sort chosen here takes over from both: it is this program's own local
 // reorder, described in its own words rather than the board's.
@@ -1573,7 +1644,7 @@ func (m *Model) ordering() string {
 		return "Sorted within each section by " + m.sort.plain(m.deps.Theme.Glyphs) + "."
 	}
 	if m.config.Ordering() == jira.OrderRank {
-		return "Rank order. Rows cannot be reordered here: nothing can write a rank."
+		return rankNote
 	}
 	return "No rank field on this board; oldest first, not its filter's order."
 }

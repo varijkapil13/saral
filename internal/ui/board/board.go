@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
@@ -57,6 +58,7 @@ type Model struct {
 
 	browsing map[string]action
 	holding  map[string]action
+	inFind   map[string]action
 
 	// all are the boards that draw on this project and at is the one being
 	// drawn. A project with several is ordinary, and so is a project with none.
@@ -150,6 +152,24 @@ type Model struct {
 	card   *held
 	moving bool
 
+	rank     *ranking
+	rankGen  int
+	rankStop context.CancelFunc
+
+	// me is the account this session is signed in as, asked for the first
+	// time only-my-issues is toggled.
+	me       *jira.User
+	askingMe bool
+
+	find             textinput.Model
+	finding          bool
+	findMiss         bool
+	needle           string
+	findCol, findRow int
+
+	sprintHead string
+	sprintAt   sprintKey
+
 	step     step
 	loading  bool
 	loaded   bool
@@ -185,14 +205,16 @@ type Model struct {
 // It is not claimed for the g prefix: the kernel buffers that one itself and
 // hands the view both strokes in a single dispatch, so there is no keypress in
 // between for anything else to take.
-func (m *Model) WantsRawKeys() bool { return m.pendingFilter }
+func (m *Model) WantsRawKeys() bool { return m.pendingFilter || m.finding }
 
 // backKeys are the kernel's own back strokes, which reach the board only while
 // WantsBack claims them.
 var backKeys = kernel.DefaultGlobalKeys().Back.Keys()
 
 // WantsBack claims esc while terms narrow the board, so esc clears them.
-func (m *Model) WantsBack() bool { return len(m.terms) > 0 && m.card == nil && !m.moving }
+func (m *Model) WantsBack() bool {
+	return len(m.terms) > 0 && m.card == nil && !m.moving && !m.finding
+}
 
 // New builds the board. It draws nothing of the site in its first frame: which
 // columns a board has is an answer, and the frame before that answer says which
@@ -204,7 +226,8 @@ func New(d kernel.Deps) kernel.View {
 	}
 	m.styles = newStyles(m.deps.Theme)
 	m.cards = newCardCache(cardCacheLimit)
-	m.browsing, m.holding = defaultKeys().tables()
+	m.browsing, m.holding, m.inFind = defaultKeys().tables()
+	m.find = newFindInput()
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.bar = filterbar.New(m.zones)
@@ -338,6 +361,24 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case NextSprintMsg:
 		cmd = m.nextSprint()
 
+	case RankMsg:
+		cmd = m.reorder(msg.Where)
+
+	case ShiftMsg:
+		cmd = m.shiftCard(msg.By)
+
+	case MineMsg:
+		cmd = m.toggleMine()
+
+	case FindMsg:
+		cmd = m.startFind()
+
+	case rankMsg:
+		cmd = m.ranked(msg)
+
+	case meMsg:
+		cmd = m.tookMe(msg)
+
 	case boardsMsg:
 		cmd = m.tookBoards(msg)
 
@@ -402,6 +443,7 @@ func (m *Model) Close() {
 	m.stop()
 	m.stopQuickFilters()
 	m.stopMove()
+	m.stopRank()
 }
 
 // --- fetching ---------------------------------------------------------------
@@ -561,6 +603,8 @@ func (m *Model) reproject(project string) tea.Cmd {
 	var said tea.Cmd
 	m.terms, said = filterbar.Reproject(m.deps, ViewID, was, m.terms)
 	m.stopMove()
+	m.dropRank()
+	m.needle, m.finding = "", false
 	m.all, m.at, m.ready = nil, 0, false
 	m.issues, m.cols, m.unmapped = nil, nil, 0
 	m.curCol, m.curRow, m.colTop, m.rowTop = 0, 0, 0, nil
@@ -760,6 +804,7 @@ func (m *Model) nextBoard() tea.Cmd {
 	}
 	m.at = (m.at + 1) % len(m.all)
 	m.stopMove()
+	m.dropRank()
 	m.forgetSprints()
 	m.ready, m.issues, m.cols, m.unmapped, m.stale = false, nil, nil, 0, false
 	m.quickFilters, m.qfOn = nil, nil
@@ -948,7 +993,7 @@ func (m *Model) moveTo(col, row int) {
 // pickUp takes the card under the cursor off the board. It is the keyboard half
 // of a drag and writes the same state the pointer does.
 func (m *Model) pickUp() tea.Cmd {
-	if m.moving || m.card != nil {
+	if m.moving || m.card != nil || m.finding {
 		return nil
 	}
 	iss := m.issueAt(m.curCol, m.curRow)
@@ -1142,6 +1187,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.moving {
 		return nil
 	}
+	if m.finding {
+		return m.findKey(msg)
+	}
 	if m.WantsBack() && slices.Contains(backKeys, stroke) {
 		return m.clearFilter()
 	}
@@ -1215,7 +1263,27 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.openFilterPicker()
 	case actUnfilter:
 		return m.clearFilter()
-	case actNone, actDrop, actCancel:
+	case actRankUp:
+		return m.reorder(rankUp)
+	case actRankDown:
+		return m.reorder(rankDown)
+	case actRankTop:
+		return m.reorder(rankTop)
+	case actRankBottom:
+		return m.reorder(rankBottom)
+	case actShiftLeft:
+		return m.shiftCard(-1)
+	case actShiftRight:
+		return m.shiftCard(1)
+	case actMine:
+		return m.toggleMine()
+	case actFind:
+		return m.startFind()
+	case actFindNext:
+		return m.findAgain(1)
+	case actFindPrev:
+		return m.findAgain(-1)
+	case actNone, actDrop, actCancel, actFindKeep, actFindCancel:
 	}
 	return nil
 }
@@ -1294,11 +1362,12 @@ func (m *Model) dragging(msg tea.MouseMotionMsg) {
 }
 
 func (m *Model) released(msg tea.MouseReleaseMsg) tea.Cmd {
+	grabbed := m.drag.ID()
 	if _, _, ok := m.drag.Release(msg); !ok {
 		return nil
 	}
 	if m.card == nil {
-		return nil
+		return m.dropWithin(grabbed, msg)
 	}
 	if col, over := m.columnUnder(msg); over {
 		m.aim(col)
@@ -1380,7 +1449,7 @@ func (m *Model) relayout() {
 func (m *Model) forget() {
 	m.cards.reset()
 	m.gridValid = false
-	m.summary, m.head, m.rule = "", "", ""
+	m.summary, m.head, m.rule, m.sprintHead = "", "", "", ""
 }
 
 func (m *Model) now() time.Time {
@@ -1430,7 +1499,7 @@ func (m *Model) saidSprints() tea.Cmd {
 }
 
 func (m *Model) nextSprint() tea.Cmd {
-	if m.moving || m.card != nil {
+	if m.moving || m.card != nil || m.finding {
 		return nil
 	}
 	switch {
@@ -1442,6 +1511,7 @@ func (m *Model) nextSprint() tea.Cmd {
 	at := slices.IndexFunc(m.sprints, func(sp jira.Sprint) bool { return sp.ID == m.sprint.ID })
 	m.sprint = m.sprints[(at+1)%len(m.sprints)]
 	kernel.Keep(m.deps, ViewID, sprintMemoryKey(m.plan.boardID), strconv.FormatInt(m.sprint.ID, 10))
+	m.dropRank()
 	m.issues, m.more = nil, false
 	m.curRow = 0
 	m.place()

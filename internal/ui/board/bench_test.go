@@ -2,6 +2,7 @@ package board
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -182,5 +183,70 @@ func BenchmarkCardRender(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		_ = renderCard(iss, m.lay.cell, false, false, m.styles, m.deps.Theme, m.plan)
+	}
+}
+
+// sprinting is the marked board with a running sprint on screen, which is what
+// draws the sprint's own header line.
+func sprinting(tb testing.TB, cards int) *Model {
+	tb.Helper()
+	m := marked(tb, 4, cards, 120, 40)
+	end := time.Date(2026, time.March, 12, 9, 0, 0, 0, time.UTC)
+	m.sprint = jira.Sprint{ID: 7, Name: "Sprint 7", Goal: "Ship the export", State: jira.SprintActive, End: &end}
+	m.sprints = []jira.Sprint{m.sprint}
+	m.place()
+	m.forget()
+	if !strings.Contains(m.View(), "Ship the export") {
+		tb.Fatal("the sprint header is not drawn, so this benchmark proves nothing")
+	}
+	return m
+}
+
+// BenchmarkBoardViewSprint5k is a steady-state frame of a Scrum board with its
+// sprint header up: the header is memoized like the summary line above it.
+func BenchmarkBoardViewSprint5k(b *testing.B) {
+	m := sprinting(b, 5000)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = m.View()
+	}
+}
+
+// BenchmarkBoardRank5k is what a rank costs on screen before the site answers:
+// the card moved in the read's order, the columns placed again, a frame.
+func BenchmarkBoardRank5k(b *testing.B) {
+	m := sprinting(b, 5000)
+	m.moveTo(0, 5)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		key := m.selectedKey()
+		anchor, after := m.issueAt(0, 4).Key, false
+		if i%2 == 1 {
+			anchor, after = m.issueAt(0, 6).Key, true
+		}
+		m.issues = shiftIssue(m.issues, m.indexOf(key), anchor, after)
+		m.place()
+		m.forget()
+		m.restore(key)
+		_ = m.View()
+	}
+}
+
+// BenchmarkBoardFind5k is one n over five thousand cards, with the only match
+// at the far end of the walk.
+func BenchmarkBoardFind5k(b *testing.B) {
+	m := sprinting(b, 5000)
+	m.issues[len(m.issues)-1].Summary = "the one needle in the stack"
+	m.place()
+	m.needle = "NEEDLE"
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		m.moveTo(0, 0)
+		if _, _, ok := m.nextMatch(m.curCol, m.curRow, 1, false); !ok {
+			b.Fatal("the needle was not found")
+		}
 	}
 }

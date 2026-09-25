@@ -149,7 +149,7 @@ func TestBacklog_ABoardWithNoRankFieldSaysWhatTheOrderIs(t *testing.T) {
 	mustNotContain(t, dr.view(), "Rank order")
 
 	scrum := newDriver(t, testDeps(newFake(8)), 120, 24)
-	mustContain(t, scrum.view(), "Rank order", "cannot be reordered")
+	mustContain(t, scrum.view(), "Rank order", "change it within a section")
 }
 
 func TestBacklog_SaysWhichKindOfEmptyItIs(t *testing.T) {

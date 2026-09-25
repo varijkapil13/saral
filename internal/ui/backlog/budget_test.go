@@ -50,6 +50,21 @@ func TestBudget_BacklogScrollingCostsTheSameUnderATermInForce(t *testing.T) {
 	}
 }
 
+// A total on every section head is memoized with the head, so a steady-state
+// frame of an estimating board still costs the frame string alone.
+func TestBudget_BacklogSectionTotalsCostNothingPerFrame(t *testing.T) {
+	if got := testing.Benchmark(BenchmarkBacklogSteadyScrollPointed5k).AllocsPerOp(); got > 1 {
+		t.Errorf("a steady-state frame with section totals allocates %d times, want the frame string alone", got)
+	}
+}
+
+// n over thousands of rows walks them without allocating per row.
+func TestBudget_BacklogFindAllocatesNothingPerRow(t *testing.T) {
+	if got := testing.Benchmark(BenchmarkBacklogFind5k).AllocsPerOp(); got > 0 {
+		t.Errorf("walking five thousand rows for the next match allocates %d times, want none", got)
+	}
+}
+
 // Walking a fresh row into view on every frame misses the memo by construction,
 // which is what says the miss itself is bounded: one row is rendered and the
 // window around it is not.

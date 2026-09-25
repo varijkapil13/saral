@@ -1,13 +1,17 @@
 looking at the board
-  acts   enter open · m move · b board · f filter by · F 1-9 quick filters
+  acts   enter open · m move · / find · o mine · b board · f filter by · F 1-9 quick filters
   full   [↓/j down, ↑/k up, ←/h previous column, →/l next column]
   full   [pgdn page down, pgup page up, g g first card in this column, G / g e last card in this column]
-  full   [enter open, m move this issue to another column, b another board of this project, s another sprint running on this board, f filter by a person, a status, a label, F 1-9 quick filters]
+  full   [H move this card to the previous column, L move this card to the next column, K rank this card up, J rank this card down, { rank this card first in its column, } rank this card last in its column]
+  full   [enter open, m move this issue to another column, / find a card, o only my issues, b another board of this project, s another sprint running on this board, f filter by a person, a status, a label, F 1-9 quick filters]
+  full   [n next card found, N previous card found]
 a board narrowed by a term
-  acts   enter open · m move · b board · f filter by · F 1-9 quick filters · ctrl+g clear
+  acts   enter open · m move · / find · o mine · b board · f filter by · F 1-9 quick filters · ctrl+g clear
   full   [↓/j down, ↑/k up, ←/h previous column, →/l next column]
   full   [pgdn page down, pgup page up, g g first card in this column, G / g e last card in this column]
-  full   [enter open, m move this issue to another column, b another board of this project, s another sprint running on this board, f filter by a person, a status, a label, F 1-9 quick filters, ctrl+g clear filter]
+  full   [H move this card to the previous column, L move this card to the next column, K rank this card up, J rank this card down, { rank this card first in its column, } rank this card last in its column]
+  full   [enter open, m move this issue to another column, / find a card, o only my issues, b another board of this project, s another sprint running on this board, f filter by a person, a status, a label, F 1-9 quick filters, ctrl+g clear filter]
+  full   [n next card found, N previous card found]
 a card in hand
   acts   enter move it here · ctrl+g put it back
   full   [←/h previous column, →/l next column]
@@ -17,3 +21,7 @@ a move out with the site
 F waiting for its digit
   acts   1-9 quick filter · esc cancel
   full   [1-9 toggle that quick filter]
+/ taking a search
+  acts   enter keep · esc cancel
+  full   [enter keep this search, esc go back to where the search began]
+  full   [alt+k delete to end of line]

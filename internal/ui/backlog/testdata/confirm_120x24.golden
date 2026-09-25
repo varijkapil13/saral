@@ -1,9 +1,9 @@
   PROJ board | 2 open sprints | 8 of 12 issues
-  v Sprint 2 | active | 2 issues                                                                                        
+  v Sprint 2 | active | 2 issues | 5 Story Points                                                                       
     o PROJ-3   Investigate the onboarding wizard                                        o Triage        Ada Lovelace    
     o PROJ-4   Document CSV import                                                      ~ Building      unassigned      
   v Sprint 3 | future | 0 issues                                                                                        
-  v Backlog | 6 issues                                                                                                  
+  v Backlog | 6 issues | 13 Story Points                                                                                
   + o PROJ-1   Add the nightly export                                                   ~ Building      Grace Hopper    
 >   o PROJ-6   Speed up session expiry                                                  o Triage        Ada Lovelace    
     o PROJ-7   Fix the search index                                                     ~ Building      Grace Hopper    
@@ -19,6 +19,6 @@
 
 
 
-  Rank order. Rows cannot be reordered here: nothing can write a rank.
+  Rank order. K, J, { and } change it within a section.
   1 issue picked
   Move 1 issue into Sprint 2? y go ahead  esc cancel

@@ -1,6 +1,9 @@
 package board
 
-import "github.com/varijkapil13/saral/internal/ui/kernel"
+import (
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget"
+)
 
 var _ kernel.KeyReporter = (*Model)(nil)
 
@@ -39,6 +42,25 @@ type keyMap struct {
 	// Unfilter drops every term FilterBy put in force. It is offered only while
 	// one is, the way list.Unfilter is.
 	Unfilter kernel.Binding
+	// RankUp, RankDown, RankTop and RankBottom change a card's rank within its
+	// column; ShiftLeft and ShiftRight land it in the next column without
+	// picking it up first.
+	RankUp     kernel.Binding
+	RankDown   kernel.Binding
+	RankTop    kernel.Binding
+	RankBottom kernel.Binding
+	ShiftLeft  kernel.Binding
+	ShiftRight kernel.Binding
+	// Mine narrows the board to the account this session is signed in as, as an
+	// assignee term the chip bar names like any other.
+	Mine kernel.Binding
+	// Find types a search over the cards loaded, and FindNext and FindPrev walk
+	// what it matched once it is kept.
+	Find       kernel.Binding
+	FindNext   kernel.Binding
+	FindPrev   kernel.Binding
+	FindKeep   kernel.Binding
+	FindCancel kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -61,6 +83,19 @@ func defaultKeys() keyMap {
 		Filters:  kernel.Bind([]string{"F"}, "F 1-9", "quick filters"),
 		FilterBy: kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),
 		Unfilter: kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter"),
+
+		RankUp:     kernel.Bind([]string{"K", "shift+up"}, "K", "rank this card up"),
+		RankDown:   kernel.Bind([]string{"J", "shift+down"}, "J", "rank this card down"),
+		RankTop:    kernel.Bind([]string{"{"}, "{", "rank this card first in its column"),
+		RankBottom: kernel.Bind([]string{"}"}, "}", "rank this card last in its column"),
+		ShiftLeft:  kernel.Bind([]string{"H", "shift+left"}, "H", "move this card to the previous column"),
+		ShiftRight: kernel.Bind([]string{"L", "shift+right"}, "L", "move this card to the next column"),
+		Mine:       kernel.Bind([]string{"o"}, "o", "only my issues"),
+		Find:       kernel.Bind([]string{"/"}, "/", "find a card"),
+		FindNext:   kernel.Bind([]string{"n"}, "n", "next card found"),
+		FindPrev:   kernel.Bind([]string{"N"}, "N", "previous card found"),
+		FindKeep:   kernel.Bind([]string{"enter"}, "enter", "keep this search"),
+		FindCancel: kernel.Bind([]string{"esc"}, "esc", "go back to where the search began"),
 	}
 }
 
@@ -71,10 +106,11 @@ func (k keyMap) keySet() kernel.KeySet { return liveSets[keysBrowsing] }
 // narrowed one offers the key that clears them, the way list.browsing does.
 func (k keyMap) browsing(narrowed bool) kernel.KeySet {
 	acts := []kernel.Binding{
-		k.Open, kernel.Terse(k.Pick, "move"), kernel.Terse(k.Board, "board"),
-		kernel.Terse(k.FilterBy, "filter by"), kernel.Terse(k.Filters, "quick filters"),
+		k.Open, kernel.Terse(k.Pick, "move"), kernel.Terse(k.Find, "find"), kernel.Terse(k.Mine, "mine"),
+		kernel.Terse(k.Board, "board"), kernel.Terse(k.FilterBy, "filter by"),
+		kernel.Terse(k.Filters, "quick filters"),
 	}
-	actions := []kernel.Binding{k.Open, k.Pick, k.Board, k.Sprint, k.FilterBy, k.Filters}
+	actions := []kernel.Binding{k.Open, k.Pick, k.Find, k.Mine, k.Board, k.Sprint, k.FilterBy, k.Filters}
 	if narrowed {
 		acts = append(acts, kernel.Terse(k.Unfilter, "clear"))
 		actions = append(actions, k.Unfilter)
@@ -84,7 +120,9 @@ func (k keyMap) browsing(narrowed bool) kernel.KeySet {
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.Left, k.Right},
 			{k.PageDown, k.PageUp, k.Top, k.Bottom},
+			{k.ShiftLeft, k.ShiftRight, k.RankUp, k.RankDown, k.RankTop, k.RankBottom},
 			actions,
+			{k.FindNext, k.FindPrev},
 		},
 	}
 }
@@ -100,6 +138,7 @@ const (
 	keysHolding
 	keysMoving
 	keysPickingFilter
+	keysFinding
 	keyStates
 )
 
@@ -133,6 +172,12 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		},
 		Full: [][]kernel.Binding{{kernel.Bind(digitKeys, "1-9", "toggle that quick filter")}},
 	}
+	// / is taking typing: every printable stroke goes into the search, so the
+	// row names the two strokes that end it.
+	sets[keysFinding] = kernel.KeySet{
+		Acts: []kernel.Binding{kernel.Terse(k.FindKeep, "keep"), kernel.Terse(k.FindCancel, "cancel")},
+		Full: [][]kernel.Binding{{k.FindKeep, k.FindCancel}, {widget.KillLine}},
+	}
 	return sets
 }()
 
@@ -149,6 +194,8 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysHolding
 	case m.pendingFilter:
 		state = keysPickingFilter
+	case m.finding:
+		state = keysFinding
 	case len(m.terms) > 0:
 		state = keysNarrowed
 	}
@@ -182,31 +229,57 @@ const (
 	actFilter
 	actFilterBy
 	actUnfilter
+	actRankUp
+	actRankDown
+	actRankTop
+	actRankBottom
+	actShiftLeft
+	actShiftRight
+	actMine
+	actFind
+	actFindNext
+	actFindPrev
+	actFindKeep
+	actFindCancel
 )
 
 // tables turn the bindings into a keystroke lookup, built once per board. The
 // bindings stay the single source of truth for what a key does and for what the
 // footer says it does, and a keystroke costs one map probe rather than a walk
 // over every binding.
-func (k keyMap) tables() (browsing, holding map[string]action) {
-	browsing = table(
-		binding{k.Up, actUp}, binding{k.Down, actDown},
-		binding{k.Left, actLeft}, binding{k.Right, actRight},
-		binding{k.PageUp, actPageUp}, binding{k.PageDown, actPageDown},
-		binding{k.Go, actGo}, binding{k.Top, actTop}, binding{k.Bottom, actBottom},
-		binding{k.Open, actOpen}, binding{k.Pick, actPick}, binding{k.Board, actBoard},
-		binding{k.Sprint, actSprint},
-		binding{k.Filters, actFilter}, binding{k.FilterBy, actFilterBy},
-		binding{k.Unfilter, actUnfilter},
-	)
-	// A card in hand answers only the keys the holding state advertises: the two
-	// that aim it and the two that end the gesture. A motion that moved the
-	// cursor here would leave the card behind whatever it moved to.
-	holding = table(
-		binding{k.Left, actLeft}, binding{k.Right, actRight},
-		binding{k.Drop, actDrop}, binding{k.Cancel, actCancel},
-	)
-	return browsing, holding
+func (k keyMap) tables() (browsing, holding, finding map[string]action) {
+	browse, hold, find := k.entries()
+	return table(browse...), table(hold...), table(find...)
+}
+
+// entries are the three tables as lists, which is what lets a test see a stroke
+// bound twice in one of them: a map keeps whichever came last.
+//
+// A card in hand answers only the keys the holding state advertises: the two
+// that aim it and the two that end the gesture. A motion that moved the cursor
+// here would leave the card behind whatever it moved to.
+func (k keyMap) entries() (browsing, holding, finding []binding) {
+	browsing = []binding{
+		{k.Up, actUp}, {k.Down, actDown},
+		{k.Left, actLeft}, {k.Right, actRight},
+		{k.PageUp, actPageUp}, {k.PageDown, actPageDown},
+		{k.Go, actGo}, {k.Top, actTop}, {k.Bottom, actBottom},
+		{k.Open, actOpen}, {k.Pick, actPick}, {k.Board, actBoard},
+		{k.Sprint, actSprint},
+		{k.Filters, actFilter}, {k.FilterBy, actFilterBy},
+		{k.Unfilter, actUnfilter},
+		{k.RankUp, actRankUp}, {k.RankDown, actRankDown},
+		{k.RankTop, actRankTop}, {k.RankBottom, actRankBottom},
+		{k.ShiftLeft, actShiftLeft}, {k.ShiftRight, actShiftRight},
+		{k.Mine, actMine}, {k.Find, actFind},
+		{k.FindNext, actFindNext}, {k.FindPrev, actFindPrev},
+	}
+	holding = []binding{
+		{k.Left, actLeft}, {k.Right, actRight},
+		{k.Drop, actDrop}, {k.Cancel, actCancel},
+	}
+	finding = []binding{{k.FindKeep, actFindKeep}, {k.FindCancel, actFindCancel}}
+	return browsing, holding, finding
 }
 
 type binding struct {

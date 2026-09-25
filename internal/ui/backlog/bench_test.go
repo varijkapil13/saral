@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -186,5 +187,73 @@ func BenchmarkBacklogRegroup10k(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		m.regroup()
+	}
+}
+
+// pointed is the stocked backlog on a board that estimates, every issue
+// carrying a number, so every section head carries a total.
+func pointed(b *testing.B, n int) *Model {
+	b.Helper()
+	msg := benchLoaded(0, n)
+	points := jira.FieldRef{ID: "customfield_13401", Name: "Story Points"}
+	msg.config.Estimation = &jira.Estimation{Type: jira.EstimationField, Field: points}
+	for i := range msg.page.Items {
+		msg.page.Items[i].Fields = msg.page.Items[i].Fields.With(points, jira.FieldValue{Kind: jira.KindNumber, Number: float64(i % 8)})
+	}
+	m := stocked(b, 20, 120, 40)
+	msg.gen = m.gen
+	next, _ := m.Update(msg)
+	m, _ = next.(*Model)
+	_ = m.View()
+	if !m.groups[len(m.groups)-1].pointed {
+		b.Fatal("the sections carry no total, so this benchmark proves nothing")
+	}
+	return m
+}
+
+// BenchmarkBacklogSteadyScrollPointed5k is the steady scroll with a total on
+// every section head.
+func BenchmarkBacklogSteadyScrollPointed5k(b *testing.B) { scroll(b, pointed(b, 5000)) }
+
+// BenchmarkBacklogRank5k is what a rank costs on screen before the site
+// answers: the issue moved and given its neighbour's rank, the sections
+// regrouped, a frame.
+func BenchmarkBacklogRank5k(b *testing.B) {
+	m := pointed(b, 5000)
+	g := m.groups[len(m.groups)-1]
+	key := m.issues[g.issues[5]].Key
+	ref := m.rankRef()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		g := m.groups[len(m.groups)-1]
+		pos := slices.Index(g.issues, m.byKey[key])
+		anchor, after := g.issues[pos-1], false
+		if i%2 == 1 {
+			anchor, after = g.issues[pos+1], true
+		}
+		from, to := m.byKey[key], m.issues[anchor].Key
+		value, has := m.issues[anchor].Fields.Get(ref)
+		m.setRank(from, value, has)
+		m.issues = shiftIssue(m.issues, from, to, after)
+		m.reindex()
+		m.regroup()
+		_ = m.View()
+	}
+}
+
+// BenchmarkBacklogFind5k is one n over five thousand rows with the only match
+// at the far end of the walk.
+func BenchmarkBacklogFind5k(b *testing.B) {
+	m := pointed(b, 5000)
+	last := m.rows[len(m.rows)-1]
+	m.issues[last.issue].Summary = "the one needle in the stack"
+	m.needle = "NEEDLE"
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if _, ok := m.nextMatch(0, 1, false); !ok {
+			b.Fatal("the needle was not found")
+		}
 	}
 }

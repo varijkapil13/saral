@@ -1,23 +1,31 @@
 browsing with nothing picked
-  acts   space pick · v pick all · m move · f filter by · s sort
+  acts   space pick · v pick all · m move · / find · o mine · f filter by · s sort
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label, s sort]
+  full   [K rank this issue up, J rank this issue down, { rank this issue first in its section, } rank this issue last in its section]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, / find an issue, o only my issues, f filter by a person, a status, a label, s sort]
+  full   [n next issue found, N previous issue found]
 something picked
-  acts   space pick · v pick all · m move · f filter by · s sort · x unpick all
+  acts   space pick · v pick all · m move · / find · o mine · f filter by · s sort · x unpick all
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label, s sort, x unpick everything]
+  full   [K rank this issue up, J rank this issue down, { rank this issue first in its section, } rank this issue last in its section]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, / find an issue, o only my issues, f filter by a person, a status, a label, s sort, x unpick everything]
+  full   [n next issue found, N previous issue found]
 narrowed by a term
-  acts   space pick · v pick all · m move · f filter by · s sort · ctrl+g clear
+  acts   space pick · v pick all · m move · / find · o mine · f filter by · s sort · ctrl+g clear
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label, s sort, ctrl+g clear filter]
+  full   [K rank this issue up, J rank this issue down, { rank this issue first in its section, } rank this issue last in its section]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, / find an issue, o only my issues, f filter by a person, a status, a label, s sort, ctrl+g clear filter]
+  full   [n next issue found, N previous issue found]
 something picked and narrowed by a term
-  acts   space pick · v pick all · m move · f filter by · s sort · x unpick all · ctrl+g clear
+  acts   space pick · v pick all · m move · / find · o mine · f filter by · s sort · x unpick all · ctrl+g clear
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, f filter by a person, a status, a label, s sort, x unpick everything, ctrl+g clear filter]
+  full   [K rank this issue up, J rank this issue down, { rank this issue first in its section, } rank this issue last in its section]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, / find an issue, o only my issues, f filter by a person, a status, a label, s sort, x unpick everything, ctrl+g clear filter]
+  full   [n next issue found, N previous issue found]
 choosing where they go
   acts   →/l choose · enter move here · esc cancel
   full   [→/l next, ←/h previous]
@@ -31,3 +39,7 @@ choosing the order
   acts   ←/h prev · →/l next · enter choose this order · esc leave the order as it is
   full   [←/h previous field, →/l next field]
   full   [enter choose this order, esc leave the order as it is]
+/ taking a search
+  acts   enter keep · esc cancel
+  full   [enter keep this search, esc go back to where the search began]
+  full   [alt+k delete to end of line]

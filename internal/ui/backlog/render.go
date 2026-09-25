@@ -153,16 +153,18 @@ func newStyles(t *kernel.Theme) *styles {
 // widened to the column plan, to whether the row is picked, and to what a
 // section head is built from.
 type rowKey struct {
-	head     bool
 	name     string
+	state    string
 	updated  int64
 	count    int
-	more     bool
-	state    string
+	points   float64
 	lay      layout
+	gen      int
+	head     bool
+	more     bool
+	pointed  bool
 	selected bool
 	picked   bool
-	gen      int
 }
 
 // headKey is everything the head line is built from, so that it is rebuilt when
@@ -225,6 +227,8 @@ func (m *Model) View() string {
 		lines = append(lines, m.confirmLine())
 	case sorting:
 		lines = append(lines, m.sortPrompt())
+	case finding:
+		lines = append(lines, m.findPrompt())
 	case movingIssues:
 		lines = append(lines, m.progressLine())
 	case browsing:
@@ -250,6 +254,7 @@ func (m *Model) line(at int) string {
 	if r.head {
 		g := &m.groups[r.group]
 		k.head, k.name, k.count, k.state = true, g.name, len(g.issues), string(g.state)
+		k.points, k.pointed = g.points, g.pointed
 		k.more = m.page.HasMore()
 	} else {
 		iss := &m.issues[r.issue]
@@ -299,6 +304,14 @@ func (m *Model) renderHead(g *group, sel, more bool) string {
 	} else {
 		b.WriteString(count(len(g.issues), "issue"))
 	}
+	if g.pointed {
+		b.WriteString(" ")
+		b.WriteString(t.Glyphs.Separator)
+		b.WriteString(" ")
+		b.WriteString(strconv.FormatFloat(g.points, 'f', -1, 64))
+		b.WriteString(" ")
+		b.WriteString(m.estimateUnit())
+	}
 	line := widget.PadTruncate(b.String(), m.lay.width, t.Glyphs.Ellipsis)
 	if sel {
 		return m.styles.selected.Render(line)
@@ -347,6 +360,20 @@ func (m *Model) renderRow(iss *jira.Issue, sel, picked bool) string {
 	}
 	return b.String()
 }
+
+// estimateUnit is what a section's total is counted in: the estimation field's
+// own name on this site.
+func (m *Model) estimateUnit() string {
+	if name := strings.TrimSpace(widget.Sanitize(m.estimate.Name)); name != "" {
+		return name
+	}
+	return "estimated"
+}
+
+// rankNote names the keys that change a rank, spelt from the bindings once
+// rather than on every frame the note is drawn.
+var rankNote = "Rank order. " + defaultKeys().RankUp.Help().Key + ", " + defaultKeys().RankDown.Help().Key + ", " +
+	defaultKeys().RankTop.Help().Key + " and " + defaultKeys().RankBottom.Help().Key + " change it within a section."
 
 func (m *Model) headLine() string {
 	key := m.headKey()

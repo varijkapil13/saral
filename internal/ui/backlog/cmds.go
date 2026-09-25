@@ -141,6 +141,9 @@ func read(ctx context.Context, s site, search *app.Search, project string, at in
 		if config.RankFieldID != "" {
 			projection = projection.With(config.RankFieldID)
 		}
+		if est := estimateOf(config); est.ID != "" {
+			projection = projection.With(est.ID)
+		}
 		wanted, err := search.Resolve(ctx, projection)
 		if err != nil {
 			return failedMsg{gen: gen, err: err}

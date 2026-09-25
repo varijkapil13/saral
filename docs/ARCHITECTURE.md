@@ -150,7 +150,8 @@ worklogs, watchers and `ServerInfo` each sit behind a role of their own in `pkg/
 view widens the composite. The board brought in `SprintIssueReader` (a Scrum board shows its running
 sprint, and the sprints view counts a running sprint's progress and reads what is open before a
 completion moves it) and `IssueReader` (a moved card is read back by key rather than through a
-search). `*cloud.Client` and `*jiratest.Fake` both implement the whole port.
+search), and the board's and the backlog's reorder brought in `Ranker`. `*cloud.Client` and
+`*jiratest.Fake` both implement the whole port.
 
 ### Filtering by a person, and by the site's own words
 
