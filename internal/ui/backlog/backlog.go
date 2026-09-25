@@ -135,6 +135,9 @@ type Model struct {
 	boards  []jira.Board
 	boardAt int
 	config  jira.BoardConfig
+	// done is the statuses of the config's last mapped column, nil when it maps
+	// none, in which case the status category decides.
+	done    map[string]bool
 	sprints []jira.Sprint
 	// noSprints is the site's own sentence for a board that has none — a Kanban
 	// board — and "" otherwise. It is what the header says in place of a count,
@@ -299,7 +302,7 @@ func (m *Model) fromCache() {
 // switch know only the one board a snapshot names, while nextBoard already
 // holds the site's own list and must not collapse it down to one.
 func (m *Model) applyBacklogSnapshot(snap app.BacklogSnapshot) {
-	m.config = snap.Config
+	m.config, m.done = snap.Config, doneStatuses(snap.Config)
 	m.sprints, m.field, m.noSprints = snap.Sprints, snap.Field, snap.NoSprints
 	m.issues, m.page, m.missing = snap.Issues, jira.Page[jira.Issue]{}, nil
 	// A snapshot stored part way through a walk carries no cursor to page on
@@ -622,7 +625,7 @@ func (m *Model) forget() {
 	m.byKey = make(map[string]int)
 	m.picked = make(map[string]bool)
 	m.page, m.missing = jira.Page[jira.Issue]{}, nil
-	m.config, m.field = jira.BoardConfig{}, jira.FieldRef{}
+	m.config, m.field, m.done = jira.BoardConfig{}, jira.FieldRef{}, nil
 	m.cursor, m.top = 0, 0
 	m.loaded, m.stale, m.failure, m.absent, m.said = false, false, nil, "", ""
 	m.mode = browsing
@@ -659,6 +662,7 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 	}
 	m.loading, m.loaded, m.stale, m.boardIDHint = false, true, false, 0
 	m.boards, m.boardAt, m.config = msg.boards, msg.boardAt, msg.config
+	m.done = doneStatuses(msg.config)
 	m.sprints, m.field, m.noSprints = msg.sprints, msg.field, msg.noSprints
 	m.issues, m.page, m.missing = msg.page.Items, msg.page, msg.missing
 	m.head = ""
@@ -875,9 +879,8 @@ func (m *Model) regroup() {
 	}
 	m.groups = append(m.groups, group{name: backlogName})
 	last := len(m.groups) - 1
-	done := doneStatuses(m.config)
 	for i := range m.issues {
-		if done[m.issues[i].Status.ID] {
+		if m.finished(&m.issues[i]) {
 			continue
 		}
 		if !matchesTerms(&m.issues[i], m.terms) {
@@ -896,6 +899,13 @@ func (m *Model) regroup() {
 	m.orderIssues()
 	m.rebuildRows()
 	m.restore(under)
+}
+
+func (m *Model) finished(iss *jira.Issue) bool {
+	if m.done == nil {
+		return iss.Status.Category == jira.CategoryDone
+	}
+	return m.done[iss.Status.ID]
 }
 
 func doneStatuses(cfg jira.BoardConfig) map[string]bool {

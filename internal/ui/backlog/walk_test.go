@@ -193,3 +193,23 @@ func TestBacklog_APickThatCannotReadTheRestSaysSoAndPicksNothing(t *testing.T) {
 		t.Error("the pick is still waiting on a walk that failed")
 	}
 }
+
+func TestBacklog_AConfigMappingNoColumnFallsBackToTheStatusCategory(t *testing.T) {
+	t.Parallel()
+	dr := newDriver(t, testDeps(nil), 120, 20)
+	dr.send(loadedMsg{
+		gen: dr.m.gen, boards: []jira.Board{{ID: 7, Name: "Ledger"}}, config: jira.BoardConfig{BoardID: 7},
+		field: jira.FieldRef{ID: "customfield_20001", Name: "Sprint"},
+		page: jira.Page[jira.Issue]{Items: []jira.Issue{
+			{Key: "PROJ-1", Summary: "open", Status: jira.Status{ID: "s1", Category: jira.CategoryToDo}},
+			{Key: "PROJ-2", Summary: "finished", Status: jira.Status{ID: "s2", Category: jira.CategoryDone}},
+		}},
+	})
+
+	if dr.groupOf("PROJ-2") != "" {
+		t.Error("a finished issue was drawn on a board whose config maps no column")
+	}
+	if dr.groupOf("PROJ-1") == "" {
+		t.Error("an open issue was hidden")
+	}
+}
