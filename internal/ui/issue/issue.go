@@ -16,6 +16,7 @@ import (
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/comment"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/mention"
 	"github.com/varijkapil13/saral/internal/ui/richtext"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -147,6 +148,13 @@ type Model struct {
 	docSeed    string
 	docLosses  []string
 	pendingGen int
+	// docRow is the row the textarea is open on: the description, or a custom
+	// document field. mention is the @-autocomplete open inside it.
+	docRow  string
+	mention mention.State
+
+	// held is a draft's edits for custom rows the screen has not listed yet.
+	held draft
 
 	// editGen counts every keystroke a typing row or the description textarea
 	// takes, which is what tells the sidebar's own memo a frame has to be
@@ -446,6 +454,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	default:
 		cmd = join(m.splitMsg(msg), join(m.moveMsg(msg), join(m.assignMsg(msg), join(m.dirtyMsg(msg), join(m.collabMsg(msg), m.tell(msg))))))
+		cmd = join(cmd, m.mentionMsg(msg))
 	}
 	// The regions are laid out here rather than only in View so that a key
 	// pressed before the first frame moves the content that is already in hand,

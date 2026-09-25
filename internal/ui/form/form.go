@@ -24,6 +24,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/mention"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -123,6 +124,10 @@ type Model struct {
 
 	people peopleSearch
 
+	// mention is the @-autocomplete inside a document field's editor.
+	mention mention.State
+	after   func(time.Duration, func() tea.Msg) tea.Cmd
+
 	gen    int
 	cancel context.CancelFunc
 	addr   kernel.Addr
@@ -168,8 +173,11 @@ func newWith(d kernel.Deps, cache *schemaCache) *Model {
 		store = newDraftStore(root)
 	}
 	m := &Model{
-		deps:    d,
-		addr:    kernel.NewAddr(),
+		deps: d,
+		addr: kernel.NewAddr(),
+		after: func(d time.Duration, fn func() tea.Msg) tea.Cmd {
+			return tea.Tick(d, func(time.Time) tea.Msg { return fn() })
+		},
 		cache:   cache,
 		drafts:  store,
 		styles:  newStyles(d.Theme),
@@ -325,6 +333,14 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case accountMsg:
 		m.accountFound(msg)
+
+	case mention.DueMsg, mention.FoundMsg:
+		search := mention.Search{Finder: m.deps.Jira, Project: m.project}
+		if reason, blocked := m.peopleBlocked(); blocked {
+			search.Blocked = reason
+		}
+		next, _ := m.mention.Update(msg, search)
+		cmd = kernel.Reply(next, m.addr)
 
 	case peopleFoundMsg:
 		m.peopleFound(msg)
@@ -916,6 +932,7 @@ func (m *Model) closeEditor() tea.Cmd {
 	case editNone:
 	}
 	f.problem = f.validate()
+	m.mention.Close()
 	m.input.Blur()
 	m.area.Blur()
 	m.filter.Blur()
@@ -929,6 +946,9 @@ func (m *Model) editKey(msg tea.KeyPressMsg) tea.Cmd {
 	stroke := msg.String()
 	if m.edit == editChoose {
 		return m.chooseKey(msg, stroke)
+	}
+	if m.edit == editDoc && m.mention.Key(msg, &m.area) {
+		return kernel.Reply(m.mention.Track(&m.area, m.after), m.addr)
 	}
 	switch stroke {
 	case "esc":
@@ -946,7 +966,7 @@ func (m *Model) editKey(msg tea.KeyPressMsg) tea.Cmd {
 	// this view then owns for as long as the editor is open.
 	if m.edit == editDoc {
 		m.area, _ = m.area.Update(msg)
-		return nil
+		return kernel.Reply(m.mention.Track(&m.area, m.after), m.addr)
 	}
 	m.input, _ = m.input.Update(msg)
 	return nil

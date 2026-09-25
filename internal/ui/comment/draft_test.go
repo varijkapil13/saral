@@ -18,13 +18,13 @@ func TestDrafts_KeepsAndReturnsWhatWasTyped(t *testing.T) {
 	if got := d.read(k); got != "" {
 		t.Errorf("a draft nobody wrote came back as %q", got)
 	}
-	if err := d.write(k, "half a thought"); err != nil {
+	if err := d.write(k, "half a thought", ""); err != nil {
 		t.Fatalf("writing: %v", err)
 	}
 	if got := d.read(k); got != "half a thought" {
 		t.Errorf("the draft came back as %q", got)
 	}
-	if err := d.write(k, "a whole one"); err != nil {
+	if err := d.write(k, "a whole one", ""); err != nil {
 		t.Fatalf("rewriting: %v", err)
 	}
 	if got := d.read(k); got != "a whole one" {
@@ -43,10 +43,10 @@ func TestDrafts_KeepsANewCommentApartFromAnEditOfAnExistingOne(t *testing.T) {
 	fresh := draftKey{site: "example.atlassian.net", issue: "PROJ-1"}
 	editing := draftKey{site: "example.atlassian.net", issue: "PROJ-1", comment: "10701"}
 
-	if err := d.write(fresh, "the new one"); err != nil {
+	if err := d.write(fresh, "the new one", ""); err != nil {
 		t.Fatalf("writing: %v", err)
 	}
-	if err := d.write(editing, "the edit"); err != nil {
+	if err := d.write(editing, "the edit", ""); err != nil {
 		t.Fatalf("writing: %v", err)
 	}
 	d.discard(editing)
@@ -63,7 +63,7 @@ func TestDrafts_TwoSitesWithOneIssueKeyDoNotShareADraft(t *testing.T) {
 	here := draftKey{site: "one.atlassian.net", issue: "PROJ-1"}
 	there := draftKey{site: "two.atlassian.net", issue: "PROJ-1"}
 
-	if err := d.write(here, "about this site's PROJ-1"); err != nil {
+	if err := d.write(here, "about this site's PROJ-1", ""); err != nil {
 		t.Fatalf("writing: %v", err)
 	}
 	if got := d.read(there); got != "" {
@@ -78,7 +78,7 @@ func TestDrafts_APathCannotReachOutsideTheDraftsDirectory(t *testing.T) {
 	d := &drafts{root: root}
 	k := draftKey{site: "../../etc", issue: "../../../passwd", comment: "/../.."}
 
-	if err := d.write(k, "not going anywhere"); err != nil {
+	if err := d.write(k, "not going anywhere", ""); err != nil {
 		t.Fatalf("writing: %v", err)
 	}
 	path := d.path(k)
@@ -95,7 +95,7 @@ func TestDrafts_AreReadableOnlyByTheAccountThatWroteThem(t *testing.T) {
 
 	d := &drafts{root: t.TempDir()}
 	k := draftKey{site: "example.atlassian.net", issue: "PROJ-1"}
-	if err := d.write(k, "private until it is sent"); err != nil {
+	if err := d.write(k, "private until it is sent", ""); err != nil {
 		t.Fatalf("writing: %v", err)
 	}
 
@@ -114,7 +114,7 @@ func TestDrafts_WithNowhereToWriteKeepNothingRatherThanFailing(t *testing.T) {
 	d := &drafts{}
 	k := draftKey{site: "example.atlassian.net", issue: "PROJ-1"}
 
-	if err := d.write(k, "nowhere to put this"); err != nil {
+	if err := d.write(k, "nowhere to put this", ""); err != nil {
 		t.Errorf("a store with no directory reported %v, want silence", err)
 	}
 	if got := d.read(k); got != "" {
@@ -135,7 +135,7 @@ func TestDrafts_ReportsAWriteItCannotMake(t *testing.T) {
 	}
 	d := &drafts{root: blocked}
 
-	if err := d.write(draftKey{site: "example.atlassian.net", issue: "PROJ-1"}, "text"); err == nil {
+	if err := d.write(draftKey{site: "example.atlassian.net", issue: "PROJ-1"}, "text", ""); err == nil {
 		t.Error("writing into a file reported success")
 	}
 }
@@ -184,7 +184,7 @@ func TestDrafts_LiveUnderTheDraftsDirectoryTheSessionNames(t *testing.T) {
 	root := t.TempDir()
 	d := openDrafts(kernel.Deps{DraftsDir: root})
 	k := draftKey{site: "example.atlassian.net", issue: "PROJ-1"}
-	if err := d.write(k, "kept"); err != nil {
+	if err := d.write(k, "kept", ""); err != nil {
 		t.Fatalf("writing: %v", err)
 	}
 

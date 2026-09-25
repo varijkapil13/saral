@@ -346,17 +346,21 @@ func (m *Model) View() string {
 // itself, so there is nothing left for this region's own offset to do while it
 // is open.
 func (m *Model) docEditContent(w, h int) content {
-	head := 0
-	if len(m.docLosses) > 0 && h > 1 {
-		head = 1
+	ell := m.deps.Theme.Glyphs.Ellipsis
+	head := make([]string, 0, 2)
+	if row := m.rowByID(m.docRow); row != nil && row.kind == rkField {
+		head = append(head, clip(m.styles.section.Render(row.label), w, ell))
 	}
+	if len(m.docLosses) > 0 {
+		head = append(head, clip(m.styles.fail.Render(lossSentence(m.docLosses)), w, ell))
+	}
+	head = append(head, m.mention.Lines(w, m.mentionLook())...)
+	head = head[:min(len(head), max(h-1, 0))]
 	m.docArea.SetWidth(max(w, 1))
-	m.docArea.SetHeight(max(h-head, 1))
+	m.docArea.SetHeight(max(h-len(head), 1))
 	area := strings.Split(m.docArea.View(), "\n")
-	lines := make([]string, 0, head+len(area))
-	if head > 0 {
-		lines = append(lines, clip(m.styles.fail.Render(lossSentence(m.docLosses)), w, m.deps.Theme.Glyphs.Ellipsis))
-	}
+	lines := make([]string, 0, len(head)+len(area))
+	lines = append(lines, head...)
 	lines = append(lines, area...)
 	widths := make([]int, len(lines))
 	widest := 0

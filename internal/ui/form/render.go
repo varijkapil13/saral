@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/mention"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
@@ -382,6 +383,12 @@ func (m *Model) editorLines() []string {
 		if warning := m.oneWayLine(); warning != "" {
 			out = append(out, m.styles.muted.Render(m.fit("  "+warning)))
 		}
+		g := m.styles.glyphs
+		m.area.SetHeight(max(m.editorHeight()-2-m.mention.Height(), 1))
+		out = append(out, m.mention.Lines(m.width, mention.Look{
+			Row: m.styles.value, Selected: m.styles.selected, Muted: m.styles.muted,
+			Arrow: g.Arrow, Ellipsis: g.Ellipsis,
+		})...)
 		out = append(out, strings.Split(m.area.View(), "\n")...)
 		return m.exactly(out, m.editorHeight())
 	case editChoose:

@@ -30,6 +30,9 @@ type pickOption struct {
 	// picker's own shortcut is found, and "Alice" is what the row then reads,
 	// exactly as choosing her out of a search would have left it.
 	commit string
+	// option is what a custom row's choice writes: the site's own value, a
+	// cascade's second level under it.
+	option jira.Option
 }
 
 func (o pickOption) commitAs() string {
@@ -64,6 +67,13 @@ type picker struct {
 	loading bool
 	asked   map[string]bool
 	fail    string
+
+	// multi and people describe a custom row's list: several values toggled
+	// on and off rather than one chosen, and accounts searched on the site
+	// rather than a list the screen states. on is what is toggled on.
+	multi  bool
+	people bool
+	on     map[string]bool
 
 	// The status picker's own sub-state once a transition has been chosen:
 	// moves is every transition offered, kept so a chosen id can be resolved
@@ -236,15 +246,23 @@ func (m *Model) fetchPeople(needle string) tea.Cmd {
 }
 
 func (m *Model) peopleFound(msg peopleFoundMsg) {
-	if m.pick == nil || m.pick.kind != rkPerson || !m.currentPick(msg.gen) {
+	if m.pick == nil || (m.pick.kind != rkPerson && !m.pick.people) || !m.currentPick(msg.gen) {
 		return
 	}
 	m.pick.loading = false
+	under := m.pickUnderCursor()
+	if m.pick.people {
+		if row := m.rowByID(m.pick.id); row != nil {
+			m.pick.all = m.customPeopleSeed(row, msg.people)
+		}
+		m.rerankPick(m.pick.input.Value(), under)
+		m.editGen++
+		return
+	}
 	site := make([]pickOption, len(msg.people))
 	for i, u := range msg.people {
 		site[i] = pickOption{id: u.AccountID, label: u.DisplayName}
 	}
-	under := m.pickUnderCursor()
 	m.pick.all = append(m.personSeed(), site...)
 	m.rerankPick(m.pick.input.Value(), under)
 	m.editGen++
@@ -439,8 +457,10 @@ func (m *Model) applyTransition() tea.Cmd {
 		p.fail, _ = jira.Reason(err)
 		return kernel.Fail(err)
 	}
-	if screen := screenPatchFields(p.fields); screen.Fields.Len() > 0 {
-		patch.Fields = screen.Fields
+	screen := screenPatchFields(p.fields)
+	for _, id := range screen.Fields.IDs() {
+		v, _ := screen.Fields.ByID(id)
+		patch.Fields = patch.Fields.With(jira.FieldRef{ID: id}, v)
 	}
 	m.stage = sideSaving
 	ctx, gen := m.beginPick()
@@ -594,7 +614,7 @@ func (m *Model) pickListKey(msg tea.KeyPressMsg) tea.Cmd {
 	p.input, cmd = p.input.Update(msg)
 	m.editGen++
 	m.rerankPick(p.input.Value(), under)
-	if p.kind != rkPerson {
+	if p.kind != rkPerson && !p.people {
 		return cmd
 	}
 	needle := strings.TrimSpace(p.input.Value())
@@ -613,6 +633,9 @@ func (m *Model) choosePick() tea.Cmd {
 	if p.kind == rkStatus {
 		m.chooseTransition(opt.id)
 		return nil
+	}
+	if p.kind == rkField {
+		return m.chooseCustom(opt)
 	}
 	row := m.rowByID(p.id)
 	if row == nil {

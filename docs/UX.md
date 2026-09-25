@@ -586,8 +586,8 @@ editable when the issue was read with its field (`Issue.Requested`, the same mas
 cycle already answers to) *and* editmeta lists it *and* its kind is one this build can edit — see
 `docs/FIELDS.md`. This build's kinds are text (the summary), labels, date (the due date), the document
 the description is, opened from the description region itself rather than from a sidebar row, single
-choice (priority), person (the assignee) and status, through the issue's own transitions — see
-"Assigning, and changing status" below. Status answers for itself rather than through editmeta, since a
+choice (priority), person (the assignee), status, through the issue's own transitions — see
+"Assigning, and changing status" below — and the custom fields the issue's screen lists, below. Status answers for itself rather than through editmeta, since a
 transition is a workflow action and never a field a screen lists.
 
 **Committing a row is not sending it.** Enter on a text, labels or date row swaps its value for a
@@ -643,11 +643,29 @@ exception: they go out as add and remove operations diffed against the list the 
 label somebody else added survives and cannot conflict. The read after a save goes through the issue
 endpoint too, never through search, whose index trails the write.
 
-**What editmeta still stops at.** Editmeta answers editable fields, and *editable* here has always
-meant "this build additionally knows the kind" — an option or user-typed custom field beyond priority
-and the assignee, an unfamiliar array type, anything this build has no row kind for stays a static
-line, counted the way P5 already counts a hidden or an unmodelled value, never silently offered as a
-row that opens onto nothing.
+**Custom fields the screen lists are rows too.** Every custom field editmeta names with a `set`
+operation gets a row whose editor comes from its schema, never its id or name: text and URL fields
+type into the row's input (a URL must be a whole address), numbers, dates (`2006-01-02`) and dates
+with a time (`2006-01-02 15:04`, in the account's zone) are checked when `enter` keeps them, labels
+are typed comma-separated, a paragraph field opens the description's textarea with its name above
+it, and select, cascading select (`Parent / Child`), multi-select and people fields open an inline
+list — the screen's own `allowedValues`, or a site search for a person. A multi-select or people list
+toggles with `enter` and closes with `esc`; a single one offers `None` unless the screen marks the
+field required. An empty row is sent as a clear. An editable field with no value is drawn as `not
+set`, in the screen's order, so it can be filled in. A value in a shape the editor does not write back,
+a field with no `set` operation and a shape with no editor stay a static line.
+
+**Typing `@` offers people.** In the description, a paragraph field, the comment composer and a
+create form's document field, `@` followed by part of a name asks the site (`FindPeople`, once typing
+pauses) and lists who matches above the text; `up`/`down` move, `enter` or `tab` writes
+`@[Name](accountid:…)`, which the markdown reader turns into a real mention node, and `esc` closes the
+list until the next `@`. An `@` inside a word, as in an email address, opens nothing. A token without
+*Browse users and groups* says so in the list and asks nothing.
+
+**A restored comment edit is checked against the body it was written on.** An edit's draft keeps a
+fingerprint of the comment it started from. When the comment has changed on the site since, opening
+the draft says so, and the first `ctrl+s` only acknowledges it; the second sends. A draft with no
+fingerprint, from an older build, is treated the same way.
 
 ## Assigning, and changing status
 
