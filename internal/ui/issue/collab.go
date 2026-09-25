@@ -75,7 +75,11 @@ const (
 // CollabMsg is the palette's way to the sheets the keys open.
 type CollabMsg struct{ Open collabAct }
 
-type changedMsg struct{ key string }
+// ChangedMsg is broadcast whenever a write lands against an issue this pane
+// holds — a transition, a dirty-set save, or a sheet's own change (a link,
+// a worklog, a watcher). A list, board or backlog row showing the same key
+// listens for it to revalidate that one row, rather than reloading whole.
+type ChangedMsg struct{ Key string }
 
 var collabBindings = [...]kernel.Binding{
 	collabLinks:    kernel.Bind([]string{"L"}, "L", "links"),
@@ -141,8 +145,8 @@ func (m *Model) collabMsg(msg tea.Msg) tea.Cmd {
 		if !m.inactive {
 			return m.openSheet(msg.Open)
 		}
-	case changedMsg:
-		if msg.key == m.issue.Key {
+	case ChangedMsg:
+		if msg.Key == m.issue.Key {
 			return m.fetch()
 		}
 	}

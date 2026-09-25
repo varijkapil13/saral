@@ -19,6 +19,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -26,21 +27,7 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
-// TestMain points the config lookup at a directory of this run's own. New reads
-// the profile's timeline field names, and no test in this package may reach
-// whatever the person running it has configured.
-func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "saral-timeline-config")
-	if err != nil {
-		panic(err)
-	}
-	if err := os.Setenv("SARAL_CONFIG_DIR", dir); err != nil {
-		panic(err)
-	}
-	code := m.Run()
-	_ = os.RemoveAll(dir)
-	os.Exit(code)
-}
+func TestMain(m *testing.M) { os.Exit(testsupport.IsolateDirs(m)) }
 
 // theDay is the clock every test in this package runs on. It sits between the
 // fake's seeded sprints and its second version's release date, so that the today

@@ -64,6 +64,25 @@ type failedMsg struct {
 	err error
 }
 
+// revalidatedMsg is one row re-read after the issue pane reported a landed
+// write elsewhere. It carries its own generation, separate from a move's or a
+// walk's, because none of the three should cancel either of the others.
+type revalidatedMsg struct {
+	gen   int
+	key   string
+	issue jira.Issue
+	err   error
+}
+
+// revalidate re-reads one issue by the fields it was last drawn with, after a
+// write against it landed somewhere other than this backlog.
+func revalidate(ctx context.Context, reader jira.IssueReader, key string, fields []string, gen int) tea.Cmd {
+	return func() tea.Msg {
+		iss, err := reader.IssueFields(ctx, key, fields)
+		return revalidatedMsg{gen: gen, key: key, issue: iss, err: err}
+	}
+}
+
 // withCancel makes a command release its context however it ends. The cancel is
 // also held on the model so that the next request can cut this one short.
 func withCancel(cancel context.CancelFunc, cmd tea.Cmd) tea.Cmd {

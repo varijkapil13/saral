@@ -210,7 +210,7 @@ func (s *sheet) failed(err error) tea.Cmd {
 	return kernel.Fail(err)
 }
 
-func (s *sheet) changedIssue() tea.Cmd { return kernel.Broadcast(changedMsg{key: s.key}) }
+func (s *sheet) changedIssue() tea.Cmd { return kernel.Broadcast(ChangedMsg{Key: s.key}) }
 
 func (s *sheet) setRows(rows []sheetRow) {
 	s.rows, s.fail = rows, ""

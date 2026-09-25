@@ -161,6 +161,12 @@ type Model struct {
 	cancel  context.CancelFunc
 	addr    kernel.Addr
 
+	// A revalidation triggered by the issue pane has its own generation and
+	// context, so it neither cancels the search in flight nor is cancelled by
+	// it.
+	revalGen  int
+	revalStop context.CancelFunc
+
 	// failure is why the search on screen brought back no rows. The status line
 	// kernel.Fail writes is replaced by the next keypress, so the pane keeps its
 	// own copy of the reason for as long as it is empty.
@@ -438,6 +444,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case patchedMsg:
 		cmd = m.patch(msg)
+
+	case issue.ChangedMsg:
+		cmd = m.revalidateOne(msg.Key)
+
+	case revalidatedMsg:
+		cmd = m.revalidated(msg)
 
 	case failedMsg:
 		cmd = m.failed(msg)
@@ -727,6 +739,44 @@ func (m *Model) patch(msg patchedMsg) tea.Cmd {
 	m.restore(under)
 	return tea.Batch(notStored(msg.stored), refreshed(msg.why, before, m.issues),
 		m.pageAheadIfNeeded(), m.pollTick())
+}
+
+// revalidateOne re-reads one issue the issue pane just changed elsewhere — a
+// transition or a field save — by the fields it was last drawn with, so this
+// row catches up without a fresh search.
+func (m *Model) revalidateOne(key string) tea.Cmd {
+	at := slices.IndexFunc(m.issues, func(iss jira.Issue) bool { return iss.Key == key })
+	if at < 0 || m.deps.Jira == nil {
+		return nil
+	}
+	fields := m.issues[at].Requested.IDs()
+	if len(fields) == 0 {
+		return nil
+	}
+	if m.revalStop != nil {
+		m.revalStop()
+	}
+	m.revalGen++
+	ctx, cancel := context.WithCancel(context.Background())
+	m.revalStop = cancel
+	return kernel.Reply(revalidate(ctx, m.deps.Jira, key, fields, m.revalGen), m.addr)
+}
+
+func (m *Model) revalidated(msg revalidatedMsg) tea.Cmd {
+	if msg.gen != m.revalGen {
+		return nil
+	}
+	if msg.err != nil {
+		reason, _ := jira.Reason(msg.err)
+		return kernel.Warn(msg.key + " changed elsewhere, but could not be revalidated: " + reason)
+	}
+	at := slices.IndexFunc(m.issues, func(iss jira.Issue) bool { return iss.Key == msg.key })
+	if at < 0 {
+		return nil
+	}
+	m.issues[at] = msg.issue
+	m.refilter()
+	return storeRows(m.cache, m.jql, slices.Clone(m.issues), m.hasMore())
 }
 
 // failed keeps whatever is on screen. Rows that are already drawn are the last

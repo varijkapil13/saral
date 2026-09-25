@@ -513,9 +513,9 @@ func (m *Model) saveResult(msg savedMsg) tea.Cmd {
 	key := m.issue.Key
 	if m.leaving {
 		m.leaving = false
-		return tea.Sequence(discardCmd, kernel.Proceed(), kernel.Broadcast(kernel.RefreshMsg{}), kernel.Status(key+" saved"))
+		return tea.Sequence(discardCmd, kernel.Proceed(), kernel.Broadcast(ChangedMsg{Key: key}), kernel.Status(key+" saved"))
 	}
-	return join(discardCmd, join(m.fetch(), kernel.Status(key+" saved")))
+	return join(discardCmd, join(m.fetch(), join(kernel.Broadcast(ChangedMsg{Key: key}), kernel.Status(key+" saved"))))
 }
 
 // discardCmd drops the draft of a write that landed. Description text still

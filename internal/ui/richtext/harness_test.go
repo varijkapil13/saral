@@ -11,8 +11,11 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/pkg/adf"
 )
+
+func TestMain(m *testing.M) { os.Exit(testsupport.IsolateDirs(m)) }
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 

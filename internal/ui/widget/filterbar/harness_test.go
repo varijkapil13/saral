@@ -9,9 +9,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
+
+func TestMain(m *testing.M) { os.Exit(testsupport.IsolateDirs(m)) }
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 

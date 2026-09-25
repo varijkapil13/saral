@@ -14,10 +14,13 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
+
+func TestMain(m *testing.M) { os.Exit(testsupport.IsolateDirs(m)) }
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 

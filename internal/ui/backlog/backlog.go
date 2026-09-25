@@ -227,6 +227,12 @@ type Model struct {
 	mv       *move
 	moveCtx  context.Context
 	moveStop context.CancelFunc
+
+	// A revalidation triggered by the issue pane has its own generation and
+	// context, so it neither cancels a move or a walk in flight, nor is
+	// cancelled by one.
+	revalGen  int
+	revalStop context.CancelFunc
 	// wanted is the selection a move was started on, taken once so that the
 	// confirm names the same issues it will move and a frame costs no walk.
 	wanted []string
@@ -484,6 +490,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case moveFailedMsg:
 		cmd = m.moveFailed(msg)
+
+	case issue.ChangedMsg:
+		cmd = m.revalidateOne(msg.Key)
+
+	case revalidatedMsg:
+		cmd = m.revalidated(msg)
 
 	case failedMsg:
 		cmd = m.failed(msg)
@@ -1360,6 +1372,46 @@ func (m *Model) applyMoved(keys []string) {
 		})
 	}
 	m.regroup()
+}
+
+// revalidateOne re-reads one issue the issue pane just changed elsewhere — a
+// transition or a field save — by the fields it was last drawn with, so this
+// backlog's own row catches up without a fresh read of the board.
+func (m *Model) revalidateOne(key string) tea.Cmd {
+	at, ok := m.byKey[key]
+	if !ok || m.deps.Jira == nil {
+		return nil
+	}
+	fields := m.issues[at].Requested.IDs()
+	if len(fields) == 0 {
+		return nil
+	}
+	if m.revalStop != nil {
+		m.revalStop()
+	}
+	m.revalGen++
+	ctx, cancel := context.WithCancel(context.Background())
+	m.revalStop = cancel
+	return kernel.Reply(revalidate(ctx, m.deps.Jira, key, fields, m.revalGen), m.addr)
+}
+
+func (m *Model) revalidated(msg revalidatedMsg) tea.Cmd {
+	if msg.gen != m.revalGen {
+		return nil
+	}
+	if msg.err != nil {
+		reason, _ := jira.Reason(msg.err)
+		return kernel.Warn(msg.key + " changed elsewhere, but could not be revalidated: " + reason)
+	}
+	at, ok := m.byKey[msg.key]
+	if !ok {
+		return nil
+	}
+	under := m.under()
+	m.issues[at] = msg.issue
+	m.regroup()
+	m.restore(under)
+	return stored(m.movedPut([]string{msg.key}))
 }
 
 // filterBar draws the chip line naming the terms in force.

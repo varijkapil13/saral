@@ -483,7 +483,7 @@ func (m *Model) moveDone(msg moveDoneMsg) tea.Cmd {
 	if n > 0 {
 		status += ", " + pluralChanges(n) + " saved"
 	}
-	return join(discardCmd, join(m.fetch(), kernel.Status(status)))
+	return join(discardCmd, join(m.fetch(), join(kernel.Broadcast(ChangedMsg{Key: key}), kernel.Status(status))))
 }
 
 // pickFailed is every way a priority's already-held list never needed but a
