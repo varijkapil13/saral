@@ -1,0 +1,53 @@
+{
+  "key": "PROJ-3",
+  "id": "20003",
+  "url": "https://example.atlassian.net/browse/PROJ-3",
+  "project": {
+    "key": "PROJ",
+    "name": "PROJ Project"
+  },
+  "type": {
+    "id": "10301",
+    "name": "Story",
+    "subtask": false
+  },
+  "status": {
+    "id": "10201",
+    "name": "Triage",
+    "category": "new"
+  },
+  "summary": "Investigate the onboarding wizard",
+  "priority": {
+    "id": "10401",
+    "name": "Urgent"
+  },
+  "resolution": null,
+  "assignee": {
+    "accountId": "acct-ada",
+    "displayName": "Ada Lovelace",
+    "email": ""
+  },
+  "reporter": {
+    "accountId": "acct-grace",
+    "displayName": "Grace Hopper",
+    "email": ""
+  },
+  "labels": [],
+  "components": [],
+  "fixVersions": [],
+  "parent": null,
+  "subtasks": [],
+  "links": [],
+  "due": null,
+  "created": "2025-03-02T12:00:00Z",
+  "updated": "2025-03-02T16:00:00Z",
+  "resolved": null,
+  "timeTracking": null,
+  "description": "Investigate the onboarding wizard.\n\n- Filed against PROJ-3.\n- Needs a decision on the wording before it can ship.",
+  "fields": {
+    "customfield_13404": {
+      "name": "Rank",
+      "value": "0|i00003:"
+    }
+  }
+}

@@ -15,9 +15,16 @@ views:
   settings  Settings  
 
 commands:
-  doctor   check the config, the token, the site and the cache; the output is safe to paste
-  help     print this help
-  version  print the version, where the config lives, and what the terminal reports
+  assign      assign an issue: assign KEY (me | none | account ID | a name or email to search for)
+  comment     add a comment written in Markdown: comment add KEY (-m text | --file F)
+  completion  print a shell completion script: completion bash|zsh|fish
+  doctor      check the config, the token, the site and the cache; the output is safe to paste
+  help        print this help
+  issue       print one issue, or create one: issue view KEY, issue create --project P --type T --summary S
+  open        open an issue in the browser and print its link: open KEY [--print]
+  search      run JQL and print one issue per line, or JSON: search 'JQL' [--fields F,G] [--limit N]
+  transition  move an issue through its workflow: transition KEY 'status or transition name'
+  version     print the version, where the config lives, and what the terminal reports
 
 examples:
   saral                       open where you left off, or setup on a first run

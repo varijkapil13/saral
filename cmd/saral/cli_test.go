@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -128,7 +129,7 @@ func TestRun_ExitCodes(t *testing.T) {
 		"a poll with no unit":         {args: []string{"--poll", "5"}, code: exitUsage, says: "5s"},
 		"a poll that is not a time":   {args: []string{"--poll", "often"}, code: exitUsage, says: "30s"},
 		"two things to open":          {args: []string{"board", "backlog"}, code: exitUsage, says: "opens one thing"},
-		"a scripting subcommand":      {args: []string{"issue", "view", "PROJ-1", "--json"}, code: exitUsage, says: "saral PROJ-1"},
+		"a scripting subcommand":      {args: []string{"issue", "view", "PROJ-1", "--json"}, code: exitConfig, says: "SARAL_TOKEN"},
 		"a missing named profile":     {args: []string{"--profile", "nope", "--bench-first-paint"}, code: exitConfig, says: "nope"},
 		"a config file that is wrong": {args: []string{"--bench-first-paint"}, config: "active = [", code: exitConfig},
 		"a profile with no email": {
@@ -261,8 +262,19 @@ func TestSubcommands_ShadowNoView(t *testing.T) {
 	if len(names) < 3 {
 		t.Fatalf("only %v registered", names)
 	}
+	// A view pushed with an issue has nothing to show opened by name, so a
+	// subcommand may take its name; the list is closed.
+	mayShadow := map[string]bool{"comment": true}
+	for name := range mayShadow {
+		if _, ok := lookupSubcommand(name); !ok {
+			t.Errorf("%s may shadow a view, but no subcommand is called that", name)
+		}
+		if slices.Contains(openableViewIDs(), name) {
+			t.Errorf("%s is openable by name, so no subcommand may take it", name)
+		}
+	}
 	for _, name := range names {
-		if id, ok := viewNamed(name); ok {
+		if id, ok := viewNamed(name); ok && !mayShadow[name] {
 			t.Errorf("the subcommand %s hides the view %s", name, id)
 		}
 	}

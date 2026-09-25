@@ -1,0 +1,57 @@
+{
+  "issues": [
+    {
+      "key": "PROJ-1",
+      "id": "20001",
+      "url": "https://example.atlassian.net/browse/PROJ-1",
+      "type": {
+        "id": "10304",
+        "name": "Epic",
+        "subtask": false
+      },
+      "status": {
+        "id": "10202",
+        "name": "Building",
+        "category": "indeterminate"
+      },
+      "summary": "Add the nightly export",
+      "priority": {
+        "id": "10402",
+        "name": "Normal"
+      },
+      "assignee": {
+        "accountId": "acct-grace",
+        "displayName": "Grace Hopper",
+        "email": ""
+      },
+      "updated": "2025-03-02T12:00:00Z"
+    },
+    {
+      "key": "PROJ-2",
+      "id": "20002",
+      "url": "https://example.atlassian.net/browse/PROJ-2",
+      "type": {
+        "id": "10303",
+        "name": "Chore",
+        "subtask": false
+      },
+      "status": {
+        "id": "10203",
+        "name": "Shipped",
+        "category": "done"
+      },
+      "summary": "Rework webhook retries",
+      "priority": {
+        "id": "10403",
+        "name": "Whenever"
+      },
+      "assignee": {
+        "accountId": "acct-alan",
+        "displayName": "Alan Turing",
+        "email": ""
+      },
+      "updated": "2025-03-02T14:00:00Z"
+    }
+  ],
+  "more": true
+}

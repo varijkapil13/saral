@@ -1,0 +1,35 @@
+#compdef saral
+# zsh completion for saral. Load it with: source <(saral completion zsh)
+_saral() {
+    local cmd="" sub="" word i valued=" --description-file --field --fields --file --glyphs --limit --log --parent --poll --profile --project --scheme --summary --theme --type -m "
+    for ((i = 2; i < CURRENT; i++)); do
+        word="${words[i]}"
+        if [[ "$valued" == *" $word "* ]]; then ((i++)); continue; fi
+        [[ "$word" == -* ]] && continue
+        if [[ -z "$cmd" ]]; then cmd="$word"; continue; fi
+        [[ -z "$sub" ]] && sub="$word"
+        break
+    done
+    local -a choices flags
+    case "$cmd:$sub" in
+        :) choices=(assign comment completion doctor help issue open search transition version list board backlog sprints releases timeline plans settings); flags=(--glyphs --log --mouse --poll --profile --project --scheme --theme --version) ;;
+        assign:*) choices=(); flags=(--log --profile --project) ;;
+        comment:add) choices=(); flags=(--file --log -m --profile --project) ;;
+        comment:*) choices=(add); flags=() ;;
+        completion:*) choices=(bash zsh fish); flags=() ;;
+        issue:create) choices=(); flags=(--description-file --json --log --parent --profile --project --summary --type) ;;
+        issue:view) choices=(); flags=(--json --log --profile --project) ;;
+        issue:*) choices=(create view); flags=() ;;
+        open:*) choices=(); flags=(--log --print --profile --project) ;;
+        search:*) choices=(); flags=(--fields --json --limit --log --profile --project) ;;
+        transition:*) choices=(); flags=(--field --log --profile --project) ;;
+    esac
+    if [[ "${words[CURRENT]}" == -* ]]; then
+        compadd -- "${flags[@]}"
+    elif (( ${#choices} )); then
+        compadd -- "${choices[@]}"
+    else
+        _files
+    fi
+}
+compdef _saral saral
