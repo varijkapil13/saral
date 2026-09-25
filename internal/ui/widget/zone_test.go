@@ -131,3 +131,53 @@ func TestZoner_TwoViewsMarkTheSameNameApart(t *testing.T) {
 		t.Error("the click hit the other view's row of the same name")
 	}
 }
+
+// A view rebuilt on every open must reuse its prefix, or every name it ever
+// marks costs the manager a permanent id-table entry: the fix under test.
+func TestSharedZoner_ReusesThePrefixAcrossRebuildsOfTheSameManager(t *testing.T) {
+	t.Parallel()
+
+	mgr := zone.New()
+	t.Cleanup(mgr.Close)
+	var shared SharedZoner
+
+	first := shared.Get(mgr)
+	second := shared.Get(mgr)
+	if first.ID("row:1") != second.ID("row:1") {
+		t.Errorf("two opens minted %q and %q; a rebuilt view must keep its prefix", first.ID("row:1"), second.ID("row:1"))
+	}
+}
+
+// A different manager — a fresh test, a fresh session — must not resolve
+// against a prefix minted for somebody else's.
+func TestSharedZoner_MintsAFreshPrefixForADifferentManager(t *testing.T) {
+	t.Parallel()
+
+	one, two := zone.New(), zone.New()
+	t.Cleanup(one.Close)
+	t.Cleanup(two.Close)
+	var shared SharedZoner
+
+	first := shared.Get(one)
+	second := shared.Get(two)
+	if first.ID("row:1") == second.ID("row:1") {
+		t.Errorf("both managers got %q, so a click against the first would resolve against the second", first.ID("row:1"))
+	}
+
+	frame := second.Mark("row:1", "the second manager's row")
+	uitest.Zone(t, two, func() string { return frame }, second.ID("row:1"))
+	if second.Hit("row:1", clickAt(2, 0)) != true {
+		t.Error("the reminted prefix does not resolve against the manager it was minted for")
+	}
+}
+
+func TestSharedZoner_ZeroValueMarksNothing(t *testing.T) {
+	t.Parallel()
+
+	var shared SharedZoner
+	z := shared.Get(nil)
+	const row = "PROJ-1  Fix the thing"
+	if got := z.Mark("row:PROJ-1", row); got != row {
+		t.Errorf("Mark returned %q over a nil manager, want the row unchanged", got)
+	}
+}

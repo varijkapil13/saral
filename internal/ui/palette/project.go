@@ -87,6 +87,10 @@ var (
 	_ kernel.Closer      = (*projectModel)(nil)
 )
 
+// projectZoner reuses one prefix across every "Switch project": the picker is
+// built fresh on every open, for the same reason paletteZoner exists.
+var projectZoner widget.SharedZoner
+
 // projectsFoundMsg carries the projects behind this account's recent issues.
 type projectsFoundMsg struct{ found []project }
 
@@ -152,13 +156,13 @@ type projectModel struct {
 	cursor, top   int
 	width, height int
 
-	styles     *styles
-	memo       *widget.RowCache[rowKey, string]
-	lay        layout
-	lines      []string
-	head       string
-	headAt     projectHeadKey
-	zonePrefix string
+	styles *styles
+	memo   *widget.RowCache[rowKey, string]
+	lay    layout
+	lines  []string
+	head   string
+	headAt projectHeadKey
+	zones  widget.Zoner
 }
 
 // newProject builds the picker against the session as it is at the keypress. The
@@ -182,9 +186,7 @@ func buildProject(d kernel.Deps, freq *table) *projectModel {
 	if m.deps.Now == nil {
 		m.deps.Now = time.Now
 	}
-	if d.Zones != nil {
-		m.zonePrefix = d.Zones.NewPrefix()
-	}
+	m.zones = projectZoner.Get(d.Zones)
 	m.acts = m.keys.table()
 	m.styles = newStyles(m.deps.Theme)
 	m.rows = m.buildRows(nil)
@@ -236,8 +238,16 @@ func (m *projectModel) WantsRawKeys() bool { return true }
 
 // Init asks which projects this account has been working in. There is no
 // project-list endpoint on the port, so the answer comes from a narrow read over
-// recent issues — the shape onboarding's picker already uses.
-func (m *projectModel) Init() tea.Cmd { return m.look() }
+// recent issues — the shape onboarding's picker already uses. It also says once
+// if the last save of what got chosen here failed, the way the palette's own
+// Init does.
+func (m *projectModel) Init() tea.Cmd {
+	cmds := []tea.Cmd{m.look()}
+	if text, ok := m.freq.Warning(); ok {
+		cmds = append(cmds, kernel.Warn(text))
+	}
+	return tea.Batch(cmds...)
+}
 
 // Close cancels a read the kernel has thrown the view away for.
 func (m *projectModel) Close() { m.stop() }
@@ -394,15 +404,15 @@ func (m *projectModel) choose() tea.Cmd {
 	}
 	row := &m.rows[m.shown[m.cursor]]
 	m.freq.ran(row.key, m.deps.Now())
-	return tea.Sequence(kernel.Pop(), kernel.SetProject(row.key))
+	return tea.Batch(m.freq.Save(), tea.Sequence(kernel.Pop(), kernel.SetProject(row.key)))
 }
 
 func (m *projectModel) click(msg tea.MouseClickMsg) tea.Cmd {
-	if msg.Button != tea.MouseLeft || m.deps.Zones == nil {
+	if msg.Button != tea.MouseLeft {
 		return nil
 	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.shown)); i++ {
-		if !m.deps.Zones.Get(m.zone(m.shown[i])).InBounds(msg) {
+		if !m.zones.Hit(m.zone(m.shown[i]), msg) {
 			continue
 		}
 		if i == m.cursor {
@@ -415,7 +425,7 @@ func (m *projectModel) click(msg tea.MouseClickMsg) tea.Cmd {
 }
 
 func (m *projectModel) zone(at int) string {
-	return m.zonePrefix + zoneProject + strconv.Itoa(at)
+	return zoneProject + strconv.Itoa(at)
 }
 
 func (m *projectModel) wheel(msg tea.MouseWheelMsg) {

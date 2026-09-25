@@ -128,6 +128,45 @@ func cachedIssues(n int) *fakeCache {
 	return c
 }
 
+// BenchmarkPaletteOpenCached is ctrl+k itself with a cache behind it, over
+// app.SharedIndex: every iteration but the first pays a generation check
+// rather than a walk of the whole cache.
+func BenchmarkPaletteOpenCached(b *testing.B) {
+	d := paletteDeps()
+	d.Cache = cachedIssues(app.DefaultIssueBound)
+	cmds := manyCommands(64)
+	freq := memoryTable()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		m := build(d, cmds, freq)
+		next, _ := m.Update(kernel.SizeMsg{Width: 120, Height: 40})
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
+// BenchmarkPaletteFirstKeystrokeCached is the keystroke right after ctrl+k,
+// over the same cache: build's app.Index is shared, so only the very first
+// open of the whole run walks it.
+func BenchmarkPaletteFirstKeystrokeCached(b *testing.B) {
+	d := paletteDeps()
+	d.Cache = cachedIssues(app.DefaultIssueBound)
+	cmds := manyCommands(64)
+	freq := memoryTable()
+	key := tea.KeyPressMsg{Code: 'r', Text: "r"}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		m := build(d, cmds, freq)
+		next, _ := m.Update(kernel.SizeMsg{Width: 120, Height: 40})
+		m, _ = next.(*Model)
+		next, _ = m.Update(key)
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
 // BenchmarkPaletteKeystrokeCached is the budgeted path with both halves of the
 // list answering: a character into the filter, every command ranked again, every
 // cached issue ranked against it, then a frame. The pattern matches all of them,

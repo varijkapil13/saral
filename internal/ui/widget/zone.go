@@ -9,6 +9,7 @@ package widget
 
 import (
 	"strings"
+	"sync"
 
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
@@ -80,4 +81,31 @@ func (z Zoner) Hit(name string, msg tea.MouseMsg) bool {
 		return false
 	}
 	return z.mgr.Get(z.prefix + name).InBounds(msg)
+}
+
+// SharedZoner hands out one prefix per manager, minted the first time a view
+// that is rebuilt on every open — ctrl+k, an issue pushed fresh per key — asks
+// for one, and reused after. Marking under a fresh prefix costs a permanent
+// entry in the manager's id table even for a name marked before: Clear only
+// drops a zone's position, never its id, so a view that mints on every open
+// grows that table forever. A different manager — a later test, a session of
+// its own — gets its own prefix instead of ids that resolve against the wrong
+// one.
+//
+// The zero SharedZoner is usable. It is safe for concurrent use, though every
+// caller today is the event loop.
+type SharedZoner struct {
+	mu    sync.Mutex
+	mgr   *zone.Manager
+	zoner Zoner
+}
+
+// Get returns mgr's prefix, minting it the first time s sees mgr.
+func (s *SharedZoner) Get(mgr *zone.Manager) Zoner {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if mgr != s.mgr {
+		s.mgr, s.zoner = mgr, NewZoner(mgr)
+	}
+	return s.zoner
 }

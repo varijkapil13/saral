@@ -37,6 +37,12 @@ var zoneNames = [regionCount]string{
 	regionComments: "region:comments",
 }
 
+// issueZoner reuses one prefix across every issue pane this process draws: the
+// pane is pushed fresh per issue opened, and minting a new prefix on every open
+// would grow the zone manager's id table by every element ever marked, for as
+// long as the process runs.
+var issueZoner widget.SharedZoner
+
 var (
 	_ kernel.View      = (*Model)(nil)
 	_ kernel.Closer    = (*Model)(nil)
@@ -213,7 +219,7 @@ func New(d kernel.Deps, seed jira.Issue, opts ...modelOption) kernel.View {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
 	m.styles = newStyles(m.deps.Theme)
-	m.zones = widget.NewZoner(d.Zones)
+	m.zones = issueZoner.Get(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	for r := range regionCount {
 		m.marks[r] = marker(m.zones, zoneNames[r])

@@ -47,6 +47,11 @@ var (
 	_ kernel.KeyCapturer = (*Model)(nil)
 )
 
+// paletteZoner reuses one prefix across every ctrl+k: the palette is built
+// fresh on every open, and minting a new prefix each time would grow the zone
+// manager's id table by every row ever marked, for as long as the process runs.
+var paletteZoner widget.SharedZoner
+
 // row is one command as the palette holds it: the key that reaches it without
 // the palette, and why the site does not allow it.
 type row struct {
@@ -129,10 +134,10 @@ type Model struct {
 	lay      layout
 	keyWidth int
 
-	head       string
-	headAt     headKey
-	lines      []string
-	zonePrefix string
+	head   string
+	headAt headKey
+	lines  []string
+	zones  widget.Zoner
 }
 
 // New builds the palette over everything registered. It is the registry's
@@ -146,7 +151,7 @@ func build(d kernel.Deps, cmds []kernel.Command, freq *table) *Model {
 		keys:  defaultKeys(),
 		input: newInput(d.Cache != nil),
 		freq:  freq,
-		index: app.NewIndex(d.Cache),
+		index: app.SharedIndex(d.Cache),
 		memo:  widget.NewRowCache[rowKey, string](rowMemoLimit),
 	}
 	if m.deps.Theme == nil {
@@ -155,9 +160,7 @@ func build(d kernel.Deps, cmds []kernel.Command, freq *table) *Model {
 	if m.deps.Now == nil {
 		m.deps.Now = time.Now
 	}
-	if d.Zones != nil {
-		m.zonePrefix = d.Zones.NewPrefix()
-	}
+	m.zones = paletteZoner.Get(d.Zones)
 	m.acts = m.keys.table()
 	m.styles = newStyles(m.deps.Theme)
 	m.rows = m.buildRows(cmds)
@@ -217,9 +220,16 @@ func (m *Model) now() time.Time { return m.deps.Now() }
 // letters q, r and R, the digits and esc never reach the filter.
 func (m *Model) WantsRawKeys() bool { return true }
 
-// Init has nothing to fetch. Everything the palette shows is already in the
-// registry and in the frecency table.
-func (m *Model) Init() tea.Cmd { return nil }
+// Init says once if the last save of what got used here failed — a build
+// earlier in the session may have hit it and gone before it landed, and a
+// failure said only on the status line that build already popped is a failure
+// nobody sees.
+func (m *Model) Init() tea.Cmd {
+	if text, ok := m.freq.Warning(); ok {
+		return kernel.Warn(text)
+	}
+	return nil
+}
 
 // Update handles one message.
 func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
@@ -292,14 +302,15 @@ func (m *Model) recheck() tea.Cmd {
 // a second counter would be a second answer to the same question.
 func (m *Model) ran(msg kernel.CommandRanMsg) tea.Cmd {
 	count := m.freq.ran(msg.ID, m.now())
+	cmd := m.freq.Save()
 	if count != hintAfter || len(msg.Keys) == 0 {
-		return nil
+		return cmd
 	}
 	title, ok := m.titleOf(msg.ID)
 	if !ok {
-		return nil
+		return cmd
 	}
-	return kernel.Status(strings.Join(msg.Keys, " / ") + " runs " + title + " without the palette")
+	return tea.Batch(cmd, kernel.Status(strings.Join(msg.Keys, " / ")+" runs "+title+" without the palette"))
 }
 
 func (m *Model) titleOf(id string) (string, bool) {
@@ -373,14 +384,14 @@ func (m *Model) open(h *hit) tea.Cmd {
 }
 
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
-	if msg.Button != tea.MouseLeft || m.deps.Zones == nil {
+	if msg.Button != tea.MouseLeft {
 		return nil
 	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.shown)); i++ {
 		if !m.shown[i].selectable() {
 			continue
 		}
-		if !m.deps.Zones.Get(m.zone(m.shown[i])).InBounds(msg) {
+		if !m.zones.Hit(m.zone(m.shown[i]), msg) {
 			continue
 		}
 		if i == m.cursor {
@@ -395,9 +406,9 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 // zone is the click target a row is marked with.
 func (m *Model) zone(at entry) string {
 	if at.issue {
-		return m.zonePrefix + zoneHit + m.hits[at.at].key
+		return zoneHit + m.hits[at.at].key
 	}
-	return m.zonePrefix + zoneRow + m.rows[at.at].cmd.ID
+	return zoneRow + m.rows[at.at].cmd.ID
 }
 
 // wheel scrolls the rows without moving the selection, which is what a wheel
