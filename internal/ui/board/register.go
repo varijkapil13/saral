@@ -55,7 +55,7 @@ func init() {
 		Requires: jira.CapBoards,
 		Keys:     []string{keys.Pick.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(MoveIssueMsg{}))
+			return kernel.OpenThen(ViewID, MoveIssueMsg{})
 		},
 	})
 	kernel.RegisterCommand(kernel.Command{
@@ -65,7 +65,7 @@ func init() {
 		Requires: jira.CapBoards,
 		Keys:     []string{keys.Board.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(NextBoardMsg{}))
+			return kernel.OpenThen(ViewID, NextBoardMsg{})
 		},
 	})
 	kernel.RegisterCommand(kernel.Command{
@@ -75,7 +75,7 @@ func init() {
 		Requires: jira.CapBoards,
 		Keys:     []string{keys.Sprint.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(NextSprintMsg{}))
+			return kernel.OpenThen(ViewID, NextSprintMsg{})
 		},
 	})
 	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that
@@ -87,7 +87,7 @@ func init() {
 		Kind:     kernel.KindSearch,
 		Requires: jira.CapBoards,
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(ClearFilterMsg{}))
+			return kernel.OpenThen(ViewID, ClearFilterMsg{})
 		},
 	})
 }

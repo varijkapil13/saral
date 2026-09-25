@@ -33,6 +33,7 @@ var (
 	_ kernel.Addressed   = (*Model)(nil)
 	_ kernel.KeyCapturer = (*Model)(nil)
 	_ kernel.KeyReporter = (*Model)(nil)
+	_ kernel.BackClaimer = (*Model)(nil)
 )
 
 // held is the card that has been taken off the board and not yet landed. It is
@@ -186,6 +187,13 @@ type Model struct {
 // between for anything else to take.
 func (m *Model) WantsRawKeys() bool { return m.pendingFilter }
 
+// backKey is the kernel's own back stroke, which reaches the board only while
+// WantsBack claims it.
+var backKey = kernel.DefaultGlobalKeys().Back
+
+// WantsBack claims esc while terms narrow the board, so esc clears them.
+func (m *Model) WantsBack() bool { return len(m.terms) > 0 && m.card == nil && !m.moving }
+
 // New builds the board. It draws nothing of the site in its first frame: which
 // columns a board has is an answer, and the frame before that answer says which
 // question is outstanding rather than a spinner.
@@ -298,6 +306,10 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		if back && m.aged() && !m.stale && !m.loading && !m.moving {
 			cmd = m.refresh(false)
 		}
+
+	case kernel.SetMouseMsg:
+		m.dataGen++
+		m.forget()
 
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
@@ -1129,6 +1141,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	stroke := msg.String()
 	if m.moving {
 		return nil
+	}
+	if m.WantsBack() && kernel.Matches(msg, backKey) {
+		return m.clearFilter()
 	}
 	if m.card != nil {
 		switch m.holding[stroke] {

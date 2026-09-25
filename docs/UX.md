@@ -430,7 +430,8 @@ terms in force — one key rather than two to learn — and the palette carries 
 rows*. The footer offers `ctrl+g` whenever there is a term or a filter to clear. `esc` does the same:
 in a root view it is the kernel's, and clears only the status line, unless the view implements
 `kernel.BackClaimer` and its `WantsBack()` says yes — which the list does exactly while something is
-narrowing its rows.
+narrowing its rows, and the board and the backlog while a term is in force (not while a card is in
+hand or a move is being chosen).
 
 **The divider is a column of blank, and it is deliberate that it stays blank.** The boundary between
 the issue pane's description and its sidebar is one column wide and carries no rule, because the

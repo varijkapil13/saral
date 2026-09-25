@@ -42,7 +42,7 @@ func init() {
 		Requires: jira.CapBoards,
 		Keys:     []string{keys.Move.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(MoveMsg{}))
+			return kernel.OpenThen(ViewID, MoveMsg{})
 		},
 	})
 	kernel.RegisterCommand(kernel.Command{
@@ -51,7 +51,7 @@ func init() {
 		Group:    "Backlog",
 		Requires: jira.CapBoards,
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(NextBoardMsg{}))
+			return kernel.OpenThen(ViewID, NextBoardMsg{})
 		},
 	})
 	kernel.RegisterCommand(kernel.Command{
@@ -62,7 +62,7 @@ func init() {
 		Requires: jira.CapBoards,
 		Keys:     []string{keys.FilterBy.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(OpenFilterMsg{}))
+			return kernel.OpenThen(ViewID, OpenFilterMsg{})
 		},
 	})
 	kernel.RegisterCommand(kernel.Command{
@@ -73,7 +73,7 @@ func init() {
 		Requires: jira.CapBoards,
 		Keys:     []string{keys.Sort.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(SortMsg{}))
+			return kernel.OpenThen(ViewID, SortMsg{})
 		},
 	})
 	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that
@@ -85,7 +85,7 @@ func init() {
 		Kind:     kernel.KindSearch,
 		Requires: jira.CapBoards,
 		Run: func(kernel.Deps) tea.Cmd {
-			return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(ClearFilterMsg{}))
+			return kernel.OpenThen(ViewID, ClearFilterMsg{})
 		},
 	})
 }

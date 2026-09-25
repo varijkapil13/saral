@@ -48,6 +48,7 @@ var (
 	_ kernel.KeyCapturer = (*Model)(nil)
 	_ kernel.Addressed   = (*Model)(nil)
 	_ kernel.Blocker     = (*Model)(nil)
+	_ kernel.BackClaimer = (*Model)(nil)
 )
 
 // site is the narrow slice of the port one read of the backlog needs.
@@ -317,6 +318,13 @@ func (m *Model) WantsRawKeys() bool {
 	return m.mode == choosing || m.mode == confirming || m.mode == sorting
 }
 
+// backKey is the kernel's own back stroke, which reaches the backlog only while
+// WantsBack claims it.
+var backKey = kernel.DefaultGlobalKeys().Back
+
+// WantsBack claims esc while terms narrow the backlog, so esc clears them.
+func (m *Model) WantsBack() bool { return len(m.terms) > 0 && m.mode == browsing }
+
 // BlocksClose refuses to throw away a move that is part way through. The chunks
 // already accepted have moved and the rest have not, and a program that exits
 // here leaves nobody able to say which was which.
@@ -355,6 +363,11 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		// Losing the keyboard is not being closed: the palette opening over a
 		// board still being read must not cancel the read.
 		m.focused = msg.Focused
+
+	case kernel.SetMouseMsg:
+		m.termsGen++
+		m.memo.Reset()
+		m.head = ""
 
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
@@ -1304,6 +1317,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	case movingIssues:
 		return nil
 	case browsing:
+	}
+	if m.WantsBack() && kernel.Matches(msg, backKey) {
+		return m.clearFilter()
 	}
 	if m.pendingGo {
 		m.pendingGo = false

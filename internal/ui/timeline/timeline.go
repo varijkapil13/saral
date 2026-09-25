@@ -354,6 +354,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.marksBuilt, m.noteCountSet = false, false
 		m.summary, m.heading, m.ruler, m.detail = "", "", "", ""
 
+	case kernel.SetMouseMsg:
+		m.termsGen++
+		m.memo.Reset()
+		m.marksBuilt = false
+		m.summary, m.heading, m.ruler, m.detail = "", "", "", ""
+
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.memo.Reset()
