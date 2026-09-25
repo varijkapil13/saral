@@ -1,7 +1,10 @@
+//go:build demo
+
 package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,6 +19,14 @@ const (
 	fakeProject = "PROJ"
 	fakeIssues  = 60
 )
+
+func init() {
+	hiddenFlags["fake"] = true
+	extraRootFlags = append(extraRootFlags, func(fs *flag.FlagSet, opt *options) {
+		fs.BoolVar(&opt.fake, "fake", false, "demo mode: synthetic issues in memory, no site, no token, nothing saved")
+	})
+	startFake = useFakeSite
+}
 
 func useFakeSite(opt *options) (cleanup func(), err error) {
 	cleanup = func() {}

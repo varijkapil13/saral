@@ -83,8 +83,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		defer closeLog()
 		opt.logger = logger
 	}
-	if opt.fake {
-		cleanup, err := useFakeSite(&opt)
+	if opt.fake && startFake != nil {
+		cleanup, err := startFake(&opt)
 		defer cleanup()
 		if err != nil {
 			return err

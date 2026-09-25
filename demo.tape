@@ -1,4 +1,4 @@
-# See docs/DEMO.md. The session is saral -fake: synthetic data, no site, no token.
+# See docs/DEMO.md. Needs a binary built with -tags demo; the session is saral -fake.
 Require saral
 
 Output demo.gif

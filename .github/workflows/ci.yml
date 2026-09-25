@@ -29,7 +29,7 @@ jobs:
       - name: vet
         run: go vet ./...
       - name: warm the caches while the network is still there
-        run: go test -race -count=1 -run '^$' ./...
+        run: go test -race -count=1 -tags demo -run '^$' ./...
       - name: test with race detector, on a loopback-only network
         run: |
           sudo env "PATH=$PATH" "HOME=$HOME" \
@@ -43,7 +43,7 @@ jobs:
                 echo "::error::a request left the namespace, so this check proves nothing"
                 exit 1
               fi
-              go test -race -count=1 ./...
+              go test -race -count=1 -tags demo ./...
             '
       - name: give the caches back to the runner
         if: always()

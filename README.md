@@ -134,7 +134,6 @@ saral --poll 30s          # re-read the focused view, pausing when Jira rate-lim
 saral --mouse=false       # off all the way down, for terminal text selection
 saral doctor              # check config, token, site and cache; safe to paste
 saral --log saral.log     # method, path, status and timing per request; secrets redacted
-saral -fake               # a demo on synthetic issues: no site, no token, nothing saved
 saral --help              # views, commands, environment and exit codes
 saral version
 ```

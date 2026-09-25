@@ -1,4 +1,6 @@
 version: "2"
+run:
+  build-tags: [demo]
 linters:
   enable:
     - errcheck

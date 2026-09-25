@@ -29,7 +29,6 @@ inside:
   ctrl+k  the command palette: every action, view and issue on disk
 
 flags:
-  --fake               demo mode: synthetic issues in memory, no site, no token, nothing saved
   --glyphs   string    unicode, nerd or ascii; unicode is the default, nerd needs a Nerd Font
   --log      string    write a debug log to this file; tokens and emails are redacted
   --mouse              enable mouse reporting

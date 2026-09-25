@@ -9,6 +9,9 @@ whatever the last person to run it produced.
 
 ## The tape runs against the fake
 
+`-fake` exists only in a binary built with `-tags demo`, because it embeds `pkg/jira/jiratest`'s
+fixtures and a release binary has a size budget to keep. It is left out of `--help`.
+
 `saral -fake` builds its session on `pkg/jira/jiratest`'s in-memory site instead of a profile: a
 scrum project `PROJ` with a board and sprints, sixty generated issues, every third assigned to the
 account the fake answers as so the issue list's opening query has rows. It reaches no network, never
@@ -30,14 +33,14 @@ What the tape does, and what the fake gives it:
 | `n` on the timeline | due dates on every sixth issue |
 | `g` `2` for the board | the scrum board `WithProject(PROJ, Scrum)` builds |
 
-`-fake` works with every other flag and subcommand, so `saral -fake doctor` is also a quick check
-that a build runs at all.
+`-fake` works with every other flag and subcommand, so `go run -tags demo ./cmd/saral -fake doctor`
+is also a quick check that a build runs at all.
 
 ## Recording
 
 ```sh
 mkdir -p /tmp/saral-demo
-go build -trimpath -o /tmp/saral-demo/saral ./cmd/saral
+go build -trimpath -tags demo -o /tmp/saral-demo/saral ./cmd/saral
 PATH=/tmp/saral-demo:$PATH vhs demo.tape
 ```
 

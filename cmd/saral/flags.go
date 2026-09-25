@@ -18,8 +18,14 @@ import (
 
 var glyphTiers = []string{"unicode", "nerd", "ascii"}
 
-// hiddenFlags are CI measuring tools, left out of --help.
+// hiddenFlags are CI and demo tools, left out of --help.
 var hiddenFlags = map[string]bool{"bench-first-paint": true}
+
+// extraRootFlags are bound by files built only under a tag.
+var extraRootFlags []func(*flag.FlagSet, *options)
+
+// startFake is set only in a -tags demo build, which is the only one with the fixtures.
+var startFake func(*options) (cleanup func(), err error)
 
 type options struct {
 	profile    string
@@ -86,9 +92,11 @@ func rootFlags(opt *options) *flag.FlagSet {
 	fs.StringVar(&opt.glyphs, "glyphs", "", "unicode, nerd or ascii; unicode is the default, nerd needs a Nerd Font")
 	fs.Var(pollFlag{&opt.poll}, "poll", "re-read the focused view every `duration`, e.g. 30s; off by default, and pauses when Jira rate-limits")
 	fs.BoolVar(&opt.mouse, "mouse", true, "enable mouse reporting")
-	fs.BoolVar(&opt.fake, "fake", false, "demo mode: synthetic issues in memory, no site, no token, nothing saved")
 	fs.BoolVar(&opt.showVer, "version", false, "print the version and exit")
 	fs.BoolVar(&opt.benchPaint, "bench-first-paint", false, "render one frame, print how long it took, and exit")
+	for _, bind := range extraRootFlags {
+		bind(fs, opt)
+	}
 	return fs
 }
 
