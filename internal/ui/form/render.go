@@ -116,7 +116,7 @@ func (m *Model) View() string {
 
 func (m *Model) viewTypes() string {
 	lines := m.lines[:0]
-	lines = append(lines, m.styles.title.Render(m.fit("New issue in "+m.project)))
+	lines = append(lines, m.styles.title.Render(m.fit("New issue in "+m.project+m.destination())))
 	switch {
 	case m.loading:
 		lines = append(lines, m.styles.muted.Render("  Looking for the issue types in use"+m.styles.glyphs.Ellipsis))
@@ -183,6 +183,7 @@ func (m *Model) viewFields() string {
 type headingKey struct {
 	width, gen    int
 	name, project string
+	dest          string
 	note          string
 	busy, loading bool
 }
@@ -193,7 +194,7 @@ func (m *Model) headingLine() string {
 	}
 	key := headingKey{
 		width: m.width, gen: m.styles.gen, name: m.chosen.Name,
-		project: m.project, note: m.note, busy: m.busy, loading: m.loading,
+		project: m.project, dest: m.destination(), note: m.note, busy: m.busy, loading: m.loading,
 	}
 	if m.head != "" && key == m.headKey {
 		return m.head
@@ -203,7 +204,7 @@ func (m *Model) headingLine() string {
 }
 
 func (m *Model) heading() string {
-	head := "New " + m.chosen.Name + " in " + m.project
+	head := "New " + m.chosen.Name + " in " + m.project + m.destination()
 	switch {
 	case m.busy:
 		return head + "  " + m.styles.glyphs.Bullet + " creating"

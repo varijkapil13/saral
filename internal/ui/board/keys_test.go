@@ -26,6 +26,12 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"a move out with the site", keysMoving},
 		{"F waiting for its digit", keysPickingFilter},
 		{"/ taking a search", keysFinding},
+		{"cards picked", keysPicked},
+		{"cards picked on a board narrowed by a term", keysPickedNarrowed},
+		{"@ asking who the cards go to", keysAskingPerson},
+		{"+ asking for the label", keysAskingLabel},
+		{"a bulk change waiting for its go-ahead", keysConfirming},
+		{"a bulk change running", keysRunning},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the board has %d key states and this test names %d", keyStates, len(named))
@@ -77,6 +83,7 @@ func TestLiveKeys_FollowWhatTheBoardIsDoing(t *testing.T) {
 func TestKeys_EveryAdvertisedActionIsOneTheStateAnswers(t *testing.T) {
 	t.Parallel()
 	browsing, holding, finding := defaultKeys().tables()
+	asking, confirming, running := defaultKeys().bulkTables()
 	for name, tc := range map[string]struct {
 		set   kernel.KeySet
 		table map[string]action
@@ -85,6 +92,12 @@ func TestKeys_EveryAdvertisedActionIsOneTheStateAnswers(t *testing.T) {
 		"a board narrowed by a term": {set: liveSets[keysNarrowed], table: browsing},
 		"a card in hand":             {set: liveSets[keysHolding], table: holding},
 		"/ taking a search":          {set: liveSets[keysFinding], table: finding},
+		"cards picked":               {set: liveSets[keysPicked], table: browsing},
+		"cards picked and narrowed":  {set: liveSets[keysPickedNarrowed], table: browsing},
+		"asking who":                 {set: liveSets[keysAskingPerson], table: asking},
+		"asking for a label":         {set: liveSets[keysAskingLabel], table: asking},
+		"waiting for the go-ahead":   {set: liveSets[keysConfirming], table: confirming},
+		"a bulk change running":      {set: liveSets[keysRunning], table: running},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -133,8 +146,10 @@ func TestKeys_NothingTheKernelKeepsIsBoundHere(t *testing.T) {
 func TestKeys_NoStrokeMeansTwoThingsInOneState(t *testing.T) {
 	t.Parallel()
 	browsing, holding, finding := defaultKeys().entries()
+	asking, confirming, running := defaultKeys().bulkEntries()
 	for name, entries := range map[string][]binding{
 		"looking at the board": browsing, "a card in hand": holding, "/ taking a search": finding,
+		"asking": asking, "confirming": confirming, "running": running,
 	} {
 		seen := map[string]action{}
 		for _, e := range entries {

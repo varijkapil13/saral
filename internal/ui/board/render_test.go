@@ -349,7 +349,7 @@ func TestRenderCard_RestingMarkAcrossGlyphTiers(t *testing.T) {
 		t.Run(tier.name, func(t *testing.T) {
 			theme := kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
 			st := newStyles(theme)
-			got := ansi.Strip(renderCard(&iss, 30, false, false, st, theme, plan{}))
+			got := ansi.Strip(renderCard(&iss, 30, cardLook{}, st, theme, plan{}))
 			golden(t, "card_mark_"+tier.name+".golden", got+"\n")
 		})
 	}
@@ -375,7 +375,7 @@ func TestRenderCard_SubtaskMarkAcrossGlyphTiers(t *testing.T) {
 		t.Run(tier.name, func(t *testing.T) {
 			theme := kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
 			st := newStyles(theme)
-			got := ansi.Strip(renderCard(&iss, 30, false, false, st, theme, plan{}))
+			got := ansi.Strip(renderCard(&iss, 30, cardLook{}, st, theme, plan{}))
 			golden(t, "card_mark_subtask_"+tier.name+".golden", got+"\n")
 		})
 	}
@@ -392,21 +392,21 @@ func TestRenderCard_TheKeyCarriesItsStatusCategorysColourWhileResting(t *testing
 	toDo := &jira.Issue{Key: "PROJ-1", Summary: "one", Status: jira.Status{Category: jira.CategoryToDo}}
 	done := &jira.Issue{Key: "PROJ-1", Summary: "one", Status: jira.Status{Category: jira.CategoryDone}}
 
-	restingToDo := renderCard(toDo, 30, false, false, st, th, p)
+	restingToDo := renderCard(toDo, 30, cardLook{}, st, th, p)
 	if restingToDo == ansi.Strip(restingToDo) {
 		t.Fatal("a resting card built from a colour theme carries no colour at all, so this test proves nothing")
 	}
-	if restingDone := renderCard(done, 30, false, false, st, th, p); restingDone == restingToDo {
+	if restingDone := renderCard(done, 30, cardLook{}, st, th, p); restingDone == restingToDo {
 		t.Error("two resting cards in different categories rendered identically")
 	}
-	if sameAgain := renderCard(toDo, 30, false, false, st, th, p); sameAgain != restingToDo {
+	if sameAgain := renderCard(toDo, 30, cardLook{}, st, th, p); sameAgain != restingToDo {
 		t.Errorf("the same card rendered twice differs: %q vs %q", sameAgain, restingToDo)
 	}
 
-	if selected := renderCard(toDo, 30, true, false, st, th, p); selected != renderCard(done, 30, true, false, st, th, p) {
+	if selected := renderCard(toDo, 30, cardLook{selected: true}, st, th, p); selected != renderCard(done, 30, cardLook{selected: true}, st, th, p) {
 		t.Error("two selected cards still differ by category, so a second colour is fighting the selection style")
 	}
-	if held := renderCard(toDo, 30, false, true, st, th, p); held != renderCard(done, 30, false, true, st, th, p) {
+	if held := renderCard(toDo, 30, cardLook{inHand: true}, st, th, p); held != renderCard(done, 30, cardLook{inHand: true}, st, th, p) {
 		t.Error("two held cards still differ by category, so a second colour is fighting the held style")
 	}
 }

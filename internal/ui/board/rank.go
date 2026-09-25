@@ -62,36 +62,40 @@ func (m *Model) rankRefused() string {
 
 // reorder ranks the card under the cursor within its column.
 func (m *Model) reorder(where rankWhere) tea.Cmd {
-	if m.moving || m.card != nil {
+	if m.moving || m.card != nil || m.bulk != nil {
 		return nil
 	}
 	iss := m.issueAt(m.curCol, m.curRow)
 	if iss == nil {
 		return nil
 	}
-	col, row, n := m.curCol, m.curRow, m.columnLen(m.curCol)
+	col, row := m.curCol, m.curRow
+	lo, hi := m.laneSpan(col, row)
 	name := m.plan.columns[col].name
+	if m.lanesOn() {
+		name += " in this lane"
+	}
 	var anchor int
 	var after bool
 	switch where {
 	case rankUp, rankTop:
-		if row == 0 {
+		if row == lo {
 			return kernel.Status(iss.Key + " is already first in " + name)
 		}
 		anchor = row - 1
 		if where == rankTop {
-			anchor = 0
+			anchor = lo
 		}
 	case rankDown, rankBottom:
 		if where == rankBottom && m.more {
 			return kernel.Warn("the rest of this board is still loading, so the last card in " + name + " is not known yet")
 		}
-		if row == n-1 {
+		if row == hi-1 {
 			return kernel.Status(iss.Key + " is already last in " + name)
 		}
 		anchor, after = row+1, true
 		if where == rankBottom {
-			anchor = n - 1
+			anchor = hi - 1
 		}
 	}
 	return m.rankNextTo(iss.Key, m.issues[m.cols[col][anchor]].Key, after)
@@ -141,11 +145,12 @@ func (m *Model) sendRank() tea.Cmd {
 		m.rank = nil
 		return nil
 	}
+	lo, hi := m.laneSpan(col, row)
 	var at jira.RankPosition
 	switch {
-	case row+1 < m.columnLen(col):
+	case row+1 < hi:
 		at = jira.RankBefore(m.issueAt(col, row+1).Key)
-	case row > 0:
+	case row > lo:
 		at = jira.RankAfter(m.issueAt(col, row-1).Key)
 	default:
 		m.rank = nil
@@ -278,13 +283,16 @@ func (m *Model) dropWithin(grabbed string, msg tea.MouseMsg) tea.Cmd {
 	if !ok || fromCol != col || fromRow == row {
 		return nil
 	}
+	if lo, hi := m.laneSpan(col, fromRow); row < lo || row >= hi {
+		return kernel.Warn("a card is ranked within its own lane; move it to another lane by changing what the lane is grouped by")
+	}
 	return m.rankNextTo(key, m.issueAt(col, row).Key, row > fromRow)
 }
 
 // shiftCard lands the card under the cursor in the column beside it: the same
 // pick-up, aim and drop the m gesture makes, in one stroke.
 func (m *Model) shiftCard(by int) tea.Cmd {
-	if m.moving || m.card != nil {
+	if m.moving || m.card != nil || m.bulk != nil {
 		return nil
 	}
 	iss := m.issueAt(m.curCol, m.curRow)

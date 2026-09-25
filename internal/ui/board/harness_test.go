@@ -110,12 +110,28 @@ type driver struct {
 	statuses   []kernel.StatusMsg
 	pushes     []kernel.PushMsg
 	pops       int
+	proceeds   int
 	broadcasts []tea.Msg
 	// holdPages keeps every page after the first out of the board once it has
 	// been read, the way a page still in flight is, until release hands them
 	// over.
 	holdPages bool
 	heldPages []tea.Msg
+	// park keeps back every message it says yes to, the way holdPages keeps a
+	// page, so a test can look at the board while that answer is in flight.
+	park   func(tea.Msg) bool
+	parked []tea.Msg
+}
+
+// unpark delivers the oldest message park kept back.
+func (d *driver) unpark() {
+	d.t.Helper()
+	if len(d.parked) == 0 {
+		d.t.Fatal("nothing is parked")
+	}
+	msg := d.parked[0]
+	d.parked = d.parked[1:]
+	d.send(msg)
 }
 
 // release delivers the pages holdPages kept back, and lets every page after
@@ -185,6 +201,10 @@ func (d *driver) run(cmd tea.Cmd) {
 			d.heldPages = append(d.heldPages, msg)
 			continue
 		}
+		if d.park != nil && d.park(msg) {
+			d.parked = append(d.parked, msg)
+			continue
+		}
 		switch msg := msg.(type) {
 		case kernel.StatusMsg:
 			d.statuses = append(d.statuses, msg)
@@ -192,6 +212,8 @@ func (d *driver) run(cmd tea.Cmd) {
 			d.pushes = append(d.pushes, msg)
 		case kernel.PopMsg:
 			d.pops++
+		case kernel.ProceedMsg:
+			d.proceeds++
 		case kernel.BroadcastMsg:
 			d.broadcasts = append(d.broadcasts, msg.Msg)
 		default:
@@ -290,6 +312,8 @@ func keyPress(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyPgUp}
 	case "ctrl+g":
 		return tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}
+	case "space":
+		return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
 	default:
 		r, _ := utf8.DecodeRuneInString(s)
 		return tea.KeyPressMsg{Code: r, Text: s}

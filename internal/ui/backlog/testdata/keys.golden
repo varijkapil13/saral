@@ -1,30 +1,30 @@
 browsing with nothing picked
-  acts   space pick · v pick all · m move · / find · M mine · f filter by · s sort
+  acts   space pick · v pick all · m move · c create · / find · M mine · f filter by · s sort
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
   full   [K rank this issue up, J rank this issue down, { rank this issue first in its section, } rank this issue last in its section]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, / find an issue, M only my issues, f filter by a person, a status, a label, s sort, y copy the key, Y copy the link, o open in browser]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, c create an issue in this section, / find an issue, M only my issues, f filter by a person, a status, a label, s sort, y copy the key, Y copy the link, o open in browser]
   full   [n next issue found, N previous issue found]
 something picked
-  acts   space pick · v pick all · m move · / find · M mine · f filter by · s sort · x unpick all
+  acts   space pick · v pick all · m move · c create · / find · M mine · f filter by · s sort · x unpick all
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
   full   [K rank this issue up, J rank this issue down, { rank this issue first in its section, } rank this issue last in its section]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, / find an issue, M only my issues, f filter by a person, a status, a label, s sort, y copy the key, Y copy the link, o open in browser, x unpick everything]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, c create an issue in this section, / find an issue, M only my issues, f filter by a person, a status, a label, s sort, y copy the key, Y copy the link, o open in browser, x unpick everything]
   full   [n next issue found, N previous issue found]
 narrowed by a term
-  acts   space pick · v pick all · m move · / find · M mine · f filter by · s sort · ctrl+g clear
+  acts   space pick · v pick all · m move · c create · / find · M mine · f filter by · s sort · ctrl+g clear
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
   full   [K rank this issue up, J rank this issue down, { rank this issue first in its section, } rank this issue last in its section]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, / find an issue, M only my issues, f filter by a person, a status, a label, s sort, y copy the key, Y copy the link, o open in browser, ctrl+g clear filter]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, c create an issue in this section, / find an issue, M only my issues, f filter by a person, a status, a label, s sort, y copy the key, Y copy the link, o open in browser, ctrl+g clear filter]
   full   [n next issue found, N previous issue found]
 something picked and narrowed by a term
-  acts   space pick · v pick all · m move · / find · M mine · f filter by · s sort · x unpick all · ctrl+g clear
+  acts   space pick · v pick all · m move · c create · / find · M mine · f filter by · s sort · x unpick all · ctrl+g clear
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up]
   full   [ctrl+d half page down, ctrl+u half page up, g g first row, G last row]
   full   [K rank this issue up, J rank this issue down, { rank this issue first in its section, } rank this issue last in its section]
-  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, / find an issue, M only my issues, f filter by a person, a status, a label, s sort, y copy the key, Y copy the link, o open in browser, x unpick everything, ctrl+g clear filter]
+  full   [space pick or unpick this issue, v pick every issue in this section, m move these issues to a sprint or the backlog, c create an issue in this section, / find an issue, M only my issues, f filter by a person, a status, a label, s sort, y copy the key, Y copy the link, o open in browser, x unpick everything, ctrl+g clear filter]
   full   [n next issue found, N previous issue found]
 choosing where they go
   acts   →/l choose · enter move here · esc cancel

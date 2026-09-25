@@ -46,6 +46,16 @@ func init() {
 		},
 	})
 	kernel.RegisterCommand(kernel.Command{
+		ID:       "backlog.create",
+		Title:    "Create an issue in this backlog section",
+		Group:    "Backlog",
+		Requires: jira.CapBoards,
+		Keys:     []string{keys.Create.Help().Key},
+		Run: func(kernel.Deps) tea.Cmd {
+			return kernel.OpenThen(ViewID, CreateMsg{})
+		},
+	})
+	kernel.RegisterCommand(kernel.Command{
 		ID:       "backlog.next-board",
 		Title:    "Show the next board on this project",
 		Group:    "Backlog",

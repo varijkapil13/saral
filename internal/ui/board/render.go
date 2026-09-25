@@ -85,7 +85,7 @@ func (m *Model) rowsHeight() int {
 // prompting reports that a line under the grid is taken by a gesture in
 // progress.
 func (m *Model) prompting() bool {
-	return m.card != nil || m.moving || m.pendingFilter || m.finding
+	return m.card != nil || m.moving || m.pendingFilter || m.finding || m.bulk != nil
 }
 
 // styles are the board's own, built once per theme generation because
@@ -107,19 +107,25 @@ type styles struct {
 	// exist and a cursor move re-renders two cards, so rendering the style per
 	// card put a lipgloss.Render on the hot path for a string that never
 	// changes within a theme generation.
-	marks    map[string]string
-	selMark  string
-	heldMark string
+	marks       map[string]string
+	selMark     string
+	heldMark    string
+	pickMark    string
+	pickSelMark string
 }
 
 // markCell is a card's first cell: the type glyph at rest, or the gesture's own
 // marker when the card is selected or in hand — those two invert the whole
 // card, so their mark carries no style of its own to fight it.
-func (s *styles) markCell(glyph string, selected, inHand bool) string {
+func (s *styles) markCell(glyph string, look cardLook) string {
 	switch {
-	case inHand:
+	case look.inHand:
 		return s.heldMark
-	case selected:
+	case look.picked && look.selected:
+		return s.pickSelMark
+	case look.picked:
+		return s.pickMark
+	case look.selected:
 		return s.selMark
 	}
 	if cell, ok := s.marks[glyph]; ok {
@@ -153,6 +159,7 @@ func newStyles(t *kernel.Theme) *styles {
 		s.marks[glyph] = t.Muted.Render(glyph) + " "
 	}
 	s.selMark, s.heldMark = g.Collapsed+" ", g.Diamond+" "
+	s.pickMark, s.pickSelMark = t.Accent.Render(g.Check)+" ", g.Check+" "
 	return s
 }
 
@@ -164,9 +171,16 @@ type cardKey struct {
 	key      string
 	updated  int64
 	cell     int
+	gen      int
 	selected bool
 	held     bool
-	gen      int
+	picked   bool
+}
+
+// cardLook is how a card is drawn apart from what it says: under the cursor,
+// in hand, picked.
+type cardLook struct {
+	selected, inHand, picked bool
 }
 
 type cardCache struct {
@@ -210,12 +224,17 @@ type gridState struct {
 	holding  bool
 	heldFrom int
 	heldRow  int
+	lanes    laneMode
+	laneTop  int
 }
 
 func (m *Model) gridState(h int) gridState {
 	st := gridState{
 		lay: m.lay, colTop: m.colTop, gen: m.styles.gen, dataGen: m.dataGen, h: h,
 		curCol: m.curCol, curRow: m.curRow,
+	}
+	if m.lanesOn() {
+		st.lanes, st.laneTop = m.laneMode, m.laneTop
 	}
 	if m.card != nil {
 		st.holding, st.heldFrom, st.heldRow = true, m.card.from, m.card.row
@@ -263,7 +282,7 @@ func (m *Model) View() string {
 	head, rule := m.chrome()
 	lines = append(lines, head)
 	h := m.rowsHeight()
-	if m.gridRows() == 0 {
+	if m.gridRows() == 0 && len(m.lanes) == 0 {
 		lines = m.appendEmpty(lines, h)
 	} else {
 		lines = append(lines, m.grid(h)...)
@@ -318,8 +337,12 @@ func (m *Model) grid(h int) []string {
 		return m.gridCache
 	}
 	lines := m.gridCache[:0]
-	for row := range h {
-		lines = append(lines, m.composeRow(row))
+	if m.lanesOn() {
+		lines = m.laneGrid(lines, h)
+	} else {
+		for row := range h {
+			lines = append(lines, m.composeRow(row))
+		}
 	}
 	m.gridCache = lines
 	m.gridAt = st
@@ -352,15 +375,21 @@ func (m *Model) line(row int) string {
 // mid-write for every rebuilt row rather than the one this returns.
 func (m *Model) composeRow(row int) string {
 	end := min(m.colTop+m.lay.cols, len(m.cols))
-	n := max(end-m.colTop, 0)
 	cells := m.rowCells[:0]
-	total := 0
 	for c := m.colTop; c < end; c++ {
-		s := m.cell(c, m.rowTopAt(c)+row)
-		cells = append(cells, s)
-		total += len(s)
+		cells = append(cells, m.cell(c, m.rowTopAt(c)+row))
 	}
 	m.rowCells = cells
+	return m.joinCells(cells)
+}
+
+// joinCells is one grid line out of its cells, padded out to the board's width.
+func (m *Model) joinCells(cells []string) string {
+	n := len(cells)
+	total := 0
+	for _, s := range cells {
+		total += len(s)
+	}
 	if n > 1 {
 		total += gap * (n - 1)
 	}
@@ -390,15 +419,17 @@ func (m *Model) cell(col, row int) string {
 		return m.blank
 	}
 	selected := col == m.curCol && row == m.curRow && m.card == nil
-	inHand := m.card != nil && m.card.key == iss.Key
+	picked := m.picked[iss.Key]
+	inHand := m.card != nil && (m.card.key == iss.Key || (m.card.set && picked))
 	k := cardKey{
 		key: iss.Key, updated: iss.Updated.UnixNano(), cell: m.lay.cell,
-		selected: selected, held: inHand, gen: m.styles.gen,
+		selected: selected, held: inHand, picked: picked, gen: m.styles.gen,
 	}
 	if s, ok := m.cards.get(k); ok {
 		return s
 	}
-	s := m.zones.Mark(cardZone(iss.Key), renderCard(iss, m.lay.cell, selected, inHand, m.styles, m.deps.Theme, m.plan))
+	s := m.zones.Mark(cardZone(iss.Key), renderCard(iss, m.lay.cell, cardLook{selected: selected, inHand: inHand, picked: picked},
+		m.styles, m.deps.Theme, m.plan))
 	m.cards.put(k, s)
 	return s
 }
@@ -406,7 +437,8 @@ func (m *Model) cell(col, row int) string {
 // renderCard draws one card to exactly cell columns: a marker saying whether it
 // is the one under the cursor or the one in hand, the issue key, as much of the
 // summary as is left, and the board's estimate for it where the board has one.
-func renderCard(iss *jira.Issue, cell int, selected, inHand bool, st *styles, t *kernel.Theme, p plan) string {
+func renderCard(iss *jira.Issue, cell int, look cardLook, st *styles, t *kernel.Theme, p plan) string {
+	selected, inHand := look.selected, look.inHand
 	ell := t.Glyphs.Ellipsis
 	// Selected and held both need the marker for their own gesture and take it
 	// back from the type icon it otherwise carries at rest.
@@ -416,11 +448,13 @@ func renderCard(iss *jira.Issue, cell int, selected, inHand bool, st *styles, t 
 	switch {
 	case inHand:
 		mark = t.Glyphs.Diamond
+	case look.picked:
+		mark = t.Glyphs.Check
 	case selected:
 		mark = t.Glyphs.Collapsed
 	}
 	room := max(cell-ansi.StringWidth(mark)-1, 0)
-	markCell := st.markCell(t.Glyphs.TypeGlyph(iss.Type), selected, inHand)
+	markCell := st.markCell(t.Glyphs.TypeGlyph(iss.Type), look)
 	estimate := ""
 	if p.estimates {
 		if n, ok := iss.Fields.Number(p.estimate); ok {
@@ -498,7 +532,7 @@ func (m *Model) aimedAt() int {
 // and Max are pointers because a column may have neither.
 func (m *Model) caption(col int) string {
 	c := m.plan.columns[col]
-	n := m.columnLen(col)
+	n := m.columnLen(col) + m.foldedIn(col)
 	count := strconv.Itoa(n)
 	room := max(m.lay.cell-ansi.StringWidth(count)-1, 1)
 	name := widget.PadTruncate(widget.Sanitize(c.name), room, m.deps.Theme.Glyphs.Ellipsis)
@@ -548,6 +582,13 @@ func (m *Model) estimateOf(col int) float64 {
 			total += n
 		}
 	}
+	if col < len(m.folded) {
+		for _, at := range m.folded[col] {
+			if n, ok := m.issues[at].Fields.Number(m.plan.estimate); ok {
+				total += n
+			}
+		}
+	}
 	return total
 }
 
@@ -572,6 +613,8 @@ type summaryKey struct {
 	checked     int64
 	filters     string
 	sprint      string
+	lanes       laneMode
+	picked      int
 }
 
 func (m *Model) summaryKey() summaryKey {
@@ -582,6 +625,7 @@ func (m *Model) summaryKey() summaryKey {
 		loading: m.loading, loaded: m.loaded, failed: m.failure != nil, stale: m.stale || m.aged(),
 		ordering: m.plan.ordering, estimates: m.plan.estimates,
 		checked: m.checked.UnixNano(), filters: m.quickFilterLine(), sprint: m.sprintLabel(),
+		lanes: m.laneMode, picked: len(m.picked),
 	}
 }
 
@@ -629,6 +673,9 @@ func (m *Model) boardTitle() string {
 	if line := m.quickFilterLine(); line != "" {
 		name += " · " + line
 	}
+	if lanes := m.laneTitle(); lanes != "" {
+		name += " · " + lanes
+	}
 	return name
 }
 
@@ -646,7 +693,7 @@ func (m *Model) counts() string {
 	// the number somebody checks first when a board looks wrong.
 	on := 0
 	for i := range m.cols {
-		on += len(m.cols[i])
+		on += len(m.cols[i]) + m.foldedIn(i)
 	}
 	cards := strconv.Itoa(on)
 	if read := len(m.issues); read != on {
@@ -670,6 +717,9 @@ func (m *Model) counts() string {
 		columns += " (" + strconv.Itoa(m.lay.cols) + " shown)"
 	}
 	parts := []string{cards}
+	if n := len(m.picked); n > 0 {
+		parts = append(parts, strconv.Itoa(n)+" picked")
+	}
 	if m.unmapped > 0 {
 		parts = append(parts, strconv.Itoa(m.unmapped)+" in no column")
 	}
@@ -704,6 +754,8 @@ const staleLabel = "stale"
 func (m *Model) prompt() string {
 	ell := m.deps.Theme.Glyphs.Ellipsis
 	switch {
+	case m.bulk != nil:
+		return m.bulkPrompt()
 	case m.pendingFilter:
 		return m.quickFilterPrompt()
 	case m.finding:
@@ -711,6 +763,9 @@ func (m *Model) prompt() string {
 	case m.card != nil:
 		said := "move " + m.card.key + " from " + m.card.status + " to " +
 			m.plan.columns[m.card.target].name
+		if m.card.set {
+			said = "move " + countCards(len(m.picked)) + " to " + m.plan.columns[m.card.target].name
+		}
 		hint := dropHint
 		if m.moving {
 			hint = m.deps.Theme.Glyphs.Stale + " asking the site"

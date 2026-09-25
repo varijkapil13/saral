@@ -62,6 +62,28 @@ type keyMap struct {
 	FindPrev   kernel.Binding
 	FindKeep   kernel.Binding
 	FindCancel kernel.Binding
+	// Lanes cycles the swimlanes, Fold closes or opens the lane under the
+	// cursor and FoldAll every lane at once.
+	Lanes   kernel.Binding
+	Fold    kernel.Binding
+	FoldAll kernel.Binding
+	// Create opens the create form for the column under the cursor.
+	Create kernel.Binding
+	// Toggle, PickColumn and Unpick are the multi-select; Assign and Label act on
+	// what is picked, or on the card under the cursor when nothing is.
+	Toggle     kernel.Binding
+	PickColumn kernel.Binding
+	Unpick     kernel.Binding
+	Assign     kernel.Binding
+	Label      kernel.Binding
+	// Accept, Next and Prev answer the person and label prompts, Run and
+	// Decline the confirmation, and Halt stops a run after the card in flight.
+	Accept  kernel.Binding
+	Decline kernel.Binding
+	Prev    kernel.Binding
+	Next    kernel.Binding
+	Run     kernel.Binding
+	Halt    kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -97,6 +119,24 @@ func defaultKeys() keyMap {
 		FindPrev:   kernel.Bind([]string{"N"}, "N", "previous card found"),
 		FindKeep:   kernel.Bind([]string{"enter"}, "enter", "keep this search"),
 		FindCancel: kernel.Bind([]string{"esc"}, "esc", "go back to where the search began"),
+
+		Lanes:   kernel.Bind([]string{"w"}, "w", "swimlanes: none, by assignee, by parent"),
+		Fold:    kernel.Bind([]string{"z"}, "z", "fold or unfold this lane"),
+		FoldAll: kernel.Bind([]string{"Z"}, "Z", "fold or unfold every lane"),
+		Create:  kernel.Bind([]string{"c"}, "c", "create an issue in this column"),
+
+		Toggle:     kernel.Bind([]string{"space"}, "space", "pick or unpick this card"),
+		PickColumn: kernel.Bind([]string{"v"}, "v", "pick every card in this column"),
+		Unpick:     kernel.Bind([]string{"x"}, "x", "unpick every card"),
+		Assign:     kernel.Bind([]string{"@"}, "@", "assign the picked cards"),
+		Label:      kernel.Bind([]string{"+"}, "+", "add a label to the picked cards"),
+
+		Accept:  kernel.Bind([]string{"enter"}, "enter", "take this"),
+		Decline: kernel.Bind([]string{"esc"}, "esc", "cancel"),
+		Prev:    kernel.Bind([]string{"up"}, "↑", "previous person"),
+		Next:    kernel.Bind([]string{"down"}, "↓", "next person"),
+		Run:     kernel.Bind([]string{"enter", "y"}, "enter", "go ahead"),
+		Halt:    kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "stop after the card in flight"),
 	}
 }
 
@@ -105,16 +145,27 @@ func (k keyMap) keySet() kernel.KeySet { return liveSets[keysBrowsing] }
 
 // browsing is the resting state, with and without a term in force. The
 // narrowed one offers the key that clears them, the way list.browsing does.
-func (k keyMap) browsing(narrowed bool) kernel.KeySet {
+func (k keyMap) browsing(narrowed, picked bool) kernel.KeySet {
 	acts := []kernel.Binding{
-		k.Open, kernel.Terse(k.Pick, "move"), kernel.Terse(k.Find, "find"), kernel.Terse(k.Mine, "mine"),
+		k.Open, kernel.Terse(k.Pick, "move"), kernel.Terse(k.Create, "create"), kernel.Terse(k.Find, "find"),
+		kernel.Terse(k.Mine, "mine"),
 		kernel.Terse(k.Board, "board"), kernel.Terse(k.FilterBy, "filter by"),
 		kernel.Terse(k.Filters, "quick filters"),
+	}
+	if picked {
+		acts = []kernel.Binding{
+			kernel.Terse(k.Pick, "move them"), kernel.Terse(k.Assign, "assign"), kernel.Terse(k.Label, "label"),
+			kernel.Terse(k.Toggle, "pick"), kernel.Terse(k.Unpick, "unpick all"),
+		}
 	}
 	actions := append([]kernel.Binding{k.Open, k.Pick, k.Find, k.Mine, k.Board, k.Sprint, k.FilterBy, k.Filters}, issue.ShareBindings...)
 	if narrowed {
 		acts = append(acts, kernel.Terse(k.Unfilter, "clear"))
 		actions = append(actions, k.Unfilter)
+	}
+	many := []kernel.Binding{k.Toggle, k.PickColumn, k.Assign, k.Label}
+	if picked {
+		many = append(many, k.Unpick)
 	}
 	return kernel.KeySet{
 		Acts: acts,
@@ -123,6 +174,8 @@ func (k keyMap) browsing(narrowed bool) kernel.KeySet {
 			{k.PageDown, k.PageUp, k.Top, k.Bottom},
 			{k.ShiftLeft, k.ShiftRight, k.RankUp, k.RankDown, k.RankTop, k.RankBottom},
 			actions,
+			many,
+			{k.Create, k.Lanes, k.Fold, k.FoldAll},
 			{k.FindNext, k.FindPrev},
 		},
 	}
@@ -140,6 +193,12 @@ const (
 	keysMoving
 	keysPickingFilter
 	keysFinding
+	keysPicked
+	keysPickedNarrowed
+	keysAskingPerson
+	keysAskingLabel
+	keysConfirming
+	keysRunning
 	keyStates
 )
 
@@ -148,8 +207,10 @@ const (
 var liveSets = func() [keyStates]kernel.KeySet {
 	k := defaultKeys()
 	var sets [keyStates]kernel.KeySet
-	sets[keysBrowsing] = k.browsing(false)
-	sets[keysNarrowed] = k.browsing(true)
+	sets[keysBrowsing] = k.browsing(false, false)
+	sets[keysNarrowed] = k.browsing(true, false)
+	sets[keysPicked] = k.browsing(false, true)
+	sets[keysPickedNarrowed] = k.browsing(true, true)
 	// A card in hand can only be aimed and landed, so the whole inventory is the
 	// two answers and the two ways of aiming. enter means something else here
 	// than it does above, which is the reason a state reports for itself.
@@ -179,6 +240,23 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Acts: []kernel.Binding{kernel.Terse(k.FindKeep, "keep"), kernel.Terse(k.FindCancel, "cancel")},
 		Full: [][]kernel.Binding{{k.FindKeep, k.FindCancel}, {widget.KillLine}},
 	}
+	// @ and + take typing: a name to look an account up by, or a label.
+	sets[keysAskingPerson] = kernel.KeySet{
+		Acts: []kernel.Binding{kernel.Terse(k.Accept, "choose"), kernel.Terse(k.Decline, "cancel")},
+		Full: [][]kernel.Binding{{k.Prev, k.Next}, {k.Accept, k.Decline}, {widget.KillLine}},
+	}
+	sets[keysAskingLabel] = kernel.KeySet{
+		Acts: []kernel.Binding{kernel.Terse(k.Accept, "add it"), kernel.Terse(k.Decline, "cancel")},
+		Full: [][]kernel.Binding{{k.Accept, k.Decline}, {widget.KillLine}},
+	}
+	sets[keysConfirming] = kernel.KeySet{
+		Acts: []kernel.Binding{k.Run, kernel.Terse(k.Decline, "leave them as they are")},
+		Full: [][]kernel.Binding{{k.Run, k.Decline}},
+	}
+	sets[keysRunning] = kernel.KeySet{
+		Acts: []kernel.Binding{kernel.Terse(k.Halt, "stop")},
+		Full: [][]kernel.Binding{{k.Halt}},
+	}
 	return sets
 }()
 
@@ -189,6 +267,8 @@ var liveSets = func() [keyStates]kernel.KeySet {
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	state := keysBrowsing
 	switch {
+	case m.bulk != nil:
+		state = m.bulk.keyState()
 	case m.moving:
 		state = keysMoving
 	case m.card != nil:
@@ -197,6 +277,10 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysPickingFilter
 	case m.finding:
 		state = keysFinding
+	case len(m.picked) > 0 && len(m.terms) > 0:
+		state = keysPickedNarrowed
+	case len(m.picked) > 0:
+		state = keysPicked
 	case len(m.terms) > 0:
 		state = keysNarrowed
 	}
@@ -242,6 +326,21 @@ const (
 	actFindPrev
 	actFindKeep
 	actFindCancel
+	actLanes
+	actFold
+	actFoldAll
+	actCreate
+	actToggle
+	actPickColumn
+	actUnpick
+	actAssign
+	actLabel
+	actAccept
+	actDecline
+	actPrev
+	actNext
+	actRun
+	actHalt
 )
 
 // tables turn the bindings into a keystroke lookup, built once per board. The
@@ -251,6 +350,20 @@ const (
 func (k keyMap) tables() (browsing, holding, finding map[string]action) {
 	browse, hold, find := k.entries()
 	return table(browse...), table(hold...), table(find...)
+}
+
+// bulkTables are the three states a bulk change passes through before and
+// while it runs: typing a person or a label, confirming, and running.
+func (k keyMap) bulkTables() (asking, confirming, running map[string]action) {
+	ask, confirm, run := k.bulkEntries()
+	return table(ask...), table(confirm...), table(run...)
+}
+
+func (k keyMap) bulkEntries() (asking, confirming, running []binding) {
+	asking = []binding{{k.Accept, actAccept}, {k.Decline, actDecline}, {k.Prev, actPrev}, {k.Next, actNext}}
+	confirming = []binding{{k.Run, actRun}, {k.Decline, actDecline}}
+	running = []binding{{k.Halt, actHalt}}
+	return asking, confirming, running
 }
 
 // entries are the three tables as lists, which is what lets a test see a stroke
@@ -274,6 +387,10 @@ func (k keyMap) entries() (browsing, holding, finding []binding) {
 		{k.ShiftLeft, actShiftLeft}, {k.ShiftRight, actShiftRight},
 		{k.Mine, actMine}, {k.Find, actFind},
 		{k.FindNext, actFindNext}, {k.FindPrev, actFindPrev},
+		{k.Lanes, actLanes}, {k.Fold, actFold}, {k.FoldAll, actFoldAll},
+		{k.Create, actCreate},
+		{k.Toggle, actToggle}, {k.PickColumn, actPickColumn}, {k.Unpick, actUnpick},
+		{k.Assign, actAssign}, {k.Label, actLabel},
 	}
 	holding = []binding{
 		{k.Left, actLeft}, {k.Right, actRight},

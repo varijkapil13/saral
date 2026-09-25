@@ -66,6 +66,8 @@ type keyMap struct {
 	FindPrev   kernel.Binding
 	FindKeep   kernel.Binding
 	FindCancel kernel.Binding
+	// Create opens the create form for the section under the cursor.
+	Create kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -107,6 +109,7 @@ func defaultKeys() keyMap {
 		FindPrev:   kernel.Bind([]string{"N"}, "N", "previous issue found"),
 		FindKeep:   kernel.Bind([]string{"enter"}, "enter", "keep this search"),
 		FindCancel: kernel.Bind([]string{"esc"}, "esc", "go back to where the search began"),
+		Create:     kernel.Bind([]string{"c"}, "c", "create an issue in this section"),
 	}
 }
 
@@ -123,8 +126,9 @@ func (k keyMap) browsing(picked, narrowed bool) kernel.KeySet {
 	by := kernel.Terse(k.FilterBy, "filter by")
 	sort := kernel.Terse(k.Sort, "sort")
 	find, mine := kernel.Terse(k.Find, "find"), kernel.Terse(k.Mine, "mine")
-	acts := []kernel.Binding{pick, all, move, find, mine, by, sort}
-	actions := append([]kernel.Binding{k.Pick, k.PickAll, k.Move, k.Find, k.Mine, k.FilterBy, k.Sort}, issue.ShareBindings...)
+	create := kernel.Terse(k.Create, "create")
+	acts := []kernel.Binding{pick, all, move, create, find, mine, by, sort}
+	actions := append([]kernel.Binding{k.Pick, k.PickAll, k.Move, k.Create, k.Find, k.Mine, k.FilterBy, k.Sort}, issue.ShareBindings...)
 	if picked {
 		acts = append(acts, kernel.Terse(k.Unpick, "unpick all"))
 		actions = append(actions, k.Unpick)
@@ -264,6 +268,7 @@ const (
 	actFindPrev
 	actFindKeep
 	actFindCancel
+	actCreate
 )
 
 // tables turn the bindings into a keystroke lookup, built once. The bindings
@@ -291,6 +296,7 @@ func (k keyMap) entries() (browse, chooser, confirm, sorting, finding []binding)
 		{k.RankTop, actRankTop}, {k.RankBottom, actRankBottom},
 		{k.Mine, actMine}, {k.Find, actFind},
 		{k.FindNext, actFindNext}, {k.FindPrev, actFindPrev},
+		{k.Create, actCreate},
 	}
 	chooser = []binding{
 		{k.Next, actDown}, {k.Prev, actUp},

@@ -34,6 +34,25 @@ type MineMsg struct{}
 // FindMsg is described with RankMsg.
 type FindMsg struct{}
 
+// LanesMsg steps the swimlanes to the next grouping, FoldMsg folds or unfolds
+// the lane under the cursor, CreateMsg opens the create form for the column
+// under the cursor, and AssignMsg and LabelMsg start a bulk change of the
+// picked cards: each is exported so the palette reaches the gesture its key
+// does.
+type LanesMsg struct{}
+
+// FoldMsg is described with LanesMsg.
+type FoldMsg struct{}
+
+// CreateMsg is described with LanesMsg.
+type CreateMsg struct{}
+
+// AssignMsg is described with LanesMsg.
+type AssignMsg struct{}
+
+// LabelMsg is described with LanesMsg.
+type LabelMsg struct{}
+
 // ClearFilterMsg drops every term the filter picker put in force. It is
 // exported so the palette reaches the gesture ctrl+g does rather than a second
 // implementation of it.
@@ -103,6 +122,26 @@ func init() {
 		{"board.rank-bottom", "Rank this card last in its column", keys.RankBottom, RankMsg{Where: rankBottom}},
 		{"board.shift-left", "Move this card to the previous column", keys.ShiftLeft, ShiftMsg{By: -1}},
 		{"board.shift-right", "Move this card to the next column", keys.ShiftRight, ShiftMsg{By: 1}},
+	} {
+		kernel.RegisterCommand(kernel.Command{
+			ID:       c.id,
+			Title:    c.title,
+			Group:    "Board",
+			Requires: jira.CapBoards,
+			Keys:     []string{c.key.Help().Key},
+			Run:      func(kernel.Deps) tea.Cmd { return kernel.OpenThen(ViewID, c.msg) },
+		})
+	}
+	for _, c := range []struct {
+		id, title string
+		key       kernel.Binding
+		msg       tea.Msg
+	}{
+		{"board.lanes", "Change the swimlanes on the board", keys.Lanes, LanesMsg{}},
+		{"board.fold-lane", "Fold or unfold this swimlane", keys.Fold, FoldMsg{}},
+		{"board.create", "Create an issue in this column", keys.Create, CreateMsg{}},
+		{"board.assign", "Assign the picked cards", keys.Assign, AssignMsg{}},
+		{"board.label", "Add a label to the picked cards", keys.Label, LabelMsg{}},
 	} {
 		kernel.RegisterCommand(kernel.Command{
 			ID:       c.id,

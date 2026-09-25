@@ -128,6 +128,11 @@ type Model struct {
 	mention mention.State
 	after   func(time.Duration, func() tea.Msg) tea.Cmd
 
+	sprint    jira.Sprint
+	dest      string
+	report    kernel.Addr
+	reporting bool
+
 	gen    int
 	cancel context.CancelFunc
 	addr   kernel.Addr
@@ -1221,6 +1226,7 @@ func (m *Model) created(msg createdMsg) tea.Cmd {
 	return tea.Sequence(
 		warn,
 		kernel.Pop(),
+		m.reported(msg.issue),
 		kernel.Broadcast(kernel.RefreshMsg{}),
 		kernel.Status(msg.issue.Key+" created"),
 	)

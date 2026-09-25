@@ -13,6 +13,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/filter"
+	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -158,6 +159,9 @@ type Model struct {
 	byKey    map[string]int
 	page     jira.Page[jira.Issue]
 	missing  []string
+	// fieldIDs is what the last read of the board asked for, nil when the
+	// backlog on screen came off disk.
+	fieldIDs []string
 
 	groups []group
 	rows   []row
@@ -242,6 +246,13 @@ type Model struct {
 	needle   string
 	findMiss bool
 	findFrom int
+
+	// createOn is the board the last create was started on, so a report that
+	// lands after the board changed is not drawn on the wrong one.
+	createOn int64
+	// made is the issues this view created and drew itself, which a re-read
+	// the search index has not caught up with yet would otherwise drop.
+	made []string
 
 	focused bool
 }
@@ -440,6 +451,15 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case FindMsg:
 		cmd = m.startFind()
+
+	case CreateMsg:
+		cmd = m.startCreate()
+
+	case form.CreatedMsg:
+		cmd = m.created(msg)
+
+	case createdMsg:
+		cmd = m.settled(msg)
 
 	case MineMsg:
 		cmd = m.toggleMine()
@@ -669,6 +689,7 @@ func (m *Model) forget() {
 	m.picked = make(map[string]bool)
 	m.page, m.missing = jira.Page[jira.Issue]{}, nil
 	m.config, m.field, m.done, m.estimate = jira.BoardConfig{}, jira.FieldRef{}, nil, jira.FieldRef{}
+	m.fieldIDs, m.made = nil, nil
 	m.dropRank()
 	m.needle, m.findMiss = "", false
 	m.cursor, m.top = 0, 0
@@ -706,10 +727,13 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 		return nil
 	}
 	m.loading, m.loaded, m.stale, m.boardIDHint = false, true, false, 0
+	under, issues := m.under(), m.carryMade(msg.config.BoardID, msg.page.Items)
 	m.boards, m.boardAt, m.config = msg.boards, msg.boardAt, msg.config
 	m.done, m.estimate = doneStatuses(msg.config), estimateOf(msg.config)
 	m.sprints, m.field, m.noSprints = msg.sprints, msg.field, msg.noSprints
-	m.issues, m.page, m.missing = msg.page.Items, msg.page, msg.missing
+	m.issues, m.page, m.missing, m.fieldIDs = issues, msg.page, msg.missing, msg.fields
+	// The rows still index the issues just replaced.
+	m.rows = m.rows[:0]
 	m.head = ""
 	switch {
 	case len(msg.boards) == 0:
@@ -723,6 +747,7 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 	m.reindex()
 	m.relayout()
 	m.regroup()
+	m.restore(under)
 	return tea.Batch(m.rememberLastBacklogBoard(), m.storeThen(m.pagePut(msg.page.Items, true), m.pageAheadIfNeeded))
 }
 
@@ -803,11 +828,14 @@ func (m *Model) tookPage(msg pagedMsg) tea.Cmd {
 		return nil
 	}
 	m.loading, m.stale = false, false
-	m.issues = append(m.issues, msg.page.Items...)
+	under := m.under()
+	m.issues = append(m.dropMade(msg.page.Items), msg.page.Items...)
+	m.rows = m.rows[:0]
 	m.page = msg.page
 	m.reindex()
 	m.relayout()
 	m.regroup()
+	m.restore(under)
 	var said tea.Cmd
 	if msg.stored != nil {
 		said = kernel.Warn("this backlog could not be stored for next time: " + msg.stored.Error())
@@ -1459,6 +1487,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.findAgain(1)
 	case actFindPrev:
 		return m.findAgain(-1)
+	case actCreate:
+		return m.startCreate()
 	case actNone, actChoose, actBack, actConfirm,
 		actSortPrev, actSortNext, actSortChoose, actSortCancel, actFindKeep, actFindCancel:
 	}
