@@ -391,7 +391,11 @@ func (m *Model) rowsHeight() int {
 }
 
 func (m *Model) showsDetail() bool {
-	return m.state == browsing && m.rowCount() > 0 && m.bodyHeight() >= detailMinBody
+	if m.state != browsing || m.rowCount() == 0 || m.bodyHeight() < detailMinBody {
+		return false
+	}
+	_, ok := m.detailSprint()
+	return ok
 }
 
 // refused reports that the site said no and there are still rows to draw, which

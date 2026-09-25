@@ -33,11 +33,25 @@ func (m *Model) detailKey(sp jira.Sprint) detailKey {
 	}
 }
 
-// detailLines describe the sprint under the cursor: its name, its dates in the
-// account's zone and how long it has left, its goal, and for a running sprint
-// how much of it is done.
+// detailSprint is the running sprint the block describes: the one under the
+// cursor when it is running, else the first running one on the list. Keying it
+// on the running sprint rather than the cursor keeps a scroll from rebuilding it.
+func (m *Model) detailSprint() (jira.Sprint, bool) {
+	if sp := m.selected(); sp.State == jira.SprintActive {
+		return sp, true
+	}
+	for i := range m.sprints {
+		if m.sprints[i].State == jira.SprintActive {
+			return m.sprints[i], true
+		}
+	}
+	return jira.Sprint{}, false
+}
+
+// detailLines describe a running sprint: its name, its dates in the account's
+// zone and how long it has left, its goal, and how much of it is done.
 func (m *Model) detailLines() []string {
-	sp := m.selected()
+	sp, _ := m.detailSprint()
 	key := m.detailKey(sp)
 	if held, ok := m.details.Get(key); ok {
 		return held
@@ -56,7 +70,7 @@ func (m *Model) detailLines() []string {
 	b.WriteString(" (")
 	b.WriteString(zone.String())
 	b.WriteString(")")
-	if sp.State == jira.SprintActive && sp.End != nil && m.deps.Now != nil {
+	if sp.End != nil && m.deps.Now != nil {
 		b.WriteString(sep)
 		b.WriteString(daysLeft(*sp.End, m.deps.Now(), m.deps.Caps.Location()))
 	}
@@ -75,29 +89,17 @@ func (m *Model) detailLines() []string {
 	return lines
 }
 
-// standing is the third line: progress for a running sprint, and what state
-// the others are in.
+// standing is the third line: how much of the sprint is done.
 func (m *Model) standing(sp jira.Sprint) string {
-	switch sp.State {
-	case jira.SprintActive:
-		p, ok := m.progress[sp.ID]
-		switch {
-		case ok && p.err != nil:
-			reason, _ := jira.Reason(p.err)
-			return "The issues in it could not be counted: " + reason
-		case ok:
-			return p.words()
-		case m.counting:
-			return "Counting the issues in it" + m.deps.Theme.Glyphs.Ellipsis
-		}
-		return "Its issues have not been counted."
-	case jira.SprintFuture:
-		return "Planned, and not started."
-	case jira.SprintClosed:
-		if sp.Complete != nil {
-			return "Closed on " + writeDate(sp.Complete, m.deps.Caps.Location()) + "."
-		}
-		return "Closed."
+	p, ok := m.progress[sp.ID]
+	switch {
+	case ok && p.err != nil:
+		reason, _ := jira.Reason(p.err)
+		return "The issues in it could not be counted: " + reason
+	case ok:
+		return p.words()
+	case m.counting:
+		return "Counting the issues in it" + m.deps.Theme.Glyphs.Ellipsis
 	}
-	return "In a state this build has no word for: " + stateWord(sp.State) + "."
+	return "Its issues have not been counted."
 }
