@@ -131,7 +131,6 @@ type SessionClient interface {
 	Releaser
 	BoardReader
 	SprintManager
-	SprintIssueReader
 	Relocator
 	PlanReader
 	ServerInfoReader
