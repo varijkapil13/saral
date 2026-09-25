@@ -1298,9 +1298,10 @@ Wave 3 — the features a daily driver was missing:
   `issue view|create`, `search`, `transition`, `comment add`, `assign`, `open` and `completion`, with
   tab-separated output and a documented JSON schema.
 
-- [ ] **P10.21 — Rows refreshed after a write in the issue pane** · branch `fix/p10.21-list-after-transition`
-  The list, board and backlog under the issue pane still show the old status after a transition
-  there. In progress.
+- [x] **P10.21 — Rows refreshed after a write in the issue pane** · [#166](https://github.com/varijkapil13/saral/pull/166)
+  A transition or field save in the issue pane revalidates that one row in the list, board or
+  backlog under it (`issue.ChangedMsg`). Every test package now isolates its config and cache
+  directories through `testsupport.IsolateDirs`, enforced by `internal/arch`.
 
 Wave 4:
 

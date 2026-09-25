@@ -78,6 +78,8 @@ such change is listed under **Changed**.
 - A save in the issue pane no longer overwrites a field that changed on the site since you started
   editing it: your changes are kept, and you review them against the new value before saving again.
   The read after a save goes through the issue endpoint, so it is not stale.
+- After you transition or edit an issue in the issue pane, the list, board or backlog underneath
+  shows the new values without a refresh.
 - Text typed into the inline description editor survives `esc`.
 - Editing a description or comment through markdown keeps untouched list items, table cells,
   panels and mentions exactly as they were; literal `*`, `_` and similar characters stay literal.
