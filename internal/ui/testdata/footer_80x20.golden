@@ -1,9 +1,9 @@
 attach
  Issues                                                             ? ctrl+k esc
 backlog
- Issues  space pick  v pick all  m move  / find  o mine  +2         ? ctrl+k esc
+ Issues  space pick  v pick all  m move  / find  M mine  +2         ? ctrl+k esc
 board
- Issues  enter open  m move  / find  o mine  b board  +2            ? ctrl+k esc
+ Issues  enter open  m move  / find  M mine  b board  +2            ? ctrl+k esc
 comment
  Issues  a write  e edit  d delete                                  ? ctrl+k esc
 filter

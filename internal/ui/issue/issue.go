@@ -179,6 +179,8 @@ type Model struct {
 	pendingAssignSelf bool
 
 	openMove string
+	// inactive stops a pane under another view answering a palette broadcast.
+	inactive bool
 
 	search *app.Search
 	cache  app.Cache
@@ -443,7 +445,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.wheel(msg)
 
 	default:
-		cmd = join(m.splitMsg(msg), join(m.moveMsg(msg), join(m.assignMsg(msg), join(m.dirtyMsg(msg), m.tell(msg)))))
+		cmd = join(m.splitMsg(msg), join(m.moveMsg(msg), join(m.assignMsg(msg), join(m.dirtyMsg(msg), join(m.collabMsg(msg), m.tell(msg))))))
 	}
 	// The regions are laid out here rather than only in View so that a key
 	// pressed before the first frame moves the content that is already in hand,
@@ -515,6 +517,7 @@ func (m *Model) Close() {
 // keys. Coming back from the full-screen thread is where the thread's box has to
 // be put back: the kernel gave it the whole screen on the way there.
 func (m *Model) focused(on bool) tea.Cmd {
+	m.inactive = !on
 	if !on {
 		// The read carries on: a palette opened over a loading pane must not
 		// cancel what it is loading. Nobody is holding the divider, though.
@@ -671,6 +674,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		case "e":
 			return m.move(m.focus, stepBottom, 1)
 		}
+	}
+	if cmd, ok := m.collabKey(stroke); ok {
+		return cmd
 	}
 	switch at := strokes[stroke]; at {
 	case actNone:

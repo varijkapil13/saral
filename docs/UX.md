@@ -693,7 +693,7 @@ point at, a pointer gesture.
 | `K` / `J` (or `shift+↑` / `shift+↓`) | rank the card above the one before it, below the one after it | the same, within the section |
 | `{` / `}` | rank it first or last in its column | first or last in its section |
 | `H` / `L` (or `shift+←` / `shift+→`) | move the card to the previous or next column, in one stroke | — |
-| `o` | only my issues | only my issues |
+| `M` | only my issues | only my issues |
 | `/`, then `n` / `N` | find a card by key or words of its summary, then the next and the one before | the same over the rows |
 
 **A rank is drawn before the site answers and taken back if it refuses.** The site's own order lags
@@ -709,9 +709,9 @@ card, and so does a backlog sorted by a field of its own: a rank there would not
 **`H` and `L` are `m`, an arrow and `enter` in one stroke.** They go through the same transition
 read, so a move whose screen needs a field opens the issue pane on that move exactly as a drop does.
 
-**`o` is a term, not a mode.** It puts the account this session is signed in as in force as the only
+**`M` is a term, not a mode.** It puts the account this session is signed in as in force as the only
 assignee — replacing any other person already there and leaving the other facets alone — so the chip
-bar names it, `ctrl+g` clears it and a second `o` takes it off. The account is asked for once, the
+bar names it, `ctrl+g` clears it and a second `M` takes it off. The account is asked for once, the
 first time.
 
 **`/` walks what is loaded.** Typing moves the cursor to the first match from where the search
@@ -723,6 +723,36 @@ days it has left in the site's time zone, and a bar of how much of it is done. D
 mapped column, never a status category, and the bar counts the board's estimate where the board
 estimates and any card carries one, cards otherwise. Each column's rule already carries its estimate
 total; the backlog puts each section's total on the section's head, in the estimation field's own name.
+
+## Around an issue: sharing, links, time, watchers, copies
+
+**Sharing is the same three keys wherever an issue is under the cursor.** `y` copies the key, `Y` the
+browse link built from the profile's site, and `o` opens that link in the desktop's browser — in the
+detail pane, the list, the board and the backlog alike, and from the palette as *Copy this issue's key*, *Copy the
+link to this issue* and *Open this issue in the browser*. A copy names what it copied, because OSC 52
+cannot confirm one landed.
+
+**Links, time and watchers are sheets pushed over the pane**, one list with one prompt under it, so
+`esc` comes back to the fields exactly as they were. Each change is written at once and the pane
+underneath rereads the issue.
+
+- `L` lists the links under the phrase that relates them. `a` asks for a phrase — either direction of
+  every link type the site has, filtered as it is typed — and then the issue at the other end: a key,
+  a pasted URL, or words from an issue already cached on this machine. `d` removes the link under the
+  cursor after a *y*, and `enter` opens the issue it points at.
+- `w` lists the time logged, newest first, under the issue's logged, remaining and estimated time —
+  the same wording the sidebar's Time row uses. `a` (or `w` again) asks how long (`1h 30m`, `90m`,
+  `1.5h`), when it started (a date, a date and time, or nothing for now, in the account's timezone)
+  and what it was. Days and weeks are refused: their length is the site's working day, which the
+  client does not read.
+- `W` shows who watches, and says so when the token may see fewer people than the count. `w` watches
+  or stops watching as yourself, `a` searches the site's people to add someone, `d` removes the person
+  under the cursor; both of those are the Manage Watchers permission, and a refusal says so.
+
+**Clone** is a palette command, *Clone this issue*. It reads the issue whole and its project's create
+screen, carries over every field that screen takes (and lists them), and asks for the copy's summary,
+`CLONE - ` and the original's to begin with. An issue with links asks whether to copy them too, each
+the same way round. The copy then opens in place of the sheet.
 
 ## Rendering rules for modern terminals
 

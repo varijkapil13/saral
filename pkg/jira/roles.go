@@ -137,6 +137,9 @@ type SessionClient interface {
 	SprintIssueReader
 	IssueReader
 	Ranker
+	Linker
+	Worklogger
+	WatcherManager
 }
 
 // AttachmentReader lists an issue's attachments and streams one out. It is

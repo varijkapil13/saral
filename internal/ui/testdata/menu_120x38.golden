@@ -11,7 +11,7 @@ backlog
 │ v      pick every issue in this section             │
 │ m      move these issues to a sprint or the backlog │
 │ /      find an issue                                │
-│ o      only my issues                               │
+│ M      only my issues                               │
 │ f      filter by a person, a status, a label        │
 │ s      sort                                         │
 └─────────────────────────────────────────────────────┘
@@ -22,7 +22,7 @@ board
 │ enter  open                                  │
 │ m      move this issue to another column     │
 │ /      find a card                           │
-│ o      only my issues                        │
+│ M      only my issues                        │
 │ b      another board of this project         │
 │ f      filter by a person, a status, a label │
 │ F 1-9  quick filters                         │

@@ -404,6 +404,11 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case SaveQueryMsg:
 		m.startBind()
 
+	case issue.ShareMsg:
+		if m.focused {
+			cmd = issue.Share(m.deps, msg.Act, m.selectedKey())
+		}
+
 	case EditQueryMsg:
 		cmd = m.startAsk()
 
@@ -981,6 +986,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		case "e":
 			return m.moveTo(len(m.view) - 1)
 		}
+	}
+	if act := issue.ShareStroke(stroke); act != issue.ShareNone {
+		return issue.Share(m.deps, act, m.selectedKey())
 	}
 	switch m.normal[stroke] {
 	case actDown:

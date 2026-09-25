@@ -489,7 +489,7 @@ func timeTracking(t *jira.TimeTracking) string {
 	for _, p := range [...]struct {
 		label string
 		secs  int64
-	}{{"estimated", t.OriginalEstimate}, {"remaining", t.RemainingEstimate}, {"spent", t.TimeSpent}} {
+	}{{"logged", t.TimeSpent}, {"remaining", t.RemainingEstimate}, {"estimated", t.OriginalEstimate}} {
 		if p.secs > 0 {
 			parts = append(parts, duration(p.secs)+" "+p.label)
 		}

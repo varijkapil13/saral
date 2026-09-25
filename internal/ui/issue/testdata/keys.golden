@@ -2,27 +2,27 @@ editing an issue's fields
   browsing, the description focused
     acts   tab pane · e edit · E open in $EDITOR · t status · C comment
     full   [tab pane, e edit, E open in $EDITOR, t status, C comment]
-    full   [tab next pane, e edit fields, E open in $EDITOR, @ assign, t change status, C comment]
+    full   [tab next pane, e edit fields, E open in $EDITOR, @ assign, t change status, C comment, y copy the key, Y copy the link, o open in browser, L links, w log time, W watchers]
   browsing, the description focused, dirty
     acts   tab pane · e edit · E open in $EDITOR · s save · x revert · X revert all · t status · C comment
     full   [tab pane, e edit, E open in $EDITOR, s save, x revert, X revert all, t status, C comment]
-    full   [tab next pane, e edit fields, E open in $EDITOR, s save changes, x revert this, X revert all, @ assign, t change status, C comment]
+    full   [tab next pane, e edit fields, E open in $EDITOR, s save changes, x revert this, X revert all, @ assign, t change status, C comment, y copy the key, Y copy the link, o open in browser, L links, w log time, W watchers]
   browsing, the fields focused
     acts   tab pane · enter edit · t status · C comment
     full   [tab pane, enter edit, t status, C comment]
-    full   [tab next pane, enter edit this row, e edit fields, @ assign, t change status, C comment]
+    full   [tab next pane, enter edit this row, e edit fields, @ assign, t change status, C comment, y copy the key, Y copy the link, o open in browser, L links, w log time, W watchers]
   browsing, the fields focused, dirty
     acts   tab pane · enter edit · s save · x revert · X revert all · t status · C comment
     full   [tab pane, enter edit, s save, x revert, X revert all, t status, C comment]
-    full   [tab next pane, enter edit this row, e edit fields, s save changes, x revert this, X revert all, @ assign, t change status, C comment]
+    full   [tab next pane, enter edit this row, e edit fields, s save changes, x revert this, X revert all, @ assign, t change status, C comment, y copy the key, Y copy the link, o open in browser, L links, w log time, W watchers]
   browsing, the thread focused
     acts   tab pane · t status · C comment
     full   [tab pane, t status, C comment]
-    full   [tab next pane, @ assign, t change status, C comment]
+    full   [tab next pane, @ assign, t change status, C comment, y copy the key, Y copy the link, o open in browser, L links, w log time, W watchers]
   browsing, the thread focused, dirty
     acts   tab pane · s save · X revert all · t status · C comment
     full   [tab pane, s save, X revert all, t status, C comment]
-    full   [tab next pane, s save changes, X revert all, @ assign, t change status, C comment]
+    full   [tab next pane, s save changes, X revert all, @ assign, t change status, C comment, y copy the key, Y copy the link, o open in browser, L links, w log time, W watchers]
   a row taking typing
     acts   enter keep this value · esc leave it alone
     full   [enter keep this value, esc leave it alone]
