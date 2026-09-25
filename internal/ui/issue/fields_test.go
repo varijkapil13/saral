@@ -9,6 +9,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/config"
+	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -485,8 +486,9 @@ func TestFields_AnUnknownPinnedIDIsSkippedButSurvivesASave(t *testing.T) {
 // pinnedFieldIDs is reading the package's isolated config directory rather
 // than falling through to whoever is running the suite's real one.
 func TestFields_CustomFieldsNeverReadsOutsideTheIsolatedConfigDir(t *testing.T) {
-	if dir, err := config.Dir(); err != nil || dir != isolatedConfigDir {
-		t.Fatalf("config.Dir() = %q, %v, want the isolated %q", dir, err, isolatedConfigDir)
+	want := testsupport.ConfigDir()
+	if dir, err := config.Dir(); err != nil || dir != want {
+		t.Fatalf("config.Dir() = %q, %v, want the isolated %q", dir, err, want)
 	}
 	iss, labels := pinnableIssue()
 	dr := newDriver(t, testDeps(t, newFake(4)), jira.Issue{Key: iss.Key, Summary: iss.Summary}, 90, 40)

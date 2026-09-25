@@ -2,7 +2,6 @@ package comment
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -24,30 +24,7 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
-// TestMain points the cache and config directories at ones of this run's own,
-// so that a Deps somebody builds without a DraftsDir still cannot reach the
-// real drafts of whoever is running the suite.
-func TestMain(m *testing.M) {
-	envs := []string{"SARAL_CACHE_DIR", "SARAL_CONFIG_DIR"}
-	dirs := make([]string, 0, len(envs))
-	for _, env := range envs {
-		dir, err := os.MkdirTemp("", "saral-comment")
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		dirs = append(dirs, dir)
-		if err := os.Setenv(env, dir); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-	}
-	code := m.Run()
-	for _, dir := range dirs {
-		_ = os.RemoveAll(dir)
-	}
-	os.Exit(code)
-}
+func TestMain(m *testing.M) { os.Exit(testsupport.IsolateDirs(m)) }
 
 func fullCaps() jira.Capabilities {
 	ok := jira.Capability{OK: true}

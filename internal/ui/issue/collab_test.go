@@ -252,10 +252,10 @@ func TestPane_AChangeFromASheetRereadsThatIssueOnly(t *testing.T) {
 	t.Parallel()
 	f := collabFake()
 	m, _ := New(testDeps(t, f), seedOf(t, f, "PROJ-1")).(*Model)
-	if m.collabMsg(changedMsg{key: "PROJ-2"}) != nil {
+	if m.collabMsg(ChangedMsg{Key: "PROJ-2"}) != nil {
 		t.Error("another issue's change reread this one")
 	}
-	if m.collabMsg(changedMsg{key: "PROJ-1"}) == nil {
+	if m.collabMsg(ChangedMsg{Key: "PROJ-1"}) == nil {
 		t.Error("this issue's change was not reread")
 	}
 }
@@ -279,7 +279,7 @@ func TestLinks_ListAddAndRemove(t *testing.T) {
 		t.Fatalf("PROJ-3 holds %+v, want it to echo PROJ-1", iss.Links)
 	}
 	mustContain(t, d.frame(), "2 links", "is echoed by", "PROJ-3")
-	if !slices.Contains(d.broadcasts, tea.Msg(changedMsg{key: "PROJ-1"})) {
+	if !slices.Contains(d.broadcasts, tea.Msg(ChangedMsg{Key: "PROJ-1"})) {
 		t.Error("the pane underneath was not told")
 	}
 

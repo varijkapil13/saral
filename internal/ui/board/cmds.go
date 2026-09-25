@@ -107,6 +107,17 @@ type rereadMsg struct {
 	err   error
 }
 
+// revalidatedMsg is one card re-read after the issue pane reported a landed
+// write elsewhere. It carries its own generation, separate from a move's,
+// because the two happen for unrelated reasons and neither should cancel the
+// other.
+type revalidatedMsg struct {
+	gen   int
+	key   string
+	issue jira.Issue
+	err   error
+}
+
 // failedMsg is any read or write that brought nothing back. The error travels
 // whole so that a refusal reaches the user in the site's own words, and the step
 // travels with it so that the pane can say which question went unanswered.
@@ -276,6 +287,15 @@ func reread(ctx context.Context, reader jira.IssueReader, key string, fields []s
 	return func() tea.Msg {
 		iss, err := reader.IssueFields(ctx, key, fields)
 		return rereadMsg{gen: gen, key: key, issue: iss, err: err}
+	}
+}
+
+// revalidate re-reads one card by the fields it was last drawn with, after a
+// write against it landed somewhere other than this board.
+func revalidate(ctx context.Context, reader jira.IssueReader, key string, fields []string, gen int) tea.Cmd {
+	return func() tea.Msg {
+		iss, err := reader.IssueFields(ctx, key, fields)
+		return revalidatedMsg{gen: gen, key: key, issue: iss, err: err}
 	}
 }
 

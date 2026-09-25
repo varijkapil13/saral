@@ -13,13 +13,17 @@ import (
 	"time"
 
 	"github.com/zalando/go-keyring"
+
+	"github.com/varijkapil13/saral/internal/testsupport"
 )
 
 // The mock is installed for the whole binary so that no test can ever reach the
-// real keychain, which on darwin would shell out to /usr/bin/security.
+// real keychain, which on darwin would shell out to /usr/bin/security. The
+// isolated directories are only the baseline: most tests here override them
+// with their own t.Setenv to exercise Dir and CacheDir's resolution directly.
 func TestMain(m *testing.M) {
 	keyring.MockInit()
-	os.Exit(m.Run())
+	os.Exit(testsupport.IsolateDirs(m))
 }
 
 const testSecret = "9d8f7a6b5c4d3e2f1a0b"

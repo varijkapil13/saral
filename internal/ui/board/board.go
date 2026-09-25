@@ -226,6 +226,12 @@ type Model struct {
 	moveCtx  context.Context
 	moveStop context.CancelFunc
 
+	// A revalidation triggered by the issue pane also has its own context and
+	// generation, for the same reason: it must not cancel a move or a walk in
+	// flight, and neither of those should cancel it either.
+	revalGen  int
+	revalStop context.CancelFunc
+
 	zones   widget.Zoner
 	clicks  *widget.Clicks
 	drag    widget.Drag
@@ -479,6 +485,12 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case rereadMsg:
 		cmd = m.reread(msg)
 
+	case issue.ChangedMsg:
+		cmd = m.revalidateCard(msg.Key)
+
+	case revalidatedMsg:
+		cmd = m.revalidated(msg)
+
 	case failedMsg:
 		cmd = m.failed(msg)
 
@@ -519,6 +531,7 @@ func (m *Model) Close() {
 		m.bulk.stopAsking()
 		m.bulk.stopRun()
 	}
+	m.stopReval()
 }
 
 // --- fetching ---------------------------------------------------------------
@@ -562,6 +575,22 @@ func (m *Model) stopMove() {
 	m.moveCtx = nil
 	m.moving = false
 	m.moveGen++
+}
+
+func (m *Model) beginReval() (ctx context.Context, gen int) {
+	m.stopReval()
+	m.revalGen++
+	ctx, cancel := context.WithCancel(context.Background())
+	m.revalStop = cancel
+	return ctx, m.revalGen
+}
+
+func (m *Model) stopReval() {
+	if m.revalStop != nil {
+		m.revalStop()
+		m.revalStop = nil
+	}
+	m.revalGen++
 }
 
 // stopQuickFilters cancels only the quick-filter read in flight, if there is
@@ -1286,6 +1315,42 @@ func (m *Model) moveFailed(msg moveFailedMsg) tea.Cmd {
 	m.moving = false
 	m.putBack()
 	return kernel.Fail(msg.err)
+}
+
+// revalidateCard re-reads one card the issue pane just changed elsewhere — a
+// transition or a field save — by the fields it was last drawn with, so this
+// board's own row catches up without a fresh walk from page one.
+func (m *Model) revalidateCard(key string) tea.Cmd {
+	iss := m.byKey(key)
+	if iss == nil || m.deps.Jira == nil {
+		return nil
+	}
+	fields := iss.Requested.IDs()
+	if len(fields) == 0 {
+		return nil
+	}
+	ctx, gen := m.beginReval()
+	return kernel.Reply(revalidate(ctx, m.deps.Jira, key, fields, gen), m.addr)
+}
+
+func (m *Model) revalidated(msg revalidatedMsg) tea.Cmd {
+	if msg.gen != m.revalGen {
+		return nil
+	}
+	if msg.err != nil {
+		reason, _ := jira.Reason(msg.err)
+		return kernel.Warn(msg.key + " changed elsewhere, but could not be revalidated: " + reason)
+	}
+	at := slices.IndexFunc(m.issues, func(iss jira.Issue) bool { return iss.Key == msg.key })
+	if at < 0 {
+		return nil
+	}
+	under := m.selectedKey()
+	m.issues[at] = msg.issue
+	m.place()
+	m.forget()
+	m.restore(under)
+	return stored(m.pagePut([]jira.Issue{msg.issue}, false))
 }
 
 // --- input ------------------------------------------------------------------

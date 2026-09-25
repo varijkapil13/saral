@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -24,21 +25,7 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
-// TestMain points the download directory at one of this run's own. Every test in
-// this package builds the pane through New, which locates that directory, and
-// none of them may reach the machine's cache directory to do it.
-func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "saral-attach-cache")
-	if err != nil {
-		panic(err)
-	}
-	if err := os.Setenv("SARAL_CACHE_DIR", dir); err != nil {
-		panic(err)
-	}
-	code := m.Run()
-	_ = os.RemoveAll(dir)
-	os.Exit(code)
-}
+func TestMain(m *testing.M) { os.Exit(testsupport.IsolateDirs(m)) }
 
 func fullCaps() jira.Capabilities {
 	ok := jira.Capability{OK: true}

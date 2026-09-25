@@ -53,6 +53,27 @@ type failedMsg struct {
 	err error
 }
 
+// revalidatedMsg is one row re-read after the issue pane reported a landed
+// write elsewhere. It carries its own generation, separate from a search's,
+// because neither should cancel the other.
+type revalidatedMsg struct {
+	gen   int
+	key   string
+	issue jira.Issue
+	err   error
+}
+
+// revalidate re-reads one issue by the fields it was last drawn with, using
+// the issue endpoint rather than the search this list otherwise runs on: the
+// search is eventually consistent, and a read straight after a write has to
+// see it.
+func revalidate(ctx context.Context, reader jira.IssueReader, key string, fields []string, gen int) tea.Cmd {
+	return func() tea.Msg {
+		iss, err := reader.IssueFields(ctx, key, fields)
+		return revalidatedMsg{gen: gen, key: key, issue: iss, err: err}
+	}
+}
+
 func request(jql string) app.Request {
 	return app.Request{JQL: jql, Projection: app.ListProjection(), MaxResults: pageSize}
 }
@@ -77,6 +98,19 @@ func notStored(err error) tea.Cmd {
 		return nil
 	}
 	return kernel.Warn("these rows could not be stored for next time: " + err.Error())
+}
+
+// storeRows writes the rows on screen back to the stored copy of this query,
+// off the update loop: a revalidated row changes what is on screen
+// synchronously, and the write that keeps the stored copy in step runs as a
+// command like every other write to this cache does.
+func storeRows(cache app.Cache, jql string, issues []jira.Issue, more bool) tea.Cmd {
+	return func() tea.Msg {
+		if cmd := notStored(keep(cache, jql, issues, more)); cmd != nil {
+			return cmd()
+		}
+		return nil
+	}
 }
 
 // load fetches the first page of a query.

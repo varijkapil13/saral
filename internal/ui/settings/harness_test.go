@@ -2,7 +2,6 @@ package settings
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -23,23 +23,7 @@ var update = flag.Bool("update", false, "rewrite the golden files")
 
 var clockAt = time.Date(2026, time.September, 3, 9, 0, 0, 0, time.UTC)
 
-// TestMain points every read this package's tests do at a directory of this
-// run's own, so nothing here ever touches whoever is running the suite's real
-// config.toml.
-func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "saral-settings-config")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	if err := os.Setenv("SARAL_CONFIG_DIR", dir); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	code := m.Run()
-	_ = os.RemoveAll(dir)
-	os.Exit(code)
-}
+func TestMain(m *testing.M) { os.Exit(testsupport.IsolateDirs(m)) }
 
 // fakeState is the state sampleSettings's Value/Set/Run close over, so a test
 // can assert what a keypress or a click actually changed without a real

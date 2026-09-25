@@ -2,7 +2,6 @@ package palette
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -15,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -25,22 +25,7 @@ var update = flag.Bool("update", false, "rewrite the golden files")
 // days is measured against something written down rather than against now.
 var clockAt = time.Date(2026, time.August, 20, 9, 0, 0, 0, time.UTC)
 
-// TestMain points the frecency table at a directory of this run's own. Nothing
-// here may reach the cache directory of whoever is running the suite.
-func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "saral-palette-cache")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	if err := os.Setenv("SARAL_CACHE_DIR", dir); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	code := m.Run()
-	_ = os.RemoveAll(dir)
-	os.Exit(code)
-}
+func TestMain(m *testing.M) { os.Exit(testsupport.IsolateDirs(m)) }
 
 // noBulkMove is a site whose token cannot move issues between projects, with
 // the refusal in the words a probe would have used.
