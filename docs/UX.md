@@ -674,11 +674,11 @@ the same gesture now draws it in place instead of pushing it.
   a capability: `kernel.ThemeModeFromEnv` reads `NO_COLOR` and `TERM`, both beat the configured theme
   and the runtime switch, and the resulting theme keeps bold, faint and reverse — `NO_COLOR` asks for
   colour to go away, not for emphasis to.
-- **A Nerd Font is assumed, as a tier and not as a floor.** This reverses what this bullet used to say
-  outright — icons come from a three-tier glyph set, `nerd` the default, and the two tiers under it —
-  plain Unicode box-drawing and geometric shapes, then ASCII — are kept whole rather than deleted. A
-  terminal without the font shows tofu where an icon should be, which is exactly what the settings
-  screen's Glyphs row (`docs/SETTINGS.md`) is for.
+- **A Nerd Font is a tier to opt into, not an assumption.** Icons come from a three-tier glyph set —
+  Nerd Font icons, plain Unicode box-drawing and geometric shapes, then ASCII — and `unicode` is the
+  default, because no terminal reliably says whether the font is installed and a wrong guess shows
+  tofu where every icon should be. `--glyphs nerd`, or the settings screen's Glyphs row
+  (`docs/SETTINGS.md`), turns the icons on.
 - **Grapheme-cluster-correct widths.** Emoji, CJK and combining marks must not shift columns. Use a
   width-aware truncation helper everywhere; never `len()` on a display string.
 - **Resize is not a redraw hack.** Layout is computed from the current size on every `WindowSizeMsg`,

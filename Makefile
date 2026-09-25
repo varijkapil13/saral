@@ -11,7 +11,7 @@ test:
 	go test -count=1 $(PKG)
 
 race:
-	go test -race -count=1 $(PKG)
+	go test -race -count=1 -tags demo $(PKG)
 
 lint:
 	golangci-lint run

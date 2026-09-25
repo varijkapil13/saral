@@ -1,0 +1,61 @@
+saral is a terminal client for Jira Cloud.
+
+usage:
+  saral [flags] [view | issue key | Jira URL]
+  saral <command> [flags]
+
+views:
+  list      Issues    g 1
+  board     Board     g 2
+  backlog   Backlog   g 3
+  sprints   Sprints   g 4
+  releases  Releases  g 5
+  timeline  Timeline  g 6
+  plans     Plans     g 7
+  settings  Settings  
+
+commands:
+  doctor   check the config, the token, the site and the cache; the output is safe to paste
+  help     print this help
+  version  print the version, where the config lives, and what the terminal reports
+
+examples:
+  saral                       open where you left off, or setup on a first run
+  saral board --project PROJ  the board, scoped to one project
+  saral PROJ-142              one issue; a pasted Jira URL works too
+
+inside:
+  ?       every key the view in front of you takes
+  ctrl+k  the command palette: every action, view and issue on disk
+
+flags:
+  --glyphs   string    unicode, nerd or ascii; unicode is the default, nerd needs a Nerd Font
+  --log      string    write a debug log to this file; tokens and emails are redacted
+  --mouse              enable mouse reporting
+  --poll     duration  re-read the focused view every duration, e.g. 30s; off by default, and pauses when Jira rate-limits
+  --profile  string    profile to use (default: $SARAL_PROFILE, then the active one)
+  --project  string    project key to scope the session to; several capabilities are per-project
+  --scheme   string    default, nord, dracula, solarized or gruvbox
+  --theme    string    auto, dark, light or no-color
+  --version            print the version and exit
+
+files:
+  config  $SARAL_CONFIG_DIR/config.toml
+  cache   $SARAL_CACHE_DIR/cache.db
+
+environment:
+  SARAL_CONFIG_DIR         where config.toml lives
+  SARAL_CACHE_DIR          where the cache lives
+  SARAL_PROFILE            the profile to use when --profile is not given
+  SARAL_SITE, SARAL_EMAIL  override the profile's site and email, or stand in for a config file
+  SARAL_TOKEN              the API token; read from the environment only, never written to the file
+  HTTPS_PROXY, NO_PROXY    the proxy requests go through
+  NO_COLOR                 turn colour off whatever the theme says
+  precedence: flags, then the environment, then config.toml
+
+exit codes:
+  0  success
+  1  anything else: the site could not be reached, a request failed
+  2  a flag or argument was not understood
+  3  config.toml or the profile is unusable
+  4  the token could not be found, or the site refused it

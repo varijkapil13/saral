@@ -120,15 +120,17 @@ func TestGlyphs_ASCIIFallbackIsPlain(t *testing.T) {
 	}
 }
 
-func TestGlyphsFor_DefaultsToNerd(t *testing.T) {
+func TestGlyphsFor_DefaultsToUnicode(t *testing.T) {
 	t.Parallel()
-	for _, in := range []string{"", "  ", "nerd", "NERD", "something unrecognised"} {
+	for _, in := range []string{"", "  ", "unicode", "UNICODE", "something unrecognised"} {
+		if got := GlyphsFor(in); got.Tier() != "unicode" {
+			t.Errorf("GlyphsFor(%q).Tier() = %q, want unicode", in, got.Tier())
+		}
+	}
+	for _, in := range []string{"nerd", "NERD", " nerd "} {
 		if got := GlyphsFor(in); got.Tier() != "nerd" {
 			t.Errorf("GlyphsFor(%q).Tier() = %q, want nerd", in, got.Tier())
 		}
-	}
-	if GlyphsFor("unicode").Tier() != "unicode" {
-		t.Error("GlyphsFor(\"unicode\") did not resolve to the unicode tier")
 	}
 	if GlyphsFor("ascii").Tier() != "ascii" {
 		t.Error("GlyphsFor(\"ascii\") did not resolve to the ascii tier")

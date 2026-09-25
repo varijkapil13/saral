@@ -132,8 +132,19 @@ saral https://example.atlassian.net/browse/ENG-142
 saral board               # open a view by name
 saral --poll 30s          # re-read the focused view, pausing when Jira rate-limits
 saral --mouse=false       # off all the way down, for terminal text selection
+saral doctor              # check config, token, site and cache; safe to paste
+saral --log saral.log     # method, path, status and timing per request; secrets redacted
+saral --help              # views, commands, environment and exit codes
 saral version
 ```
+
+With no config file at all, `SARAL_SITE`, `SARAL_EMAIL` and `SARAL_TOKEN` are a profile of their
+own, which is how a container or a CI job runs Saral. Over a config file they override the profile's
+fields for one run; `SARAL_PROFILE` picks the profile. Flags beat the environment, and the environment
+beats the file. `SARAL_TOKEN` is only ever read from the environment and never written to the file.
+
+Exit codes: `0` success, `1` anything else, `2` a flag or argument was not understood, `3` the config
+or profile is unusable, `4` the token was not found or the site refused it.
 
 `SARAL_CONFIG_DIR` and `SARAL_CACHE_DIR` move both directories, which is how a throwaway profile is
 kept out of the way of a real one.

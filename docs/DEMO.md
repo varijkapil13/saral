@@ -7,72 +7,40 @@ the README embeds.
 moves; a GIF committed once is a blob nobody can regenerate. So the tape is committed and the GIF is
 whatever the last person to run it produced.
 
-## The tape cannot be driven against the fake today
+## The tape runs against the fake
 
-It should be able to be. `pkg/jira/jiratest` is a complete `jira.Client` with projects, boards,
-sprints, versions and generated issues, and a demo built on it would need no site, no credentials and
-no network. Two things stop it, and neither is in this packet's owned paths:
+`-fake` exists only in a binary built with `-tags demo`, because it embeds `pkg/jira/jiratest`'s
+fixtures and a release binary has a size budget to keep. It is left out of `--help`.
 
-1. **`cmd/saral` has one way to build a client.** `build()` in `cmd/saral/main.go` reaches
-   `deps.Jira` only through `clientFor(profile)` → `cloud.New`. There is no flag, no environment
-   variable and no build tag that installs another implementation of the port. A session with no
-   reachable site is a real state — it draws from the cache and says so — but it is not a demo.
-2. **A loopback fixture server is unreachable from a profile.** `jiratest.NewServer` is an
-   `httptest.Server` and serves plain HTTP, while `config.NormalizeSite` refuses any scheme but
-   `https` and `cloud.parseSite` prepends `https://` to a bare host. `cloud.New` will accept
-   `http://…` from a caller that passes one — that is what the adapter's own tests do — but nothing
-   between the config file and `cloud.New` can express it.
+`saral -fake` builds its session on `pkg/jira/jiratest`'s in-memory site instead of a profile: a
+scrum project `PROJ` with a board and sprints, sixty generated issues, every third assigned to the
+account the fake answers as so the issue list's opening query has rows. It reaches no network, never
+asks a keychain for a token, and points `SARAL_CONFIG_DIR` and `SARAL_CACHE_DIR` at a temporary
+directory it deletes on exit, so two recordings start from the same place and nothing is left behind.
+`SARAL_SITE`, `SARAL_EMAIL`, `SARAL_TOKEN` and `SARAL_PROFILE` are ignored for the run.
 
-**The smallest honest fix is a flag in `cmd/saral`**: a `-fake` that sets
-`deps.Jira = jiratest.New(jiratest.WithProject(…), jiratest.WithIssues(jiratest.Gen(…)))` and skips
-`clientFor` entirely. No import rule forbids `cmd/**` from importing `pkg/jira/jiratest`, the fixture
-tree it embeds is under 300 KiB against a 15 MiB budget, and it would replace this whole section with
-one line of the tape. Until it exists, the tape records against a scripted profile, and the recorder
-supplies what that profile points at.
+Every word on screen is the fake's invented data, so the GIF shows nobody's tickets. The site in the
+header is the invented `example.atlassian.net`.
 
-## What the recorder has to set up
+What the tape does, and what the fake gives it:
 
-The tape sets `SARAL_CONFIG_DIR` and `SARAL_CACHE_DIR` to directories under `/tmp/saral-demo`, so a
-recording never touches a real profile and never leaves one behind. Both must exist before `vhs`
-starts, and the config directory must hold a `config.toml`:
-
-```sh
-mkdir -p /tmp/saral-demo/config /tmp/saral-demo/cache
-cat > /tmp/saral-demo/config/config.toml <<'TOML'
-active = "demo"
-
-[profiles.demo]
-site  = "your-site.atlassian.net"
-email = "you@example.com"
-project = "EX"
-theme = "dark"
-token = { env = "SARAL_DEMO_TOKEN" }
-TOML
-export SARAL_DEMO_TOKEN=...
-```
-
-`Env SARAL_DEMO_PROJECT` in the tape must match the profile's project key, because `--project`
-scopes the session and three of the six capabilities are answered per project.
-
-For the sequence to be worth watching, that project needs:
-
-| The tape does | so the project needs |
+| The tape does | the fake provides |
 |---|---|
-| opens the second row of the issue list | at least three issues the account can see |
-| `tab` across the detail pane's three regions | an issue with a description worth reading and a comment on it |
-| `t`, then the second move in the list | two or more available transitions, and **no transition screen** on the one it picks — a screen adds a step the tape does not type |
+| opens the second row of the issue list | twenty issues assigned to the demo account |
+| `tab` across the detail pane's three regions | an ADF description on every generated issue |
+| `t`, then the second move in the list | the fake's workflow, where only a move into a done status has a screen — if the second move is one, the keystrokes fall out of step (see *The transition landed* below) |
 | `ctrl+k`, then *Timeline* | nothing; the command is registered unconditionally |
-| `n` on the timeline | issues whose dates resolve, so the notes have provenance to report |
-| `g` `2` for the board | a board on the project, or `CapBoards` is absent and the slot is not registered |
+| `n` on the timeline | due dates on every sixth issue |
+| `g` `2` for the board | the scrum board `WithProject(PROJ, Scrum)` builds |
 
-Everything on screen ends up in a GIF in a public README. **Record against a site whose ticket
-summaries, board names and account names you are willing to publish** — a scratch site, not the one
-your team works in. `scripts/checkleak.py` guards the fixture tree; nothing guards pixels.
+`-fake` works with every other flag and subcommand, so `go run -tags demo ./cmd/saral -fake doctor`
+is also a quick check that a build runs at all.
 
 ## Recording
 
 ```sh
-go build -trimpath -o /tmp/saral-demo/saral ./cmd/saral
+mkdir -p /tmp/saral-demo
+go build -trimpath -tags demo -o /tmp/saral-demo/saral ./cmd/saral
 PATH=/tmp/saral-demo:$PATH vhs demo.tape
 ```
 

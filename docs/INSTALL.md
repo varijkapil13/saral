@@ -77,8 +77,9 @@ go install github.com/varijkapil13/saral/cmd/saral@latest
 ```
 
 This is the only route on a platform the releases do not cover, and the one that works if you want to
-build from a branch. `saral version` will report `dev` rather than a release version, because the
-version, commit and date are stamped in by the release build's linker flags.
+build from a branch. `saral version` reports the module version Go recorded — `v0.x.y` for an
+`@v0.x.y` install, a pseudo-version for a branch — and the commit and date from the VCS stamp, since
+the release build's linker flags are not there to supply them.
 
 ## By hand
 
@@ -136,7 +137,11 @@ saral version
 ```
 
 prints the release version, the commit it was built from and the build date — all three stamped in at
-link time, so they describe the binary in your hand rather than whatever the repository says today.
+link time, so they describe the binary in your hand rather than whatever the repository says today —
+then whether it is a release or a dev build, where its config lives, the glyph tier it would draw
+with, and `TERM` and `TERM_PROGRAM`. For anything that is not working, `saral doctor` checks the
+config, the token, the site, the cache and the proxy, and prints a report that is safe to paste into
+an issue: the token is never printed and the email is shortened.
 
 ## Where Saral keeps its files
 
