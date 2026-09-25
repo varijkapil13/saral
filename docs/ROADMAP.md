@@ -8,9 +8,9 @@
 >
 > **Picking this up cold:** start with [`docs/BOOTSTRAP.md`](BOOTSTRAP.md) — it takes a fresh clone to
 > the first line of code. Then open the **lowest-numbered open milestone** and take any unassigned
-> packet with no unchecked dependency — today that is
-> `gh issue list --milestone "Batch 9 — Ship it"`, every batch before it having closed. Claim it by
-> commenting on the issue. `AGENTS.md` is the working agreement; `docs/PARALLEL.md` is the definition
+> packet with no unchecked dependency. Batches 0 to 9 have merged, and Batch 10's packets are
+> tracked by their PRs rather than issues (see Batch 10). Claim a packet by commenting on its issue.
+> `AGENTS.md` is the working agreement; `docs/PARALLEL.md` is the definition
 > of done.
 >
 > **A batch does not open until the one before it closes**, and Batch 1.5 existed precisely so that
@@ -1203,6 +1203,103 @@ are guesses.
   The demo is committed as `demo.tape` and not as a GIF: a tape is re-recordable when the UI moves.
   [`docs/DEMO.md`](DEMO.md) is how to record it, and records the one finding — `cmd/saral` cannot be
   pointed at `pkg/jira/jiratest`, so the tape needs a scripted profile until a `-fake` flag exists.
+
+---
+
+## Batch 10 — Hardening and the daily-driver gaps · four waves
+
+A review of the whole tree at `36e3ecf`, turned into packets that each own a set of paths and land
+as one PR. The packets have no GitHub issues; each links the PR that closed it, and the PR
+description is the record of what was fixed, what was skipped and why. Wave 1 had no dependencies,
+wave 2 consumed wave 1's symbols, wave 3 built features on both, and wave 4 is this documentation
+pass. What changed for users is in [`CHANGELOG.md`](../CHANGELOG.md) under *Unreleased*.
+
+Wave 1 — the adapter, the store and shared helpers:
+
+- [x] **Dependencies** · [#142](https://github.com/varijkapil13/saral/pull/142)
+  bubbles, bubbletea, `x/sync` and `x/sys`, bumped on their own before the packets that build on them.
+- [x] **P10.2 — Adapter hardening** · [#143](https://github.com/varijkapil13/saral/pull/143) · **owns** `pkg/jira/cloud/**`, `pkg/jira/ref.go`
+  Non-finite numbers refused, plain http only on loopback, a cap on `Retry-After`, bounded response
+  bodies with an idle-read deadline, every path segment validated and escaped once, a replayed
+  DELETE's 404 read as success, the coalescing key carrying a write epoch, and downloads that refuse
+  a redirect off https or a 206 that does not start where it was asked.
+- [x] **P10.3 — Port expansion** · [#148](https://github.com/varijkapil13/saral/pull/148) · **owns** `pkg/jira/**`
+  Twelve methods behind seven roles: `SprintIssues`, `RankIssues`, links, worklogs, watchers,
+  `ServerInfo` and `IssueFields`, plus label add/remove verbs, the board's column constraint and a
+  streamed upload with progress. `*cloud.Client` now satisfies the whole port (56 methods).
+- [x] **P10.4 — ADF fidelity** · [#150](https://github.com/varijkapil13/saral/pull/150) · **owns** `pkg/adf/**`
+  Recursive reconcile keeps untouched list items, cells and panels; literal markup is escaped; a
+  mention round-trips as `@[Name](accountid:ID)`; `adf.LossyConstructs` names what an edit still
+  costs. `FuzzRoundTrip` added.
+- [x] **P10.5 — CI and release supply chain** · [#144](https://github.com/varijkapil13/saral/pull/144) · **owns** `.github/**`, `.goreleaser.yaml`, `scripts/install*.sh`
+  Actions pinned to SHAs, cosign-signed checksums, SBOMs and a provenance attestation, the release
+  job running vet and the race suite first, govulncheck, a macOS job, Dependabot, Windows zips and
+  deb/rpm/apk packages. The install script verifies with cosign or `gh attestation`.
+- [x] **P10.6 — Cache, config and store robustness** · [#145](https://github.com/varijkapil13/saral/pull/145) · **owns** `internal/store/**`, `internal/config/**`, `internal/app/cache*.go`
+  Retention per kind, a corrupt cache moved aside, per-page board and backlog writes, *Clear the
+  cache* in settings, `version = 1` in config.toml with migrations, symlink-safe writes, and file
+  locks around every read-modify-write (`config.UpdateFile`).
+- [x] **P10.7 — Shared text helpers and terminal-safe rendering** · [#149](https://github.com/varijkapil13/saral/pull/149) · **owns** `internal/ui/widget/**`
+  Thirteen `padTruncate` copies, eleven row caches and three `padLeft`s became `widget.PadTruncate`,
+  `widget.RowCache` and `widget.PadLeft`; `widget.Sanitize` strips escapes, control bytes and bidi
+  overrides from Jira text at the point of entry.
+- [x] **Test isolation** · [#146](https://github.com/varijkapil13/saral/pull/146), [#151](https://github.com/varijkapil13/saral/pull/151)
+  A row-click test that walked past stale zones, and a fake server that shared `http.DefaultClient`.
+
+Wave 2 — correctness in every view:
+
+- [x] **P10.8 — Kernel correctness** · [#154](https://github.com/varijkapil13/saral/pull/154) · **owns** `internal/ui/kernel/**`
+  The view named at startup opens once the probe allows it, `kernel.Proceed` replays the gesture a
+  close was asked about, zones are never read off a frame not on screen, `kernel.BackClaimer`,
+  `kernel.OpenThen`, and status glyphs that differ by more than colour.
+- [x] **P10.9 — Board, backlog and timeline correctness** · [#157](https://github.com/varijkapil13/saral/pull/157) · **owns** `internal/ui/board/**`, `internal/ui/backlog/**`, `internal/ui/timeline/**`
+  A Scrum board shows its running sprint (and cycles parallel ones with `s`), a card move updates in
+  place, filters are kept per project, WIP limits only where enforced, cache writes per page from a
+  command.
+- [x] **P10.10 — Onboarding, forms, comments, attachments, move** · [#152](https://github.com/varijkapil13/saral/pull/152) · **owns** `internal/ui/{onboarding,form,comment,attach,move}/**`
+  One drafts directory for every view, setup that names why a token was refused and refuses Data
+  Center, create-form drafts and a leave prompt, people search in forms, upload progress and cancel,
+  and a move confirmation that lists the fields it would drop. The `-count=2` failures are gone.
+- [x] **P10.11 — Issue view correctness** · [#158](https://github.com/varijkapil13/saral/pull/158) · **owns** `internal/ui/issue/**`, `internal/app/issue.go`
+  Inline text survives `esc`, a save is checked against the value its edit began from
+  (`app.CheckBase`), the read after a write goes through the issue endpoint, `x`/`X` revert what has
+  focus, header facts are clickable, and `$EDITOR` names what an edit loses.
+- [x] **P10.12 — CLI experience** · [#153](https://github.com/varijkapil13/saral/pull/153) · **owns** `cmd/saral/**`
+  `--help`, `version` from build info, validated flags, exit codes 0 to 4, environment profiles,
+  `saral doctor`, `--log` with redaction, a first run that keeps its argument's intent, and `-fake`
+  in `-tags demo` builds. Glyphs default to unicode.
+- [x] **P10.13 — Sprint and release** · [#156](https://github.com/varijkapil13/saral/pull/156) · **owns** `internal/ui/sprint/**`, `internal/ui/release/**`
+  Sprint completion that asks where the open issues go, running-sprint progress, bulk fix-version
+  assignment over JQL (`b`), and cache-first paint for both views.
+- [x] **P10.14 — Palette performance** · [#155](https://github.com/varijkapil13/saral/pull/155) · **owns** `internal/ui/palette/**`, `internal/app/index.go`
+  One local index per corpus (`app.SharedIndex`), one zone prefix per manager (`widget.SharedZoner`),
+  and frecency saved off the event loop.
+- [x] **P10.19 — The race suite twice** · [#159](https://github.com/varijkapil13/saral/pull/159) · **owns** `.github/workflows/ci.yml`, `Makefile`
+  CI and `make race` run `-count=2`, and the binary budget is 16 MiB.
+
+Wave 3 — the features a daily driver was missing:
+
+- [x] **P10.15 — Board and backlog workflow** · [#161](https://github.com/varijkapil13/saral/pull/161) · **owns** `internal/ui/board/**`, `internal/ui/backlog/**`
+  Rank reorder (`K`/`J`, `{`/`}`, drag), one-stroke column moves (`H`/`L`), only my issues (`M`),
+  find (`/`, `n`/`N`), points per backlog section and a sprint header with a progress bar.
+- [ ] **P10.15b — Swimlanes, inline create, board multi-select** · [#164](https://github.com/varijkapil13/saral/pull/164) · **owns** `internal/ui/board/**`, `internal/ui/backlog/**`, `internal/ui/form/**`
+  The three items P10.15 left out. Open.
+- [x] **P10.16 — Issue collaboration** · [#162](https://github.com/varijkapil13/saral/pull/162) · **owns** `internal/ui/issue/**` (new files)
+  Copy key (`y`), copy link (`Y`), open in browser (`o`) from the pane, list, board and backlog;
+  sheets for links (`L`), worklogs (`w`) and watchers (`W`); clone from the palette.
+- [x] **P10.17 — Custom fields and mentions** · [#163](https://github.com/varijkapil13/saral/pull/163) · **owns** `internal/ui/issue/**` editing rows, `internal/ui/form/**`, `internal/ui/comment/**`, `internal/ui/mention/**`
+  Every editmeta field with a `set` operation is editable in the sidebar, by schema and never by id;
+  `@` searches people in the description, paragraph fields, the composer and create forms; a
+  restored comment-edit draft is checked against the body it began from.
+- [x] **P10.18 — Scriptable CLI** · [#160](https://github.com/varijkapil13/saral/pull/160) · **owns** `cmd/saral/**` (new files), `docs/CLI.md`
+  `issue view|create`, `search`, `transition`, `comment add`, `assign`, `open` and `completion`, with
+  tab-separated output and a documented JSON schema.
+
+Wave 4:
+
+- [x] **P10.20 — Docs and project hygiene** · **owns** `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `.github/ISSUE_TEMPLATE/**`, `docs/SCOPE.md`, this section
+  The README rewritten for a new user with a recorded demo and screenshots from `-fake`, a changelog
+  from the tags, a security policy, issue templates, and release notes grouped by type without SHAs.
 
 ---
 

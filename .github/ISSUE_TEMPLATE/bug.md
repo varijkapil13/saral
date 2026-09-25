@@ -6,7 +6,14 @@ labels: bug
 
 **Terminal and version:**
 **`saral version`:**
-**Jira Cloud or Data Center:**
+
+<details><summary><code>saral doctor</code> output</summary>
+
+```
+paste it here; it never prints the token and shortens the email
+```
+
+</details>
 
 ## What happened
 
@@ -14,4 +21,6 @@ labels: bug
 
 ## Steps
 
-<!-- Never paste tokens, real account IDs, or your site name if it is sensitive. -->
+<!-- Saral supports Jira Cloud only. Never paste tokens or real account IDs, and leave out ticket
+text or your site name if they are sensitive. If you can, reproduce it on the demo site:
+go run -tags demo ./cmd/saral -fake -->

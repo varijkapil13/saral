@@ -351,6 +351,7 @@ Two directories, both named for the build (`saral`, or `saral-dev` for a build f
 | `cache.db` | `$SARAL_CACHE_DIR`, else `$XDG_CACHE_HOME/saral`, else `~/.cache/saral` | per profile (site and account): issues, searches, boards, backlogs, each project's sprint list and versions (never an open count), capability probe answers, the last board each project drew | see below |
 | `cache.db.corrupt-<timestamp>` | beside `cache.db` | a cache file Saral could not read, moved aside when it started afresh | until you delete it |
 | `ui.toml`, `.ui.toml.lock` | the cache directory | split widths, sort orders, each profile's remembered view and filters | until `session.memory` or you delete it |
+| `palette/usage.json`, `palette/projects.json` | the cache directory | how often and how recently each palette command and each project was picked, to rank them | at most 200 entries each, the lowest-ranked dropped first; until you delete them |
 
 What `cache.db` keeps, per profile (`app.Kind.Retention`):
 

@@ -21,8 +21,10 @@ You need Go (see `go.mod`) and `golangci-lint`. You do **not** need a Jira accou
 4. Keep the diff inside the packet's owned paths.
 5. `make check`, then open one PR for that packet.
 
-Conventional commit subjects (`feat(board): …`, `fix(search): …`, `perf(list): …`) — they generate the
-changelog, so write them for a user.
+Conventional commit subjects (`feat(board): …`, `fix(search): …`, `perf(list): …`) — the release
+notes are generated from them, grouped by type, so write them for a user. Add a line under
+*Unreleased* in `CHANGELOG.md` for anything a user will notice, and say so there when a change alters
+behaviour someone relies on.
 
 ## What reviewers check
 
@@ -34,7 +36,19 @@ changelog, so write them for a user.
 Style is the linter's job. See `docs/PARALLEL.md` for the full definition of done and
 `AGENTS.md` if you are an automated contributor.
 
+## Trying it without a site
+
+```sh
+go run -tags demo ./cmd/saral -fake
+```
+
+opens Saral on an invented, in-memory site: a project `PROJ` with a board, three sprints, three
+versions and sixty issues. Nothing reaches the network or the keychain, and its config and cache are
+deleted on exit. `-fake` exists only in a `-tags demo` build.
+
 ## Reporting a bug
 
-Include your terminal and its version, `saral version`, whether the site is Cloud or Data Center, and
-the redacted output of `saral doctor` (the capability probe, printed — built in P1.3). Never paste a token or a real account ID.
+Use the bug template. Include your terminal and its version and the output of `saral doctor`, which
+checks the config, token, site, cache and proxy and is safe to paste: it never prints the token and
+shortens the email. Saral supports Jira Cloud only. Never paste a token or a real account ID.
+Security problems go through [`SECURITY.md`](SECURITY.md) instead.
