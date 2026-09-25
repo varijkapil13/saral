@@ -116,6 +116,12 @@ Bubble Tea's `teatest` drives full programs where an interaction sequence matter
   `unshare` that quietly stopped working reads as a hermetic suite. A test that needs a server starts
   one on loopback with `httptest`, which is what `jiratest.Server` does; `internal/arch` asserts that
   the workflow still runs the suite that way.
+- **No test reads or writes the real config or cache directory.** Every test package has a
+  `TestMain` that runs `os.Exit(testsupport.IsolateDirs(m))`, which points `SARAL_CONFIG_DIR`,
+  `SARAL_CACHE_DIR`, `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` at temporary directories for the whole
+  binary. It is set once per binary because `t.Setenv` panics in a parallel test. `internal/arch`
+  enforces it fail-closed: a package with tests and no such `TestMain` fails the build unless it is
+  in `isolationExempt`, with a reason.
 - Test names describe behaviour: `TestReleaseVersion_RefusesWhenUnresolvedIssuesExist`.
 - A click is aimed through `internal/ui/uitest`: `uitest.Zone` for a view's own frame and
   `uitest.ZoneDrawn` for a draw that scans itself, such as `kernel.Model.Frame`. Both clear the ids

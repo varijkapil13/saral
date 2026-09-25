@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -77,5 +78,35 @@ func TestRun_FakeDoctorIsHealthy(t *testing.T) {
 	var out bytes.Buffer
 	if err := run([]string{"-fake", "doctor"}, &out, &bytes.Buffer{}); err != nil {
 		t.Fatalf("doctor on the demo site: %v\n%s", err, out.String())
+	}
+}
+
+func TestFake_TheBoardsRunningSprintHoldsIssuesAndIsStillRunning(t *testing.T) {
+	ctx := context.Background()
+	fake, _, err := newFakeClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	boards, err := fake.Boards(ctx, fakeProject)
+	if err != nil || len(boards) == 0 {
+		t.Fatalf("boards: %v, %d", err, len(boards))
+	}
+	running, err := fake.Sprints(ctx, boards[0].ID, jira.SprintActive)
+	if err != nil || len(running.Items) != 1 {
+		t.Fatalf("active sprints: %v, %d", err, len(running.Items))
+	}
+	sprint := running.Items[0]
+	if sprint.End == nil || !sprint.End.After(time.Now()) {
+		t.Errorf("the running sprint ends %v, which is not after now", sprint.End)
+	}
+	if sprint.Start == nil || sprint.Start.After(time.Now()) {
+		t.Errorf("the running sprint starts %v, which is not before now", sprint.Start)
+	}
+	page, err := fake.SprintIssues(ctx, boards[0].ID, sprint.ID, jira.BoardQuery{Fields: []string{"summary"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != fakeSprintIssues {
+		t.Errorf("the running sprint holds %d issues, want %d", len(page.Items), fakeSprintIssues)
 	}
 }

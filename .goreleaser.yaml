@@ -72,18 +72,24 @@ signs:
 changelog:
   use: github
   sort: asc
+  format: "{{ .Message }}"
   groups:
     - title: Features
-      regexp: '^feat'
+      regexp: '^feat(\([^)]*\))?!?:'
       order: 0
     - title: Fixes
-      regexp: '^fix'
+      regexp: '^fix(\([^)]*\))?!?:'
       order: 1
     - title: Performance
-      regexp: '^perf'
+      regexp: '^perf(\([^)]*\))?!?:'
       order: 2
+    - title: Refactoring
+      regexp: '^refactor(\([^)]*\))?!?:'
+      order: 3
+    - title: Other changes
+      order: 9
   filters:
-    exclude: ['^docs', '^test', '^chore', '^ci']
+    exclude: ['^docs', '^test', '^chore', '^ci', '^Merge ']
 
 homebrew_casks:
   - name: saral

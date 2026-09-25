@@ -92,7 +92,7 @@ it there in your PR — that file is how the next agent avoids your afternoon.
 [`docs/BOOTSTRAP.md`](docs/BOOTSTRAP.md) still covers verifying what a token can reach and capturing
 the fixtures every later packet depends on, and it is worth reading before touching an adapter. What
 it no longer means is what it says: there **is** feature code, so a doc and the code can disagree, and
-where they do it is the doc that is wrong until somebody has checked. Batches 0 to 8 have merged, and
+where they do it is the doc that is wrong until somebody has checked. Batches 0 to 10 have merged, and
 much of the correction backlog was a document outliving its code: a table of task states missing one
 the type had gained, a note asserting four status names where the queue uses seven, a performance doc
 calling two packages unguarded while five tests guarded them, a doc comment naming the endpoints that

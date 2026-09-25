@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -18,6 +19,8 @@ const (
 	fakeProfile = "demo"
 	fakeProject = "PROJ"
 	fakeIssues  = 60
+
+	fakeSprintIssues = 18
 )
 
 func init() {
@@ -87,5 +90,33 @@ func newFakeClient() (*jiratest.Fake, jira.User, error) {
 			issues[i].Assignee = &me
 		}
 	}
-	return jiratest.New(jiratest.WithProject(fakeProject, jiratest.Scrum), jiratest.WithIssues(issues)), me, nil
+	fake := jiratest.New(jiratest.WithProject(fakeProject, jiratest.Scrum), jiratest.WithIssues(issues))
+	if err := seedRunningSprint(context.Background(), fake, issues, time.Now()); err != nil {
+		return nil, jira.User{}, fmt.Errorf("the demo board has no running sprint: %w", err)
+	}
+	return fake, me, nil
+}
+
+// The fake dates its sprints around a fixed epoch and fills none, so the board would draw an empty sprint long over.
+func seedRunningSprint(ctx context.Context, fake *jiratest.Fake, issues []jira.Issue, now time.Time) error {
+	boards, err := fake.Boards(ctx, fakeProject)
+	if err != nil || len(boards) == 0 {
+		return fmt.Errorf("no board for %s: %w", fakeProject, err)
+	}
+	running, err := fake.Sprints(ctx, boards[0].ID, jira.SprintActive)
+	if err != nil || len(running.Items) == 0 {
+		return fmt.Errorf("no active sprint on %s: %w", boards[0].Name, err)
+	}
+	sprint := running.Items[0]
+	start, end := now.AddDate(0, 0, -6), now.AddDate(0, 0, 8)
+	if _, err := fake.UpdateSprint(ctx, sprint.ID, jira.SprintPatch{Start: &start, End: &end}); err != nil {
+		return err
+	}
+	var keys []string
+	for i := range issues {
+		if i%2 == 0 && len(keys) < fakeSprintIssues {
+			keys = append(keys, issues[i].Key)
+		}
+	}
+	return fake.MoveToSprint(ctx, sprint.ID, keys)
 }

@@ -397,7 +397,7 @@ the detail.
 | schema | A worklog's `timeSpent` (`"1d 2h"`) is read against the site's **working hours per day and days per week**; `timeSpentSeconds` is not | `WorklogInput.Spent` goes out as seconds. `started` is required and uses the platform layout. The default `adjustEstimate=auto` takes the logged time off the remaining estimate. |
 | schema | `GET /issue/{key}/watchers` answers `watchCount` and `isWatching` to anyone who can see the issue, and the `watchers` list only with **View voters and watchers** | `WatcherList.People` can be shorter than `Count`; an empty list is not an issue nobody watches. |
 | schema | `POST /issue/{key}/watchers` takes the account id as a **bare JSON string**, not an object, and **no body at all** adds the caller; `DELETE` takes `accountId` in the query and has no default | `Watch(key, "")` watches as the token's account. `Unwatch` needs the account id, the caller's own included — `Me` has it. Changing anyone else's watch is **Manage watchers**. |
-| schema | `GET /rest/api/3/serverInfo` is readable **anonymously** and reports `deploymentType` — `Cloud` on Jira Cloud | Onboarding asks it after `Me` answers and refuses a site that reports a `deploymentType` other than `Cloud`. A failed or empty answer does not block: `Me` has already answered on `/rest/api/3`, which is better evidence of Cloud than a probe that did not. A 200 here proves the host is a Jira and nothing about the credential; `Me` is still the check for that. |
+| schema | `GET /rest/api/3/serverInfo` is readable **anonymously** and reports `deploymentType` — `Cloud` on Jira Cloud | `saral doctor` prints it. Onboarding asks it after `Me` answers and refuses a site that reports a `deploymentType` other than `Cloud`. A failed or empty answer does not block: `Me` has already answered on `/rest/api/3`, which is better evidence of Cloud than a probe that did not. A 200 here proves the host is a Jira and nothing about the credential; `Me` is still the check for that. |
 | assumed | An attachment upload can be sent **chunked** as well as with a length | `Upload` streams the multipart body through a pipe. Every `FileRef` declaring a size gives an exact `Content-Length`; one that does not sends it chunked, and that is the case a capture has to confirm the site accepts. A file that reads longer or shorter than it declared is refused part way. |
 
 ## Rate limiting
@@ -439,6 +439,17 @@ any poller on the first 429. Cost-based limits mean a burst of narrow requests b
   server does, which keys an upload's answer drops, and whether a `CANCEL_REQUESTED` body omits
   `result`.
 - Whether `Retry-After` ever arrives as an HTTP-date. No 429 was provoked.
+- Everything under *Ranks, links, worklogs, watchers and what a site says it is*: the port gained
+  those endpoints and their views without a capture. Link direction first — which of `inwardIssue`
+  and `outwardIssue` a create reads as the start — then whether the edge accepts a chunked upload,
+  and the 207 body of a partial rank.
+- The `update.fixVersions` and `update.labels` add and remove verbs that bulk fix-version
+  assignment and the issue pane's label edit send. The schema documents both; no site has answered
+  either.
+- The write shape of every custom field the issue sidebar now edits in place. The editors are chosen
+  from `schema.type`, `schema.items` and the plugin key's suffix, and the values go out in the edit
+  endpoint's documented shapes; cascading select, multi-user and date-time are the ones most likely
+  to differ.
 - The status, body and 403 shape of `DELETE /rest/api/3/attachment/{id}`, and whether `?redirect=false`
   honours a `Range`. The download asks for both and reads a 200, a 206 and a 303, because one site was
   watched redirecting even with a `Range` and nobody has watched it with `redirect=false`.
