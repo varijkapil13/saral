@@ -213,6 +213,10 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.memo.Reset()
 		m.chrome = [2]string{}
 
+	case kernel.SetMouseMsg:
+		m.memo.Reset()
+		m.details.Reset()
+
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.memo.Reset()

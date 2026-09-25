@@ -52,7 +52,7 @@ func init() {
 			Requires: jira.CapBoards,
 			Keys:     shown(c.key),
 			Run: func(kernel.Deps) tea.Cmd {
-				return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(c.msg))
+				return kernel.OpenThen(ViewID, c.msg)
 			},
 		})
 	}

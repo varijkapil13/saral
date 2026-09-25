@@ -172,6 +172,9 @@ func (b *Bulk) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		b.input.SetWidth(max(msg.Width-inputChrome-2, 8))
 		b.rows.Reset()
 		b.clampScroll()
+	case kernel.SetMouseMsg:
+		b.rows.Reset()
+		b.chrome = [4]string{}
 	case kernel.ThemeMsg:
 		b.deps.Theme = msg.Theme
 		b.styles = newStyles(msg.Theme)

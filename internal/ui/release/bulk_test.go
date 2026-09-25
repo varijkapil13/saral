@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -392,6 +393,39 @@ func TestBulk_Golden(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			golden(t, tc.golden, tc.build(t).view())
+		})
+	}
+}
+
+// Turning the mouse off mid-session drops every memoized line with a marker in
+// it, on the list, the flow and the assignment screen alike.
+func TestReleases_TurningTheMouseOffDropsTheMarkedLines(t *testing.T) {
+	t.Parallel()
+
+	for name, build := range map[string]func(d kernel.Deps) kernel.View{
+		"the list": New,
+		"the flow": func(d kernel.Deps) kernel.View {
+			return NewFlow(d, versionByID(t, twoOh), 2, []jira.Version{versionByID(t, threeOh)})
+		},
+		"the assignment preview": func(d kernel.Deps) kernel.View { return NewBulk(d, versionByID(t, twoOh)) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			d := plainDeps(newFake(12))
+			mgr := d.Zones
+			t.Cleanup(mgr.Close)
+			dr := newDriver(t, build(d), 100, 20)
+			if _, ok := dr.m.(*Bulk); ok {
+				dr.key("enter")
+			}
+			if !strings.ContainsRune(dr.m.View(), '\x1b') {
+				t.Fatal("the mouse-on frame carries no marker, so this proves nothing")
+			}
+			mgr.SetEnabled(false)
+			dr.send(kernel.SetMouseMsg{Enabled: false})
+			if frame := dr.m.View(); strings.ContainsRune(frame, '\x1b') {
+				t.Errorf("a marker survived turning the mouse off:\n%q", frame)
+			}
 		})
 	}
 }

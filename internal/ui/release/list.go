@@ -161,6 +161,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.head, m.sum = "", ""
 		m.relayout()
 
+	case kernel.SetMouseMsg:
+		m.rows.Reset()
+
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
 		m.rows.Reset()

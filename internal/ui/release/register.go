@@ -61,7 +61,7 @@ func init() {
 			Group: "Releases",
 			Keys:  []string{c.key.Help().Key},
 			Run: func(kernel.Deps) tea.Cmd {
-				return tea.Sequence(kernel.Open(ViewID), kernel.Broadcast(c.msg))
+				return kernel.OpenThen(ViewID, c.msg)
 			},
 		})
 	}

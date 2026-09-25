@@ -215,3 +215,23 @@ func TestSprints_ClickingADestinationChoosesItAndGoesNoFurther(t *testing.T) {
 		t.Errorf("choosing a destination wrote %d times", n)
 	}
 }
+
+// Turning the mouse off mid-session drops the rows memoized with markers in
+// them, so the next frame carries none.
+func TestSprints_TurningTheMouseOffDropsTheMarkedRows(t *testing.T) {
+	t.Parallel()
+
+	mgr := zone.New()
+	t.Cleanup(mgr.Close)
+	d := plainDeps(newFake())
+	d.Zones = mgr
+	dr := newDriver(t, d, 120, 20)
+	if !strings.ContainsRune(dr.m.View(), '\x1b') {
+		t.Fatal("the mouse-on frame carries no marker, so this proves nothing")
+	}
+	mgr.SetEnabled(false)
+	dr.send(kernel.SetMouseMsg{Enabled: false})
+	if frame := dr.m.View(); strings.ContainsRune(frame, '\x1b') {
+		t.Errorf("a marker survived turning the mouse off:\n%q", frame)
+	}
+}

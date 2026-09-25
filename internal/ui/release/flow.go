@@ -128,6 +128,10 @@ func (f *Flow) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		f.width, f.height = msg.Width, msg.Height
 		f.clampScroll()
 
+	case kernel.SetMouseMsg:
+		f.rows.Reset()
+		f.head[0] = ""
+
 	case kernel.ThemeMsg:
 		f.deps.Theme = msg.Theme
 		f.styles = newStyles(msg.Theme)
