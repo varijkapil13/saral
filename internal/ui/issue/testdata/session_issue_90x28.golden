@@ -5,8 +5,9 @@ o Epic | x Shipped (done) | Whenever | Alan Turing | updated 03 Mar 2025 08:00
 |Document the login flow.                              |Details                           
 |                                                      |->Summary      Document the log...
 |- Filed against PROJ-11.                              |  Description  4 lines            
-|- Only happens for accounts created before the        |  Status       Shipped            
-|  migration.                                          |  Priority     Whenever           
+|- Only happens for accounts created before the        |  Type         o Epic             
+|  migration.                                          |  Status       x Shipped          
+|                                                      |  Priority     W Whenever         
 |                                                      |  Assignee     Alan Turing        
 |                                                      |  Project      PROJ PROJ Project  
 |                                                      |  Reporter     Ada Lovelace       
@@ -22,7 +23,6 @@ o Epic | x Shipped (done) | Whenever | Alan Turing | updated 03 Mar 2025 08:00
 |                                                      |> Sam Tester | 02 Mar 2026 09:00  
 |                                                      |    A comment worth a line or two,
 |                                                      |    and a second sentence to wrap.
-|                                                      |                                  
 |                                                      |                                  
 |                                                      |                                  
  Issues  tab pane  e edit  E open in $EDITOR  t status  C comment                    ? esc

@@ -438,7 +438,7 @@ func pinnedPane(t *testing.T, pinned []string, w, h int) *driver {
 // Pinning out of alphabetical order is the case that proves the sidebar is
 // following the pin list rather than happening to agree with it.
 func TestFields_PinnedFieldsDrawFirstAndInPinOrder(t *testing.T) {
-	dr := pinnedPane(t, []string{"customfield_30003", "customfield_30001"}, 90, 40)
+	dr := pinnedPane(t, []string{"customfield_30003", "customfield_30001"}, 90, 44)
 	dr.key("tab")
 	got := dr.view()
 

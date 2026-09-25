@@ -4,21 +4,21 @@ o Story | o Triage (to do) | Urgent | Ada Lovelace | updated 02 Mar 2025 16:00
 #Paragraph 1 of something worth several lines when the pane is      |Details                                            
 #narrow.                                                            |->Summary      Investigate the onboarding wizard   
 #                                                                   |  Description  39 lines                            
-#Paragraph 2 of something worth several lines when the pane is      |  Status       Triage                              
-#narrow.                                                            |  Priority     Urgent                              
-#                                                                   |  Assignee     Ada Lovelace                        
-#Paragraph 3 of something worth several lines when the pane is      |  Project      PROJ PROJ Project                   
-#narrow.                                                            |  Reporter     Grace Hopper                        
-#                                                                   |  Due          not set                             
-#Paragraph 4 of something worth several lines when the pane is      |  Created      02 Mar 2025 12:00                   
-#narrow.                                                            |  Labels       not set                             
-#                                                                   |Fields                                             
-#Paragraph 5 of something worth several lines when the pane is      |  customfield_13404 0|i00003:                      
-#narrow.                                                            |PROJ-3 | 1 comment              write  edit  delete
-#                                                                   |---------------------------------------------------
-#Paragraph 6 of something worth several lines when the pane is      |> Sam Tester | 02 Mar 2026 09:00                   
-#narrow.                                                            |    Reproduced on staging, twice.                  
-#                                                                   |                                                   
+#Paragraph 2 of something worth several lines when the pane is      |  Type         o Story                             
+#narrow.                                                            |  Status       o Triage                            
+#                                                                   |  Priority     U Urgent                            
+#Paragraph 3 of something worth several lines when the pane is      |  Assignee     Ada Lovelace                        
+#narrow.                                                            |  Project      PROJ PROJ Project                   
+#                                                                   |  Reporter     Grace Hopper                        
+#Paragraph 4 of something worth several lines when the pane is      |  Due          not set                             
+#narrow.                                                            |  Created      02 Mar 2025 12:00                   
+#                                                                   |  Labels       not set                             
+#Paragraph 5 of something worth several lines when the pane is      |Fields                                             
+#narrow.                                                            |  customfield_13404 0|i00003:                      
+#                                                                   |PROJ-3 | 1 comment              write  edit  delete
+#Paragraph 6 of something worth several lines when the pane is      |---------------------------------------------------
+#narrow.                                                            |> Sam Tester | 02 Mar 2026 09:00                   
+#                                                                   |    Reproduced on staging, twice.                  
 #Paragraph 7 of something worth several lines when the pane is      |                                                   
 #narrow.                                                            |                                                   
 |                                                                   |                                                   

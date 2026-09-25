@@ -4,8 +4,9 @@ o Story | o Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00
 |Retire the nightly export.                                                     |Details                                
 |                                                                               |->Summary      Retire the nightly ex...
 |- Filed against PROJ-12.                                                       |  Description  5 lines                 
-|- The old ticket for this was closed as cannot reproduce.                      |  Status       Triage                  
-|- Waiting on a decision.                                                       |  Priority     Urgent                  
+|- The old ticket for this was closed as cannot reproduce.                      |  Type         o Story                 
+|- Waiting on a decision.                                                       |  Status       o Triage                
+|                                                                               |  Priority     U Urgent                
 |                                                                               |  Assignee     unassigned              
 |                                                                               |  Project      PROJ PROJ Project       
 |                                                                               |  Reporter     Grace Hopper            
@@ -25,7 +26,6 @@ o Story | o Triage (to do) | Urgent | unassigned | updated 03 Mar 2025 10:00
 |                                                                               |> Sam Tester | 02 Mar 2026 09:00       
 |                                                                               |    Agreed. I will pick this up on     
 |                                                                               |    Monday.                            
-|                                                                               |                                       
 |                                                                               |                                       
 |                                                                               |                                       
 |                                                                               |                                       

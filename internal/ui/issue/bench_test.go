@@ -215,3 +215,24 @@ func BenchmarkIssueResize(b *testing.B) {
 		_ = m.View()
 	}
 }
+
+// BenchmarkIssueDescriptionTyping is a keystroke in the inline description
+// editor and the frame it produces, with the draft write held back the way a
+// burst of typing holds it.
+func BenchmarkIssueDescriptionTyping(b *testing.B) {
+	m := benchPane(b, 120, 40)
+	m.after = func(time.Duration, func() tea.Msg) tea.Cmd { return nil }
+	row := m.rowByID("description")
+	if row == nil {
+		b.Fatal("no description row")
+	}
+	m.focus = regionDesc
+	m.startDocEdit(row)
+	key := tea.KeyPressMsg{Code: 'a', Text: "a"}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_, _ = m.Update(key)
+		_ = m.View()
+	}
+}

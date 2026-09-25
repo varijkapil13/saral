@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/mattn/go-shellwords"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/adf"
@@ -35,7 +36,14 @@ func launchEditor(path string, done func(error) tea.Msg) tea.Cmd {
 // "code --wait" is a whole editor rather than a program called that.
 func editorCommand() (name string, args []string, err error) {
 	for _, env := range []string{"VISUAL", "EDITOR"} {
-		fields := strings.Fields(os.Getenv(env))
+		value := os.Getenv(env)
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		fields, err := editorWords(value, runtime.GOOS)
+		if err != nil {
+			return "", nil, fmt.Errorf("$%s is not a command this can run: %w", env, err)
+		}
 		if len(fields) > 0 {
 			return fields[0], fields[1:], lookEditor(fields[0], env)
 		}
@@ -45,6 +53,16 @@ func editorCommand() (name string, args []string, err error) {
 		fallback = "notepad"
 	}
 	return fallback, nil, lookEditor(fallback, "")
+}
+
+// editorWords splits a $VISUAL or $EDITOR value the way a shell would, so a
+// quoted path with a space in it stays one word. A Windows path is all
+// backslashes, which a shell reads as escapes, so there they are kept literal.
+func editorWords(value, goos string) ([]string, error) {
+	if goos == "windows" {
+		value = strings.ReplaceAll(value, `\`, `\\`)
+	}
+	return shellwords.Parse(value)
 }
 
 func lookEditor(name, env string) error {
@@ -63,9 +81,13 @@ func lookEditor(name, env string) error {
 // The markdown is rendered with the zero options on purpose. A width-bounded
 // render truncates a table's cells with an ellipsis, and an edit anywhere in
 // that document would write the truncation back into Jira.
-func handOffToEditor(launch editorLauncher, addr kernel.Addr, gen int, key string, original adf.Doc) tea.Cmd {
+//
+// What editing it costs is named in a comment line at the top of the file,
+// before the author has changed anything; the line is taken off again on the
+// way back as long as it is still the first one.
+func handOffToEditor(launch editorLauncher, addr kernel.Addr, gen int, key string, original adf.Doc, losses []string) tea.Cmd {
 	rendered := adf.Markdown(original)
-	path, err := writeHandoff(key, rendered)
+	path, err := writeHandoff(key, handoffHeader(losses)+rendered)
 	if err != nil {
 		return func() tea.Msg { return kernel.ReplyTo(editedMsg{gen: gen, err: err}, addr) }
 	}
@@ -106,7 +128,7 @@ func readHandoff(gen int, original adf.Doc, rendered, path string, runErr error)
 	if err != nil {
 		return editedMsg{gen: gen, err: fmt.Errorf("reading the description back: %w", err)}
 	}
-	edited := string(body)
+	edited := stripHandoffHeader(string(body))
 	if edited == rendered {
 		remove(path)
 		return editedMsg{gen: gen, note: "the description is unchanged"}
@@ -140,6 +162,26 @@ func handoffError(err error, path string) error {
 }
 
 func remove(path string) { _ = os.Remove(path) }
+
+const handoffMark = "<!-- saral: "
+
+func handoffHeader(losses []string) string {
+	if len(losses) == 0 {
+		return ""
+	}
+	return handoffMark + lossSentence(losses) + ". Delete this line or leave it; it is not saved. -->\n\n"
+}
+
+func stripHandoffHeader(body string) string {
+	if !strings.HasPrefix(body, handoffMark) {
+		return body
+	}
+	line, rest, _ := strings.Cut(body, "\n")
+	if !strings.HasSuffix(strings.TrimSpace(line), "-->") {
+		return body
+	}
+	return strings.TrimPrefix(rest, "\n")
+}
 
 // riskyEdits names what editing this document as markdown costs, narrowed to
 // the constructs it actually contains. ParseMarkdownInto restores everything

@@ -4,21 +4,21 @@ o Story | o Triage (to do) | Urgent | Ada Lovelace | updated 02 Mar 2025 16:00
 #Paragraph 1 of something worth several lines when the |Details                           
 #pane is narrow.                                       |->Summary      Investigate the ...
 #                                                      |  Description  39 lines           
-#Paragraph 2 of something worth several lines when the |  Status       Triage             
-#pane is narrow.                                       |  Priority     Urgent             
-#                                                      |  Assignee     Ada Lovelace       
-#Paragraph 3 of something worth several lines when the |  Project      PROJ PROJ Project  
-#pane is narrow.                                       |  Reporter     Grace Hopper       
-#                                                      |  Due          not set            
-#Paragraph 4 of something worth several lines when the |  Created      02 Mar 2025 12:00  
-|pane is narrow.                                       |  Labels       not set            
-|                                                      |Fields                            
-|Paragraph 5 of something worth several lines when the |  customfield_13404 0|i00003:     
-|pane is narrow.                                       |PROJ-3 | 1 comment                
-|                                                      |----------------------------------
-|Paragraph 6 of something worth several lines when the |> Sam Tester | 02 Mar 2026 09:00  
-|pane is narrow.                                       |    Reproduced on staging, twice. 
-|                                                      |                                  
+#Paragraph 2 of something worth several lines when the |  Type         o Story            
+#pane is narrow.                                       |  Status       o Triage           
+#                                                      |  Priority     U Urgent           
+#Paragraph 3 of something worth several lines when the |  Assignee     Ada Lovelace       
+#pane is narrow.                                       |  Project      PROJ PROJ Project  
+#                                                      |  Reporter     Grace Hopper       
+#Paragraph 4 of something worth several lines when the |  Due          not set            
+|pane is narrow.                                       |  Created      02 Mar 2025 12:00  
+|                                                      |  Labels       not set            
+|Paragraph 5 of something worth several lines when the |Fields                            
+|pane is narrow.                                       |  customfield_13404 0|i00003:     
+|                                                      |PROJ-3 | 1 comment                
+|Paragraph 6 of something worth several lines when the |----------------------------------
+|pane is narrow.                                       |> Sam Tester | 02 Mar 2026 09:00  
+|                                                      |    Reproduced on staging, twice. 
 |Paragraph 7 of something worth several lines when the |                                  
 |pane is narrow.                                       |                                  
 |                                                      |                                  

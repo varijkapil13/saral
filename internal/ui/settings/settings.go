@@ -65,6 +65,9 @@ type Model struct {
 	profile profileState
 
 	zonePrefix string
+
+	preview   string
+	previewAt struct{ gen, width int }
 }
 
 // New builds the settings screen over everything registered, the registry's
@@ -433,7 +436,7 @@ func (m *Model) renderAll() []string {
 			last = m.rows[i].Section
 		}
 		ctrl, detail := m.renderRow(i, m.rows[i])
-		out = append(out, ctrl, detail, "")
+		out = append(out, ctrl, detail, m.belowRow(m.rows[i]))
 	}
 	return out
 }

@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -52,8 +53,16 @@ func loadMoves(ctx context.Context, client jira.Mover, key string, gen int) tea.
 	}
 }
 
-func applyMove(ctx context.Context, client jira.Mover, key, transitionID string, patch jira.IssuePatch, gen int) tea.Cmd {
+type moveClient interface {
+	jira.IssueReader
+	jira.Mover
+}
+
+func applyMove(ctx context.Context, client moveClient, key, transitionID string, base app.EditBase, patch jira.IssuePatch, gen int) tea.Cmd {
 	return func() tea.Msg {
+		if err := app.CheckBase(ctx, client, key, base); err != nil {
+			return editFailedMsg{gen: gen, err: err}
+		}
 		if err := client.Transition(ctx, key, transitionID, patch); err != nil {
 			return editFailedMsg{gen: gen, err: err}
 		}

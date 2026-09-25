@@ -43,6 +43,9 @@ type detail struct {
 // and a click act on; their value funcs are the fallback when no fieldRow
 // exists for them — see editableField.
 var platform = []detail{
+	{"Type", "issuetype", func(m *Model) string {
+		return withIcon(m.deps.Theme.Glyphs.TypeGlyph(m.issue.Type), m.issue.Type.Name)
+	}},
 	{"Status", "status", func(m *Model) string { return m.issue.Status.Name }},
 	{"Priority", "priority", func(m *Model) string { return priorityName(m.issue) }},
 	{"Assignee", "assignee", func(m *Model) string { return assigneeName(m.issue, "") }},
@@ -239,7 +242,10 @@ func (m *Model) detailContent(width int) content {
 		widths: make([]int, 0, 32),
 	}, curs: make([]cursorRow, 0, 32)}
 	r.heading("Details")
-	if !m.loadedIssue {
+	switch {
+	case m.loadFailed && !m.loadedIssue:
+		r.note("The issue could not be read.")
+	case !m.loadedIssue:
 		r.note("Reading the issue" + m.deps.Theme.Glyphs.Ellipsis)
 	}
 	if row := m.rowByID("summary"); row != nil {
@@ -316,6 +322,8 @@ func (r *rows) editableField(row *fieldRow) {
 		shown := row.display()
 		if strings.TrimSpace(shown) == "" {
 			shown = "not set"
+		} else {
+			shown = withIcon(r.m.rowIcon(row), shown)
 		}
 		style := r.m.styles.value
 		if row.problem != "" {
@@ -337,6 +345,19 @@ func (r *rows) editableField(row *fieldRow) {
 	if picking {
 		r.pickerLines()
 	}
+}
+
+// rowIcon is the glyph a status or priority row's value is drawn with: the
+// status category's shape, and the priority's own.
+func (m *Model) rowIcon(row *fieldRow) string {
+	g := m.deps.Theme.Glyphs
+	switch row.id {
+	case "status":
+		return g.CategoryGlyph(m.issue.Status.Category)
+	case "priority":
+		return g.PriorityGlyph(jira.Priority{ID: row.chosenID, Name: row.value})
+	}
+	return ""
 }
 
 // maxPickRows bounds the inline list a choice, person or status row opens

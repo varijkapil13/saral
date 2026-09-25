@@ -592,20 +592,26 @@ transition is a workflow action and never a field a screen lists.
 `bubbles/textinput` seeded with what is there now; enter again keeps the typed value on the row and
 closes the field, `esc` leaves it alone. The description opens the same `bubbles/textarea` the comment
 composer uses, inline in the description region below the header, closed with `ctrl+s` to keep it or
-`esc` to leave it; `E` still hands the same document to `$EDITOR`, exactly as P2.3 built it. None of
-this writes to Jira — it marks the row **dirty**, on the pane, and nowhere else yet.
+`esc` to put it aside: the text stays on the row and in the draft (written a moment after typing
+pauses), `e` reopens the editor on it, and `x` throws it away. Its first line names what editing this
+document as markdown costs (`adf.LossyConstructs`) before a key is typed. `E` still hands the same
+document to `$EDITOR`, whose value is split the way a shell would, so a quoted path with a space in it
+works; the file opens with an HTML comment naming the same costs, taken off again on the way back.
+None of this writes to Jira — it marks the row **dirty**, on the pane, and nowhere else yet.
 
 **Dirty rows accumulate into one set**, not one request per field. A dirty row carries a bullet in the
 theme's accent colour and, where the line has room, the value the site still holds beside it as
 `(was …)`. The identity line under the issue's title — the one place on this pane that survives a
 keypress the way `docs/UX.md`'s own status-line rule asks for — names the set: `N unsaved · s save ·
-backspace undo this · U undo all`, each word a click target as well as a key. `s` (and `ctrl+s`, and
+x revert this · X revert all`, each word a click target as well as a key. `s` (and `ctrl+s`, and
 the palette's *Save changes*) sends every dirty row as **one** `IssuePatch`; a field this pane cannot
 express — an empty summary, an unparsable date — is refused before anything is sent, and a rejection
 Jira does send back is shown in that field's own words rather than as a status line nobody can act on
-after the next keypress. `backspace` (not `u`: this pane already spends `u` and `ctrl+u` on half a page
-up) undoes the row under the cursor; `U` (and the palette's *Undo all changes*) undoes every row at
-once.
+after the next keypress. `x` (not `u`: this pane already spends `u` and `ctrl+u` on half a page up)
+reverts what the keyboard is on — the description while its region has focus, the row under the
+cursor in the details region, and nothing in the comments, which say so. `X` (and the palette's
+*Revert all changes*) reverts every row at once. `backspace` and `U`, the keys these used to be, still
+work for one release and are named nowhere.
 
 **Leaving with dirty rows asks, everywhere the kernel would otherwise refuse.** `kernel.CloseAsker` is
 the additive interface that makes this possible: a `Blocker` that also answers to it is asked instead
@@ -621,11 +627,19 @@ is not on screen to ask, so the switch is refused with its reason instead.
 **The dirty set survives a crash.** Every commit to a row writes the whole set through the same
 `draftStore` P2.3 built — one file per issue per site, replaced atomically — and it is picked back up
 the next time this issue is opened, with the identity line saying so: `unsaved changes from earlier
-restored · s save · U discard`. A `*jira.ConflictError` on save is answered the same way the pushed
-editor answered a 409: the issue is read again and the dirty set is rebased on top of the fresh copy,
-which is what every reload already does for a normal `r`, `R`, or the site simply being asked again the
-moment the pane opens — so a 409 costs this pane nothing beyond the one sentence that says the site
-moved under it and the edits are still there to review.
+restored · s save · X discard`.
+
+**A save never overwrites what it did not see.** Jira Cloud answers a plain `PUT` with 204 whatever
+changed in between, so the pane checks for itself. Each edit keeps the base it was made against — the
+issue's `updated` stamp and a fingerprint of each field it writes (`app.EditBase`), in memory and in the
+draft — and the save re-reads exactly those fields through the issue endpoint first (`app.SaveIssue`).
+A field that moved is a `*jira.ConflictError` before anything is written, answered by reading the issue
+again and rebasing the dirty set on top; every row the site changed underneath is marked in its own
+words and takes the fresh read as its new base, so the next `s` is a reviewed save. Any full read does
+the same — a draft restored days later, `r`, a transition carrying the dirty set. Labels are the
+exception: they go out as add and remove operations diffed against the list the edit began from, so a
+label somebody else added survives and cannot conflict. The read after a save goes through the issue
+endpoint too, never through search, whose index trails the write.
 
 **What editmeta still stops at.** Editmeta answers editable fields, and *editable* here has always
 meant "this build additionally knows the kind" — an option or user-typed custom field beyond priority
@@ -660,6 +674,11 @@ two. `t` (and the palette's *Change this issue's status*) open it from wherever 
 the board pushes `issue.New(…, issue.WithTransition(id))`, which opens this same status list and, once
 the issue's moves have been read, chooses that transition, so its screen is the first thing on screen.
 A move the site no longer offers by then says so in the list rather than choosing another.
+
+**The header's facts are the same three doors.** A click on the status, the priority or the assignee in
+the facts line under the title opens the list its sidebar row opens. The sidebar draws the type as a
+row of its own and the status and priority with their icons, and an issue opened by key alone shows
+each fact's icon with a placeholder until the read lands — `unknown` if it never does.
 
 ## Rendering rules for modern terminals
 

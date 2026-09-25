@@ -73,12 +73,14 @@ func saveBinding() kernel.Binding {
 	return kernel.Bind([]string{"s", "ctrl+s"}, "s", "save changes")
 }
 
+// undoRowBinding and undoAllBinding still answer to backspace and U, the keys
+// they used to be, without naming them anywhere.
 func undoRowBinding() kernel.Binding {
-	return kernel.Bind([]string{"backspace"}, "backspace", "undo this")
+	return kernel.Bind([]string{"x", "backspace"}, "x", "revert this")
 }
 
 func undoAllBinding() kernel.Binding {
-	return kernel.Bind([]string{"U"}, "U", "undo all")
+	return kernel.Bind([]string{"X", "U"}, "X", "revert all")
 }
 
 // assignBinding opens the assignee picker from wherever the cursor already
@@ -266,15 +268,21 @@ var sideLiveSets = func() [lkCount]kernel.KeySet {
 	k := defaultKeys()
 	baseActs := []kernel.Binding{kernel.Terse(k.Pane, "pane")}
 	baseFull := []kernel.Binding{k.Pane}
-	dirtyActs := []kernel.Binding{kernel.Terse(k.Save, "save"), kernel.Terse(k.UndoRow, "undo"), k.UndoAll}
+	dirtyActs := []kernel.Binding{kernel.Terse(k.Save, "save"), kernel.Terse(k.UndoRow, "revert"), k.UndoAll}
 	dirtyFull := []kernel.Binding{k.Save, k.UndoRow, k.UndoAll}
+	commentsDirtyActs := []kernel.Binding{kernel.Terse(k.Save, "save"), k.UndoAll}
+	commentsDirtyFull := []kernel.Binding{k.Save, k.UndoAll}
 	restActs := []kernel.Binding{kernel.Terse(k.Move, "status"), k.Comments}
 	restFull := []kernel.Binding{k.Assign, k.Move, k.Comments}
 
 	build := func(dirty bool, editActs, editFull []kernel.Binding) kernel.KeySet {
 		acts := append(append([]kernel.Binding{}, baseActs...), editActs...)
 		full := append(append([]kernel.Binding{}, baseFull...), editFull...)
-		if dirty {
+		switch {
+		case dirty && editActs == nil:
+			acts = append(acts, commentsDirtyActs...)
+			full = append(full, commentsDirtyFull...)
+		case dirty:
 			acts = append(acts, dirtyActs...)
 			full = append(full, dirtyFull...)
 		}
@@ -289,7 +297,7 @@ var sideLiveSets = func() [lkCount]kernel.KeySet {
 	accept := kernel.Bind([]string{"enter"}, "enter", "keep this value")
 	cancelTyping := kernel.Bind([]string{"esc"}, "esc", "leave it alone")
 	commit := kernel.Bind([]string{"ctrl+s"}, "ctrl+s", "keep this description")
-	cancelDoc := kernel.Bind([]string{"esc"}, "esc", "leave it alone")
+	cancelDoc := kernel.Bind([]string{"esc"}, "esc", "put it aside")
 	saveNow := kernel.Bind([]string{"y"}, "y", "save")
 	discardNow := kernel.Bind([]string{"n"}, "n", "discard")
 	stay := kernel.Bind([]string{"esc"}, "esc", "stay")

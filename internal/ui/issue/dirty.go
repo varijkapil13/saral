@@ -3,12 +3,15 @@ package issue
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/adf"
@@ -56,7 +59,7 @@ type EditFieldMsg struct{}
 // SaveChangesMsg is the palette's way to s: send the whole dirty set.
 type SaveChangesMsg struct{}
 
-// UndoAllMsg is the palette's way to U: throw every edit away.
+// UndoAllMsg is the palette's way to X: throw every edit away.
 type UndoAllMsg struct{}
 
 func init() {
@@ -76,7 +79,7 @@ func init() {
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:    "issue.undoAll",
-		Title: "Undo all changes",
+		Title: "Revert all changes",
 		Group: "Issue",
 		Keys:  []string{undoAllBinding().Help().Key},
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Broadcast(UndoAllMsg{}) },
@@ -84,7 +87,7 @@ func init() {
 }
 
 // dirtyMsg answers the palette's way into editing the row under the cursor,
-// saving and undoing everything — the same gestures e/enter, s and U reach.
+// saving and reverting everything — the same gestures e/enter, s and X reach.
 func (m *Model) dirtyMsg(msg tea.Msg) tea.Cmd {
 	switch msg.(type) {
 	case EditFieldMsg:
@@ -166,13 +169,32 @@ func (m *Model) dirtyCount() int {
 	return n
 }
 
-// edits is what the user has changed, in the form a draft keeps it.
+// edits is what the user has changed, in the form a draft keeps it, with the
+// base each edit was made against.
 func (m *Model) edits() draft {
 	out := draft{Key: m.issue.Key, Site: m.deps.Site, Values: map[string]string{}}
+	out.Base.Updated = m.baseAt
 	for i := range m.rows {
 		row := &m.rows[i]
+		if row.kind == rkDoc && row.pending != nil {
+			text := *row.pending
+			out.DescriptionText = &text
+		}
 		if !row.dirty() {
 			continue
+		}
+		switch row.kind {
+		case rkLabels:
+			was := slices.Clone(row.baseLabels)
+			if was == nil {
+				was = []string{}
+			}
+			out.LabelsBase = &was
+		default:
+			if out.Base.Fields == nil {
+				out.Base.Fields = map[string]string{}
+			}
+			out.Base.Fields[row.id] = row.base
 		}
 		switch row.kind {
 		case rkDoc:
@@ -198,18 +220,33 @@ func (m *Model) edits() draft {
 	return out
 }
 
+func (m *Model) editBase() app.EditBase {
+	return m.edits().Base
+}
+
 // applyEdits puts a draft's edits back onto the rows, skipping anything the
 // issue was not read with — a draft outlives a session, and the field list of
-// the read that rebuilt these rows is not the one that produced it.
+// the read that rebuilt these rows is not the one that produced it. Each edit
+// keeps the base it was made against; a draft written before bases were kept
+// takes the fresh read's.
 func (m *Model) applyEdits(d draft) {
+	rebase := func(row *fieldRow) {
+		if was, ok := d.Base.Fields[row.id]; ok && was != "" {
+			row.base = was
+		}
+	}
 	for id, value := range d.Values {
 		row := m.rowByID(id)
 		if row == nil || !row.fetched {
 			continue
 		}
+		rebase(row)
 		if row.kind == rkDoc {
 			row.cleared, row.edited = true, nil
 			continue
+		}
+		if row.kind == rkLabels && d.LabelsBase != nil {
+			row.baseLabels = slices.Clone(*d.LabelsBase)
 		}
 		row.setEdited(value)
 	}
@@ -218,19 +255,28 @@ func (m *Model) applyEdits(d draft) {
 		if row == nil || !row.fetched {
 			continue
 		}
+		rebase(row)
 		row.chosenID, row.value = choice.ID, choice.Label
 	}
-	if len(d.Description) == 0 {
-		return
+	if !d.Base.Updated.IsZero() {
+		m.baseAt = d.Base.Updated
 	}
 	row := m.rowByID("description")
 	if row == nil || !row.fetched {
+		return
+	}
+	if d.DescriptionText != nil {
+		text := *d.DescriptionText
+		row.pending = &text
+	}
+	if len(d.Description) == 0 {
 		return
 	}
 	doc, err := adf.Unmarshal(d.Description)
 	if err != nil {
 		return
 	}
+	rebase(row)
 	row.edited, row.cleared = &doc, false
 }
 
@@ -238,9 +284,16 @@ func (m *Model) applyEdits(d draft) {
 // puts whatever the user had already typed back on top, and — only while
 // nothing is dirty in memory — tries a persisted draft too. It runs every time
 // the issue reloads: on the first open, on r and R, and after a conflict, which
-// is what makes conflict handling here nothing more than "reload and rebase".
+// is what makes conflict handling here "reload, rebase, and say which rows the
+// site moved under".
 func (m *Model) rebaseRows() {
 	kept := m.edits()
+	problems := map[string]string{}
+	for i := range m.rows {
+		if m.rows[i].dirty() && m.rows[i].problem != "" {
+			problems[m.rows[i].id] = m.rows[i].problem
+		}
+	}
 	fresh := buildFieldRows(m.issue)
 	for i := range fresh {
 		_, listed := m.edit.Order(fresh[i].id)
@@ -248,12 +301,50 @@ func (m *Model) rebaseRows() {
 	}
 	m.rows = fresh
 	m.applyEdits(kept)
-	if !m.anyDirty() {
+	for i := range m.rows {
+		if m.rows[i].dirty() {
+			m.rows[i].problem = problems[m.rows[i].id]
+		}
+	}
+	if !m.anyDirty() && !m.anyPending() {
+		m.baseAt = m.issue.Updated
 		if d, ok, err := m.drafts.load(m.deps.Site, m.issue.Key); err == nil && ok {
 			m.applyEdits(d)
 			m.draftRestored = true
 		}
 	}
+	m.moved = m.flagMoved()
+}
+
+// flagMoved rebases a moved row onto the fresh read once it is marked: the user
+// has been shown it. Only a full read counts; a seed or cache may just be old.
+func (m *Model) flagMoved() int {
+	if !m.loadedIssue {
+		return 0
+	}
+	n := 0
+	for i := range m.rows {
+		row := &m.rows[i]
+		if !row.dirty() || row.kind == rkLabels {
+			continue
+		}
+		now := app.Fingerprint(m.issue, row.id)
+		if row.base == now {
+			continue
+		}
+		row.base = now
+		row.problem = "changed on the site while you edited; review before saving"
+		n++
+	}
+	if n > 0 {
+		m.baseAt = m.issue.Updated
+	}
+	return n
+}
+
+func (m *Model) anyPending() bool {
+	row := m.rowByID("description")
+	return row != nil && row.pending != nil
 }
 
 // relist refreshes which rows editmeta names, without touching the values a
@@ -281,7 +372,7 @@ func (m *Model) discardAll() tea.Cmd {
 		_, listed := m.edit.Order(m.rows[i].id)
 		m.rows[i].listed = listed
 	}
-	m.draftRestored = false
+	m.draftRestored, m.moved = false, 0
 	if err := m.drafts.discard(m.deps.Site, m.issue.Key); err != nil {
 		return kernel.Warn(err.Error())
 	}
@@ -335,12 +426,15 @@ func (m *Model) saveDirty() tea.Cmd {
 		m.saveFail, _ = jira.Reason(err)
 		return kernel.Fail(err)
 	}
+	if patch.IsEmpty() {
+		return kernel.Warn("nothing has changed")
+	}
 	if m.deps.Jira == nil {
 		return kernel.Warn("there is no Jira connection in this session")
 	}
 	m.stage, m.saveFail = sideSaving, ""
 	ctx, gen := m.beginSave()
-	return kernel.Reply(saveDirtyPatch(ctx, m.deps.Jira, m.issue.Key, patch, gen), m.addr)
+	return kernel.Reply(saveDirtyPatch(ctx, m.deps.Jira, m.issue.Key, m.editBase(), patch, gen), m.addr)
 }
 
 func (m *Model) saveResult(msg savedMsg) tea.Cmd {
@@ -360,26 +454,42 @@ func (m *Model) saveResult(msg savedMsg) tea.Cmd {
 	return join(discardCmd, join(m.fetch(), kernel.Status(key+" saved")))
 }
 
+// discardCmd drops the draft of a write that landed. Description text still
+// open in the inline editor was never part of that write, so it stays.
 func (m *Model) discardCmd() tea.Cmd {
-	if err := m.drafts.discard(m.deps.Site, m.issue.Key); err != nil {
+	left := draft{Key: m.issue.Key, Site: m.deps.Site}
+	if row := m.rowByID("description"); row != nil && row.pending != nil {
+		text := *row.pending
+		left.DescriptionText = &text
+	}
+	if err := m.drafts.save(left); err != nil {
 		return kernel.Warn(err.Error())
 	}
 	return nil
 }
 
 // saveFailed keeps every edit on screen and on disk. docs/UX.md principle 6 is
-// that a refused write never costs the user their text, and a 409 is the case
-// that principle was written for: it is answered by rereading the issue and
-// rebasing the edits back on top, which rebaseRows already does for every
-// reload.
+// that a refused write never costs the user their text. A conflict — the save's
+// own re-read finding a field it writes moved — is answered by rereading the
+// issue and rebasing the edits back on top, which is where flagMoved marks the
+// rows the site changed.
+func movedNote(n int) string {
+	if n == 1 {
+		return "1 field changed on the site while you edited; your change is kept, review and save again"
+	}
+	return strconv.Itoa(n) + " fields changed on the site while you edited; your changes are kept, review and save again"
+}
+
+const conflictNote = "changed on the site while you edited; your changes are kept, review and save again"
+
 func (m *Model) saveFailed(err error) tea.Cmd {
 	m.stage = sideBrowse
 	m.leaving = false
 	m.markFieldProblems(err)
 	var conflict *jira.ConflictError
 	if errors.As(err, &conflict) {
-		m.saveFail = "changed on the site while you edited; your changes are kept, review and save again"
-		return m.fetch()
+		m.saveFail = conflictNote
+		return join(m.fetch(), kernel.Warn(m.saveFail))
 	}
 	m.saveFail, _ = jira.Reason(err)
 	return kernel.Fail(err)
@@ -402,15 +512,20 @@ func (m *Model) markFieldProblems(err error) {
 	}
 }
 
-// undoRow puts the row under the cursor back to what the site holds.
 func (m *Model) undoRow() tea.Cmd {
-	cr := m.currentCursorRow()
-	if cr == nil {
-		return nil
+	var row *fieldRow
+	switch m.focus {
+	case regionDesc:
+		row = m.rowByID("description")
+	case regionDetails:
+		if cr := m.currentCursorRow(); cr != nil {
+			row = m.rowByID(cr.id)
+		}
+	default:
+		return kernel.Warn("nothing to revert here")
 	}
-	row := m.rowByID(cr.id)
-	if row == nil || !row.dirty() {
-		return kernel.Warn("nothing to undo here")
+	if row == nil || (!row.dirty() && row.pending == nil) {
+		return kernel.Warn("nothing to revert here")
 	}
 	fresh := newFieldRow(row.id, row.label, row.kind, m.issue)
 	fresh.listed, fresh.problem = row.listed, ""
@@ -521,12 +636,22 @@ func (m *Model) currentEditRow() *fieldRow {
 
 func (m *Model) startDocEdit(row *fieldRow) tea.Cmd {
 	m.docArea = newDocArea()
-	m.docArea.SetValue(adf.Markdown(row.documentNow()))
+	m.docSeed = adf.Markdown(row.documentNow())
+	if row.pending != nil {
+		m.docArea.SetValue(*row.pending)
+	} else {
+		m.docArea.SetValue(m.docSeed)
+	}
+	m.docLosses = riskyEdits(row.doc)
 	cmd := m.docArea.Focus()
 	m.stage = sideDocEdit
 	m.tops[regionDesc] = 0
 	return cmd
 }
+
+const pendingSaveAfter = 400 * time.Millisecond
+
+type pendingFlushMsg struct{ gen int }
 
 func (m *Model) docEditKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
@@ -535,11 +660,35 @@ func (m *Model) docEditKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "esc":
 		m.stage = sideBrowse
 		m.docArea.Blur()
-		return nil
+		m.holdPending()
+		return join(m.keepDraft(), kernel.Status("the description text is kept; e opens it again, x throws it away"))
 	}
 	var cmd tea.Cmd
 	m.docArea, cmd = m.docArea.Update(msg)
-	return cmd
+	m.holdPending()
+	m.pendingGen++
+	gen := m.pendingGen
+	return join(cmd, m.after(pendingSaveAfter, func() tea.Msg { return kernel.ReplyTo(pendingFlushMsg{gen: gen}, m.addr) }))
+}
+
+func (m *Model) holdPending() {
+	row := m.rowByID("description")
+	if row == nil {
+		return
+	}
+	text := m.docArea.Value()
+	if text == m.docSeed {
+		row.pending = nil
+		return
+	}
+	row.pending = &text
+}
+
+func (m *Model) pendingFlush(msg pendingFlushMsg) tea.Cmd {
+	if msg.gen != m.pendingGen {
+		return nil
+	}
+	return m.keepDraft()
 }
 
 func (m *Model) commitDocEdit() tea.Cmd {
@@ -551,7 +700,7 @@ func (m *Model) commitDocEdit() tea.Cmd {
 	}
 	text := m.docArea.Value()
 	if strings.TrimSpace(text) == "" {
-		row.edited, row.cleared = nil, true
+		row.edited, row.cleared, row.pending = nil, true, nil
 		m.stage = sideBrowse
 		m.docArea.Blur()
 		return m.keepDraft()
@@ -560,13 +709,21 @@ func (m *Model) commitDocEdit() tea.Cmd {
 	if err != nil {
 		return kernel.Warn(parseMarkdownProblem(err))
 	}
-	row.edited, row.cleared = &doc, false
+	row.edited, row.cleared, row.pending = &doc, false, nil
 	m.stage = sideBrowse
 	m.docArea.Blur()
-	if costs := riskyEdits(row.doc); len(costs) > 0 {
-		return join(m.keepDraft(), kernel.Warn("editing this as markdown loses: "+strings.Join(costs, ", ")))
+	return join(m.keepDraft(), lossWarning(row.doc))
+}
+
+func lossWarning(d adf.Doc) tea.Cmd {
+	if costs := riskyEdits(d); len(costs) > 0 {
+		return kernel.Warn(lossSentence(costs))
 	}
-	return m.keepDraft()
+	return nil
+}
+
+func lossSentence(costs []string) string {
+	return "editing this as markdown loses: " + strings.Join(costs, ", ")
 }
 
 func parseMarkdownProblem(err error) string {
@@ -588,7 +745,7 @@ func (m *Model) handOffDescription() tea.Cmd {
 		return kernel.Warn(reason)
 	}
 	m.docGen++
-	return handOffToEditor(m.launch, m.addr, m.docGen, m.issue.Key, row.documentNow())
+	return handOffToEditor(m.launch, m.addr, m.docGen, m.issue.Key, row.documentNow(), riskyEdits(row.doc))
 }
 
 // editedResult takes what the $EDITOR handoff produced.
@@ -604,9 +761,10 @@ func (m *Model) editedResult(msg editedMsg) tea.Cmd {
 	case row == nil, msg.doc == nil && !msg.cleared:
 		return kernel.Status(msg.note)
 	case msg.cleared:
-		row.edited, row.cleared = nil, true
+		row.edited, row.cleared, row.pending = nil, true, nil
+		return join(m.keepDraft(), kernel.Status(msg.note))
 	default:
-		row.edited, row.cleared = msg.doc, false
+		row.edited, row.cleared, row.pending = msg.doc, false, nil
 	}
-	return join(m.keepDraft(), kernel.Status(msg.note))
+	return join(m.keepDraft(), join(kernel.Status(msg.note), lossWarning(row.doc)))
 }

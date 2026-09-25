@@ -1,6 +1,7 @@
 package issue
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -85,6 +86,7 @@ func TestDirty_ThreeEditsOneSave(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(3)
+	was := readIssue(t, f, "PROJ-1").Labels
 	p, rec := openEditable(t, f, "PROJ-1", withDrafts(tempDrafts(t)))
 
 	rowAt(t, p, "summary")
@@ -118,8 +120,12 @@ func TestDirty_ThreeEditsOneSave(t *testing.T) {
 	if patch.Summary == nil || *patch.Summary != "New title" {
 		t.Errorf("patch.Summary = %v", patch.Summary)
 	}
-	if patch.Labels == nil || len(*patch.Labels) != 2 || (*patch.Labels)[0] != "alpha" || (*patch.Labels)[1] != "beta" {
-		t.Errorf("patch.Labels = %v, want [alpha beta]", patch.Labels)
+	if patch.Labels != nil {
+		t.Errorf("patch.Labels = %v, want the list edited by add and remove rather than replaced", *patch.Labels)
+	}
+	wantAdd, wantRemove := labelDiff(was, []string{"alpha", "beta"})
+	if !slices.Equal(patch.AddLabels, wantAdd) || !slices.Equal(patch.RemoveLabels, wantRemove) {
+		t.Errorf("patch adds %v and removes %v, want %v and %v", patch.AddLabels, patch.RemoveLabels, wantAdd, wantRemove)
 	}
 	if patch.Due == nil || patch.Due.String() != "2026-01-15" {
 		t.Errorf("patch.Due = %v, want 2026-01-15", patch.Due)

@@ -2,8 +2,6 @@ package issue
 
 import (
 	"context"
-	"strconv"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -33,23 +31,13 @@ type editMetaMsg struct {
 	meta jira.EditMeta
 }
 
-// byKey is the JQL that reads one issue. It goes through search rather than
-// through the port's Issue method because only search takes a field set, and a
-// bare issue read returns every field the site defines.
-func byKey(key string) string {
-	return "key = " + strconv.Quote(strings.ReplaceAll(key, `"`, ""))
-}
-
-func load(ctx context.Context, search *app.Search, key string, gen int) tea.Cmd {
+func load(ctx context.Context, search *app.Search, reader jira.IssueReader, key string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		res, err := search.Run(ctx, app.Request{JQL: byKey(key), Projection: app.DetailProjection(), MaxResults: 1})
+		iss, labels, err := search.ReadIssue(ctx, reader, key, app.DetailProjection())
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
-		if len(res.Page.Items) == 0 {
-			return failedMsg{gen: gen, err: &jira.NotFoundError{Kind: "issue", ID: key}}
-		}
-		return loadedMsg{gen: gen, issue: res.Page.Items[0], labels: res.Labels}
+		return loadedMsg{gen: gen, issue: iss, labels: labels}
 	}
 }
 
@@ -60,9 +48,9 @@ type savedMsg struct {
 }
 
 // saveDirtyPatch sends the whole dirty set as one request.
-func saveDirtyPatch(ctx context.Context, client jira.IssueWriter, key string, patch jira.IssuePatch, gen int) tea.Cmd {
+func saveDirtyPatch(ctx context.Context, client app.IssueEditor, key string, base app.EditBase, patch jira.IssuePatch, gen int) tea.Cmd {
 	return func() tea.Msg {
-		if err := client.UpdateIssue(ctx, key, patch); err != nil {
+		if err := app.SaveIssue(ctx, client, key, base, patch); err != nil {
 			return savedMsg{gen: gen, err: err}
 		}
 		return savedMsg{gen: gen}
