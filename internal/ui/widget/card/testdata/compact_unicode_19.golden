@@ -1,0 +1,32 @@
+-- list, resting --
+╭   EX-1234 ▲     ◐|
+│ Checkout fails w…|
+╰ Ada Lovelace     |
+-- list, selected --
+╭ ▸ EX-1234 ▲     ◐|
+│ Checkout fails w…|
+╰ Ada Lovelace     |
+-- list, picked --
+╭ ✓ EX-1234 ▲     ◐|
+│ Checkout fails w…|
+╰ Ada Lovelace     |
+-- list, held --
+╭ ◆ EX-1234 ▲     ◐|
+│ Checkout fails w…|
+╰ Ada Lovelace     |
+-- board, resting --
+╭ ■ EX-87         5|
+│ Cache the field …|
+╰ Ben Adams        |
+-- board, selected --
+╭ ▸ EX-87         5|
+│ Cache the field …|
+╰ Ben Adams        |
+-- board, picked --
+╭ ✓ EX-87         5|
+│ Cache the field …|
+╰ Ben Adams        |
+-- board, held --
+╭ ◆ EX-87         5|
+│ Cache the field …|
+╰ Ben Adams        |

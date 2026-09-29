@@ -350,7 +350,7 @@ Two directories, both named for the build (`saral`, or `saral-dev` for a build f
 | `drafts/` | beside `config.toml` | text not yet sent, per site: an issue's unsaved edits (`<site>/<key>.json`), unsent comments (`comments/<site>/`), unsubmitted create forms (`create/<site>/`) | until it is sent or discarded; comment drafts an earlier build left under the cache directory move here the first time a thread opens |
 | `cache.db` | `$SARAL_CACHE_DIR`, else `$XDG_CACHE_HOME/saral`, else `~/.cache/saral` | per profile (site and account): issues, searches, boards, backlogs, each project's sprint list and versions (never an open count), capability probe answers, the last board each project drew | see below |
 | `cache.db.corrupt-<timestamp>` | beside `cache.db` | a cache file Saral could not read, moved aside when it started afresh | until you delete it |
-| `ui.toml`, `.ui.toml.lock` | the cache directory | split widths, sort orders, each profile's remembered view and filters | until `session.memory` or you delete it |
+| `ui.toml`, `.ui.toml.lock` | the cache directory | split widths, sort orders, the row look (`[look] look = "roomy"`, `"compact"` or `"lines"`), each profile's remembered view and filters | until `session.memory` or you delete it |
 | `palette/usage.json`, `palette/projects.json` | the cache directory | how often and how recently each palette command and each project was picked, to rank them | at most 200 entries each, the lowest-ranked dropped first; until you delete them |
 
 What `cache.db` keeps, per profile (`app.Kind.Retention`):
@@ -369,7 +369,7 @@ a profile removed, or set up again under another email.
 
 To wipe it: `session.cache` in settings clears the active profile's cache. To clear everything, quit
 every copy of Saral and delete `cache.db` (and any `cache.db.corrupt-*`); the next launch makes a new
-one. Deleting `ui.toml` forgets every remembered split, sort and filter.
+one. Deleting `ui.toml` forgets every remembered split, sort, filter and the row look.
 
 ### Stays a command *and* appears as a setting
 

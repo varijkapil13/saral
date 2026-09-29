@@ -1,0 +1,48 @@
+-- list, resting --
+╭   EX-1234 ▲     ◐|
+│ Checkout fails   |
+│ when the basket …|
+│ Ada Lovelace     |
+╰ checkout payment…|
+-- list, selected --
+╭ ▸ EX-1234 ▲     ◐|
+│ Checkout fails   |
+│ when the basket …|
+│ Ada Lovelace     |
+╰ checkout payment…|
+-- list, picked --
+╭ ✓ EX-1234 ▲     ◐|
+│ Checkout fails   |
+│ when the basket …|
+│ Ada Lovelace     |
+╰ checkout payment…|
+-- list, held --
+╭ ◆ EX-1234 ▲     ◐|
+│ Checkout fails   |
+│ when the basket …|
+│ Ada Lovelace     |
+╰ checkout payment…|
+-- board, resting --
+╭ ■ EX-87         5|
+│ Cache the field  |
+│ catalogue betwee…|
+│ Ben Adams        |
+╰ EX-12 Faster fir…|
+-- board, selected --
+╭ ▸ EX-87         5|
+│ Cache the field  |
+│ catalogue betwee…|
+│ Ben Adams        |
+╰ EX-12 Faster fir…|
+-- board, picked --
+╭ ✓ EX-87         5|
+│ Cache the field  |
+│ catalogue betwee…|
+│ Ben Adams        |
+╰ EX-12 Faster fir…|
+-- board, held --
+╭ ◆ EX-87         5|
+│ Cache the field  |
+│ catalogue betwee…|
+│ Ben Adams        |
+╰ EX-12 Faster fir…|

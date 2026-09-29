@@ -230,6 +230,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/timeline` | `TestBudget_TimelineRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/timeline` | `TestBudget_TimelineScrollingCostsTheSameOnTenThousandBarsAsOnTwenty` |
 | `internal/ui/timeline` | `TestBudget_TimelineScrollingCostsTheSameUnderATermInForce` |
+| `internal/ui/widget/card` | `TestBudget_ACardCostsABoundedNumberOfAllocations` |
 
 <!-- /budget-guards -->
 
@@ -491,6 +492,24 @@ data, which is what the ceiling is sized for. Three things were what made it wor
 
 A summary stops at the width it was asked for rather than flattening 32,000 characters and cutting
 the result, which is what a list of twenty rows over long descriptions pays.
+
+### What drawing a card costs today
+
+Measured on an M2 Pro over `internal/ui/widget/card`: one resting card of the list's facts, drawn
+with nothing memoized, which is what a view's memo miss pays for the card itself. The ceilings are in
+`internal/ui/widget/card/budget_test.go`.
+
+| Benchmark | ns/op | allocs/op | ceiling |
+|---|---|---|---|
+| `BenchmarkCardRender/roomy/24` | 8,600 | 20 | 22 |
+| `BenchmarkCardRender/roomy/120` | 6,200 | 9 | 10 |
+| `BenchmarkCardRender/compact/24` | 7,800 | 13 | 15 |
+| `BenchmarkCardRender/compact/120` | 5,800 | 8 | 9 |
+
+The floor is one allocation a line. What is left over it at 24 cells is the truncation of the fields
+that do not fit. `NewStyles` asks each style once what it puts around its text, the way the document
+renderer does, so a card writes those sequences itself rather than calling `Render` per cell; that
+took a compact card from 65 allocations to 8.
 
 ## Measuring for real
 

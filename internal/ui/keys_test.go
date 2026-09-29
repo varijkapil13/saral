@@ -15,6 +15,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/release"
 	"github.com/varijkapil13/saral/internal/ui/sprint"
 	"github.com/varijkapil13/saral/internal/ui/timeline"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 )
 
 // keyOwners says whose footer renders the key each command carries. The kernel
@@ -119,6 +120,15 @@ var keyOwners = map[string]string{
 	"timeline.zoom-in":   timeline.ViewID,
 	"timeline.zoom-out":  timeline.ViewID,
 	"timeline.filter-by": timeline.ViewID,
+
+	card.CommandID: list.ViewID,
+}
+
+// adopting names a command whose key the views listed take up in packets still
+// open. Each is held to the key once it shows it, and the entry has to go once
+// they all do.
+var adopting = map[string][]string{
+	card.CommandID: {list.ViewID, backlog.ViewID, board.ViewID},
 }
 
 func TestCommands_TeachTheKeyTheirViewActuallyShows(t *testing.T) {
@@ -134,6 +144,10 @@ func TestCommands_TeachTheKeyTheirViewActuallyShows(t *testing.T) {
 			continue
 		}
 		seen[cmd.ID] = true
+		if views, ok := adopting[cmd.ID]; ok {
+			checkAdopting(t, cmd, views)
+			continue
+		}
 		for _, k := range cmd.Keys {
 			checkKey(t, cmd.ID, owner, k)
 		}
@@ -142,6 +156,25 @@ func TestCommands_TeachTheKeyTheirViewActuallyShows(t *testing.T) {
 		if !seen[id] {
 			t.Errorf("keyOwners names %q, which registers no command with keys any more", id)
 		}
+	}
+}
+
+func checkAdopting(t *testing.T, cmd kernel.Command, views []string) {
+	t.Helper()
+
+	waiting := 0
+	for _, view := range views {
+		shown, _ := labelsOf(kernel.KeysFor(view))
+		for _, k := range cmd.Keys {
+			if slices.Contains(shown, k) {
+				checkKey(t, cmd.ID, view, k)
+			} else {
+				waiting++
+			}
+		}
+	}
+	if waiting == 0 {
+		t.Errorf("every view in adopting now shows %v for %q; drop it from adopting", cmd.Keys, cmd.ID)
 	}
 }
 
