@@ -128,7 +128,7 @@ var keyOwners = map[string]string{
 // open. Each is held to the key once it shows it, and the entry has to go once
 // they all do.
 var adopting = map[string][]string{
-	card.CommandID: {list.ViewID, backlog.ViewID, board.ViewID},
+	card.CommandID: {backlog.ViewID, board.ViewID},
 }
 
 func TestCommands_TeachTheKeyTheirViewActuallyShows(t *testing.T) {

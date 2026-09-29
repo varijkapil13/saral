@@ -223,7 +223,7 @@ func TestReply_AnAnswerLandingUnderThePaletteStillReachesTheViewThatAskedForIt(t
 			name:   "the field editor, pushed over the pane",
 			settle: func(p *program) { p.run(p.m.Init()) },
 			arrive: func(p *program) { p.press("enter", "e") },
-			want:   []string{"2025-03-16"},
+			want:   []string{"02 Mar 2025 21:00"},
 			gone:   []string{"not read"},
 		},
 		{

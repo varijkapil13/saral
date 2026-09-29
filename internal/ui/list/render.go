@@ -1,6 +1,7 @@
 package list
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -154,9 +156,11 @@ type rowKey struct {
 	key      string
 	updated  int64
 	lay      layout
+	width    int
 	selected bool
 	gen      int
 	mouse    bool
+	look     card.Look
 }
 
 // renderRow draws one row to exactly lay.width columns.
@@ -261,4 +265,68 @@ func formatWhen(t, now time.Time, loc *time.Location) string {
 		return in.Format("02 Jan 15:04")
 	}
 	return in.Format("02 Jan 2006")
+}
+
+// facts is what a card shows of an issue. The facet cells are named only while
+// the mouse is on, since a zone nobody can click is an allocation for nothing.
+func (m *Model) facts(iss *jira.Issue) card.Facts {
+	g := m.deps.Theme.Glyphs
+	loc, now := m.deps.Caps.Location(), m.now()
+	f := card.Facts{
+		Key: iss.Key, Summary: iss.Summary,
+		TypeGlyph: g.TypeGlyph(iss.Type), TypeName: iss.Type.Name,
+		StatusGlyph: g.CategoryGlyph(iss.Status.Category), StatusName: iss.Status.Name,
+		Category: categoryIndex(iss.Status.Category),
+		Assignee: assigneeName(iss, ""),
+		Updated:  formatWhen(iss.Updated, now, loc),
+		Subtasks: subtaskCount(iss.Subtasks),
+		Labels:   iss.Labels,
+	}
+	if iss.Priority != nil {
+		f.Priority = iss.Priority.Name
+	}
+	f.Due, f.Overdue = formatDue(iss.Due, now, loc)
+	if len(iss.FixVersions) > 0 {
+		f.FixVersions = make([]string, len(iss.FixVersions))
+		for i := range iss.FixVersions {
+			f.FixVersions[i] = iss.FixVersions[i].Name
+		}
+	}
+	if m.zones.Enabled() {
+		f.TypeZone, f.StatusZone, f.WhoZone = typeZone(iss.Key), statusZone(iss.Key), whoZone(iss.Key)
+	}
+	return f
+}
+
+// formatDue spells a due date the way formatWhen spells a day, the year shown
+// only when it is not the current one, and says whether it has passed. Both are
+// judged in the account's timezone: a due date is a calendar day, and today is
+// the account's today rather than the machine's.
+func formatDue(d jira.Date, now time.Time, loc *time.Location) (string, bool) {
+	if d.IsZero() {
+		return "", false
+	}
+	if loc == nil {
+		loc = time.UTC
+	}
+	today := jira.DateOf(now.In(loc))
+	layout := "due 02 Jan"
+	if d.Year != today.Year {
+		layout = "due 02 Jan 2006"
+	}
+	return d.In(loc).Format(layout), !now.IsZero() && d.Before(today)
+}
+
+// subtaskCount is "done/total", and nothing for an issue with no subtasks.
+func subtaskCount(subs []jira.IssueRef) string {
+	if len(subs) == 0 {
+		return ""
+	}
+	done := 0
+	for i := range subs {
+		if subs[i].Status.Category == jira.CategoryDone {
+			done++
+		}
+	}
+	return strconv.Itoa(done) + "/" + strconv.Itoa(len(subs))
 }

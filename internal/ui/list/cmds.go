@@ -74,8 +74,8 @@ func revalidate(ctx context.Context, reader jira.IssueReader, key string, fields
 	}
 }
 
-func request(jql string) app.Request {
-	return app.Request{JQL: jql, Projection: app.ListProjection(), MaxResults: pageSize}
+func request(jql string, proj app.Projection) app.Request {
+	return app.Request{JQL: jql, Projection: proj, MaxResults: pageSize}
 }
 
 // keep stores what a fetch brought back, so that the next session draws these
@@ -114,9 +114,9 @@ func storeRows(cache app.Cache, jql string, issues []jira.Issue, more bool) tea.
 }
 
 // load fetches the first page of a query.
-func load(ctx context.Context, search *app.Search, cache app.Cache, jql string, gen int, w why) tea.Cmd {
+func load(ctx context.Context, search *app.Search, cache app.Cache, jql string, proj app.Projection, gen int, w why) tea.Cmd {
 	return func() tea.Msg {
-		res, err := search.Run(ctx, request(jql))
+		res, err := search.Run(ctx, request(jql, proj))
 		if err != nil {
 			return failedMsg{gen: gen, why: w, err: err}
 		}
@@ -145,9 +145,9 @@ func more(ctx context.Context, cache app.Cache, jql string, have []jira.Issue, p
 // reload re-reads the rows the list already has, walking as many pages as it
 // took to get them. It exists so that a refresh can patch rows in place rather
 // than throw the user's position away and start again at row one.
-func reload(ctx context.Context, search *app.Search, cache app.Cache, jql string, want, gen int, w why) tea.Cmd {
+func reload(ctx context.Context, search *app.Search, cache app.Cache, jql string, proj app.Projection, want, gen int, w why) tea.Cmd {
 	return func() tea.Msg {
-		res, err := search.Run(ctx, request(jql))
+		res, err := search.Run(ctx, request(jql, proj))
 		if err != nil {
 			return failedMsg{gen: gen, why: w, err: err}
 		}

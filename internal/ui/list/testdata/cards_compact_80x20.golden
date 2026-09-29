@@ -1,0 +1,19 @@
+All issues                                              checked 09:00  12 issues
++   PROJ-1 o Epic                                       ~ Building  02 Mar 12:00
+| Add the nightly export                                                        
++ Grace Hopper | Normal                                                         
++ > PROJ-2 o Chore                                       x Shipped  02 Mar 14:00
+| Rework webhook retries                                                        
++ Alan Turing | Whenever                                                        
++   PROJ-3 o Story                                        o Triage  02 Mar 16:00
+| Investigate the onboarding wizard                                             
++ Ada Lovelace | Urgent                                                         
++   PROJ-4 o Defect                                     ~ Building  02 Mar 18:00
+| Document CSV import                                                           
++ Normal                                                                        
++   PROJ-5 o Chore                                       x Shipped  02 Mar 20:00
+| Retire the audit trail                                                        
++ Alan Turing | Whenever                                                        
++   PROJ-6 o Story                                        o Triage  02 Mar 22:00
+| Speed up session expiry                                                       
++ Ada Lovelace | Urgent                                                         

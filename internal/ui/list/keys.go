@@ -4,6 +4,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 )
 
 var _ kernel.KeyReporter = (*Model)(nil)
@@ -30,6 +31,7 @@ type keyMap struct {
 	// in. Save moved off "s" to make room for it.
 	Sort   kernel.Binding
 	Save   kernel.Binding
+	Look   kernel.Binding
 	Accept kernel.Binding
 	Clear  kernel.Binding
 	// Unfilter takes an accepted filter off from the browsing state. esc reaches
@@ -74,6 +76,7 @@ func defaultKeys() keyMap {
 		Edit:       kernel.Bind([]string{"e"}, "e", "edit this search"),
 		Sort:       kernel.Bind([]string{"s"}, "s", "sort"),
 		Save:       kernel.Bind([]string{"S"}, "S", "save this query to a key"),
+		Look:       card.Binding,
 		Accept:     kernel.Bind([]string{"enter"}, "enter", "keep filter"),
 		Clear:      kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "clear filter"),
 		Unfilter:   kernel.Bind([]string{"ctrl+g", "esc"}, "ctrl+g", "clear everything narrowing these rows"),
@@ -105,12 +108,12 @@ func (k keyMap) keySet() kernel.KeySet { return k.browsing(false) }
 func (k keyMap) browsing(narrowed bool) kernel.KeySet {
 	all, search := kernel.Terse(k.All, "all"), kernel.Terse(k.Edit, "search")
 	sort, save := kernel.Terse(k.Sort, "sort"), kernel.Terse(k.Save, "save")
-	by := kernel.Terse(k.FilterBy, "filter by")
-	acts := []kernel.Binding{k.Open, by, k.Filter, all, search, sort, save}
-	actions := append([]kernel.Binding{k.Open, k.FilterBy, k.Filter, k.All, k.Edit, k.Sort, k.Save}, issue.ShareBindings...)
+	by, look := kernel.Terse(k.FilterBy, "filter by"), kernel.Terse(k.Look, "look")
+	acts := []kernel.Binding{k.Open, by, k.Filter, all, search, sort, save, look}
+	actions := append([]kernel.Binding{k.Open, k.FilterBy, k.Filter, k.All, k.Edit, k.Sort, k.Save, k.Look}, issue.ShareBindings...)
 	if narrowed {
-		acts = []kernel.Binding{k.Open, by, k.Filter, kernel.Terse(k.Unfilter, "clear"), all, search, sort, save}
-		actions = append([]kernel.Binding{k.Open, k.FilterBy, k.Filter, k.Unfilter, k.All, k.Edit, k.Sort, k.Save}, issue.ShareBindings...)
+		acts = []kernel.Binding{k.Open, by, k.Filter, kernel.Terse(k.Unfilter, "clear"), all, search, sort, save, look}
+		actions = append([]kernel.Binding{k.Open, k.FilterBy, k.Filter, k.Unfilter, k.All, k.Edit, k.Sort, k.Save, k.Look}, issue.ShareBindings...)
 	}
 	return kernel.KeySet{
 		Acts: acts,
@@ -216,6 +219,7 @@ const (
 	actEdit
 	actSort
 	actSave
+	actLook
 	actAccept
 	actClear
 	actRun
@@ -240,6 +244,7 @@ func (k keyMap) tables() (normal, filtering, asking, sorting map[string]action) 
 		binding{k.FilterBy, actFilterBy}, binding{k.Unfilter, actClear},
 		binding{k.All, actAll}, binding{k.Edit, actEdit},
 		binding{k.Sort, actSort}, binding{k.Save, actSave},
+		binding{k.Look, actLook},
 	)
 	filtering = table(binding{k.Accept, actAccept}, binding{k.Clear, actClear})
 	asking = table(binding{k.Run, actRun}, binding{k.Keep, actKeep})

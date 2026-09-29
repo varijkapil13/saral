@@ -7,6 +7,13 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+### Added
+
+- The issue list draws each issue as a card, roomy by default, with its priority, due date,
+  subtasks, labels and fix versions as well as what a row shows. `V` cycles roomy, compact and lines,
+  and the choice is kept on this machine. Clicking a card's type, status or assignee still filters by
+  it.
+
 ## [0.8.0] - 2026-09-29
 
 ### Added

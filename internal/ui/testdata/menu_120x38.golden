@@ -70,6 +70,7 @@ list
 │ e      edit this search                      │
 │ s      sort                                  │
 │ S      save this query to a key              │
+│ V      roomy / compact / lines               │
 └──────────────────────────────────────────────┘
 
 move

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -14,8 +15,10 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -41,7 +44,21 @@ func fullCaps() jira.Capabilities {
 	}
 }
 
+var linesOnce sync.Once
+
+// linesByDefault keeps this package's goldens and budgets on the one-line rows
+// they were written against: it writes the lines look to the ui.toml every
+// model here recalls at New. A test about another look sends card.LookMsg.
+func linesByDefault() {
+	linesOnce.Do(func() {
+		if err := config.SaveLook(card.Lines.Word()); err != nil {
+			panic(err)
+		}
+	})
+}
+
 func testDeps(client jira.Client) kernel.Deps {
+	linesByDefault()
 	return kernel.Deps{
 		Jira:    client,
 		Caps:    fullCaps(),

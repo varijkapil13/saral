@@ -1,6 +1,6 @@
  saral | Commands                                                                          PROJ | example.atlassian.net 
 > what do you want to do?                                                                                               
------------------------------------------------------------------------------------------------------------- 37 commands
+------------------------------------------------------------------------------------------------------------ 38 commands
   Go to                                                                                                                 
 > Issues                                        Go to                                                                 g1
   Switch view                                   Go to                                                              g 1-9
@@ -20,11 +20,11 @@
   Unassigned issues                             Search                                                                  
   Session                                                                                                               
   Switch project                                Session                                                                 
+  Appearance                                                                                                            
+  Cycle the row look: roomy cards, compact ...  Appearance                                                             V
   Comments                                                                                                              
   Delete the comment you are on                 Comments                                                               d
   Edit the comment you are on                   Comments                                                               e
   Write a comment                               Comments                                                               a
   Issue                                                                                                                 
-  Assign to me                                  Issue                                                                   
-  Assign to…                                    Issue                                                                  @
  Issues  enter run it  esc close                                                                                  ctrl+k
