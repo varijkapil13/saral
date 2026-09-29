@@ -254,15 +254,15 @@ bare_tools "$ws/bare"
 signed="$ws/signed"
 mkdir -p "$signed"
 cp "$release"/*.tar.gz "$release/checksums.txt" "$signed/"
-echo dummy-signature >"$signed/checksums.txt.sig"
-echo dummy-certificate >"$signed/checksums.txt.pem"
+echo dummy-bundle >"$signed/checksums.txt.sigstore.json"
 
 stub_cosign_ok="$ws/stub-cosign-ok"
 mkdir -p "$stub_cosign_ok"
 bare_tools "$stub_cosign_ok"
 cat >"$stub_cosign_ok/cosign" <<'EOF'
 #!/bin/sh
-[ "$1" = verify-blob ]
+[ "$1" = verify-blob ] || exit 1
+[ "$2" = --bundle ] && [ -s "$3" ]
 EOF
 chmod 0755 "$stub_cosign_ok/cosign"
 

@@ -95,11 +95,9 @@ sha256_of() {
 verify_signature() {
 	checksums=$1
 	if command -v cosign >/dev/null 2>&1; then
-		if fetch "$download_base/checksums.txt.sig" "$tmp/checksums.txt.sig" 2>/dev/null &&
-			fetch "$download_base/checksums.txt.pem" "$tmp/checksums.txt.pem" 2>/dev/null; then
+		if fetch "$download_base/checksums.txt.sigstore.json" "$tmp/checksums.txt.sigstore.json" 2>/dev/null; then
 			cosign verify-blob \
-				--certificate "$tmp/checksums.txt.pem" \
-				--signature "$tmp/checksums.txt.sig" \
+				--bundle "$tmp/checksums.txt.sigstore.json" \
 				--certificate-identity-regexp "^https://github.com/$REPO/" \
 				--certificate-oidc-issuer https://token.actions.githubusercontent.com \
 				"$checksums" >/dev/null 2>&1 ||
@@ -107,7 +105,7 @@ verify_signature() {
 			say "$BIN: checksums.txt signature verified with cosign"
 			return
 		fi
-		warn 'cosign is installed, but this release has no checksums.txt.sig/.pem to verify against'
+		warn 'cosign is installed, but this release has no checksums.txt.sigstore.json to verify against'
 	fi
 	if command -v gh >/dev/null 2>&1; then
 		if gh attestation verify "$tmp/$archive" --repo "$REPO" >/dev/null 2>&1; then
