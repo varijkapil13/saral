@@ -1212,7 +1212,7 @@ A review of the whole tree at `36e3ecf`, turned into packets that each own a set
 as one PR. The packets have no GitHub issues; each links the PR that closed it, and the PR
 description is the record of what was fixed, what was skipped and why. Wave 1 had no dependencies,
 wave 2 consumed wave 1's symbols, wave 3 built features on both, and wave 4 is this documentation
-pass. What changed for users is in [`CHANGELOG.md`](../CHANGELOG.md) under *Unreleased*.
+pass. What changed for users is in [`CHANGELOG.md`](../CHANGELOG.md) under *0.7.0*.
 
 Wave 1 — the adapter, the store and shared helpers:
 
