@@ -92,6 +92,10 @@ type Model struct {
 	// qfOn is which of quickFilters are toggled on, keyed by QuickFilter.ID.
 	qfOn          map[int64]bool
 	pendingFilter bool
+	qfGen         int
+	// qfWait holds the first card read back until the quick filters answer,
+	// because a filter recalled by id has no JQL until then.
+	qfWait bool
 
 	// terms is this program's own narrowing — a person, a status, a type, a
 	// priority or a label — applied locally against what is already loaded; see
@@ -214,7 +218,10 @@ type Model struct {
 	failure  error
 	failStep step
 	missing  []string
-	checked  time.Time
+	// next is a revalidating walk's cards, gathered off screen and put in force
+	// whole once its last page arrives.
+	next    *walk
+	checked time.Time
 	// stale marks the board on screen as older than it should be: it came off
 	// disk past its TTL, or a revalidation that would have replaced it failed.
 	stale bool
@@ -568,6 +575,15 @@ func (m *Model) stop() {
 	}
 	m.loading = false
 	m.step = stepIdle
+	m.next = nil
+}
+
+// abandon lets go of every read for the board being left, so no answer to one
+// can land on the board that replaces it.
+func (m *Model) abandon() {
+	m.stop()
+	m.gen++
+	m.stopQuickFilters()
 }
 
 func (m *Model) beginMove() (ctx context.Context, gen int) {
@@ -615,6 +631,8 @@ func (m *Model) stopQuickFilters() {
 		m.qfCancel()
 		m.qfCancel = nil
 	}
+	m.qfGen++
+	m.qfWait = false
 }
 
 // reply puts this board's address on a command, so what it asked for comes back
@@ -648,7 +666,7 @@ func (m *Model) loadConfig() tea.Cmd {
 func (m *Model) loadCards() tea.Cmd { return m.readCards(true) }
 
 func (m *Model) readCards(probe bool) tea.Cmd {
-	if m.deps.Jira == nil || m.search == nil || !m.ready {
+	if m.deps.Jira == nil || m.search == nil || !m.ready || m.qfWait {
 		return nil
 	}
 	q := cardsQuery{
@@ -663,10 +681,10 @@ func (m *Model) readCards(probe bool) tea.Cmd {
 	return m.reply(cards(ctx, m.deps.Jira, m.search, q, gen))
 }
 
-// loadQuickFilters reads the board's own quick filters, alongside cards and
-// under the same generation, but with its own context: it is not one of the
-// three questions begin cancels the others over, because it can fail or run
-// long without the cards it draws beside being any less answered.
+// loadQuickFilters reads the board's own quick filters, alongside cards but
+// with its own context and generation: it is not one of the three questions
+// begin cancels the others over, because it can fail or run long without the
+// cards it draws beside being any less answered.
 func (m *Model) loadQuickFilters() tea.Cmd {
 	m.stopQuickFilters()
 	if m.deps.Jira == nil || m.at < 0 || m.at >= len(m.all) {
@@ -674,7 +692,7 @@ func (m *Model) loadQuickFilters() tea.Cmd {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.qfCancel = cancel
-	return kernel.Reply(withCancel(cancel, quickFiltersCmd(ctx, m.deps.Jira, m.all[m.at].ID, m.gen)), m.addr)
+	return kernel.Reply(withCancel(cancel, quickFiltersCmd(ctx, m.deps.Jira, m.all[m.at].ID, m.qfGen)), m.addr)
 }
 
 // refresh re-reads what is on screen. Purging re-reads the board's shape as
@@ -718,6 +736,7 @@ func (m *Model) reproject(project string) tea.Cmd {
 	m.deps.Project = project
 	var said tea.Cmd
 	m.terms, said = filterbar.Reproject(m.deps, ViewID, was, m.terms)
+	m.abandon()
 	m.stopMove()
 	m.dropRank()
 	m.letGoOfBoard()
@@ -800,16 +819,24 @@ func (m *Model) tookConfig(msg configMsg) tea.Cmd {
 	if msg.cfg.BoardID != m.plan.boardID {
 		m.forgetSprints()
 	}
+	same := msg.cfg.BoardID == m.plan.boardID && m.ready
+	_, recalled := m.recallQuickFilterIDs()
+	wait := recalled && (!same || len(m.quickFilters) == 0 || m.qfWait)
 	m.plan, m.ready, m.stale = newPlan(msg.cfg), true, false
-	m.quickFilters, m.qfOn = nil, nil
+	if !same {
+		m.quickFilters, m.qfOn = nil, nil
+	}
 	m.card = nil
 	m.place()
 	m.forget()
 	said := m.rememberLastBoard(msg.cfg.BoardID)
-	// loadCards first: it is what bumps the generation loadQuickFilters reads,
-	// so a quick filter answer for the board being left cannot be read as one
-	// for the board just opened.
-	return tea.Batch(said, m.loadCards(), m.loadQuickFilters())
+	qf := m.loadQuickFilters()
+	if wait && qf != nil {
+		m.qfWait = true
+		m.loading, m.step = true, stepIssues
+		return tea.Batch(said, qf)
+	}
+	return tea.Batch(said, m.loadCards(), qf)
 }
 
 // rememberLastBoard writes which board this project is drawing, so a session
@@ -829,12 +856,19 @@ func (m *Model) rememberLastBoard(boardID int64) tea.Cmd {
 // pagePut is run off the update loop. A cache that keeps no pages is written
 // whole, on the first page and at the end of the walk only.
 func (m *Model) pagePut(items []jira.Issue, first bool) func() error {
+	return m.putShape(items, first, walk{
+		issues: m.issues, more: m.more,
+		sprints: m.sprints, sprint: m.sprint, noSprints: m.noSprints,
+	})
+}
+
+func (m *Model) putShape(items []jira.Issue, first bool, w walk) func() error {
 	if !m.ready {
 		return nil
 	}
 	snap := app.BoardSnapshot{
-		Config: m.rawConfig, QuickFilters: slices.Clone(m.quickFilters), More: m.more,
-		Sprints: slices.Clone(m.sprints), Sprint: m.sprint.ID, NoSprints: m.noSprints,
+		Config: m.rawConfig, QuickFilters: slices.Clone(m.quickFilters), More: w.more,
+		Sprints: slices.Clone(w.sprints), Sprint: w.sprint.ID, NoSprints: w.noSprints,
 	}
 	boardID := m.plan.boardID
 	if paged, ok := m.cache.(app.BoardPageCache); ok && paged != nil {
@@ -842,19 +876,65 @@ func (m *Model) pagePut(items []jira.Issue, first bool) func() error {
 		return m.writes.put(m.gen, first, func() error { return paged.PutBoardPage(boardID, snap, first) })
 	}
 	held, ok := m.boardCache()
-	if !ok || (!first && m.more) {
+	if !ok || (!first && w.more) {
 		return nil
 	}
-	snap.Issues = slices.Clone(m.issues)
+	snap.Issues = slices.Clone(w.issues)
 	return m.writes.put(m.gen, true, func() error { return held.PutBoard(boardID, snap) })
 }
 
+type walk struct {
+	issues    []jira.Issue
+	missing   []string
+	fields    []string
+	sprints   []jira.Sprint
+	sprint    jira.Sprint
+	noSprints bool
+	more      bool
+	// wrote are cards changed on screen while the walk was out, whose copy on
+	// screen is newer than one a page read before the change.
+	wrote map[string]bool
+}
+
+func (m *Model) wrote(key string) {
+	if m.next == nil {
+		return
+	}
+	if m.next.wrote == nil {
+		m.next.wrote = make(map[string]bool)
+	}
+	m.next.wrote[key] = true
+}
+
+// tookIssues fills an empty board page by page, so its first paint is the
+// first page. A board already showing cards is revalidated instead: its pages
+// are gathered in next and swapped in whole, so no column shrinks to page one
+// and refills while the reader is looking at it.
 func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
-	under := m.selectedKey()
 	var said tea.Cmd
+	if msg.stored != nil {
+		said = kernel.Warn(storeFailed + msg.stored.Error())
+	}
+	if msg.first && len(m.issues) > 0 {
+		m.next = &walk{
+			missing: msg.missing, fields: msg.fields,
+			sprints: msg.sprints, sprint: msg.sprint, noSprints: msg.noSprints,
+		}
+	}
+	if w := m.next; w != nil {
+		w.issues = append(w.issues, msg.page.Items...)
+		w.more = msg.page.HasMore()
+		put := m.putShape(msg.page.Items, msg.first, *w)
+		if w.more {
+			m.loading, m.step = true, stepIssues
+			return tea.Batch(said, m.nextPage(msg, put))
+		}
+		return tea.Batch(said, m.swap(), stored(put))
+	}
+	under := m.selectedKey()
 	if msg.first {
 		m.loading, m.loaded, m.step = false, true, stepIdle
 		was := m.issues
@@ -862,13 +942,10 @@ func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
 		m.carryLanded(was)
 		m.sprints, m.sprint, m.noSprints, m.sprintsKnown = msg.sprints, msg.sprint, msg.noSprints, true
 		m.checked = m.now()
-		said = tea.Batch(m.saidMissing(), m.saidSprints())
+		said = tea.Batch(said, m.saidMissing(), m.saidSprints())
 	} else {
 		m.dropArrived(msg.page.Items)
 		m.issues = append(m.issues, msg.page.Items...)
-	}
-	if msg.stored != nil {
-		said = tea.Batch(said, kernel.Warn(storeFailed+msg.stored.Error()))
 	}
 	m.more, m.stale = msg.page.HasMore(), false
 	m.place()
@@ -878,22 +955,105 @@ func (m *Model) tookIssues(msg issuesMsg) tea.Cmd {
 	if !m.more {
 		return tea.Batch(said, stored(put))
 	}
-	// Each page is a read of its own, under the generation the first one opened:
-	// withCancel released the context that read used the moment it answered, so
-	// the next page cannot reuse it, and a fresh one lets stop() cancel a walk
-	// still in flight the way it cancels any read. begin is not called for it,
-	// because begin marks the board loading and a board that has drawn its
-	// first page must not swap those cards for a spinner to fetch the next.
+	return tea.Batch(said, m.nextPage(msg, put))
+}
+
+// nextPage asks for the page after msg's under the generation the first one
+// opened: withCancel released the context that read used the moment it
+// answered, so the next page cannot reuse it, and a fresh one lets stop()
+// cancel a walk still in flight the way it cancels any read. begin is not
+// called for it, because begin would drop the walk it is continuing.
+func (m *Model) nextPage(msg issuesMsg, put func() error) tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	return tea.Batch(said, m.reply(moreCards(ctx, msg.page, msg.gen, put)))
+	return m.reply(moreCards(ctx, msg.page, msg.gen, put))
+}
+
+// swap puts a finished revalidation in force in one step, and puts the reader
+// back where they were: on the same card, or on the one that took its row in
+// the same column, with each column still opening on the card it opened on.
+func (m *Model) swap() tea.Cmd {
+	w := m.next
+	m.next = nil
+	at := m.anchor()
+	was := m.issues
+	for i := range w.issues {
+		if !w.wrote[w.issues[i].Key] {
+			continue
+		}
+		if live := m.indexOf(w.issues[i].Key); live >= 0 {
+			w.issues[i] = was[live]
+		}
+	}
+	m.issues, m.missing, m.fields = w.issues, w.missing, w.fields
+	m.carryLanded(was)
+	m.sprints, m.sprint, m.noSprints, m.sprintsKnown = w.sprints, w.sprint, w.noSprints, true
+	m.more, m.stale, m.checked = w.more, false, m.now()
+	m.loading, m.loaded, m.step = false, true, stepIdle
+	m.place()
+	m.forget()
+	m.returnTo(at)
+	return tea.Batch(m.saidMissing(), m.saidSprints())
+}
+
+type spot struct {
+	key      string
+	col, row int
+	tops     []string
+	offsets  []int
+}
+
+func (m *Model) anchor() spot {
+	at := spot{key: m.selectedKey(), col: m.curCol, row: m.curRow, offsets: slices.Clone(m.rowTop)}
+	at.tops = make([]string, len(m.rowTop))
+	for c, top := range m.rowTop {
+		if iss := m.issueAt(c, top); iss != nil {
+			at.tops[c] = iss.Key
+		}
+	}
+	return at
+}
+
+func (m *Model) returnTo(at spot) {
+	for c := range m.rowTop {
+		if c < len(at.offsets) {
+			m.rowTop[c] = at.offsets[c]
+		}
+		if c < len(at.tops) && at.tops[c] != "" {
+			if row := m.rowOf(c, at.tops[c]); row >= 0 {
+				m.rowTop[c] = row
+			}
+		}
+	}
+	m.curCol, m.curRow = at.col, at.row
+	if at.key != "" {
+		for col := range m.cols {
+			if row := m.rowOf(col, at.key); row >= 0 {
+				m.curCol, m.curRow = col, row
+				break
+			}
+		}
+	}
+	m.clamp()
+}
+
+func (m *Model) rowOf(col int, key string) int {
+	return slices.IndexFunc(m.cols[col], func(at int) bool { return m.issues[at].Key == key })
 }
 
 // moreFailed keeps the board that is on screen. The pages that arrived are
 // real cards, and more stays true so the count keeps saying there are others.
+// A revalidation that breaks off drops what it gathered and badges the cards
+// it would have replaced.
 func (m *Model) moreFailed(msg moreFailedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
+	}
+	if m.next != nil {
+		m.next = nil
+		m.loading, m.step, m.stale = false, stepIdle, true
+		m.forget()
+		return kernel.Warn("this board could not be read again, so it shows what was read before: " + msg.err.Error())
 	}
 	return kernel.Warn("the rest of this board did not load, so the count is short: " + msg.err.Error())
 }
@@ -933,6 +1093,7 @@ func (m *Model) nextBoard() tea.Cmd {
 		return nil
 	}
 	m.at = (m.at + 1) % len(m.all)
+	m.abandon()
 	m.stopMove()
 	m.dropRank()
 	m.letGoOfBoard()
@@ -1263,6 +1424,7 @@ func (m *Model) moved(msg movedMsg) tea.Cmd {
 		return said
 	}
 	iss.Status = msg.status
+	m.wrote(msg.key)
 	m.place()
 	m.forget()
 	m.restore(msg.key)
@@ -1290,6 +1452,7 @@ func (m *Model) reread(msg rereadMsg) tea.Cmd {
 	}
 	under := m.selectedKey()
 	m.issues[at] = msg.issue
+	m.wrote(msg.key)
 	m.place()
 	m.forget()
 	m.restore(under)
@@ -1335,6 +1498,7 @@ func (m *Model) revalidated(msg revalidatedMsg) tea.Cmd {
 	}
 	under := m.selectedKey()
 	m.issues[at] = msg.issue
+	m.wrote(msg.key)
 	m.place()
 	m.forget()
 	m.restore(under)

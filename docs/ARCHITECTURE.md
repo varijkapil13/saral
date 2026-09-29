@@ -671,6 +671,24 @@ have gone stale from a write made in the detail pane itself, for skipping the fe
 next keystroke landing on data nobody re-checked — so it always asks again once it is on screen, and
 what the cache buys it is the frame before that answer, not a skipped round trip.
 
+The board is read a page at a time (100 cards), so step 3 needs more than a patch there. A walk that
+starts from nothing on screen (a first visit or a board switch with no snapshot, a sprint switch)
+fills in page by page, so the first paint is the first page. A walk that starts while cards are on
+screen, which covers `r`, coming back to the board after its TTL, a stale snapshot's revalidation
+and a quick filter toggled on, is gathered off screen in `Model.next` and swapped in whole when its
+last page lands. Until then the old cards stay drawn, still badged if they had aged. At the swap
+the cursor goes back to its card by key, or to the card now in its old row of the same column when
+that card has gone. Each column opens on the card it opened on if that card is still in it, and
+otherwise keeps its old offset, clamped. Picks are pruned only against the swapped-in set. A card
+moved, re-read or bulk-changed while the walk was out keeps its on-screen copy, which is newer than
+the page that read it. A walk that breaks off keeps the old cards and badges them, and a walk
+superseded by a newer read drops what it had gathered. The pages still reach the cache one at a
+time as they arrive (`app.BoardPageCache` below). A session that dies mid-walk leaves a snapshot
+marked `More`, which the next open reads again, as it did before. The board's quick filters stay in
+force across a revalidation of the same board's configuration. A board opened with no snapshot
+while a quick filter is recalled reads its quick filters before its cards, because a recalled
+filter is an id whose JQL only that list holds, and so no page read without the filter is drawn.
+
 TTLs by kind, from `Kind.TTL()`: fields and createmeta 24h, board config and the capability probe 1h,
 versions 10m, a project's sprint list 1m, board and backlog 30s (a board or a backlog is a search in a column layout, and the
 cards move at a search's pace, not the configuration's), issue 60s, search 30s. All refreshable on

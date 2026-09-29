@@ -665,6 +665,7 @@ func (m *Model) bulkStepped(msg bulkStepMsg) tea.Cmd {
 				iss.Status = msg.status
 			}
 		}
+		m.wrote(msg.key)
 		put = stored(m.pagePut([]jira.Issue{*iss}, false))
 		under := m.selectedKey()
 		m.place()
