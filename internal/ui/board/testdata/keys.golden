@@ -62,3 +62,14 @@ a bulk change waiting for its go-ahead
 a bulk change running
   acts   ctrl+g stop
   full   [ctrl+g stop after the card in flight]
+a card asking which of its column's statuses it lands in
+  acts   enter move it · esc put it back
+  full   [↑/← previous status, ↓/→ next status]
+  full   [enter move it to this status, esc put it back, ctrl+g put it back]
+a picked set waiting for the statuses its column can take
+  acts   esc cancel
+  full   [esc cancel, ctrl+g cancel]
+a picked set asking which of its column's statuses it lands in
+  acts   enter take it · esc cancel
+  full   [↑/← previous status, ↓/→ next status]
+  full   [enter move them to this status, esc cancel, ctrl+g cancel]

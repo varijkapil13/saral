@@ -32,6 +32,9 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"+ asking for the label", keysAskingLabel},
 		{"a bulk change waiting for its go-ahead", keysConfirming},
 		{"a bulk change running", keysRunning},
+		{"a card asking which of its column's statuses it lands in", keysChoosing},
+		{"a picked set waiting for the statuses its column can take", keysAskingTargets},
+		{"a picked set asking which of its column's statuses it lands in", keysChoosingTarget},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the board has %d key states and this test names %d", keyStates, len(named))
@@ -84,6 +87,7 @@ func TestKeys_EveryAdvertisedActionIsOneTheStateAnswers(t *testing.T) {
 	t.Parallel()
 	browsing, holding, finding := defaultKeys().tables()
 	asking, confirming, running := defaultKeys().bulkTables()
+	choosing := table(defaultKeys().choiceEntries()...)
 	for name, tc := range map[string]struct {
 		set   kernel.KeySet
 		table map[string]action
@@ -98,6 +102,9 @@ func TestKeys_EveryAdvertisedActionIsOneTheStateAnswers(t *testing.T) {
 		"asking for a label":         {set: liveSets[keysAskingLabel], table: asking},
 		"waiting for the go-ahead":   {set: liveSets[keysConfirming], table: confirming},
 		"a bulk change running":      {set: liveSets[keysRunning], table: running},
+		"choosing a status":          {set: liveSets[keysChoosing], table: choosing},
+		"waiting for the statuses":   {set: liveSets[keysAskingTargets], table: choosing},
+		"choosing a set's status":    {set: liveSets[keysChoosingTarget], table: choosing},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -150,6 +157,7 @@ func TestKeys_NoStrokeMeansTwoThingsInOneState(t *testing.T) {
 	for name, entries := range map[string][]binding{
 		"looking at the board": browsing, "a card in hand": holding, "/ taking a search": finding,
 		"asking": asking, "confirming": confirming, "running": running,
+		"choosing a status": defaultKeys().choiceEntries(),
 	} {
 		seen := map[string]action{}
 		for _, e := range entries {

@@ -152,15 +152,12 @@ func TestBoard_TheTransitionChosenIsTheOneWhoseTargetStatusTheColumnMaps(t *test
 	}
 	// Two moves land on statuses whose display name is the column's, and only
 	// one of them lands on the status id the column actually maps.
-	tr, found := dr.m.moveInto([]jira.Transition{
+	into := dr.m.movesInto([]jira.Transition{
 		{ID: "tr-a", Name: "Under way", To: jira.Status{ID: "10202", Name: "Under way"}},
 		{ID: "tr-b", Name: "Start", To: jira.Status{ID: "10204", Name: "Building"}},
 	}, 1)
-	if !found {
-		t.Fatal("no transition was found for a column one of them lands in")
-	}
-	if tr.ID != "tr-b" {
-		t.Errorf("chose %q, want the move onto status 10204, which is the id the column maps", tr.ID)
+	if len(into) != 1 || into[0].ID != "tr-b" {
+		t.Errorf("found %+v, want only the move onto status 10204, which is the id the column maps", into)
 	}
 }
 

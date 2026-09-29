@@ -33,6 +33,7 @@ type bulkStage uint8
 const (
 	stageAskPerson bulkStage = iota
 	stageAskLabel
+	stageAskStatus
 	stageConfirm
 	stageRunning
 )
@@ -49,6 +50,13 @@ type bulk struct {
 	col   int
 	name  string
 	label string
+	// status is the one of the column's statuses every card is to land in, by
+	// id, when the column maps several; empty takes each card's first move into
+	// the column.
+	status     string
+	statusName string
+	choices    []jira.Transition
+	labels     []string
 
 	input     textinput.Model
 	found     []jira.User
@@ -80,6 +88,11 @@ func (b *bulk) keyState() keyState {
 		return keysAskingPerson
 	case stageAskLabel:
 		return keysAskingLabel
+	case stageAskStatus:
+		if b.searching {
+			return keysAskingTargets
+		}
+		return keysChoosingTarget
 	case stageConfirm:
 		return keysConfirming
 	case stageRunning:
@@ -118,10 +131,12 @@ type bulkStepMsg struct {
 }
 
 // errNoMove is a card no workflow move takes into the column the set is going
-// to; errScreen is one whose move needs a field only the issue pane can fill.
+// to; errScreen is one whose move needs a field only the issue pane can fill;
+// errNoMoveTo is one with no move to the status the set was sent to.
 var (
-	errNoMove = errors.New("no workflow move takes it into that column")
-	errScreen = errors.New("its move needs a field filled in, which the issue pane asks for")
+	errNoMove   = errors.New("no workflow move takes it into that column")
+	errScreen   = errors.New("its move needs a field filled in, which the issue pane asks for")
+	errNoMoveTo = errors.New("no workflow move takes it to that status")
 )
 
 // --- picking ------------------------------------------------------------------
@@ -331,7 +346,10 @@ func (m *Model) dropSet() tea.Cmd {
 	}
 	m.bulk = &bulk{kind: bulkMoveTo, stage: stageConfirm, keys: keys, col: target, name: m.plan.columns[target].name}
 	m.forget()
-	return nil
+	if len(m.plan.columns[target].statuses) < 2 || m.deps.Jira == nil {
+		return nil
+	}
+	return m.askTarget(m.bulk)
 }
 
 // --- answering the questions --------------------------------------------------
@@ -347,6 +365,8 @@ func (m *Model) bulkKey(msg tea.KeyPressMsg) tea.Cmd {
 			return kernel.Status("stopping once the card in flight has answered")
 		}
 		return nil
+	case stageAskStatus:
+		return m.chooseTarget(stroke)
 	case stageConfirm:
 		switch m.inSure[stroke] {
 		case actRun:
@@ -445,7 +465,7 @@ func (m *Model) answer() tea.Cmd {
 			return kernel.Warn("a label cannot contain a space")
 		}
 		b.label = label
-	case stageConfirm, stageRunning:
+	case stageAskStatus, stageConfirm, stageRunning:
 		return nil
 	}
 	b.stopAsking()
@@ -485,7 +505,7 @@ func (b *bulk) what(n int) string {
 		}
 		return "assign " + countCards(n) + " to " + personName(b.who)
 	case bulkMoveTo:
-		return "move " + countCards(n) + " to " + widget.Sanitize(b.name)
+		return "move " + countCards(n) + " to " + widget.Sanitize(b.name) + b.as()
 	case bulkLabel:
 		return "add the label " + b.label + " to " + countCards(n)
 	}
@@ -500,11 +520,18 @@ func (b *bulk) done(n int) string {
 		}
 		return "assigned " + countCards(n) + " to " + personName(b.who)
 	case bulkMoveTo:
-		return "moved " + countCards(n) + " to " + widget.Sanitize(b.name)
+		return "moved " + countCards(n) + " to " + widget.Sanitize(b.name) + b.as()
 	case bulkLabel:
 		return "added the label " + b.label + " to " + countCards(n)
 	}
 	return ""
+}
+
+func (b *bulk) as() string {
+	if b.statusName == "" {
+		return ""
+	}
+	return " as " + b.statusName
 }
 
 // --- running ------------------------------------------------------------------
@@ -543,7 +570,9 @@ func (m *Model) bulkNext() tea.Cmd {
 		b.runGen++
 		ctx, cancel := context.WithCancel(context.Background())
 		b.runStop = cancel
-		step := bulkJob{kind: b.kind, who: b.who.AccountID, col: b.col, label: b.label, plan: m.plan, issue: *iss}
+		step := bulkJob{
+			kind: b.kind, who: b.who.AccountID, col: b.col, status: b.status, label: b.label, plan: m.plan, issue: *iss,
+		}
 		return kernel.Reply(withCancel(cancel, step.run(ctx, m.deps.Jira, b.runGen)), m.addr)
 	}
 	return m.endBulk()
@@ -552,12 +581,13 @@ func (m *Model) bulkNext() tea.Cmd {
 // bulkJob is what one card's step needs, copied off the model so that the
 // command running it reads nothing the update loop writes.
 type bulkJob struct {
-	kind  bulkKind
-	who   string
-	col   int
-	label string
-	plan  plan
-	issue jira.Issue
+	kind   bulkKind
+	who    string
+	col    int
+	status string
+	label  string
+	plan   plan
+	issue  jira.Issue
 }
 
 func (j bulkJob) run(ctx context.Context, client jira.SessionClient, gen int) tea.Cmd {
@@ -586,6 +616,9 @@ func (j bulkJob) transition(ctx context.Context, mover jira.Mover) (jira.Status,
 		if at, mapped := j.plan.columnOf(tr.To.ID); !mapped || at != j.col {
 			continue
 		}
+		if j.status != "" && tr.To.ID != j.status {
+			continue
+		}
 		if needsScreen(tr) {
 			return jira.Status{}, false, errScreen
 		}
@@ -593,6 +626,9 @@ func (j bulkJob) transition(ctx context.Context, mover jira.Mover) (jira.Status,
 			return jira.Status{}, false, err
 		}
 		return tr.To, true, nil
+	}
+	if j.status != "" {
+		return jira.Status{}, false, errNoMoveTo
 	}
 	return jira.Status{}, false, errNoMove
 }
@@ -750,6 +786,8 @@ func (m *Model) bulkPrompt() string {
 		return m.twoCells(left, right+"  ", m.styles.aimed, m.styles.muted)
 	case stageAskLabel:
 		return padCells(m.styles.aimed.Render("  add a label to "+countCards(n)+": ")+b.input.View(), m.width, ell)
+	case stageAskStatus:
+		return m.targetPrompt()
 	case stageConfirm:
 		hint := keys.Run.Help().Key + " go ahead · " + keys.Decline.Help().Key + " leave them as they are  "
 		return m.twoCells("  "+b.what(n)+"?", hint, m.styles.aimed, m.styles.muted)

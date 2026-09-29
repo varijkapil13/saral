@@ -33,7 +33,7 @@ func transitionInto(t *testing.T, dr *driver, f jira.Mover, key string, col int)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, found := dr.m.moveInto(moves, col); !found {
+	if len(dr.m.movesInto(moves, col)) == 0 {
 		t.Fatalf("no transition takes %s into column %d", key, col)
 	}
 	return moves

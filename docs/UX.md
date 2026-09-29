@@ -733,6 +733,16 @@ card, and so does a backlog sorted by a field of its own: a rank there would not
 **`H` and `L` are `m`, an arrow and `enter` in one stroke.** They go through the same transition
 read, so a move whose screen needs a field opens the issue pane on that move exactly as a drop does.
 
+**A column holding several statuses asks which.** A board may map *Done* and another closing status
+into one column, and then more than one transition lands a card there. Every way of landing a card —
+`m` and `enter`, a drag, a click on a column, `H`/`L`, the palette — reads the card's moves first; one
+into the column is taken as before, and several keep the card in hand while the prompt line lists
+them in the order the site offered, the first chosen. Each is named by the status it lands in, with
+the transition's own name beside it when that differs or two share a status name. `←`/`→` (and `↑`/`↓`,
+`h`/`l`, `j`/`k`) move along them, `enter` or a click takes one, and `esc` or `ctrl+g` puts the card
+back. The one taken goes on as a single move would: to the issue pane when it needs a screen, straight
+to the site otherwise. A move is always matched by transition id, never by a name.
+
 **`M` is a term, not a mode.** It puts the account this session is signed in as in force as the only
 assignee — replacing any other person already there and leaving the other facets alone — so the chip
 bar names it, `ctrl+g` clears it and a second `M` takes it off. The account is asked for once, the
@@ -767,7 +777,8 @@ and on a Scrum board the sprint on screen, which the form's heading names. The f
 it made back to the view that opened it. The site creates every issue in the backlog, so the board
 moves it into the sprint on screen, then through the workflow move into the column when it was created
 in another one — or into the issue pane when that move needs a field, as a drop does — and reads it
-back. A column no move reaches is said so, with where the issue is instead. A refusal at any step says
+back. A column holding several statuses is not asked about here yet: the first move the site offers
+into it is taken. A column no move reaches is said so, with where the issue is instead. A refusal at any step says
 how far the issue got. The backlog does the same for a sprint section and nothing for its own. The
 site's index trails a create by seconds, so a re-read that has not caught up does not take the new
 card off again.
@@ -776,8 +787,10 @@ card off again.
 the cursor and steps on, `v` picks the whole column (or lets it go when it is all picked already), and
 `x` or `esc` lets every pick go. `@` asks who: nothing typed offers this session's account and nobody,
 anything typed is asked of the site. `+` asks for a label, which cannot contain a space. `m` with
-cards picked takes them all in hand, aimed with the same `h`/`l`. Each ends on a named confirmation —
-*assign 3 cards to Grace Hopper?* — that only `enter` or `y` runs. The run shows how far it has got,
+cards picked takes them all in hand, aimed with the same `h`/`l`; landing them on a column that holds
+several statuses reads the first card's moves and asks once which status, by name, and every card then
+takes its own transition to that status. Each ends on a named confirmation —
+*assign 3 cards to Grace Hopper?*, *move 3 cards to Done as Won't Do?* — that only `enter` or `y` runs. The run shows how far it has got,
 refuses every other key, and `ctrl+g` stops it after the card in flight. A move reads each card's own
 transitions, so a card whose workflow does not reach the column, or whose move needs a field, is
 reported rather than guessed at. An assignee is saved against the one the card was read with, so a
