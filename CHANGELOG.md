@@ -7,6 +7,8 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-29
+
 ### Changed: read these before upgrading
 
 - **Icons default to plain unicode.** Nerd Font icons are now opt-in: set `glyphs = "nerd"` in your
@@ -204,7 +206,8 @@ transitions, comments with markdown ⇄ ADF, attachments with inline image previ
 backlog, sprints, releases with the unresolved-issue decision, the cross-project move wizard, the
 timeline, plans, the command palette, full mouse support and cache-first paint.
 
-[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/varijkapil13/saral/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/varijkapil13/saral/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/varijkapil13/saral/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/varijkapil13/saral/compare/v0.4.5...v0.5.0
