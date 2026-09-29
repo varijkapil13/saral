@@ -91,10 +91,10 @@ func TestCards_ARoomyCardDrawsWhatItWasReadFor(t *testing.T) {
 	t.Parallel()
 	dr := lookDriver(t, testDeps(carded(t)), card.Roomy, 120, 40)
 	frame := dr.view()
-	mustContain(t, frame, "1/3", "01 Mar", "15 Jan 2027", "Story Points")
+	mustContain(t, frame, "1/3", "due 01 Mar", "due 15 Jan 2027", "Story Points")
 	mustNotContain(t, frame, "unassigned")
 	due, overdue := dr.m.dueText(jira.Date{Year: 2026, Month: time.March, Day: 1})
-	if due != "01 Mar" || !overdue {
+	if due != "due 01 Mar" || !overdue {
 		t.Errorf("a date four days gone reads %q, overdue %v", due, overdue)
 	}
 	if _, overdue := dr.m.dueText(jira.Date{Year: 2026, Month: time.March, Day: 5}); overdue {

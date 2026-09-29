@@ -153,8 +153,8 @@ func TestBudget_BacklogAMemoMissCostsOneCardAndNotAWindow(t *testing.T) {
 		bench             func(*testing.B)
 		ceiling, measured int64
 	}{
-		{"compact", BenchmarkBacklogWalkCards10k, 87, 79},
-		{"roomy", BenchmarkBacklogWalkRoomy10k, 131, 119},
+		{"compact", BenchmarkBacklogWalkCards10k, 88, 80},
+		{"roomy", BenchmarkBacklogWalkRoomy10k, 132, 120},
 	} {
 		res := testing.Benchmark(tc.bench)
 		got := res.AllocsPerOp()

@@ -845,8 +845,8 @@ roomy asks for nothing.
 
 **In the backlog** the sprint heads stay one line each, exactly as in the lines look, and the issues
 under them are cards as wide as the pane. The first line's right-hand side is the status and the
-issue's estimate, the number the head adds up, rather than when it changed. The due date is written
-`02 Jan`, with the year only when it is not this one, and is overdue once the site's own date has
+issue's estimate, the number the head adds up, rather than when it changed. The due date reads
+`due 02 Jan`, with the year only when it is not this one, and is overdue once the site's own date has
 passed it. The mark cell carries the pick, so there is no separate box. The card under the cursor is
 always drawn whole: page keys move about a screen of lines and land on a whole card, the wheel moves
 three lines and lands on the row there, and the lines left under the last card that fits stay blank.

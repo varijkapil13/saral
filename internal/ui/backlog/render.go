@@ -347,7 +347,7 @@ func (m *Model) dueText(due jira.Date) (string, bool) {
 	if day.Year() == today.Year() {
 		layout = "02 Jan"
 	}
-	return day.Format(layout), day.Before(today)
+	return "due " + day.Format(layout), day.Before(today)
 }
 
 func subtasksText(subtasks []jira.IssueRef) string {

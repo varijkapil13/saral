@@ -557,8 +557,8 @@ this table still measures it unchanged.
 |---|---|---|---|
 | `BenchmarkBacklogSteadyScrollCards10k` | 2,000 | 1 | 1 |
 | `BenchmarkBacklogSteadyScrollRoomy10k` | 1,500 | 1 | 1 |
-| `BenchmarkBacklogWalkCards10k` | 19,000 | 79 | 87 |
-| `BenchmarkBacklogWalkRoomy10k` | 24,000 | 119 | 131 |
+| `BenchmarkBacklogWalkCards10k` | 19,000 | 80 | 88 |
+| `BenchmarkBacklogWalkRoomy10k` | 24,000 | 120 | 132 |
 | `BenchmarkBacklogPickAndFrameCards` | 2,100 | 2 | 4 |
 | `BenchmarkBacklogRegroup10k` | 790,000 | 6,711 | 16 ms |
 
