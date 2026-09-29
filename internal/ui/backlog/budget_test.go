@@ -5,6 +5,8 @@ package backlog
 import (
 	"testing"
 	"time"
+
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 )
 
 // The budgets in docs/PERFORMANCE.md are about the binary that ships, so a
@@ -130,5 +132,57 @@ func TestBudget_BacklogRegroupingAfterAMoveIsOnTheKeystrokeBudget(t *testing.T) 
 	res := testing.Benchmark(BenchmarkBacklogRegroup10k)
 	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
 		t.Errorf("regrouping ten thousand issues took %s, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+}
+
+func TestBudget_BacklogScrollingOverCardsCostsTheFrameAlone(t *testing.T) {
+	for name, bench := range map[string]func(*testing.B){
+		"compact": BenchmarkBacklogSteadyScrollCards10k,
+		"roomy":   BenchmarkBacklogSteadyScrollRoomy10k,
+	} {
+		if got := testing.Benchmark(bench).AllocsPerOp(); got > 1 {
+			t.Errorf("a steady frame over %s cards allocates %d times, want the frame string alone", name, got)
+		}
+	}
+}
+
+// The ceilings are 1.1x what an M2 Pro measured when they were set.
+func TestBudget_BacklogAMemoMissCostsOneCardAndNotAWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		bench             func(*testing.B)
+		ceiling, measured int64
+	}{
+		{"compact", BenchmarkBacklogWalkCards10k, 87, 79},
+		{"roomy", BenchmarkBacklogWalkRoomy10k, 131, 119},
+	} {
+		res := testing.Benchmark(tc.bench)
+		got := res.AllocsPerOp()
+		t.Logf("a frame that renders one fresh %s card: %d allocations, ceiling %d", tc.name, got, tc.ceiling)
+		if got > tc.ceiling {
+			t.Errorf("a frame that renders a %s card it has never rendered allocates %d times, over the "+
+				"ceiling of %d; it measured %d when the ceiling was set", tc.name, got, tc.ceiling, tc.measured)
+		}
+		if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+			t.Errorf("keystroke to frame over %s cards took %s, want under the 16ms in docs/PERFORMANCE.md", tc.name, per)
+		}
+	}
+}
+
+func TestBudget_BacklogPickingACardCostsOneCardAndTheFrame(t *testing.T) {
+	got := testing.Benchmark(BenchmarkBacklogPickAndFrameCards).AllocsPerOp()
+	t.Logf("a pick over cards and the frame after it: %d allocations, ceiling 4", got)
+	if got > 4 {
+		t.Errorf("picking a card allocates %d times, over the ceiling of 4; it measured 2 when the ceiling was set", got)
+	}
+}
+
+func TestBudget_BacklogLineOffsetsReuseTheirSlice(t *testing.T) {
+	m := stockedIn(t, card.Roomy, 10000, 120, 40)
+	if len(m.lineAt) != len(m.rows)+1 {
+		t.Fatalf("%d offsets for %d rows", len(m.lineAt), len(m.rows))
+	}
+	if got := testing.AllocsPerRun(50, m.rebuildLines); got != 0 {
+		t.Errorf("rebuilding the offsets of %d rows allocates %.1f times, want none", len(m.rows), got)
 	}
 }

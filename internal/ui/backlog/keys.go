@@ -4,6 +4,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 )
 
 var _ kernel.KeyReporter = (*Model)(nil)
@@ -68,6 +69,7 @@ type keyMap struct {
 	FindCancel kernel.Binding
 	// Create opens the create form for the section under the cursor.
 	Create kernel.Binding
+	Look   kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -110,6 +112,7 @@ func defaultKeys() keyMap {
 		FindKeep:   kernel.Bind([]string{"enter"}, "enter", "keep this search"),
 		FindCancel: kernel.Bind([]string{"esc"}, "esc", "go back to where the search began"),
 		Create:     kernel.Bind([]string{"c"}, "c", "create an issue in this section"),
+		Look:       card.Binding,
 	}
 }
 
@@ -126,9 +129,9 @@ func (k keyMap) browsing(picked, narrowed bool) kernel.KeySet {
 	by := kernel.Terse(k.FilterBy, "filter by")
 	sort := kernel.Terse(k.Sort, "sort")
 	find, mine := kernel.Terse(k.Find, "find"), kernel.Terse(k.Mine, "mine")
-	create := kernel.Terse(k.Create, "create")
-	acts := []kernel.Binding{pick, all, move, create, find, mine, by, sort}
-	actions := append([]kernel.Binding{k.Pick, k.PickAll, k.Move, k.Create, k.Find, k.Mine, k.FilterBy, k.Sort}, issue.ShareBindings...)
+	create, look := kernel.Terse(k.Create, "create"), kernel.Terse(k.Look, "look")
+	acts := []kernel.Binding{pick, all, move, create, find, mine, by, sort, look}
+	actions := append([]kernel.Binding{k.Pick, k.PickAll, k.Move, k.Create, k.Find, k.Mine, k.FilterBy, k.Sort, k.Look}, issue.ShareBindings...)
 	if picked {
 		acts = append(acts, kernel.Terse(k.Unpick, "unpick all"))
 		actions = append(actions, k.Unpick)
@@ -269,6 +272,7 @@ const (
 	actFindKeep
 	actFindCancel
 	actCreate
+	actLook
 )
 
 // tables turn the bindings into a keystroke lookup, built once. The bindings
@@ -297,6 +301,7 @@ func (k keyMap) entries() (browse, chooser, confirm, sorting, finding []binding)
 		{k.Mine, actMine}, {k.Find, actFind},
 		{k.FindNext, actFindNext}, {k.FindPrev, actFindPrev},
 		{k.Create, actCreate},
+		{k.Look, actLook},
 	}
 	chooser = []binding{
 		{k.Next, actDown}, {k.Prev, actUp},

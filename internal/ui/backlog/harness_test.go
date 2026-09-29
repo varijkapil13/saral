@@ -18,6 +18,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -82,11 +83,7 @@ type driver struct {
 
 func newDriver(t *testing.T, d kernel.Deps, w, h int) *driver {
 	t.Helper()
-	view, ok := New(d).(*Model)
-	if !ok {
-		t.Fatal("New did not return a *Model")
-	}
-	dr := &driver{t: t, m: view}
+	dr := &driver{t: t, m: inLines(t, New(d))}
 	dr.send(kernel.SizeMsg{Width: w, Height: h})
 	dr.send(kernel.FocusMsg{Focused: true})
 	dr.run(dr.m.Init())
@@ -233,6 +230,17 @@ func (d *driver) groupOf(key string) string {
 		}
 	}
 	return ""
+}
+
+// inLines keeps the goldens and budgets written before cards measuring the lines look.
+func inLines(tb testing.TB, v kernel.View) *Model {
+	tb.Helper()
+	m, ok := v.(*Model)
+	if !ok {
+		tb.Fatal("New did not return a *Model")
+	}
+	_, _ = m.Update(card.LookMsg{Look: card.Lines})
+	return m
 }
 
 func unwrapCmds(msg tea.Msg) ([]tea.Cmd, bool) {

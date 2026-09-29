@@ -13,6 +13,10 @@ such change is listed under **Changed**.
   subtasks, labels and fix versions as well as what a row shows. `V` cycles roomy, compact and lines,
   and the choice is kept on this machine. Clicking a card's type, status or assignee still filters by
   it.
+- The backlog draws its issues as cards under the sprint heads: roomy by default, compact, or the
+  one-line rows as before. `V` cycles the look, and the choice is kept on this machine. A card shows
+  the status and the estimate beside the key, then the summary, the assignee, the priority, the due
+  date, the subtasks done and the labels and fix versions.
 
 ## [0.8.0] - 2026-09-29
 

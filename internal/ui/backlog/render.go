@@ -9,6 +9,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -150,8 +151,9 @@ func newStyles(t *kernel.Theme) *styles {
 
 // rowKey is what makes two renderings of a row the same rendering: the tuple
 // docs/PERFORMANCE.md asks for — updated, width, selected, theme generation —
-// widened to the column plan, to whether the row is picked, and to what a
-// section head is built from.
+// widened to the column plan, to whether the row is picked, to what a section
+// head is built from, and for a card to the look, the fields the issue was
+// read with and the day its due date is overdue against.
 type rowKey struct {
 	name     string
 	state    string
@@ -160,6 +162,9 @@ type rowKey struct {
 	points   float64
 	lay      layout
 	gen      int
+	fields   int
+	today    int
+	look     card.Look
 	head     bool
 	more     bool
 	pointed  bool
@@ -198,11 +203,23 @@ func (m *Model) View() string {
 	if len(m.rows) == 0 {
 		lines = m.appendEmpty(lines, h)
 	} else {
-		end := min(m.top+h, len(m.rows))
-		for i := m.top; i < end; i++ {
-			lines = append(lines, m.line(i))
+		if m.look.Cards() {
+			m.today, _ = m.siteToday()
 		}
-		for i := end - m.top; i < h; i++ {
+		end, used := m.visibleEnd(), 0
+		for i := m.top; i < end; i++ {
+			d := m.line(i)
+			if d.card == nil {
+				lines = append(lines, d.one)
+				used++
+				continue
+			}
+			for _, l := range d.card[:min(len(d.card), h-used)] {
+				lines = append(lines, l)
+				used++
+			}
+		}
+		for ; used < h; used++ {
 			lines = append(lines, "")
 		}
 		m.warm(end)
@@ -248,9 +265,16 @@ func (m *Model) warm(end int) {
 	}
 }
 
-func (m *Model) line(at int) string {
+// drawn keeps a single line out of a slice, which would cost every memo miss an allocation.
+type drawn struct {
+	one  string
+	card []string
+}
+
+func (m *Model) line(at int) drawn {
 	r := m.rows[at]
-	k := rowKey{lay: m.lay, selected: at == m.cursor, gen: m.styles.gen}
+	k := rowKey{lay: m.lay, selected: at == m.cursor, gen: m.styles.gen, look: m.look}
+	cards := !r.head && m.look.Cards()
 	if r.head {
 		g := &m.groups[r.group]
 		k.head, k.name, k.count, k.state = true, g.name, len(g.issues), string(g.state)
@@ -260,19 +284,94 @@ func (m *Model) line(at int) string {
 		iss := &m.issues[r.issue]
 		k.name, k.updated = iss.Key, iss.Updated.UnixNano()
 		k.picked = m.picked[iss.Key]
+		if cards {
+			k.fields, k.today = iss.Requested.Len(), m.today
+		}
 	}
 	if s, ok := m.memo.Get(k); ok {
 		return s
 	}
-	var s string
-	if r.head {
-		s = m.renderHead(&m.groups[r.group], k.selected, k.more)
-	} else {
-		s = m.renderRow(&m.issues[r.issue], k.selected, k.picked)
+	var out drawn
+	switch {
+	case r.head:
+		out.one = m.zones.Mark(m.zoneOf(at), m.renderHead(&m.groups[r.group], k.selected, k.more))
+	case cards:
+		out.card = m.zones.MarkLines(m.zoneOf(at), m.renderCard(&m.issues[r.issue], k.selected, k.picked))
+	default:
+		out.one = m.zones.Mark(m.zoneOf(at), m.renderRow(&m.issues[r.issue], k.selected, k.picked))
 	}
-	s = m.zones.Mark(m.zoneOf(at), s)
-	m.memo.Put(k, s)
-	return s
+	m.memo.Put(k, out)
+	return out
+}
+
+func (m *Model) renderCard(iss *jira.Issue, sel, picked bool) []string {
+	g := m.deps.Theme.Glyphs
+	f := card.Facts{
+		Key: iss.Key, Summary: iss.Summary,
+		TypeGlyph: g.TypeGlyph(iss.Type), TypeName: iss.Type.Name,
+		StatusGlyph: g.CategoryGlyph(iss.Status.Category), StatusName: iss.Status.Name,
+		Category: categoryIndex(iss.Status.Category),
+		Estimate: m.estimateText(iss),
+		Subtasks: subtasksText(iss.Subtasks),
+		Labels:   iss.Labels, FixVersions: versionNames(iss.FixVersions),
+	}
+	if iss.Assignee != nil {
+		f.Assignee = iss.Assignee.DisplayName
+	}
+	if iss.Priority != nil {
+		f.Priority = iss.Priority.Name
+	}
+	f.Due, f.Overdue = m.dueText(iss.Due)
+	return card.Render(make([]string, 0, m.look.Lines()), f, card.State{Selected: sel, Picked: picked}, m.cardSty,
+		card.Frame{Width: m.lay.width, Look: m.look, Glyphs: g, Zones: m.zones})
+}
+
+func (m *Model) estimateText(iss *jira.Issue) string {
+	if m.estimate.ID == "" {
+		return ""
+	}
+	n, ok := iss.Fields.Number(m.estimate)
+	if !ok {
+		return ""
+	}
+	return strconv.FormatFloat(n, 'f', -1, 64)
+}
+
+func (m *Model) dueText(due jira.Date) (string, bool) {
+	if due.IsZero() {
+		return "", false
+	}
+	_, today := m.siteToday()
+	day := due.In(today.Location())
+	layout := "02 Jan 2006"
+	if day.Year() == today.Year() {
+		layout = "02 Jan"
+	}
+	return day.Format(layout), day.Before(today)
+}
+
+func subtasksText(subtasks []jira.IssueRef) string {
+	if len(subtasks) == 0 {
+		return ""
+	}
+	done := 0
+	for i := range subtasks {
+		if subtasks[i].Status.Category == jira.CategoryDone {
+			done++
+		}
+	}
+	return strconv.Itoa(done) + "/" + strconv.Itoa(len(subtasks))
+}
+
+func versionNames(versions []jira.Version) []string {
+	if len(versions) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(versions))
+	for i := range versions {
+		out = append(out, versions[i].Name)
+	}
+	return out
 }
 
 // renderHead draws one section head: the sprint, its state and how many issues

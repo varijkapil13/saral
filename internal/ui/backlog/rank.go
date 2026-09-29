@@ -287,7 +287,7 @@ func (m *Model) dropWithin(grabbed string, msg tea.MouseMsg) tea.Cmd {
 	if from < 0 {
 		return nil
 	}
-	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.rows)); i++ {
+	for i, end := m.top, m.visibleEnd(); i < end; i++ {
 		if m.rows[i].head || i == from || !m.zones.Hit(m.zoneOf(i), msg) {
 			continue
 		}

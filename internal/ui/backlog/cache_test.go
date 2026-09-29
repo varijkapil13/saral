@@ -163,10 +163,7 @@ func TestBacklog_DrawsTheStoredBacklogBeforeAnythingIsAskedOfTheSite(t *testing.
 	fake := refusing(6)
 	deps := withCache(testDeps(fake), cache)
 
-	view, ok := New(deps).(*Model)
-	if !ok {
-		t.Fatal("New did not return a *Model")
-	}
+	view := inLines(t, New(deps))
 	next, _ := view.Update(kernel.SizeMsg{Width: 120, Height: 20})
 	m, ok := next.(*Model)
 	if !ok {

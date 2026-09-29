@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -121,7 +122,7 @@ const sprintFieldName = "Sprint"
 // the boards this read answers with so a revalidation lands on the same board
 // rather than always the first one the site lists. Zero means nothing was
 // hinted, and at is used as it always was.
-func read(ctx context.Context, s site, search *app.Search, project string, at int, wantID int64, gen int) tea.Cmd {
+func read(ctx context.Context, s site, search *app.Search, project string, at int, wantID int64, roomy bool, gen int) tea.Cmd {
 	return func() tea.Msg {
 		boards, err := s.Boards(ctx, project)
 		if err != nil {
@@ -154,7 +155,7 @@ func read(ctx context.Context, s site, search *app.Search, project string, at in
 			return out
 		}
 		out.field = field.Ref()
-		wanted, err := search.Resolve(ctx, projectionOf(out.field, config))
+		wanted, err := search.Resolve(ctx, projectionOf(out.field, config, roomy))
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
@@ -176,9 +177,17 @@ func read(ctx context.Context, s site, search *app.Search, project string, at in
 // rather than looked up by a name. Reporter and labels join it for the same
 // reason board.plan.projection widens it: filter.FacetReporter and FacetLabel
 // match against this read's own issues, and ListProjection alone leaves both
-// fields unread. The project is what an issue created from a section is made in.
-func projectionOf(sprint jira.FieldRef, config jira.BoardConfig) app.Projection {
+// fields unread. The project is what an issue created from a section is made in,
+// and a roomy card adds the fields it draws beyond a row.
+func projectionOf(sprint jira.FieldRef, config jira.BoardConfig, roomy bool) app.Projection {
 	projection := app.ListProjection().With(sprint.ID, "reporter", "labels", "project")
+	if roomy {
+		for _, id := range card.RoomyFields {
+			if !slices.Contains(projection.IDs, id) {
+				projection = projection.With(id)
+			}
+		}
+	}
 	if config.RankFieldID != "" {
 		projection = projection.With(config.RankFieldID)
 	}

@@ -5,8 +5,10 @@ package backlog
 import (
 	"context"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -17,6 +19,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -120,11 +123,12 @@ type Model struct {
 	cache  app.Cache
 	addr   kernel.Addr
 
-	styles *styles
-	memo   *widget.RowCache[rowKey, string]
-	zones  widget.Zoner
-	clicks *widget.Clicks
-	drag   widget.Drag
+	styles  *styles
+	cardSty *card.Styles
+	memo    *widget.RowCache[rowKey, drawn]
+	zones   widget.Zoner
+	clicks  *widget.Clicks
+	drag    widget.Drag
 
 	acts      map[string]action
 	inChooser map[string]action
@@ -165,6 +169,10 @@ type Model struct {
 
 	groups []group
 	rows   []row
+	// lineAt[i] is the first line of row i; its last entry is the total.
+	lineAt []int
+	look   card.Look
+	today  int
 	picked map[string]bool
 
 	// terms is this program's own narrowing — a person, a status, a type, a
@@ -281,7 +289,9 @@ func New(d kernel.Deps) kernel.View {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
 	m.styles = newStyles(m.deps.Theme)
-	m.memo = widget.NewRowCache[rowKey, string](rowCacheLimit)
+	m.cardSty = card.NewStyles(m.deps.Theme)
+	m.look = card.Recall()
+	m.memo = widget.NewRowCache[rowKey, drawn](rowCacheLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.bar = filterbar.New(m.zones)
@@ -420,6 +430,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
+		m.cardSty = card.NewStyles(msg.Theme)
 		m.memo.Reset()
 		m.head = ""
 
@@ -427,6 +438,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.deps.Caps = msg.Caps
 		m.memo.Reset()
 		m.head = ""
+
+	case card.LookMsg:
+		cmd = m.setLook(msg.Look)
 
 	case kernel.ProjectMsg:
 		cmd = m.reproject(msg.Project)
@@ -632,7 +646,38 @@ func (m *Model) load() tea.Cmd {
 	}
 	m.absent = ""
 	ctx, gen := m.begin()
-	return m.reply(read(ctx, m.site, m.search, m.deps.Project, m.boardAt, m.boardIDHint, gen))
+	return m.reply(read(ctx, m.site, m.search, m.deps.Project, m.boardAt, m.boardIDHint, m.look == card.Roomy, gen))
+}
+
+// setLook restarts a walk in flight rather than finish it with the other look's fields.
+func (m *Model) setLook(look card.Look) tea.Cmd {
+	if look == m.look {
+		return nil
+	}
+	m.look = look
+	m.memo.Reset()
+	m.relayout()
+	m.rebuildLines()
+	m.keepVisible()
+	if m.loading || (look == card.Roomy && m.lacksRoomyFields()) {
+		return m.load()
+	}
+	return nil
+}
+
+func (m *Model) lacksRoomyFields() bool {
+	for i := range m.issues {
+		mask := m.issues[i].Requested
+		if mask.Wide() {
+			continue
+		}
+		for _, id := range card.RoomyFields {
+			if !mask.Has(id) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // refresh re-reads the board this backlog belongs to. Purging also drops the
@@ -1061,6 +1106,7 @@ func (m *Model) rebuildRows() {
 		held += len(m.groups[g].issues)
 	}
 	if held == 0 {
+		m.rebuildLines()
 		return
 	}
 	for g := range m.groups {
@@ -1069,6 +1115,52 @@ func (m *Model) rebuildRows() {
 			m.rows = append(m.rows, row{group: g, issue: at})
 		}
 	}
+	m.rebuildLines()
+}
+
+func (m *Model) rebuildLines() {
+	n := m.look.Lines()
+	m.lineAt = append(m.lineAt[:0], 0)
+	at := 0
+	for i := range m.rows {
+		if m.rows[i].head {
+			at++
+		} else {
+			at += n
+		}
+		m.lineAt = append(m.lineAt, at)
+	}
+}
+
+func (m *Model) offsets() []int {
+	if len(m.lineAt) != len(m.rows)+1 {
+		m.rebuildLines()
+	}
+	return m.lineAt
+}
+
+func (m *Model) rowAtLine(line int) int {
+	off := m.offsets()
+	if len(m.rows) == 0 {
+		return 0
+	}
+	line = min(max(line, 0), off[len(m.rows)]-1)
+	return sort.SearchInts(off, line+1) - 1
+}
+
+// visibleEnd keeps a top row taller than the screen, drawn cut.
+func (m *Model) visibleEnd() int {
+	off, n := m.offsets(), len(m.rows)
+	if m.top >= n {
+		return n
+	}
+	end := sort.SearchInts(off, off[m.top]+m.rowsHeight()+1) - 1
+	return min(max(end, m.top+1), n)
+}
+
+func (m *Model) fits(at int) bool {
+	off := m.offsets()
+	return at >= m.top && at < len(m.rows) && off[at+1]-off[m.top] <= m.rowsHeight()
 }
 
 // under names what the cursor is on, so that a regroup can put it back on the
@@ -1110,7 +1202,7 @@ func (m *Model) restore(what string) {
 // every row under it, and a place that is kept off screen is not kept.
 func (m *Model) keepVisible() {
 	m.clampScroll()
-	if m.cursor < m.top || m.cursor >= m.top+m.rowsHeight() {
+	if len(m.rows) > 0 && !m.fits(m.cursor) {
 		m.scrollToCursor()
 	}
 }
@@ -1443,18 +1535,38 @@ func (m *Model) moveTo(at int) tea.Cmd {
 }
 
 func (m *Model) scrollToCursor() {
-	h := m.rowsHeight()
 	if m.cursor < m.top {
 		m.top = m.cursor
 	}
-	if m.cursor >= m.top+h {
-		m.top = m.cursor - h + 1
+	m.clampScroll()
+	if m.cursor >= 0 && m.cursor < len(m.rows) {
+		off := m.offsets()
+		if end := off[m.cursor+1]; end > off[m.top]+m.rowsHeight() {
+			m.top = min(sort.SearchInts(off, end-m.rowsHeight()), m.cursor)
+		}
 	}
 	m.clampScroll()
 }
 
 func (m *Model) clampScroll() {
-	m.top = min(max(m.top, 0), max(len(m.rows)-m.rowsHeight(), 0))
+	off, n := m.offsets(), len(m.rows)
+	last := sort.SearchInts(off, off[n]-m.rowsHeight())
+	m.top = min(max(m.top, 0), min(last, max(n-1, 0)))
+}
+
+func (m *Model) byLines(delta int) tea.Cmd {
+	if len(m.rows) == 0 {
+		return m.moveTo(0)
+	}
+	from := min(max(m.cursor, 0), len(m.rows)-1)
+	at := m.rowAtLine(m.offsets()[from] + delta)
+	switch {
+	case delta > 0 && at <= from:
+		at = from + 1
+	case delta < 0 && at >= from:
+		at = from - 1
+	}
+	return m.moveTo(at)
 }
 
 // --- keys -------------------------------------------------------------------
@@ -1493,13 +1605,13 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	case actUp:
 		return m.moveTo(m.cursor - 1)
 	case actPageDown:
-		return m.moveTo(m.cursor + m.rowsHeight())
+		return m.byLines(m.rowsHeight())
 	case actPageUp:
-		return m.moveTo(m.cursor - m.rowsHeight())
+		return m.byLines(-m.rowsHeight())
 	case actHalfDown:
-		return m.moveTo(m.cursor + m.rowsHeight()/2)
+		return m.byLines(m.rowsHeight() / 2)
 	case actHalfUp:
-		return m.moveTo(m.cursor - m.rowsHeight()/2)
+		return m.byLines(-m.rowsHeight() / 2)
 	case actTop:
 		return m.moveTo(0)
 	case actBottom:
@@ -1541,6 +1653,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.findAgain(-1)
 	case actCreate:
 		return m.startCreate()
+	case actLook:
+		return card.Cycle(m.look)
 	case actNone, actChoose, actBack, actConfirm,
 		actSortPrev, actSortNext, actSortChoose, actSortCancel, actFindKeep, actFindCancel:
 	}
@@ -1615,7 +1729,7 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if m.sort.chosen() && m.zones.Hit(sortZone, msg) {
 		return m.startSort()
 	}
-	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.rows)); i++ {
+	for i, end := m.top, m.visibleEnd(); i < end; i++ {
 		if !m.zones.Hit(m.zoneOf(i), msg) {
 			continue
 		}
@@ -1650,7 +1764,7 @@ func (m *Model) release(msg tea.MouseReleaseMsg) tea.Cmd {
 	if cmd := m.dropWithin(from, msg); cmd != nil {
 		return cmd
 	}
-	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.rows)); i++ {
+	for i, end := m.top, m.visibleEnd(); i < end; i++ {
 		if !m.rows[i].head || !m.zones.Hit(m.zoneOf(i), msg) {
 			continue
 		}
@@ -1686,15 +1800,30 @@ func (m *Model) draggedKeys(zone string) ([]string, bool) {
 }
 
 func (m *Model) wheel(msg tea.MouseWheelMsg) {
+	m.clampScroll()
+	if len(m.rows) == 0 {
+		return
+	}
+	from := m.offsets()[m.top]
 	switch msg.Button {
 	case tea.MouseWheelUp:
-		m.top -= widget.WheelStep
+		m.top = m.rowAtLine(from - widget.WheelStep)
 	case tea.MouseWheelDown:
-		m.top += widget.WheelStep
+		m.top = max(m.rowAtLine(from+widget.WheelStep), m.top+1)
 	default:
 		return
 	}
 	m.clampScroll()
+}
+
+func (m *Model) siteToday() (int, time.Time) {
+	now := time.Now
+	if m.deps.Now != nil {
+		now = m.deps.Now
+	}
+	loc := m.deps.Caps.Location()
+	y, mo, d := now().In(loc).Date()
+	return y*10000 + int(mo)*100 + d, time.Date(y, mo, d, 0, 0, 0, 0, loc)
 }
 
 // The value arrives in one of two shapes and the field's own type is neither: a

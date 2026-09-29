@@ -1,0 +1,24 @@
+  PROJ board | 2 open sprints | 8 of 12 issues
+> v Sprint 2 | active | 2 issues | 5 Story Points                                                                       
++   PROJ-3 o Story                                                                                              o Triage
+| Investigate the onboarding wizard                                                                                     
++ Ada Lovelace | Urgent                                                                                                 
++   PROJ-4 o Defect                                                                                        ~ Building  5
+| Document CSV import                                                                                                   
++ Normal | customer                                                                                                     
+  v Sprint 3 | future | 0 issues                                                                                        
+  v Backlog | 6 issues | 13 Story Points                                                                                
++   PROJ-1 o Epic                                                                                          ~ Building  2
+| Add the nightly export                                                                                                
++ Grace Hopper | Normal | frontend                                                                                      
++   PROJ-6 o Story                                                                                              o Triage
+| Speed up session expiry                                                                                               
++ Ada Lovelace | Urgent                                                                                                 
++   PROJ-7 o Defect                                                                                        ~ Building  8
+| Fix the search index                                                                                                  
++ Grace Hopper | Normal | frontend                                                                                      
++   PROJ-9 o Story                                                                                              o Triage
+| Rework the mobile layout                                                                                              
++ Ada Lovelace | Urgent                                                                                                 
+
+  Rank order. K, J, { and } change it within a section.

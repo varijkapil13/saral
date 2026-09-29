@@ -806,7 +806,7 @@ flight and the quit goes ahead once it has answered.
 
 ### Cards
 
-**The issue list draws them; the backlog and the board follow in the next packets.** Until a view
+**The issue list and the backlog draw cards; the board follows in the next packet.** Until a view
 handles the look, `V` does nothing there and the view keeps drawing one line per issue.
 
 `V` cycles how an issue is drawn: **roomy** cards (the default, five lines), **compact** cards
@@ -842,6 +842,17 @@ due date, the subtasks, the labels and the fix versions; compact cards and lines
 roomy over rows read without them re-reads them in the background, keeping the cursor on its issue
 and the window where it was, and a refusal keeps the rows and badges them stale. Moving away from
 roomy asks for nothing.
+
+**In the backlog** the sprint heads stay one line each, exactly as in the lines look, and the issues
+under them are cards as wide as the pane. The first line's right-hand side is the status and the
+issue's estimate, the number the head adds up, rather than when it changed. The due date is written
+`02 Jan`, with the year only when it is not this one, and is overdue once the site's own date has
+passed it. The mark cell carries the pick, so there is no separate box. The card under the cursor is
+always drawn whole: page keys move about a screen of lines and land on a whole card, the wheel moves
+three lines and lands on the row there, and the lines left under the last card that fits stay blank.
+A click anywhere on a card selects it, a drag between cards of one section ranks, and a drag onto a
+head moves, as in the lines look. Moving to roomy over issues read without its fields reads the board
+once more in the background, keeping the cursor; a failed read keeps the cards, badged stale.
 
 ## Releases: order and state
 
