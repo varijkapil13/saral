@@ -208,20 +208,22 @@ func cellsOf(v jira.Version, today jira.Date) rowCells {
 	}
 }
 
-// rebuildCells draws every version out again. It runs when the versions change,
-// when one of them is written, and when the reader's own date has moved on —
-// which is what turns a version overdue.
+// rebuildCells draws every version out again, and orders and filters them
+// over. It runs when the versions change, when one of them is written, and
+// when the reader's own date has moved on — which is what turns a version
+// overdue. The cells stay indexed like m.versions; order is what picks them.
 func (m *Model) rebuildCells() {
 	m.day = m.today()
 	m.cells = m.cells[:0]
 	for i := range m.versions {
 		m.cells = append(m.cells, cellsOf(m.versions[i], m.day))
 	}
+	m.reorder()
 	m.rows.Reset()
 }
 
 func (m *Model) rowKeyOf(at int, selected bool) rowKey {
-	return rowKey{cells: m.cells[at], lay: m.lay, selected: selected, gen: m.styles.gen}
+	return rowKey{cells: m.cells[m.order[at]], lay: m.lay, selected: selected, gen: m.styles.gen}
 }
 
 func (m *Model) row(at int, selected bool) string {
@@ -237,7 +239,7 @@ func (m *Model) row(at int, selected bool) string {
 // warm renders the overscan into the memo so that the next scroll step is a
 // cache hit rather than a row build. It draws nothing.
 func (m *Model) warm(end int) {
-	for i := max(m.top-overscan, 0); i < min(end+overscan, len(m.versions)); i++ {
+	for i := max(m.top-overscan, 0); i < min(end+overscan, len(m.order)); i++ {
 		if i < m.top || i >= end {
 			m.row(i, false)
 		}
@@ -351,7 +353,11 @@ type summaryKey struct {
 	project    string
 	width, gen int
 	versions   int
+	shown      int
 	released   int
+	filter     stateFilter
+	sortField  string
+	sortDesc   bool
 	loading    bool
 	loaded     bool
 	failed     bool
@@ -372,7 +378,8 @@ func (m *Model) summaryKey() summaryKey {
 	}
 	return summaryKey{
 		project: m.deps.Project, width: m.width, gen: m.styles.gen,
-		versions: len(m.versions), released: released,
+		versions: len(m.versions), shown: len(m.order), released: released,
+		filter: m.filter, sortField: m.sort.fieldID(), sortDesc: m.sort.desc,
 		loading: m.loading, loaded: m.loaded, failed: m.failure != nil,
 		counting: m.counting != "", saving: m.saving,
 		editing: m.mode == editing, creating: m.mode == editing && m.form.id == "",
@@ -395,11 +402,25 @@ func (m *Model) summaryLine() string {
 		b.WriteString(key.project)
 		b.WriteString(" ")
 	}
-	b.WriteString(plural(key.versions, "version", "versions"))
-	if key.released > 0 {
+	if key.filter != filterAll {
+		b.WriteString(key.filter.name())
 		b.WriteString(" · ")
-		b.WriteString(strconv.Itoa(key.released))
-		b.WriteString(" released")
+		b.WriteString(strconv.Itoa(key.shown))
+		b.WriteString(" of ")
+		b.WriteString(plural(key.versions, "version", "versions"))
+	} else {
+		b.WriteString(plural(key.versions, "version", "versions"))
+		if key.released > 0 {
+			b.WriteString(" · ")
+			b.WriteString(strconv.Itoa(key.released))
+			b.WriteString(" released")
+		}
+	}
+	sum := m.styles.muted.Render(b.String())
+	b.Reset()
+	if m.sort.chosen() {
+		sum += m.styles.muted.Render(" · ") +
+			m.zones.Mark(sortZone, m.styles.accent.Render(m.sort.label(m.deps.Theme.Glyphs)))
 	}
 	switch {
 	case key.counting:
@@ -417,10 +438,10 @@ func (m *Model) summaryLine() string {
 	}
 	// Counts are one request each, so the pane says out loud that the column is
 	// unread rather than leaving a reader to wonder why it is full of marks.
-	if key.versions > 0 && m.anyUncounted() {
+	if key.shown > 0 && m.anyUncounted() {
 		b.WriteString(" · open counts are read when a version is released")
 	}
-	m.sum = m.styles.muted.Render(b.String())
+	m.sum = sum + m.styles.muted.Render(b.String())
 	if key.stale {
 		m.sum += " " + m.deps.Theme.StaleBadge.Render(staleLabel)
 	}
@@ -468,6 +489,10 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 		lines = m.appendFailure(lines, room, h)
 	case !m.loaded:
 		lines = append(lines, m.styles.muted.Render("  Nothing has been asked of Jira yet."))
+	case len(m.versions) > 0:
+		lines = append(lines,
+			m.styles.muted.Render(ansi.Truncate("  "+m.deps.Project+" has no "+m.filter.name()+" versions.", room, ell)),
+			m.styles.muted.Render(ansi.Truncate("  "+filterHint+" shows "+m.filter.next().shows()+".", room, ell)))
 	default:
 		lines = append(lines,
 			m.styles.muted.Render(ansi.Truncate("  "+m.deps.Project+" has no versions yet.", room, ell)),
@@ -496,8 +521,9 @@ func (m *Model) appendFailure(lines []string, room, h int) []string {
 // out. The retry names the kernel's own refresh, which this view registers
 // nothing for.
 var (
-	retryHint = kernel.DefaultGlobalKeys().Refresh.Help().Key + " reads them again."
-	newHint   = defaultKeys().New.Help().Key + " creates one."
+	retryHint  = kernel.DefaultGlobalKeys().Refresh.Help().Key + " reads them again."
+	newHint    = defaultKeys().New.Help().Key + " creates one."
+	filterHint = defaultKeys().Filter.Help().Key
 )
 
 // appendForm draws the editor under the rows: which version is being typed, a
@@ -537,15 +563,17 @@ func (m *Model) View() string {
 	// The cells mirror the versions, so a write that appended one and a day that
 	// has rolled over both mean they are drawn again.
 	if m.day != m.today() || len(m.cells) != len(m.versions) {
+		under := m.selectedID()
 		m.rebuildCells()
+		m.moveOnto(under)
 	}
 	lines := m.lines[:0]
 	lines = append(lines, m.summaryLine(), m.head)
 	h := m.rowsHeight()
-	if len(m.versions) == 0 {
+	if len(m.order) == 0 {
 		lines = m.appendEmpty(lines, h)
 	} else {
-		end := min(m.top+h, len(m.versions))
+		end := min(m.top+h, len(m.order))
 		for i := m.top; i < end; i++ {
 			lines = append(lines, m.row(i, i == m.cursor))
 		}
@@ -554,8 +582,12 @@ func (m *Model) View() string {
 		}
 		m.warm(end)
 	}
-	if m.mode == editing {
+	switch m.mode {
+	case editing:
 		lines = m.appendForm(lines)
+	case sorting:
+		lines = append(lines, m.sortPrompt())
+	case browsing:
 	}
 	m.lines = lines
 	return strings.Join(lines, "\n")

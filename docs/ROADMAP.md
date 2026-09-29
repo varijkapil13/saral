@@ -1736,8 +1736,10 @@ issue's, every single time — spinner and all.
   undoes all of it belongs beside it rather than reconstructed from one view's own `terms.go`.
   **What this did not touch**: the pane split and the sort order stay exactly where `docs/FILTERS.md`
   already put them, per-machine in `ui.toml` — a filter is the only kind of state here that names
-  something a site minted, which is why it alone needed a profile scope. `sprint`, `release` and
-  `plan` hold no `filter.Terms` and remember nothing; extending this to a fifth view that gains one is
+  something a site minted, which is why it alone needed a profile scope. `sprint` and `plan` hold no
+  `filter.Terms` and remember nothing; `release` holds none either, but remembers its sort in
+  `ui.toml` and its state filter per profile through `kernel.Keep` (P11.3). Extending this to a view
+  that gains `filter.Terms` is
   the same two calls (`recallTerms` in its constructor, `rememberTerms` wherever it sets `m.terms`)
   this packet's four already show.
 
@@ -1862,6 +1864,14 @@ record of what was built, what was left and why.
   there). Clicking is not wired: the globals cell mints no mouse zones for any of its other entries
   either, so `g` follows suit rather than being the first. The view slots stay off the row, per K7 —
   this is the prefix key, not the destinations.
+
+- [x] **P11.3 — Sort releases and filter them by state** · [#173](https://github.com/varijkapil13/saral/pull/173) · **owns** `internal/ui/release/{list.go,list_keys.go,list_render.go,register.go,sort.go,state_filter.go}` and their tests and goldens, `internal/ui/keys_test.go` (`keyOwners` rows), `internal/ui/testdata/{footer_*,overlay_120x38,menu_120x38}.golden`, `docs/{FILTERS,UX,PERFORMANCE}.md`, `CHANGELOG.md`
+  `s` sorts the version list by project order (the default), name, release date, start date or
+  state, with the backlog's picker copied rather than shared; `f` cycles all, unreleased, released,
+  archived. Both are local: `m.versions` stays in the site's sequence for the cache and the flow, and
+  a derived `order` of indices is what the cursor, the actions, clicks and rows go through. The sort
+  is kept per machine with `config.SaveSort`, the filter per profile with `kernel.Keep`. A created
+  version the filter would hide switches the filter back to all.
 
 ## Later, deliberately not now
 

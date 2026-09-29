@@ -54,6 +54,11 @@ func init() {
 			id: "releases.assign", title: "Put the version you are on on issues, or take it off them",
 			key: keys.Assign, msg: AssignMsg{},
 		},
+		{id: "releases.sort", title: "Sort the versions", key: keys.Sort, msg: SortMsg{}},
+		{
+			id: "releases.filter", title: "Show the unreleased, released, archived or all versions",
+			key: keys.Filter, msg: FilterMsg{},
+		},
 	} {
 		kernel.RegisterCommand(kernel.Command{
 			ID:    c.id,

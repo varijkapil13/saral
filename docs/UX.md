@@ -150,11 +150,12 @@ settings               ctrl+, / g s   opens over what you were in, esc returns �
 search in view         /              filter rows live
 clear everything       ctrl+g / esc   a term the picker set and a typed filter both, from the browsing
                                       state; esc clears the typed one while still typing
-filter by a value      f              pick a facet, then one of the values this site holds
+filter by a value      f              pick a facet, then one of the values this site holds. in
+                                      releases, f moves the state filter on instead
 every issue here       a              widen the search to the whole of the session's project;
                                       also the state with no filter values in force
 edit this search       e              show the JQL on screen and run an edited one
-sort                   s              in issues and the backlog; pick a field and a direction
+sort                   s              in issues, the backlog and releases; pick a field and a direction
 save this search       S              bind the query on screen to a number key
 refresh                r / R          current view / purge and refetch. both say what came back
 kill to end of line    alt+k          in any text field. ctrl+k is the palette and never reaches one,
@@ -800,6 +801,27 @@ change somebody else made in between is a refusal and not an overwrite; a label 
 replaced. The report names what changed and which cards did not and why; the cards that did not stay
 picked for the same gesture to try again. Quitting mid-run is held: the run stops after the card in
 flight and the quit goes ahead once it has answered.
+
+## Releases: order and state
+
+The version list reads the project's versions in the project's own sequence and nothing else: the
+same list feeds the release flow's choice of where open work can move, so the site is never asked
+for a narrower one (`docs/API-NOTES.md`). Order and state are both laid over it locally.
+
+- **`s` sorts**, with the backlog's picker: `←`/`→` move between project order, name, release date,
+  start date and state, `enter` chooses, choosing the field in force turns it round, `esc` leaves it.
+  Project order is the default. Names compare case-folded. The two dates put an undated version last
+  in both directions. State runs overdue, unreleased, released, archived. Ties keep the project's
+  order. A chosen order shows in the summary line as `sort: name ↑`, which a click reopens, and is
+  kept per machine in `ui.toml` like the other views' sorts.
+- **`f` cycles the state filter**: all, unreleased (overdue included, archived never), released
+  (archived never), archived, and round again. The summary line says what is in force and how much
+  it keeps (`unreleased · 4 of 12 versions`); a filter that keeps nothing says so and names what `f`
+  shows next. The filter is remembered per profile.
+- **The cursor stays on its version** across a sort, a filter and a refetch. When the filter hides
+  it, as archiving under *unreleased* or releasing does, the cursor goes to the row that took its
+  place and the status line says which filter hid it. **A version just created is never hidden**:
+  if the filter in force would hide it, the filter goes back to all and the status line says so.
 
 ## Around an issue: sharing, links, time, watchers, copies
 

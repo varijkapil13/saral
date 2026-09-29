@@ -100,9 +100,11 @@ var keyOwners = map[string]string{
 	"releases.archive": release.ViewID,
 	"releases.assign":  release.ViewID,
 	"releases.edit":    release.ViewID,
+	"releases.filter":  release.ViewID,
 	"releases.new":     release.ViewID,
 	"releases.open":    release.ViewID,
 	"releases.release": release.ViewID,
+	"releases.sort":    release.ViewID,
 
 	"sprints.closed":   sprint.ViewID,
 	"sprints.complete": sprint.ViewID,

@@ -27,7 +27,7 @@ release.bulk
 release.flow
  Issues  enter choose                                                                 ? g ctrl+k esc
 releases
- Issues  enter release  n new  e edit  A archive  b assign                            ? g ctrl+k esc
+ Issues  enter release  n new  e edit  A archive  b assign  s sort  f filter          ? g ctrl+k esc
 settings
  Issues  enter apply, open or run                                                     ? g ctrl+k esc
 sprints

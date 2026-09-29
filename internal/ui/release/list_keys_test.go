@@ -21,6 +21,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"counting what is open on one", keysCounting},
 		{"typing a version", keysEditing},
 		{"a save in flight", keysSaving},
+		{"choosing an order", keysSorting},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the list has %d key states and this test names %d", keyStates, len(named))
@@ -54,9 +55,20 @@ func TestLiveKeys_FollowWhatTheListIsDoing(t *testing.T) {
 			state: keysSaving,
 		},
 		{
+			name: "choosing an order",
+			enter: func() {
+				m := dr.list()
+				m.saving, m.mode = false, browsing
+				dr.key("s")
+			},
+			state: keysSorting,
+			acts:  true,
+		},
+		{
 			name: "counting what is open on one",
 			enter: func() {
 				m := dr.list()
+				dr.key("esc")
 				m.saving, m.mode, m.counting = false, browsing, twoOh
 			},
 			state: keysCounting,
@@ -124,12 +136,44 @@ func TestLiveKeys_OpeningTheEditorChangesWhatIsAdvertised(t *testing.T) {
 func TestKeys_TheOnlyThingBoundToTheViewSwitchPrefixIsItsOwnGesture(t *testing.T) {
 	t.Parallel()
 
-	browsing, editor := defaultKeys().tables()
+	browsing, editor, sorter := defaultKeys().tables()
 	if got := browsing["g"]; got != actGo {
 		t.Errorf("g in the list dispatches %d, want the go-to prefix", got)
 	}
 	if _, bound := editor["g"]; bound {
 		t.Error("the editor binds g, where it is a letter somebody is typing")
+	}
+	if _, bound := sorter["g"]; bound {
+		t.Error("the sort picker binds g")
+	}
+}
+
+// Within one state a stroke means one thing, and none of them is a kernel
+// global the view never receives while it is not taking typing.
+func TestKeys_NoStrokeMeansTwoThingsInOneState(t *testing.T) {
+	t.Parallel()
+
+	globals := map[string]bool{"q": true, "r": true, "R": true, "?": true, "esc": true, "ctrl+k": true}
+	for d := '0'; d <= '9'; d++ {
+		globals[string(d)] = true
+	}
+	for state := range keyStates {
+		set := liveSets[state]
+		owner := map[string]string{}
+		for _, column := range set.Full {
+			for _, b := range column {
+				for _, stroke := range b.Keys() {
+					if other, taken := owner[stroke]; taken && other != b.Help().Desc {
+						t.Errorf("state %d binds %q to both %q and %q", state, stroke, other, b.Help().Desc)
+					}
+					owner[stroke] = b.Help().Desc
+					raw := state == keysEditing || state == keysSorting
+					if globals[stroke] && !raw {
+						t.Errorf("state %d binds the kernel's own %q", state, stroke)
+					}
+				}
+			}
+		}
 	}
 }
 

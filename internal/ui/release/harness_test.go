@@ -287,15 +287,15 @@ func (d *driver) moveTo(id string) {
 	d.t.Helper()
 	m := d.list()
 	d.key("home")
-	for i := range m.versions {
+	for at, i := range m.order {
 		if m.versions[i].ID == id {
-			for range i {
+			for range at {
 				d.key("j")
 			}
 			return
 		}
 	}
-	d.t.Fatalf("no version %q is on the list", id)
+	d.t.Fatalf("no version %q is on the list as it is drawn", id)
 }
 
 // pressOn scans the frame the view would draw and presses the left button in the

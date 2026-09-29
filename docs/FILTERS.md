@@ -9,7 +9,7 @@ and `docs/SETTINGS.md` (the registry pattern this borrows).
 
 ## What is actually there now
 
-Checkable against the tree as of `de099eb`.
+Checkable against the tree as of `de099eb`, except the release row, which is current.
 
 | View | Can filter | Draws what is in force | Can sort |
 |---|---|---|---|
@@ -17,7 +17,8 @@ Checkable against the tree as of `de099eb`.
 | board | yes, `f` | **no** — it holds `filter.Terms` and renders none of it | no |
 | backlog | no | — | no |
 | timeline | no | — | no |
-| plan, release, sprint | no | — | no |
+| plan, sprint | no | — | no |
+| release | by state only, `f`, locally — no `filter.Terms` | yes — `unreleased · 4 of 12` in the summary | yes, `s`, locally |
 
 **Nothing sorts.** Order is baked into each saved search's JQL — `ORDER BY updated DESC` in
 `list/search.go` — and no view offers to change it.
@@ -41,9 +42,12 @@ carries an icon.
 
 Taken rather than derived, so they are written down once:
 
-1. **Sort applies to row-shaped views only** — issues and the backlog. A board is ordered by column
-   and by rank inside it, and a timeline by date; sorting either would mean discarding the order that
-   makes it that view. Neither gets a sort control, and this sentence is why.
+1. **Sort applies to row-shaped views only** — issues, the backlog and the version list. A board is
+   ordered by column and by rank inside it, and a timeline by date; sorting either would mean
+   discarding the order that makes it that view. Neither gets a sort control, and this sentence is
+   why. The version list sorts and filters by state locally, over the one unfiltered list it reads in
+   the project's own sequence, and uses neither `filter.Terms` nor the filter bar: a version has no
+   facets, only the four states `versionState` derives.
 2. **A Nerd Font may be assumed, as a tier and not as a floor.** This reverses the rule stated in
    `kernel/theme.go` — *"Nothing here may assume a Nerd Font"* — deliberately and on request. Three
    tiers now: `nerd` → `unicode` → `ascii`, all three switchable from the

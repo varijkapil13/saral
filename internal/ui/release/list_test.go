@@ -707,6 +707,8 @@ func TestReleases_RegistersItselfCleanly(t *testing.T) {
 		"releases.archive": "A",
 		"releases.release": "enter",
 		"releases.assign":  "b",
+		"releases.sort":    "s",
+		"releases.filter":  "f",
 	}
 	shown := map[string]bool{}
 	for _, b := range kernel.KeysFor(ViewID).Acts {

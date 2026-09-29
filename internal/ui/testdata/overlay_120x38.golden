@@ -113,8 +113,8 @@ n     new version                         ↑/k  up               g            w
 e     edit this version                   pgdn page down        g 1-9        switch view           q      quit
 A     archive or unarchive it             pgup page up          ctrl+, / g s settings
 b     put it on issues, or take it off    g g  first version    g i          jump to an issue
-                                          G    last version     esc          back
-                                                                r            refresh
+s     sort the versions                   G    last version     esc          back
+f     filter by state                                           r            refresh
                                                                 R            refetch everything
 
 settings

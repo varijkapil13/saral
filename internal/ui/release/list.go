@@ -35,6 +35,10 @@ type (
 	ShipMsg struct{}
 	// AssignMsg opens the assignment screen over the version under the cursor.
 	AssignMsg struct{}
+	// SortMsg opens the picker that chooses the order the versions are drawn in.
+	SortMsg struct{}
+	// FilterMsg moves the state filter on to the next state.
+	FilterMsg struct{}
 )
 
 // mode is what the list is doing.
@@ -43,6 +47,7 @@ type mode uint8
 const (
 	browsing mode = iota
 	editing
+	sorting
 )
 
 // Model is the versions list.
@@ -50,9 +55,21 @@ type Model struct {
 	deps    kernel.Deps
 	acts    map[string]action
 	inEdit  map[string]action
+	inSort  map[string]action
 	pending bool
 
 	versions []jira.Version
+	// sorted is every version's index in the order chosen, and order is the
+	// part of it the state filter keeps. The cursor, the window and every
+	// click are positions in order; m.versions stays in the project's own
+	// sequence, which is what the cache keeps and the flow is offered.
+	sorted []int
+	order  []int
+	sort   sortChoice
+	filter stateFilter
+
+	sortCursor     int
+	sortSaveFailed bool
 	// cells are the versions drawn out, one row's worth each, and day is the
 	// date they were drawn against.
 	cells   []rowCells
@@ -101,7 +118,9 @@ func New(d kernel.Deps) kernel.View {
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
-	m.acts, m.inEdit = defaultKeys().tables()
+	m.acts, m.inEdit, m.inSort = defaultKeys().tables()
+	m.sort = loadSort()
+	m.filter = recallFilter(d)
 	m.styles = newStyles(m.deps.Theme)
 	m.rows = widget.NewRowCache[rowKey, string](rowCacheLimit)
 	m.zones = widget.NewZoner(d.Zones)
@@ -128,7 +147,10 @@ func (m *Model) Init() tea.Cmd {
 // WantsRawKeys is true while a version is being typed. Without it the kernel
 // matches its own bindings first, so a name loses every digit, q quits the
 // program out from under the typing and esc never reaches the editor.
-func (m *Model) WantsRawKeys() bool { return m.mode == editing }
+//
+// The sort picker claims them too, so esc closes it rather than leaving the
+// view.
+func (m *Model) WantsRawKeys() bool { return m.mode == editing || m.mode == sorting }
 
 // BlocksClose refuses to throw away a version being typed. The kernel asks
 // before quitting, before going back and before switching to another root, and
@@ -204,6 +226,15 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case AssignMsg:
 		cmd = m.startAssign()
+
+	case SortMsg:
+		cmd = m.startSort()
+
+	case FilterMsg:
+		cmd = m.cycleFilter()
+
+	case sortSaveFailedMsg:
+		cmd = m.reportSortSaveFailed(msg)
 
 	case tea.KeyPressMsg:
 		cmd = m.key(msg)
@@ -327,12 +358,24 @@ func (m *Model) tookSave(msg savedMsg) tea.Cmd {
 	m.put(msg.version)
 	m.relayout()
 	m.rebuildCells()
-	m.moveOnto(msg.version.ID)
-	verb := "saved"
+	said := msg.version.Name + " saved."
 	if msg.created {
-		verb = "created"
+		said = msg.version.Name + " created."
 	}
-	return tea.Batch(kernel.Status(msg.version.Name+" "+verb+"."), m.keep())
+	if state := versionState(msg.version, m.day); !m.filter.keeps(state) {
+		if msg.created {
+			// A version somebody has just made is the one thing they want to
+			// see next, so the filter gives way rather than hiding it.
+			m.setFilter(filterAll)
+			said = msg.version.Name + " created; showing every version so it is on screen."
+		} else {
+			said = msg.version.Name + " saved; it is " + state + " now, which the " +
+				m.filter.name() + " filter hides."
+		}
+	}
+	m.sum = ""
+	m.moveOnto(msg.version.ID)
+	return tea.Batch(kernel.Status(said), m.keep())
 }
 
 // tookCount pushes the flow, which is the only thing that wanted the number.
@@ -556,6 +599,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.editKey(msg)
 	}
 	stroke := msg.String()
+	if m.mode == sorting {
+		return m.sortKey(stroke)
+	}
 	if m.pending {
 		m.pending = false
 		if stroke == "g" {
@@ -577,7 +623,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	case actTop:
 		m.moveTo(0)
 	case actBottom:
-		m.moveTo(len(m.versions) - 1)
+		m.moveTo(len(m.order) - 1)
 	case actRelease:
 		return m.startRelease()
 	case actNew:
@@ -588,7 +634,12 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.toggleArchive()
 	case actAssign:
 		return m.startAssign()
-	case actNone, actNextField, actPrevField, actSave, actCancel:
+	case actSort:
+		return m.startSort()
+	case actFilter:
+		return m.cycleFilter()
+	case actNone, actNextField, actPrevField, actSave, actCancel,
+		actSortPrev, actSortNext, actSortChoose, actSortCancel:
 	}
 	return nil
 }
@@ -608,7 +659,8 @@ func (m *Model) editKey(msg tea.KeyPressMsg) tea.Cmd {
 	case actCancel:
 		return m.cancelEdit()
 	case actNone, actUp, actDown, actPageUp, actPageDown, actGo, actTop, actBottom,
-		actRelease, actNew, actEdit, actArchive, actAssign:
+		actRelease, actNew, actEdit, actArchive, actAssign, actSort, actFilter,
+		actSortPrev, actSortNext, actSortChoose, actSortCancel:
 	}
 	m.form.typed(msg)
 	return nil
@@ -616,11 +668,13 @@ func (m *Model) editKey(msg tea.KeyPressMsg) tea.Cmd {
 
 // --- selection --------------------------------------------------------------
 
+// selected is the version under the cursor, which is a position in the order
+// drawn and not an index into the versions as the site sent them.
 func (m *Model) selected() (jira.Version, bool) {
-	if m.cursor < 0 || m.cursor >= len(m.versions) {
+	if m.cursor < 0 || m.cursor >= len(m.order) || m.order[m.cursor] >= len(m.versions) {
 		return jira.Version{}, false
 	}
-	return m.versions[m.cursor], true
+	return m.versions[m.order[m.cursor]], true
 }
 
 func (m *Model) selectedID() string {
@@ -631,7 +685,7 @@ func (m *Model) selectedID() string {
 }
 
 func (m *Model) moveTo(at int) {
-	n := len(m.versions)
+	n := len(m.order)
 	if n == 0 {
 		m.cursor, m.top = 0, 0
 		return
@@ -641,19 +695,31 @@ func (m *Model) moveTo(at int) {
 }
 
 // moveOnto puts the cursor back on a version by id. A row number is not the
-// same place after a create, a rename or a refetch.
+// same place after a create, a rename, a refetch, a sort or a filter. A
+// version the filter now hides leaves the cursor on the row that took its
+// place, or on the one above it at the bottom.
 func (m *Model) moveOnto(id string) {
 	if id == "" {
-		m.clampScroll()
+		m.moveTo(m.cursor)
 		return
 	}
-	for i := range m.versions {
+	for at, i := range m.order {
 		if m.versions[i].ID == id {
-			m.moveTo(i)
+			m.moveTo(at)
 			return
 		}
 	}
-	m.clampScroll()
+	shown := 0
+	for _, i := range m.sorted {
+		if m.versions[i].ID == id {
+			m.moveTo(min(shown, len(m.order)-1))
+			return
+		}
+		if m.filter.keeps(m.cells[i].state) {
+			shown++
+		}
+	}
+	m.moveTo(m.cursor)
 }
 
 func (m *Model) scrollToCursor() {
@@ -668,13 +734,16 @@ func (m *Model) scrollToCursor() {
 }
 
 func (m *Model) clampScroll() {
-	m.top = min(max(m.top, 0), max(len(m.versions)-m.rowsHeight(), 0))
+	m.top = min(max(m.top, 0), max(len(m.order)-m.rowsHeight(), 0))
 }
 
 // rowsHeight is how many rows fit under the summary line and the caption, less
 // whatever the editor is taking below them.
 func (m *Model) rowsHeight() int {
 	h := m.height - headHeight - m.form.height(m.mode == editing)
+	if m.mode == sorting {
+		h--
+	}
 	return max(h, 1)
 }
 
@@ -692,11 +761,14 @@ func (m *Model) now() time.Time {
 // because pointing at a version and pointing at it again a minute later is not
 // a gesture that should open a release.
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
-	if msg.Button != tea.MouseLeft || m.mode == editing {
+	if msg.Button != tea.MouseLeft || m.mode != browsing {
 		return nil
 	}
-	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.versions)); i++ {
-		id := rowZone(m.versions[i].ID)
+	if m.sort.chosen() && m.zones.Hit(sortZone, msg) {
+		return m.startSort()
+	}
+	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.order)); i++ {
+		id := rowZone(m.versions[m.order[i]].ID)
 		if !m.zones.Hit(id, msg) {
 			continue
 		}
