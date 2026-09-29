@@ -1,0 +1,32 @@
+-- list, resting --
++ ! EX-1234 !     ~|
+| Checkout fails...|
++ Ada Lovelace     |
+-- list, selected --
++ > EX-1234 !     ~|
+| Checkout fails...|
++ Ada Lovelace     |
+-- list, picked --
++ + EX-1234 !     ~|
+| Checkout fails...|
++ Ada Lovelace     |
+-- list, held --
++ <> EX-1234 !    ~|
+| Checkout fails...|
++ Ada Lovelace     |
+-- board, resting --
++ # EX-87         5|
+| Cache the fiel...|
++ Ben Adams        |
+-- board, selected --
++ > EX-87         5|
+| Cache the fiel...|
++ Ben Adams        |
+-- board, picked --
++ + EX-87         5|
+| Cache the fiel...|
++ Ben Adams        |
+-- board, held --
++ <> EX-87        5|
+| Cache the fiel...|
++ Ben Adams        |

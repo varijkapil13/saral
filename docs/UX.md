@@ -804,6 +804,31 @@ replaced. The report names what changed and which cards did not and why; the car
 picked for the same gesture to try again. Quitting mid-run is held: the run stops after the card in
 flight and the quit goes ahead once it has answered.
 
+### Cards
+
+**Landing in the list, the backlog and the board in the next packets.** The renderer and the saved
+choice exist; until a view handles the look, `V` does nothing there and the view keeps drawing one
+line per issue.
+
+`V` cycles how an issue is drawn: **roomy** cards (the default, five lines), **compact** cards
+(three), and **lines** (one row per issue, as today), then round to roomy. One choice covers all three
+views and is kept per machine in `ui.toml`. The palette's *Cycle the row look* does the same.
+
+A card has a left bracket instead of a box (`╭ │ ╰`, `+ | +` in ASCII), coloured by status category
+and never by priority or type. Its first line is a mark cell, the key and, in the list and the
+backlog, the type on the left and the status and when it changed on the right. The summary follows:
+one line on a compact card, two on a roomy one, broken at a space and ending in `…` when it does not
+fit. Then the assignee, the priority, the due date (in the warning colour once it has passed) and the
+subtasks done out of all of them, `2/5`. A roomy card's last line is the parent, or else the labels
+and fix versions; a compact card puts the labels at the end of its third line. A field the issue does
+not have draws nothing.
+
+The mark cell is the type's glyph at rest, `▸` under the cursor, `✓` when picked and `◆` while held.
+The card under the cursor is drawn inverted, bracket included; a held card is in the warning colour.
+As a card gets narrower it gives up the labels and versions first, then the priority, then shortens
+the assignee, then the type's name (its glyph stays), then when it changed. The key and the summary
+never go.
+
 ## Releases: order and state
 
 The version list reads the project's versions in the project's own sequence and nothing else: the

@@ -1,0 +1,32 @@
+-- list, resting --
+╭ ▲ EX-1234 ▲ Bug        ◐ In Review  3d|
+│ Checkout fails when the basket is emp…|
+╰ Ada Lovelace • High • 2026-10-02 • 2/5|
+-- list, selected --
+╭ ▸ EX-1234 ▲ Bug        ◐ In Review  3d|
+│ Checkout fails when the basket is emp…|
+╰ Ada Lovelace • High • 2026-10-02 • 2/5|
+-- list, picked --
+╭ ✓ EX-1234 ▲ Bug        ◐ In Review  3d|
+│ Checkout fails when the basket is emp…|
+╰ Ada Lovelace • High • 2026-10-02 • 2/5|
+-- list, held --
+╭ ◆ EX-1234 ▲ Bug        ◐ In Review  3d|
+│ Checkout fails when the basket is emp…|
+╰ Ada Lovelace • High • 2026-10-02 • 2/5|
+-- board, resting --
+╭ ■ EX-87                              5|
+│ Cache the field catalogue between runs|
+╰ Ben Adams • Medium                    |
+-- board, selected --
+╭ ▸ EX-87                              5|
+│ Cache the field catalogue between runs|
+╰ Ben Adams • Medium                    |
+-- board, picked --
+╭ ✓ EX-87                              5|
+│ Cache the field catalogue between runs|
+╰ Ben Adams • Medium                    |
+-- board, held --
+╭ ◆ EX-87                              5|
+│ Cache the field catalogue between runs|
+╰ Ben Adams • Medium                    |

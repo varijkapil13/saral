@@ -1885,6 +1885,32 @@ record of what was built, what was left and why.
   drawn. **Left for later:** the lanes view keeps its numeric `laneTop` rather than anchoring it to
   a card.
 
+- [x] **P11.5 — The card renderer, its look and its key** · PR_LINK · **owns** `internal/ui/widget/card/**`, `internal/config/{uistate.go,uistate_look_test.go}`, `internal/ui/keys_test.go` (the `keyOwners` row and `adopting` for `cards.look`), `pkg/jira/cloud/conformance_roomy_test.go`, `docs/{ARCHITECTURE,UX,SETTINGS,PERFORMANCE,ROADMAP}.md`
+  Serial, and blocks P11.6 to P11.8. `card.Render` draws an issue as a roomy card (five lines, the
+  default) or a compact one (three) of exactly the width asked for, with a bracket coloured by status
+  category, the board's mark cell, and a fixed order of cells given up as it narrows. `V` and the
+  palette's `cards.look` cycle roomy, compact, lines through `card.Cycle`, which broadcasts
+  `card.LookMsg` and keeps the choice per machine in `ui.toml` under `[look]`; `card.Recall` reads it
+  back, roomy when there is none. No view handles `LookMsg` yet, so nothing on screen changes, and
+  `keys_test.go` holds `cards.look` in `adopting` until the list, the backlog and the board all show
+  `V`. A conformance test proves both adapters fill `Due`, `Subtasks` (with their status category)
+  and `FixVersions` from a search page that asks for them.
+
+- [ ] **P11.6 — Cards in the issue list** · after P11.5 · **owns** `internal/ui/list/**`; append-only `docs/{PERFORMANCE,UX,ROADMAP}.md`, `CHANGELOG.md`
+  The list draws `card.Render` in roomy and compact, with no column header in cards mode, the
+  click-to-filter cells through `Facts.TypeZone`/`StatusZone`/`WhoZone`, `card.RoomyFields` added to
+  the search only while roomy, and `itemsHeight()` wherever `rowsHeight()` counted rows. Lines mode
+  stays byte-identical. The last of P11.6 to P11.8 to land removes `cards.look` from `adopting` in
+  `internal/ui/keys_test.go`.
+
+- [ ] **P11.7 — Cards in the backlog** · after P11.5 · **owns** `internal/ui/backlog/**`; append-only `docs/{PERFORMANCE,UX,ROADMAP}.md`, `CHANGELOG.md`
+  Section heads stay one line while issues take `Look.Lines()`, through a prefix sum of line offsets;
+  one mark cell replaces marker and box in cards mode. Lines mode stays byte-identical.
+
+- [ ] **P11.8 — Cards on the board, in columns and in lanes** · after P11.5 · **owns** `internal/ui/board/**`; append-only `docs/{PERFORMANCE,UX,ROADMAP}.md`, `CHANGELOG.md`
+  Cards are drawn with `card.Render` at the column's cell width, the card cache holds `[]string`, and
+  the lane arithmetic counts `Look.Lines()` per card. Lines mode stays byte-identical.
+
 ## Later, deliberately not now
 
 - **Confluence.** Arrives as `pkg/confluence` behind its own port. Note that Confluence storage

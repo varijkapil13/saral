@@ -1,0 +1,48 @@
+-- list, resting --
++ ! EX-1234 !  ~|
+| Checkout fails|
+| when the ba...|
+| Ada Lovelace  |
++ checkout pa...|
+-- list, selected --
++ > EX-1234 !  ~|
+| Checkout fails|
+| when the ba...|
+| Ada Lovelace  |
++ checkout pa...|
+-- list, picked --
++ + EX-1234 !  ~|
+| Checkout fails|
+| when the ba...|
+| Ada Lovelace  |
++ checkout pa...|
+-- list, held --
++ <> EX-1234    |
+| Checkout fails|
+| when the ba...|
+| Ada Lovelace  |
++ checkout pa...|
+-- board, resting --
++ # EX-87      5|
+| Cache the     |
+| field catal...|
+| Ben Adams     |
++ EX-12 Faste...|
+-- board, selected --
++ > EX-87      5|
+| Cache the     |
+| field catal...|
+| Ben Adams     |
++ EX-12 Faste...|
+-- board, picked --
++ + EX-87      5|
+| Cache the     |
+| field catal...|
+| Ben Adams     |
++ EX-12 Faste...|
+-- board, held --
++ <> EX-87     5|
+| Cache the     |
+| field catal...|
+| Ben Adams     |
++ EX-12 Faste...|

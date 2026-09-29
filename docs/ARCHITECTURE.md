@@ -816,6 +816,18 @@ view that minted the ids is the only thing that knows what they mean, so the hit
 - **`widget.RowCache[K, V]`** — the bounded per-row memo every list-shaped view keeps: past its
   limit the map is cleared rather than evicted one entry at a time, since a scroll or a resize
   invalidates a screenful at once anyway.
+- **`widget/card`** — the card an issue is drawn as in the list, the backlog and the board. `Look` is
+  `Roomy` (five lines, the default), `Compact` (three) or `Lines` (one, which each view still draws
+  with its own row); `V` cycles them, and `Cycle` broadcasts `LookMsg` and writes the choice to
+  `ui.toml` off the event loop, so a key, the palette's `cards.look` and a click take one path.
+  `Render(dst, Facts, State, *Styles, Frame)` appends exactly `Look.Lines()` lines of exactly
+  `Frame.Width` cells: a left bracket coloured by status category, a mark cell, the key, and whatever
+  `Facts` the view filled — a blank field draws nothing. It sanitizes every field itself, and gives
+  cells up in a fixed order as the width shrinks. It imports `kernel`, `widget` and `internal/config`
+  and never `pkg/jira`: a view turns an issue into `Facts`, and `Facts.Category` is the status
+  category's value. `RoomyFields` are the fields a view adds to its search only while the look is
+  roomy. `NewStyles` splits each style into its opening and closing sequences once, which keeps a
+  card to between eight and twenty allocations.
 
 **Zone ids are never freed.** `Mark` fills a permanent id map in the manager, and nothing evicts from
 it. Every id in this tree is minted from a per-instance prefix and a stable name, so redrawing an

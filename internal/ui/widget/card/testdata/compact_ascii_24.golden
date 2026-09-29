@@ -1,0 +1,32 @@
+-- list, resting --
++ ! EX-1234 !          ~|
+| Checkout fails when...|
++ Ada Lo... | 2026-10-02|
+-- list, selected --
++ > EX-1234 !          ~|
+| Checkout fails when...|
++ Ada Lo... | 2026-10-02|
+-- list, picked --
++ + EX-1234 !          ~|
+| Checkout fails when...|
++ Ada Lo... | 2026-10-02|
+-- list, held --
++ <> EX-1234 !         ~|
+| Checkout fails when...|
++ Ada Lo... | 2026-10-02|
+-- board, resting --
++ # EX-87              5|
+| Cache the field cat...|
++ Ben Adams | Medium    |
+-- board, selected --
++ > EX-87              5|
+| Cache the field cat...|
++ Ben Adams | Medium    |
+-- board, picked --
++ + EX-87              5|
+| Cache the field cat...|
++ Ben Adams | Medium    |
+-- board, held --
++ <> EX-87             5|
+| Cache the field cat...|
++ Ben Adams | Medium    |

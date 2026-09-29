@@ -1,0 +1,48 @@
+-- list, resting --
++ ! EX-1234 !          ~|
+| Checkout fails when   |
+| the basket is empty...|
+| Ada Lo... | 2026-10-02|
++ checkout payments |...|
+-- list, selected --
++ > EX-1234 !          ~|
+| Checkout fails when   |
+| the basket is empty...|
+| Ada Lo... | 2026-10-02|
++ checkout payments |...|
+-- list, picked --
++ + EX-1234 !          ~|
+| Checkout fails when   |
+| the basket is empty...|
+| Ada Lo... | 2026-10-02|
++ checkout payments |...|
+-- list, held --
++ <> EX-1234 !         ~|
+| Checkout fails when   |
+| the basket is empty...|
+| Ada Lo... | 2026-10-02|
++ checkout payments |...|
+-- board, resting --
++ # EX-87              5|
+| Cache the field       |
+| catalogue between runs|
+| Ben Adams | Medium    |
++ EX-12 Faster first ...|
+-- board, selected --
++ > EX-87              5|
+| Cache the field       |
+| catalogue between runs|
+| Ben Adams | Medium    |
++ EX-12 Faster first ...|
+-- board, picked --
++ + EX-87              5|
+| Cache the field       |
+| catalogue between runs|
+| Ben Adams | Medium    |
++ EX-12 Faster first ...|
+-- board, held --
++ <> EX-87             5|
+| Cache the field       |
+| catalogue between runs|
+| Ben Adams | Medium    |
++ EX-12 Faster first ...|

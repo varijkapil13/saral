@@ -1,0 +1,48 @@
+-- list, resting --
+╭ ▲ EX-1234 ▲          ◐|
+│ Checkout fails when   |
+│ the basket is empty a…|
+│ Ada Love… • 2026-10-02|
+╰ checkout payments • 2…|
+-- list, selected --
+╭ ▸ EX-1234 ▲          ◐|
+│ Checkout fails when   |
+│ the basket is empty a…|
+│ Ada Love… • 2026-10-02|
+╰ checkout payments • 2…|
+-- list, picked --
+╭ ✓ EX-1234 ▲          ◐|
+│ Checkout fails when   |
+│ the basket is empty a…|
+│ Ada Love… • 2026-10-02|
+╰ checkout payments • 2…|
+-- list, held --
+╭ ◆ EX-1234 ▲          ◐|
+│ Checkout fails when   |
+│ the basket is empty a…|
+│ Ada Love… • 2026-10-02|
+╰ checkout payments • 2…|
+-- board, resting --
+╭ ■ EX-87              5|
+│ Cache the field       |
+│ catalogue between runs|
+│ Ben Adams • Medium    |
+╰ EX-12 Faster first pa…|
+-- board, selected --
+╭ ▸ EX-87              5|
+│ Cache the field       |
+│ catalogue between runs|
+│ Ben Adams • Medium    |
+╰ EX-12 Faster first pa…|
+-- board, picked --
+╭ ✓ EX-87              5|
+│ Cache the field       |
+│ catalogue between runs|
+│ Ben Adams • Medium    |
+╰ EX-12 Faster first pa…|
+-- board, held --
+╭ ◆ EX-87              5|
+│ Cache the field       |
+│ catalogue between runs|
+│ Ben Adams • Medium    |
+╰ EX-12 Faster first pa…|

@@ -37,6 +37,10 @@ type UIState struct {
 	// view is not a Jira account's business.
 	Sorts map[string]SortSpec `toml:"sorts"`
 
+	// Rows is how the list, the backlog and the board draw an issue. One
+	// answer for all three, kept per machine for the reason Splits is.
+	Rows *LookState `toml:"look,omitempty"`
+
 	// Remembered maps a site to an account on it to what that profile scope
 	// was last left showing — see ProfileScope and Remembered's own doc for
 	// why this half of the file is keyed by profile rather than by view alone.
@@ -48,6 +52,13 @@ type UIState struct {
 type SortSpec struct {
 	Field string `toml:"field"`
 	Desc  bool   `toml:"desc"`
+}
+
+// LookState is the [look] table: the word the card package reads a look from.
+// The word is not checked here; a reader that no longer knows it falls back to
+// its own default.
+type LookState struct {
+	Look string `toml:"look"`
 }
 
 // ProfileScope is whose remembered view and filters a Remembered entry is: the
@@ -288,6 +299,41 @@ func SaveSort(view string, spec SortSpec) error {
 		delete(state.Sorts, view)
 	} else {
 		state.Sorts[view] = spec
+	}
+	var b strings.Builder
+	if err := toml.NewEncoder(&b).Encode(state); err != nil {
+		return fmt.Errorf("encoding %s: %w", path, err)
+	}
+	return writeAtomic(path, []byte(b.String()))
+}
+
+// Look is the row look this machine last chose, or "" when it never chose one.
+func (s UIState) Look() string {
+	if s.Rows == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.Rows.Look)
+}
+
+// SaveLook records the row look and writes the file, keeping everything else
+// in it — the same locked read-merge-write SaveSort does. A blank look removes
+// the table rather than writing a choice nothing would produce.
+func SaveLook(look string) error {
+	path, err := UIStatePath()
+	if err != nil {
+		return err
+	}
+	unlock, err := lockFile(path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	state := LoadUIState()
+	if look = strings.TrimSpace(look); look == "" {
+		state.Rows = nil
+	} else {
+		state.Rows = &LookState{Look: look}
 	}
 	var b strings.Builder
 	if err := toml.NewEncoder(&b).Encode(state); err != nil {
