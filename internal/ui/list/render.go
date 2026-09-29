@@ -152,15 +152,18 @@ func newStyles(t *kernel.Theme) *styles {
 // tuple docs/PERFORMANCE.md asks for — updated, width, selected, theme
 // generation — widened to the whole column plan and to the issue's identity,
 // since one cache serves every row.
+//
+// The narrow fields sit together at the end so that the key packs into fewer
+// words: the memo is sized for rowCacheLimit entries up front, which a view
+// pays on its first paint.
 type rowKey struct {
-	key      string
-	updated  int64
-	lay      layout
-	width    int
-	selected bool
-	gen      int
-	mouse    bool
-	look     card.Look
+	key        string
+	updated    int64
+	lay        layout
+	width, gen int32
+	look       card.Look
+	selected   bool
+	mouse      bool
 }
 
 // renderRow draws one row to exactly lay.width columns.

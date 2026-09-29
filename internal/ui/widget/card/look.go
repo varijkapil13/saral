@@ -100,30 +100,35 @@ func init() {
 		Title: "Cycle the row look: roomy cards, compact cards, lines",
 		Group: "Appearance",
 		Keys:  []string{Binding.Help().Key},
-		Run:   func(kernel.Deps) tea.Cmd { return Cycle(current()) },
+		Run:   func(kernel.Deps) tea.Cmd { return Cycle(Recall()) },
 	})
 }
 
-// Recall is the look this machine last chose, read from ui.toml, or Default
-// when it never chose one or chose one this build does not know.
-func Recall() Look { return Parse(config.LoadUIState().Look()) }
-
-var chosen struct {
+var recalled struct {
 	sync.Mutex
 	look Look
-	set  bool
+	read bool
 }
 
-// current is the look the palette cycles from: the last one Cycle moved to in
-// this process, since its save may not have reached the file yet.
-func current() Look {
-	chosen.Lock()
-	look, set := chosen.look, chosen.set
-	chosen.Unlock()
-	if set {
-		return look
+// Recall is the look this machine last chose, or Default when it never chose
+// one or chose one this build does not know. ui.toml is read once per process:
+// every view calls Recall as it is built, and after that the look only moves
+// through Cycle, which keeps it here before its save reaches the file.
+func Recall() Look {
+	recalled.Lock()
+	defer recalled.Unlock()
+	if !recalled.read {
+		recalled.look, recalled.read = Parse(config.LoadUIState().Look()), true
 	}
-	return Recall()
+	return recalled.look
+}
+
+// ResetRecall makes the next Recall read ui.toml again. It is for tests that
+// point the cache directory somewhere else.
+func ResetRecall() {
+	recalled.Lock()
+	recalled.read = false
+	recalled.Unlock()
 }
 
 var saveFailed atomic.Bool
@@ -133,9 +138,9 @@ var saveFailed atomic.Bool
 // process, and the look changes regardless.
 func Cycle(l Look) tea.Cmd {
 	next := l.Next()
-	chosen.Lock()
-	chosen.look, chosen.set = next, true
-	chosen.Unlock()
+	recalled.Lock()
+	recalled.look, recalled.read = next, true
+	recalled.Unlock()
 	return tea.Batch(kernel.Broadcast(LookMsg{Look: next}), save(next))
 }
 

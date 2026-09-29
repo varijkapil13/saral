@@ -534,6 +534,14 @@ slice each, which is why the lines walk costs what it did before a row became a 
 over cards costs more than one over rows because a card draws more than a row does — the priority,
 the due date, the subtasks, the labels and the versions — and each is a string of its own.
 
+First paint in lines costs what it did before cards (`BenchmarkFirstPaintFromCache`, 899 allocations
+against 897). That holds because of three choices:
+
+- `card.Recall` reads `ui.toml` once per process rather than on every `New`, since decoding it cost
+  about 70 allocations.
+- The card styles are built on the first card drawn, not at `New`.
+- The slab of memoized lines starts at 64 and doubles.
+
 ## Measuring for real
 
 ```sh

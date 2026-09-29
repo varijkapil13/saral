@@ -248,7 +248,7 @@ func New(d kernel.Deps) kernel.View {
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
-	m.styles, m.cards = newStyles(m.deps.Theme), card.NewStyles(m.deps.Theme)
+	m.styles = newStyles(m.deps.Theme)
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
@@ -390,7 +390,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.setFocus(msg.Focused)
 
 	case kernel.ThemeMsg:
-		m.styles, m.cards = newStyles(msg.Theme), card.NewStyles(msg.Theme)
+		m.styles, m.cards = newStyles(msg.Theme), nil
 		m.deps.Theme = msg.Theme
 		m.rows.Reset()
 		m.relayout()
@@ -1390,8 +1390,8 @@ func (m *Model) warm(end int) {
 func (m *Model) row(at int, selected bool) []string {
 	iss := &m.issues[at]
 	k := rowKey{
-		key: iss.Key, updated: iss.Updated.UnixNano(), lay: m.lay, width: m.width, selected: selected,
-		gen: m.styles.gen, mouse: m.zones.Enabled(), look: m.look,
+		key: iss.Key, updated: iss.Updated.UnixNano(), lay: m.lay, width: int32(m.width), selected: selected,
+		gen: int32(m.styles.gen), mouse: m.zones.Enabled(), look: m.look,
 	}
 	if s, ok := m.rows.Get(k); ok {
 		return s
@@ -1399,7 +1399,7 @@ func (m *Model) row(at int, selected bool) []string {
 	var out []string
 	if m.look.Cards() {
 		out = m.zones.MarkLines(rowZone(iss.Key), m.hold(m.look.Lines(), func(dst []string) []string {
-			return card.Render(dst, m.facts(iss), card.State{Selected: selected}, m.cards, card.Frame{
+			return card.Render(dst, m.facts(iss), card.State{Selected: selected}, m.cardStyles(), card.Frame{
 				Width: m.width, Look: m.look, Glyphs: m.deps.Theme.Glyphs, Zones: m.zones,
 			})
 		}))
@@ -1412,14 +1412,27 @@ func (m *Model) row(at int, selected bool) []string {
 	return out
 }
 
-// slabSize is how many lines one backing array for the memoized rows holds.
-const slabSize = 1024
+// cardStyles builds the card styles on the first card drawn, so that a list in
+// lines never pays for them on its first paint.
+func (m *Model) cardStyles() *card.Styles {
+	if m.cards == nil {
+		m.cards = card.NewStyles(m.deps.Theme)
+	}
+	return m.cards
+}
+
+// The slab starts at a screenful and doubles up to slabSize, so a first paint
+// does not pay for a thousand lines it will not draw.
+const (
+	slabFirst = 64
+	slabSize  = 1024
+)
 
 // hold appends n lines to the slab and returns them as a slice of their own,
 // capped so that nothing appended to it can reach the next row's lines.
 func (m *Model) hold(n int, fill func([]string) []string) []string {
 	if cap(m.slab)-len(m.slab) < n {
-		m.slab = make([]string, 0, max(slabSize, n))
+		m.slab = make([]string, 0, max(min(2*cap(m.slab), slabSize), slabFirst, n))
 	}
 	at := len(m.slab)
 	m.slab = fill(m.slab)

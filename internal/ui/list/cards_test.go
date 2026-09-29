@@ -125,14 +125,16 @@ func pressV(t *testing.T, dr *driver) {
 	dr.send(*look)
 }
 
-// ownConfig points ui.toml at a directory of this test's own, so that a look
-// saved here is not what every other model in the binary recalls.
+// ownConfig points ui.toml at a directory of this test's own and makes the
+// next Recall read it, then puts the harness's lines back for the tests after.
 func ownConfig(t *testing.T) {
 	t.Helper()
 	linesByDefault()
 	dir := t.TempDir()
 	t.Setenv("SARAL_CACHE_DIR", dir)
 	t.Setenv("XDG_CACHE_HOME", dir)
+	card.ResetRecall()
+	t.Cleanup(recallLines)
 }
 
 func TestLook_TheHarnessDrawsLines(t *testing.T) {
@@ -401,12 +403,14 @@ func TestCards_VReachesTheListThroughTheKernel(t *testing.T) {
 	if err := config.SaveLook(card.Lines.Word()); err != nil {
 		t.Fatal(err)
 	}
+	card.ResetRecall()
 	m := startAll(t, testDeps(newFake(20)), 120, 30)
 	mustContain(t, frame(m), "SUMMARY")
 	m = send(t, m, keyPress("V"))
 	got := frame(m)
 	mustNotContain(t, got, "SUMMARY")
 	mustContain(t, got, "+ > PROJ-1 ")
+	card.ResetRecall()
 	if saved := card.Recall(); saved != card.Roomy {
 		t.Errorf("V saved %s, want roomy", saved.Word())
 	}
