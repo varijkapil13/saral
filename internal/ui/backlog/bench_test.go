@@ -11,6 +11,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -24,6 +25,11 @@ import (
 // before there were any.
 func stocked(tb testing.TB, n, w, h int) *Model {
 	tb.Helper()
+	return stockedIn(tb, card.Lines, n, w, h)
+}
+
+func stockedIn(tb testing.TB, look card.Look, n, w, h int) *Model {
+	tb.Helper()
 	mgr := zone.New()
 	tb.Cleanup(mgr.Close)
 	d := kernel.Deps{
@@ -33,10 +39,8 @@ func stocked(tb testing.TB, n, w, h int) *Model {
 		Zones:   mgr,
 		Now:     func() time.Time { return time.Date(2026, time.March, 5, 9, 0, 0, 0, time.UTC) },
 	}
-	view, ok := New(d).(*Model)
-	if !ok {
-		tb.Fatal("New did not return a *Model")
-	}
+	view := inLines(tb, New(d))
+	_, _ = view.Update(card.LookMsg{Look: look})
 	next, _ := view.Update(kernel.SizeMsg{Width: w, Height: h})
 	m, _ := next.(*Model)
 	next, _ = m.Update(benchLoaded(m.gen, n))
@@ -126,8 +130,22 @@ func BenchmarkBacklogSteadyScrollTermed10k(b *testing.B) {
 // on the last row and every iteration after the ten thousandth is a memo hit, so
 // what the benchmark reports is a blend of walking and standing still, weighted
 // by how many iterations the machine got through.
-func BenchmarkBacklogWalk10k(b *testing.B) {
-	m := stocked(b, 10000, 120, 40)
+func BenchmarkBacklogWalk10k(b *testing.B) { walk(b, stocked(b, 10000, 120, 40)) }
+
+func BenchmarkBacklogWalkCards10k(b *testing.B) { walk(b, stockedIn(b, card.Compact, 10000, 120, 40)) }
+
+func BenchmarkBacklogWalkRoomy10k(b *testing.B) { walk(b, stockedIn(b, card.Roomy, 10000, 120, 40)) }
+
+func BenchmarkBacklogSteadyScrollCards10k(b *testing.B) {
+	scroll(b, stockedIn(b, card.Compact, 10000, 120, 40))
+}
+
+func BenchmarkBacklogSteadyScrollRoomy10k(b *testing.B) {
+	scroll(b, stockedIn(b, card.Roomy, 10000, 120, 40))
+}
+
+func walk(b *testing.B, m *Model) {
+	b.Helper()
 	var down, top tea.Msg = keyPress("j"), keyPress("home")
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -151,8 +169,14 @@ func BenchmarkBacklogWalk10k(b *testing.B) {
 // the machine managed — which is a number about the machine. Both renderings of
 // one row are memoized after two iterations, so this is the cost of a pick and
 // nothing else: if it ever clears the whole memo, the figure is a screenful.
-func BenchmarkBacklogPickAndFrame(b *testing.B) {
-	m := stocked(b, 10000, 120, 40)
+func BenchmarkBacklogPickAndFrame(b *testing.B) { pickAndFrame(b, stocked(b, 10000, 120, 40)) }
+
+func BenchmarkBacklogPickAndFrameCards(b *testing.B) {
+	pickAndFrame(b, stockedIn(b, card.Compact, 10000, 120, 40))
+}
+
+func pickAndFrame(b *testing.B, m *Model) {
+	b.Helper()
 	at := 0
 	for i := range m.rows {
 		if !m.rows[i].head {

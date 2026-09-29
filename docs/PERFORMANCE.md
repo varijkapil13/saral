@@ -128,15 +128,19 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/attach` | `TestBudget_AttachKeystrokeToFrame` |
 | `internal/ui/attach` | `TestBudget_AttachRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/attach` | `TestBudget_AttachScrollingCostsTheSameOnTwoThousandFilesAsOnTwenty` |
+| `internal/ui/backlog` | `TestBudget_BacklogAMemoMissCostsOneCardAndNotAWindow` |
 | `internal/ui/backlog` | `TestBudget_BacklogAMemoMissCostsOneRowAndNotAWindow` |
 | `internal/ui/backlog` | `TestBudget_BacklogFindAllocatesNothingPerRow` |
 | `internal/ui/backlog` | `TestBudget_BacklogFullRedrawAt200x60` |
 | `internal/ui/backlog` | `TestBudget_BacklogKeystrokeToFrameAtTenThousandIssues` |
+| `internal/ui/backlog` | `TestBudget_BacklogLineOffsetsReuseTheirSlice` |
+| `internal/ui/backlog` | `TestBudget_BacklogPickingACardCostsOneCardAndTheFrame` |
 | `internal/ui/backlog` | `TestBudget_BacklogPickingAnIssueCostsOneRowAndTheFrame` |
 | `internal/ui/backlog` | `TestBudget_BacklogRegroupingAfterAMoveIsOnTheKeystrokeBudget` |
 | `internal/ui/backlog` | `TestBudget_BacklogRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/backlog` | `TestBudget_BacklogScrollingCostsTheSameOnTenThousandRowsAsOnTwenty` |
 | `internal/ui/backlog` | `TestBudget_BacklogScrollingCostsTheSameUnderATermInForce` |
+| `internal/ui/backlog` | `TestBudget_BacklogScrollingOverCardsCostsTheFrameAlone` |
 | `internal/ui/backlog` | `TestBudget_BacklogSectionTotalsCostNothingPerFrame` |
 | `internal/ui/board` | `TestBudget_ABoardMemoMissCostsTwoLinesAndNotAScreen` |
 | `internal/ui/board` | `TestBudget_BoardCardsAreMemoizedSoAFrameCostsNothingToRedraw` |
@@ -541,6 +545,27 @@ against 897). That holds because of three choices:
   about 70 allocations.
 - The card styles are built on the first card drawn, not at `New`.
 - The slab of memoized lines starts at 64 and doubles.
+
+### What the backlog's cards cost today
+
+Measured on an M2 Pro over `internal/ui/backlog`, 10,000 issues at 120x40, with the line offsets of
+heads and cards in a prefix sum rebuilt on every regroup. The ceilings are in
+`internal/ui/backlog/budget_test.go`; the lines look is the harness default, so every guard above
+this table still measures it unchanged.
+
+| Benchmark | ns/op | allocs/op | ceiling |
+|---|---|---|---|
+| `BenchmarkBacklogSteadyScrollCards10k` | 2,000 | 1 | 1 |
+| `BenchmarkBacklogSteadyScrollRoomy10k` | 1,500 | 1 | 1 |
+| `BenchmarkBacklogWalkCards10k` | 19,000 | 80 | 88 |
+| `BenchmarkBacklogWalkRoomy10k` | 24,000 | 120 | 132 |
+| `BenchmarkBacklogPickAndFrameCards` | 2,100 | 2 | 4 |
+| `BenchmarkBacklogRegroup10k` | 790,000 | 6,711 | 16 ms |
+
+Rows and heads keep their `string` memo exactly as before cards. Cards have a memo of their own,
+built on the first card drawn, as are the card styles. Keeping them apart holds the lines walk at 51
+allocations and first paint where it was: `BenchmarkBacklogFirstPaintFromCache`, 50 stored issues
+drawn in lines at 120x40, measures 1,084 allocations and 379 KB against main's 1,083 and 378 KB.
 
 ## Measuring for real
 

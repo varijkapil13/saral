@@ -9,6 +9,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -198,11 +199,23 @@ func (m *Model) View() string {
 	if len(m.rows) == 0 {
 		lines = m.appendEmpty(lines, h)
 	} else {
-		end := min(m.top+h, len(m.rows))
-		for i := m.top; i < end; i++ {
-			lines = append(lines, m.line(i))
+		if m.look.Cards() {
+			m.today, _ = m.siteToday()
 		}
-		for i := end - m.top; i < h; i++ {
+		end, used := m.visibleEnd(), 0
+		for i := m.top; i < end; i++ {
+			d := m.line(i)
+			if d.card == nil {
+				lines = append(lines, d.one)
+				used++
+				continue
+			}
+			for _, l := range d.card[:min(len(d.card), h-used)] {
+				lines = append(lines, l)
+				used++
+			}
+		}
+		for ; used < h; used++ {
 			lines = append(lines, "")
 		}
 		m.warm(end)
@@ -248,9 +261,22 @@ func (m *Model) warm(end int) {
 	}
 }
 
-func (m *Model) line(at int) string {
+// cardKey adds what a card draws beyond a row: the fields the issue was read
+// with and the day its due date is overdue against.
+type cardKey struct {
+	row           rowKey
+	fields, today int
+}
+
+type drawn struct {
+	one  string
+	card []string
+}
+
+func (m *Model) line(at int) drawn {
 	r := m.rows[at]
 	k := rowKey{lay: m.lay, selected: at == m.cursor, gen: m.styles.gen}
+	cards := !r.head && m.look.Cards()
 	if r.head {
 		g := &m.groups[r.group]
 		k.head, k.name, k.count, k.state = true, g.name, len(g.issues), string(g.state)
@@ -260,9 +286,12 @@ func (m *Model) line(at int) string {
 		iss := &m.issues[r.issue]
 		k.name, k.updated = iss.Key, iss.Updated.UnixNano()
 		k.picked = m.picked[iss.Key]
+		if cards {
+			return drawn{card: m.cardLines(at, cardKey{row: k, fields: iss.Requested.Len(), today: m.today})}
+		}
 	}
 	if s, ok := m.memo.Get(k); ok {
-		return s
+		return drawn{one: s}
 	}
 	var s string
 	if r.head {
@@ -272,7 +301,101 @@ func (m *Model) line(at int) string {
 	}
 	s = m.zones.Mark(m.zoneOf(at), s)
 	m.memo.Put(k, s)
-	return s
+	return drawn{one: s}
+}
+
+// cardLines keeps its memo apart from the rows' and builds it on the first
+// card, so a session in lines pays nothing for it.
+func (m *Model) cardLines(at int, k cardKey) []string {
+	if m.cards == nil {
+		m.cards = widget.NewRowCache[cardKey, []string](rowCacheLimit)
+	}
+	if lines, ok := m.cards.Get(k); ok {
+		return lines
+	}
+	lines := m.zones.MarkLines(m.zoneOf(at), m.renderCard(&m.issues[m.rows[at].issue], k.row.selected, k.row.picked))
+	m.cards.Put(k, lines)
+	return lines
+}
+
+func (m *Model) resetMemo() {
+	m.memo.Reset()
+	if m.cards != nil {
+		m.cards.Reset()
+	}
+}
+
+func (m *Model) renderCard(iss *jira.Issue, sel, picked bool) []string {
+	g := m.deps.Theme.Glyphs
+	f := card.Facts{
+		Key: iss.Key, Summary: iss.Summary,
+		TypeGlyph: g.TypeGlyph(iss.Type), TypeName: iss.Type.Name,
+		StatusGlyph: g.CategoryGlyph(iss.Status.Category), StatusName: iss.Status.Name,
+		Category: categoryIndex(iss.Status.Category),
+		Estimate: m.estimateText(iss),
+		Subtasks: subtasksText(iss.Subtasks),
+		Labels:   iss.Labels, FixVersions: versionNames(iss.FixVersions),
+	}
+	if iss.Assignee != nil {
+		f.Assignee = iss.Assignee.DisplayName
+	}
+	if iss.Priority != nil {
+		f.Priority = iss.Priority.Name
+	}
+	f.Due, f.Overdue = m.dueText(iss.Due)
+	if m.cardSty == nil {
+		m.cardSty = card.NewStyles(m.deps.Theme)
+	}
+	return card.Render(make([]string, 0, m.look.Lines()), f, card.State{Selected: sel, Picked: picked}, m.cardSty,
+		card.Frame{Width: m.lay.width, Look: m.look, Glyphs: g, Zones: m.zones})
+}
+
+func (m *Model) estimateText(iss *jira.Issue) string {
+	if m.estimate.ID == "" {
+		return ""
+	}
+	n, ok := iss.Fields.Number(m.estimate)
+	if !ok {
+		return ""
+	}
+	return strconv.FormatFloat(n, 'f', -1, 64)
+}
+
+func (m *Model) dueText(due jira.Date) (string, bool) {
+	if due.IsZero() {
+		return "", false
+	}
+	_, today := m.siteToday()
+	day := due.In(today.Location())
+	layout := "02 Jan 2006"
+	if day.Year() == today.Year() {
+		layout = "02 Jan"
+	}
+	return "due " + day.Format(layout), day.Before(today)
+}
+
+func subtasksText(subtasks []jira.IssueRef) string {
+	if len(subtasks) == 0 {
+		return ""
+	}
+	done := 0
+	for i := range subtasks {
+		if subtasks[i].Status.Category == jira.CategoryDone {
+			done++
+		}
+	}
+	return strconv.Itoa(done) + "/" + strconv.Itoa(len(subtasks))
+}
+
+func versionNames(versions []jira.Version) []string {
+	if len(versions) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(versions))
+	for i := range versions {
+		out = append(out, versions[i].Name)
+	}
+	return out
 }
 
 // renderHead draws one section head: the sprint, its state and how many issues

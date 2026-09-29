@@ -15,6 +15,7 @@ backlog
 │ M      only my issues                               │
 │ f      filter by a person, a status, a label        │
 │ s      sort                                         │
+│ V      roomy / compact / lines                      │
 └─────────────────────────────────────────────────────┘
 
 board

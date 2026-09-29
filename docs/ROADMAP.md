@@ -1903,7 +1903,7 @@ record of what was built, what was left and why.
   stays byte-identical. The last of P11.6 to P11.8 to land removes `cards.look` from `adopting` in
   `internal/ui/keys_test.go`.
 
-- [ ] **P11.7 — Cards in the backlog** · after P11.5 · **owns** `internal/ui/backlog/**`; append-only `docs/{PERFORMANCE,UX,ROADMAP}.md`, `CHANGELOG.md`
+- [x] **P11.7 — Cards in the backlog** · [#178](https://github.com/varijkapil13/saral/pull/178) · after P11.5 · **owns** `internal/ui/backlog/**`; append-only `docs/{PERFORMANCE,UX,ROADMAP}.md`, `CHANGELOG.md`
   Section heads stay one line while issues take `Look.Lines()`, through a prefix sum of line offsets;
   one mark cell replaces marker and box in cards mode. Lines mode stays byte-identical.
 

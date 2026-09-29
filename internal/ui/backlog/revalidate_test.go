@@ -12,6 +12,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -101,6 +102,8 @@ func openBacklog(t *testing.T, d kernel.Deps, w, h int) kernel.Model {
 	if err != nil {
 		t.Fatal(err)
 	}
+	lined, _ := m.Update(kernel.BroadcastMsg{Msg: card.LookMsg{Look: card.Lines}})
+	m = lined.(kernel.Model)
 	m = drainK(t, m, m.Init())
 	next, cmd := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	return drainK(t, next.(kernel.Model), cmd)

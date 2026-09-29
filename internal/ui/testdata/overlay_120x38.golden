@@ -17,6 +17,7 @@ c     create an issue in this section                 pgup page up      G      l
 M     only my issues
 f     filter by a person, a status, a label
 s     sort
+V     roomy / compact / lines
 
 board
 enter open                                     ↓/j down               pgdn    page down                 ...

@@ -11,6 +11,7 @@ import (
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -103,7 +104,7 @@ func (m *Model) created(msg form.CreatedMsg) tea.Cmd {
 	if board != 0 && board == m.config.BoardID && m.deps.Jira != nil {
 		reader = m.deps.Jira
 	}
-	return kernel.Reply(settle(m.mover, reader, m.search, m.fieldIDs, projectionOf(m.field, m.config),
+	return kernel.Reply(settle(m.mover, reader, m.search, m.fieldIDs, projectionOf(m.field, m.config, m.look == card.Roomy),
 		board, key, msg.Sprint), m.addr)
 }
 
