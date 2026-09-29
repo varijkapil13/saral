@@ -29,6 +29,7 @@ board
 │ b      another board of this project         │
 │ f      filter by a person, a status, a label │
 │ F 1-9  quick filters                         │
+│ V      roomy / compact / lines               │
 └──────────────────────────────────────────────┘
 
 comment

@@ -4,12 +4,14 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -81,6 +83,10 @@ func (m *Model) rowsHeight() int {
 	}
 	return max(h, 1)
 }
+
+// itemsHeight is how many cards of the look in force fit in rowsHeight, which
+// is what the cursor, the scroll offsets and the pages move by.
+func (m *Model) itemsHeight() int { return max(m.rowsHeight()/m.look.Lines(), 1) }
 
 // prompting reports that a line under the grid is taken by a gesture in
 // progress.
@@ -206,6 +212,29 @@ func (c *cardCache) put(k cardKey, s string) {
 
 func (c *cardCache) reset() { clear(c.cards) }
 
+// deckKey is a cardKey drawn in a look of cards.
+type deckKey struct {
+	cardKey
+	look card.Look
+}
+
+// deck is the memo of cards drawn by card.Render, built with its styles on the
+// first card drawn, so a board that stays in lines pays for neither.
+type deck struct {
+	cards  map[deckKey][]string
+	styles *card.Styles
+}
+
+func (m *Model) deck() *deck {
+	if m.decked == nil {
+		m.decked = &deck{cards: make(map[deckKey][]string, 64)}
+	}
+	if m.decked.styles == nil || m.decked.styles.Gen != m.deps.Theme.Gen {
+		m.decked.styles = card.NewStyles(m.deps.Theme)
+	}
+	return m.decked
+}
+
 // gridState is everything the composed window of rows depends on, apart from
 // each column's own scroll offset — which cannot be part of a comparable key,
 // since a board's column count varies, and is compared separately against
@@ -226,12 +255,13 @@ type gridState struct {
 	heldRow  int
 	lanes    laneMode
 	laneTop  int
+	look     card.Look
 }
 
 func (m *Model) gridState(h int) gridState {
 	st := gridState{
 		lay: m.lay, colTop: m.colTop, gen: m.styles.gen, dataGen: m.dataGen, h: h,
-		curCol: m.curCol, curRow: m.curRow,
+		curCol: m.curCol, curRow: m.curRow, look: m.look,
 	}
 	if m.lanesOn() {
 		st.lanes, st.laneTop = m.laneMode, m.laneTop
@@ -340,9 +370,7 @@ func (m *Model) grid(h int) []string {
 	if m.lanesOn() {
 		lines = m.laneGrid(lines, h)
 	} else {
-		for row := range h {
-			lines = append(lines, m.composeRow(row))
-		}
+		lines = m.cardRows(lines, h)
 	}
 	m.gridCache = lines
 	m.gridAt = st
@@ -351,36 +379,77 @@ func (m *Model) grid(h int) []string {
 	return m.gridCache
 }
 
-// line is one row of the grid, by its position on screen rather than an
+// cardRows is the window of whole cards that fits in h lines, with the lines
+// left under the last of them blank. A window shorter than one card still
+// draws the top of the first.
+func (m *Model) cardRows(lines []string, h int) []string {
+	start := len(lines)
+	for row := range max(h/m.look.Lines(), 1) {
+		lines = m.composeRow(lines, row)
+	}
+	if len(lines)-start > h {
+		lines = lines[:start+h]
+	}
+	for len(lines)-start < h {
+		lines = append(lines, m.blankRow)
+	}
+	return lines
+}
+
+// line is one line of the grid, by its position on screen rather than an
 // absolute index shared across columns. It is what the card memo budget test
 // calls directly: once grid has built the window for the state on screen, a
-// row already in it costs nothing but the slice index.
+// line already in it costs nothing but the slice index.
 func (m *Model) line(row int) string {
 	lines := m.grid(m.rowsHeight())
 	if row >= 0 && row < len(lines) {
 		return lines[row]
 	}
-	return m.composeRow(row)
+	return m.blankRow
 }
 
-// composeRow is one row across every visible column at the given position on
-// screen: each column's own offset says which of its cards, if any, belongs
-// there, so a short column runs out and blanks while a long one beside it
-// keeps going.
+// composeRow appends one row of cards across every visible column at the
+// given position on screen, a line for each line a card of the look takes:
+// each column's own offset says which of its cards, if any, belongs there, so
+// a short column runs out and blanks while a long one beside it keeps going.
 //
-// It gathers the cells before building the line so the builder can be grown
-// to the bytes they actually need rather than to the visual width: a styled
+// It gathers the cells before building a line so the builder can be grown to
+// the bytes they actually need rather than to the visual width: a styled
 // cell's escape sequences make it wider in bytes than in columns, and growing
 // by columns alone under-sizes the buffer and forces a second allocation
-// mid-write for every rebuilt row rather than the one this returns.
-func (m *Model) composeRow(row int) string {
+// mid-write for every rebuilt line rather than the one it returns.
+func (m *Model) composeRow(dst []string, row int) []string {
 	end := min(m.colTop+m.lay.cols, len(m.cols))
-	cells := m.rowCells[:0]
-	for c := m.colTop; c < end; c++ {
-		cells = append(cells, m.cell(c, m.rowTopAt(c)+row))
+	if !m.look.Cards() {
+		cells := m.rowCells[:0]
+		for c := m.colTop; c < end; c++ {
+			cells = append(cells, m.cell(c, m.rowTopAt(c)+row))
+		}
+		m.rowCells = cells
+		return append(dst, m.joinCells(cells))
 	}
-	m.rowCells = cells
-	return m.joinCells(cells)
+	cards := m.rowCards[:0]
+	for c := m.colTop; c < end; c++ {
+		cards = append(cards, m.cardCell(c, m.rowTopAt(c)+row))
+	}
+	m.rowCards = cards
+	return m.joinRows(dst, cards)
+}
+
+func (m *Model) joinRows(dst []string, cards [][]string) []string {
+	for sub := range m.look.Lines() {
+		cells := m.rowCells[:0]
+		for _, lines := range cards {
+			if sub < len(lines) {
+				cells = append(cells, lines[sub])
+				continue
+			}
+			cells = append(cells, m.blank)
+		}
+		m.rowCells = cells
+		dst = append(dst, m.joinCells(cells))
+	}
+	return dst
 }
 
 // joinCells is one grid line out of its cells, padded out to the board's width.
@@ -411,27 +480,117 @@ func (m *Model) joinCells(cells []string) string {
 	return b.String()
 }
 
-// cell is one column's part of one grid line: the card there, or the blank that
-// keeps the columns to the right where they are.
+// cell is one column's part of one grid line drawn in lines: the card there,
+// or the blank that keeps the columns to the right where they are.
 func (m *Model) cell(col, row int) string {
-	iss := m.issueAt(col, row)
+	iss, k := m.memoAt(col, row)
 	if iss == nil {
 		return m.blank
-	}
-	selected := col == m.curCol && row == m.curRow && m.card == nil
-	picked := m.picked[iss.Key]
-	inHand := m.card != nil && (m.card.key == iss.Key || (m.card.set && picked))
-	k := cardKey{
-		key: iss.Key, updated: iss.Updated.UnixNano(), cell: m.lay.cell,
-		selected: selected, held: inHand, picked: picked, gen: m.styles.gen,
 	}
 	if s, ok := m.cards.get(k); ok {
 		return s
 	}
-	s := m.zones.Mark(cardZone(iss.Key), renderCard(iss, m.lay.cell, cardLook{selected: selected, inHand: inHand, picked: picked},
-		m.styles, m.deps.Theme, m.plan))
+	s := m.zones.Mark(cardZone(iss.Key), renderCard(iss, m.lay.cell,
+		cardLook{selected: k.selected, inHand: k.held, picked: k.picked}, m.styles, m.deps.Theme, m.plan))
 	m.cards.put(k, s)
 	return s
+}
+
+// cardCell is cell for a look of cards: a line for each line of the card.
+func (m *Model) cardCell(col, row int) []string {
+	iss, k := m.memoAt(col, row)
+	if iss == nil {
+		return m.blanks
+	}
+	d := m.deck()
+	dk := deckKey{cardKey: k, look: m.look}
+	if s, ok := d.cards[dk]; ok {
+		return s
+	}
+	drawn := card.Render(make([]string, 0, m.look.Lines()), m.facts(iss),
+		card.State{Selected: k.selected, Picked: k.picked, Held: k.held}, d.styles,
+		card.Frame{Width: m.lay.cell, Look: m.look, Glyphs: m.deps.Theme.Glyphs, Zones: m.zones})
+	s := m.zones.MarkLines(cardZone(iss.Key), drawn)
+	if len(d.cards) >= cardCacheLimit {
+		clear(d.cards)
+	}
+	d.cards[dk] = s
+	return s
+}
+
+// memoAt is the issue drawn at a position and the key it is memoized under.
+func (m *Model) memoAt(col, row int) (*jira.Issue, cardKey) {
+	iss := m.issueAt(col, row)
+	if iss == nil {
+		return nil, cardKey{}
+	}
+	picked := m.picked[iss.Key]
+	return iss, cardKey{
+		key: iss.Key, updated: iss.Updated.UnixNano(), cell: m.lay.cell, gen: m.styles.gen,
+		selected: col == m.curCol && row == m.curRow && m.card == nil,
+		held:     m.card != nil && (m.card.key == iss.Key || (m.card.set && picked)),
+		picked:   picked,
+	}
+}
+
+// facts is what a card on the board says. The column already names the
+// status, so neither it nor the type's name is drawn, and the type's glyph is
+// the card's resting mark.
+func (m *Model) facts(iss *jira.Issue) card.Facts {
+	f := card.Facts{
+		Key: iss.Key, Summary: iss.Summary, TypeGlyph: m.deps.Theme.Glyphs.TypeGlyph(iss.Type),
+		Category: categoryIndex(iss.Status.Category), Labels: iss.Labels,
+		Subtasks: subtaskCount(iss.Subtasks),
+	}
+	if iss.Assignee != nil {
+		f.Assignee = iss.Assignee.DisplayName
+	}
+	if iss.Priority != nil {
+		f.Priority = iss.Priority.Name
+	}
+	if m.plan.estimates {
+		if n, ok := iss.Fields.Number(m.plan.estimate); ok {
+			f.Estimate = trimNumber(n)
+		}
+	}
+	if m.look == card.Roomy && iss.Parent != nil {
+		f.ParentKey, f.ParentSummary = iss.Parent.Key, iss.Parent.Summary
+	}
+	f.Due, f.Overdue = dueText(iss.Due, m.now(), m.deps.Caps.Location())
+	return f
+}
+
+// dueText is a due date the way a card says it in every view: the day and the
+// month, with the year only when it is not this one. It is overdue once that
+// day has passed in the site's own zone.
+func dueText(due jira.Date, now time.Time, loc *time.Location) (text string, overdue bool) {
+	if due.IsZero() {
+		return "", false
+	}
+	if loc == nil {
+		loc = time.UTC
+	}
+	today := jira.DateOf(now.In(loc))
+	layout := "02 Jan 2006"
+	if due.Year == today.Year {
+		layout = "02 Jan"
+	}
+	buf := make([]byte, 0, 16)
+	buf = due.In(loc).AppendFormat(append(buf, "due "...), layout)
+	return string(buf), !now.IsZero() && due.Before(today)
+}
+
+func subtaskCount(subtasks []jira.IssueRef) string {
+	if len(subtasks) == 0 {
+		return ""
+	}
+	done := 0
+	for i := range subtasks {
+		if subtasks[i].Status.Category == jira.CategoryDone {
+			done++
+		}
+	}
+	return strconv.Itoa(done) + "/" + strconv.Itoa(len(subtasks))
 }
 
 // renderCard draws one card to exactly cell columns: a marker saying whether it

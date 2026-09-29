@@ -19,11 +19,17 @@ import (
 	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
-func TestMain(m *testing.M) { os.Exit(testsupport.IsolateDirs(m)) }
+// TestMain draws every board in lines unless a test asks for cards, so the
+// goldens and budgets written before cards existed still hold lines to them.
+func TestMain(m *testing.M) {
+	recallLook = func() card.Look { return card.Lines }
+	os.Exit(testsupport.IsolateDirs(m))
+}
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 

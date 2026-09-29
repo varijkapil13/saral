@@ -1,0 +1,30 @@
+PROJ board · Sprint 2                                            9 cards | 2 picked | 3 columns | ranked | checked 09:00
+  Goal: Make it usable                                              4 days left | ---------- 0 of 15 Story Points done  
+To Do                                 3 In Progress                           3 Done                                  3
++ <> PROJ-3                             + o PROJ-1                            2 + o PROJ-2                              
+| Investigate the onboarding wizard     | Add the nightly export                | Rework webhook retries                
++ Ada Lovelace | Urgent                 + Grace Hopper | Normal | frontend      + Alan Turing | Whenever                
++ <> PROJ-6                             + o PROJ-4                            5 + o PROJ-5                              
+| Speed up session expiry               | Document CSV import                   | Retire the audit trail                
++ Ada Lovelace | Urgent                 + Normal | customer                     + Alan Turing | Whenever                
++ <> PROJ-9                             + o PROJ-7                            8 + o PROJ-8                              
+| Rework the mobile layout              | Fix the search index                  | Add invoice rounding                  
++ Ada Lovelace | Urgent                 + Grace Hopper | Normal | frontend      + Whenever | infra customer             
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+------------------------------------- 0 ------------------------------------ 15 ------------------------------------- 0
+move 2 cards to In Progress                                                        enter moves it, ctrl+g puts it back  

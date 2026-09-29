@@ -18,6 +18,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -63,6 +64,8 @@ type Model struct {
 	cache  app.Cache
 	styles *styles
 	cards  *cardCache
+	look   card.Look
+	decked *deck
 
 	browsing map[string]action
 	holding  map[string]action
@@ -138,6 +141,7 @@ type Model struct {
 	width, height int
 	lay           layout
 	blank         string
+	blanks        []string
 
 	// lines is the frame under construction, kept between frames so that drawing
 	// a screen does not allocate one slice per frame.
@@ -146,6 +150,7 @@ type Model struct {
 	// builds it, reused across rows and frames so composing a row does not
 	// allocate a slice of its own on top of the string it returns.
 	rowCells []string
+	rowCards [][]string
 	summary  string
 	sumKey   summaryKey
 	head     string
@@ -194,6 +199,7 @@ type Model struct {
 	foldedLanes map[string]bool
 	folded      [][]int
 	blankRow    string
+	laneRow     []string
 
 	// picked is the multi-select, by key; bulk is a change to it being asked
 	// for, confirmed or run.
@@ -283,6 +289,7 @@ func New(d kernel.Deps) kernel.View {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
 	m.styles = newStyles(m.deps.Theme)
+	m.look = recallLook()
 	m.cards = newCardCache(cardCacheLimit)
 	m.browsing, m.holding, m.inFind = defaultKeys().tables()
 	m.inAsk, m.inSure, m.inRun = defaultKeys().bulkTables()
@@ -368,9 +375,13 @@ func (m *Model) Addr() kernel.Addr { return m.addr }
 // Init asks which boards this project has, which is the first of the three
 // questions a board is — unless a stored board already answered all three and
 // is still within its TTL, in which case nothing here is asked of the site at
-// all (docs/UX.md principle 1).
+// all (docs/UX.md principle 1). A stored board read without what a roomy card
+// draws is read again behind the first paint while the look is roomy.
 func (m *Model) Init() tea.Cmd {
 	if m.loaded && !m.stale {
+		if m.look == card.Roomy && m.lacksRoomy() {
+			return m.readCards(false)
+		}
 		return nil
 	}
 	return m.load()
@@ -403,6 +414,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
 		m.forget()
+
+	case card.LookMsg:
+		cmd = m.setLook(msg.Look)
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
@@ -672,7 +686,7 @@ func (m *Model) readCards(probe bool) tea.Cmd {
 	q := cardsQuery{
 		plan: m.plan, quickFilters: m.activeQuickFilterJQL(),
 		probe: probe || !m.sprintsKnown, sprints: m.sprints, noSprints: m.noSprints,
-		sprint: m.wantedSprint(),
+		sprint: m.wantedSprint(), look: m.look,
 	}
 	ctx, gen := m.begin(stepIssues)
 	if q.probe {
@@ -1248,7 +1262,7 @@ func (m *Model) follow() {
 		m.followLanes()
 		return
 	}
-	h := m.rowsHeight()
+	h := m.itemsHeight()
 	top := m.rowTopAt(m.curCol)
 	switch {
 	case m.curRow < top:
@@ -1265,7 +1279,7 @@ func (m *Model) follow() {
 // moving out of it — whether or not it is the one focused, and a stale offset
 // must never be left pointing past a column's new end.
 func (m *Model) clampScroll() {
-	h := m.rowsHeight()
+	h := m.itemsHeight()
 	for c := range m.rowTop {
 		m.rowTop[c] = min(max(m.rowTop[c], 0), max(m.columnLen(c)-h, 0))
 	}
@@ -1577,9 +1591,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	case actRight:
 		m.moveTo(m.curCol+1, m.curRow)
 	case actPageUp:
-		m.moveTo(m.curCol, m.curRow-m.rowsHeight())
+		m.moveTo(m.curCol, m.curRow-m.itemsHeight())
 	case actPageDown:
-		m.moveTo(m.curCol, m.curRow+m.rowsHeight())
+		m.moveTo(m.curCol, m.curRow+m.itemsHeight())
 	case actGo:
 		m.pendingGo = true
 	case actTop:
@@ -1644,6 +1658,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.startAssign()
 	case actLabel:
 		return m.startLabel()
+	case actLook:
+		return card.Cycle(m.look)
 	case actNone, actDrop, actCancel, actFindKeep, actFindCancel,
 		actAccept, actDecline, actPrev, actNext, actRun, actHalt:
 	}
@@ -1761,7 +1777,8 @@ func (m *Model) released(msg tea.MouseReleaseMsg) tea.Cmd {
 // wheel scrolls the column under the pointer without moving the selection,
 // which is what a wheel does everywhere else. Off any column — the caption
 // row, outside the grid — it falls back to the focused one, the same column a
-// keypress would scroll.
+// keypress would scroll. A notch is a card once cards are drawn; lanes scroll
+// by lines either way.
 func (m *Model) wheel(msg tea.MouseWheelMsg) {
 	if m.lanesOn() {
 		switch msg.Button {
@@ -1779,11 +1796,12 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 	if !ok {
 		col = m.curCol
 	}
+	step := max(widget.WheelStep/m.look.Lines(), 1)
 	switch msg.Button {
 	case tea.MouseWheelUp:
-		m.setRowTop(col, m.rowTopAt(col)-widget.WheelStep)
+		m.setRowTop(col, m.rowTopAt(col)-step)
 	case tea.MouseWheelDown:
-		m.setRowTop(col, m.rowTopAt(col)+widget.WheelStep)
+		m.setRowTop(col, m.rowTopAt(col)+step)
 	default:
 		return
 	}
@@ -1826,12 +1844,15 @@ func (m *Model) resize(w, h int) {
 }
 
 func (m *Model) relayout() {
-	lay := planLayout(m.width, m.rowsHeight(), len(m.plan.columns))
-	if lay == m.lay {
+	lay := planLayout(m.width, m.itemsHeight(), len(m.plan.columns))
+	if lay == m.lay && (!m.look.Cards() || len(m.blanks) == m.look.Lines()) {
 		return
 	}
 	m.lay = lay
 	m.blank = strings.Repeat(" ", max(lay.cell, 0))
+	if m.look.Cards() {
+		m.blanks = slices.Repeat([]string{m.blank}, m.look.Lines())
+	}
 	m.blankRow = strings.Repeat(" ", max(lay.width, 0))
 	m.forget()
 }
@@ -1841,6 +1862,9 @@ func (m *Model) relayout() {
 // can never be redrawn.
 func (m *Model) forget() {
 	m.cards.reset()
+	if m.decked != nil {
+		clear(m.decked.cards)
+	}
 	m.gridValid = false
 	m.summary, m.head, m.rule, m.sprintHead = "", "", "", ""
 	for i := range m.lanes {

@@ -1,0 +1,30 @@
+PROJ board · Sprint 2                                                      24 cards | 3 columns | ranked | checked 09:00
+  Goal: Make it usable                                              4 days left | ---------- 0 of 36 Story Points done  
+To Do                                 8 In Progress                           8 Done                                  8
++ o PROJ-3                              + o PROJ-1                            2 + o PROJ-2                              
+| Investigate the onboarding wizard     | Add the nightly export                | Rework webhook retries                
++ Ada Lovelace | Urgent                 + Grace Hopper | Normal | frontend      + Alan Turing | Whenever                
++ o PROJ-6                              + o PROJ-4                            5 + o PROJ-5                              
+| Speed up session expiry               | Document CSV import                   | Retire the audit trail                
++ Ada Lovelace | Urgent                 + Normal | customer                     + Alan Turing | Whenever                
++ o PROJ-9                              + o PROJ-7                            8 + o PROJ-8                              
+| Rework the mobile layout              | Fix the search index                  | Add invoice rounding                  
++ Ada Lovelace | Urgent                 + Grace Hopper | Normal | frontend      + Whenever | infra customer             
++ > PROJ-12                             + o PROJ-10                           3 + o PROJ-11                             
+| Retire the nightly export             | Investigate the release checklist     | Document the login flow               
++ Urgent                                + Grace Hopper | Normal | customer      + Alan Turing | Whenever                
++ o PROJ-15                             + o PROJ-13                           6 + o PROJ-14                             
+| Add CSV import                        | Speed up webhook retries              | Fix the onboarding wizard             
++ Ada Lovelace | Urgent                 + Grace Hopper | frontend               + Alan Turing | Whenever                
++ o PROJ-18                             + o PROJ-16                           1 + o PROJ-17                             
+| Document the search index             | Rework the audit trail                | Investigate session expiry            
++ Ada Lovelace | Urgent                 + Normal | customer                     + Alan Turing | Whenever                
++ o PROJ-21                             + o PROJ-19                           4 + o PROJ-20                             
+| Fix the release checklist             | Retire invoice rounding               | Speed up the mobile layout            
++ Ada Lovelace | Urgent                 + Grace Hopper | Normal | frontend      + Whenever | infra customer             
++ o PROJ-24                             + o PROJ-22                           7 + o PROJ-23                             
+| Investigate webhook retries           | Add the login flow                    | Rework the nightly export             
++ Urgent                                + Grace Hopper | Normal | customer      + Alan Turing | Whenever                
+                                                                                                                        
+------------------------------------- 0 ------------------------------------ 36 ------------------------------------- 0
+/12                                                                                                                     

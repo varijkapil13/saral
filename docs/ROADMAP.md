@@ -1907,7 +1907,7 @@ record of what was built, what was left and why.
   Section heads stay one line while issues take `Look.Lines()`, through a prefix sum of line offsets;
   one mark cell replaces marker and box in cards mode. Lines mode stays byte-identical.
 
-- [ ] **P11.8 — Cards on the board, in columns and in lanes** · after P11.5 · **owns** `internal/ui/board/**`; append-only `docs/{PERFORMANCE,UX,ROADMAP}.md`, `CHANGELOG.md`
+- [x] **P11.8 — Cards on the board, in columns and in lanes** · [#179](https://github.com/varijkapil13/saral/pull/179) · after P11.5 · **owns** `internal/ui/board/**`; append-only `docs/{PERFORMANCE,UX,ROADMAP}.md`, `CHANGELOG.md`
   Cards are drawn with `card.Render` at the column's cell width, the card cache holds `[]string`, and
   the lane arithmetic counts `Look.Lines()` per card. Lines mode stays byte-identical.
 

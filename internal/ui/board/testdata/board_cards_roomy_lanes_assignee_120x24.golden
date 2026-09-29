@@ -1,0 +1,24 @@
+Delivery · lanes by assignee                                               12 cards | 3 columns | ranked | checked 09:00
+To do                                 4 Doing                                 4 Done                                  4
+v Ada Lovelace  4                                                                                                       
++ o PROJ-4                                                                      + o PROJ-3                              
+| Card number 4                                                                 | Card number 3                         
+|                                                                               |                                       
+| Ada Lovelace                                                                  | Ada Lovelace                          
++ PROJ-900 Nightly export                                                       + PROJ-901 Billing rework               
++ o PROJ-10                                                                     + o PROJ-9                              
+| Card number 10                                                                | Card number 9                         
+|                                                                               |                                       
+| Ada Lovelace                                                                  | Ada Lovelace                          
++                                                                               + PROJ-900 Nightly export               
+v Grace Hopper  4                                                                                                       
++ > PROJ-1                              + o PROJ-2                                                                      
+| Card number 1                         | Card number 2                                                                 
+|                                       |                                                                               
+| Grace Hopper                          | Grace Hopper                                                                  
++ PROJ-900 Nightly export               +                                                                               
++ o PROJ-7                              + o PROJ-8                                                                      
+| Card number 7                         | Card number 8                                                                 
+|                                       |                                                                               
+| Grace Hopper                          | Grace Hopper                                                                  
+--------------------------------------- --------------------------------------- ---------------------------------------

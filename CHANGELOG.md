@@ -9,14 +9,14 @@ such change is listed under **Changed**.
 
 ### Added
 
-- The issue list draws each issue as a card, roomy by default, with its priority, due date,
-  subtasks, labels and fix versions as well as what a row shows. `V` cycles roomy, compact and lines,
-  and the choice is kept on this machine. Clicking a card's type, status or assignee still filters by
-  it.
-- The backlog draws its issues as cards under the sprint heads: roomy by default, compact, or the
-  one-line rows as before. `V` cycles the look, and the choice is kept on this machine. A card shows
-  the status and the estimate beside the key, then the summary, the assignee, the priority, the due
-  date, the subtasks done and the labels and fix versions.
+- The issue list, the backlog and the board draw issues as cards: roomy by default, compact, or the
+  one-line rows as before. `V` cycles the look, the palette's *Cycle the row look* does the same, and
+  the choice is kept on this machine for all three views. A roomy card shows the summary over two
+  lines, the assignee, priority, due date, subtasks done, and the labels and fix versions; the list
+  and the backlog also show the status beside the key, the backlog its estimate, and the board its
+  estimate and each card's parent. Clicking a card's type, status or assignee in the list still
+  filters by it, and the board's cards work in columns and in swimlanes, with clicks and drags as
+  before.
 
 ## [0.8.0] - 2026-09-29
 
