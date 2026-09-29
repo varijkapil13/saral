@@ -212,10 +212,9 @@ func TestBoardRender_EveryCardFillsItsColumn(t *testing.T) {
 	}
 	for col := range dr.m.cols {
 		for row := range dr.m.columnLen(col) {
-			for _, line := range dr.m.cell(col, row) {
-				if got := ansi.StringWidth(ansi.Strip(line)); got != cell {
-					t.Fatalf("the card at column %d row %d is %d cells wide, want %d", col, row, got, cell)
-				}
+			got := ansi.StringWidth(ansi.Strip(dr.m.cell(col, row)))
+			if got != cell {
+				t.Fatalf("the card at column %d row %d is %d cells wide, want %d", col, row, got, cell)
 			}
 		}
 	}

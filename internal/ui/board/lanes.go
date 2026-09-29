@@ -368,13 +368,25 @@ func (m *Model) laneGrid(lines []string, h int) []string {
 
 func (m *Model) composeLaneRow(dst []string, l *lane, r int) []string {
 	end := min(m.colTop+m.lay.cols, len(m.cols))
+	if !m.look.Cards() {
+		cells := m.rowCells[:0]
+		for c := m.colTop; c < end; c++ {
+			if r < l.n[c] {
+				cells = append(cells, m.cell(c, l.at[c]+r))
+				continue
+			}
+			cells = append(cells, m.blank)
+		}
+		m.rowCells = cells
+		return append(dst, m.joinCells(cells))
+	}
 	cards := m.rowCards[:0]
 	for c := m.colTop; c < end; c++ {
 		if r < l.n[c] {
-			cards = append(cards, m.cell(c, l.at[c]+r))
+			cards = append(cards, m.cardCell(c, l.at[c]+r))
 			continue
 		}
-		cards = append(cards, m.blank)
+		cards = append(cards, m.blanks)
 	}
 	m.rowCards = cards
 	return m.joinRows(dst, cards)

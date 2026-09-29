@@ -428,9 +428,10 @@ not moved for this: see that test's own comment for the numbers it replaced.
 Cards keep the same shape. `itemsHeight` is `rowsHeight` divided by the look's lines, the offsets and
 the cursor stay in cards, and the window is still the unit: a step rebuilds it, a line for every line
 of a card, and draws the two cards whose selection changed through `card.Render` and
-`Zoner.MarkLines`. The card memo now holds a card's lines as a `[]string`; a card drawn in lines is
-cut from one shared backing array, so a miss in lines costs no slice of its own and the 83 above did
-not move. A step costs 126 allocations over compact cards and 167 over roomy ones, 124 and 167 in
+`Zoner.MarkLines`. Those cards are memoized apart, as a card's lines under a key that adds the look,
+in a memo built with the card styles on the first card drawn; the lines memo keeps its key and its
+string values, so a board that stays in lines pays for neither and the 83 above did not move, nor did
+first paint from the cache (2,363 allocations, `BenchmarkBoardFirstPaintFromCache`). A step costs 126 allocations over compact cards and 167 over roomy ones, 124 and 167 in
 lanes, each held a tenth above by `TestBudget_ABoardOfCardsMemoMissCostsTwoCardsAndTheWindow`; a
 steady frame is still the frame string alone in either look
 (`TestBudget_BoardCardsCostNothingPerFrame`).

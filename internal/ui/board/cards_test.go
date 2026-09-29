@@ -102,7 +102,7 @@ func TestBoardCards_EveryLineOfACardFillsItsColumn(t *testing.T) {
 		dr.look(look)
 		for col := range dr.m.cols {
 			for row := range dr.m.columnLen(col) {
-				lines := dr.m.cell(col, row)
+				lines := dr.m.cardCell(col, row)
 				if len(lines) != look.Lines() {
 					t.Fatalf("%s: the card at %d,%d is %d lines, want %d", look.Word(), col, row, len(lines), look.Lines())
 				}
@@ -121,9 +121,13 @@ func TestBoardCards_EveryLineOfACardFillsItsColumn(t *testing.T) {
 // ui.toml lives, at one of its own.
 func TestBoardCards_ABoardWithNoStoredLookIsRoomy(t *testing.T) {
 	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
+	card.ResetRecall()
 	was := recallLook
 	recallLook = card.Recall
-	t.Cleanup(func() { recallLook = was })
+	t.Cleanup(func() {
+		recallLook = was
+		card.ResetRecall()
+	})
 
 	m, ok := New(testDeps(nil)).(*Model)
 	if !ok {
@@ -150,6 +154,7 @@ func TestBoardCards_ABoardWithNoStoredLookIsRoomy(t *testing.T) {
 	if err := uistate.SaveLook(card.Compact.Word()); err != nil {
 		t.Fatal(err)
 	}
+	card.ResetRecall()
 	chose, ok := New(testDeps(nil)).(*Model)
 	if !ok {
 		t.Fatal("New did not return a *Model")

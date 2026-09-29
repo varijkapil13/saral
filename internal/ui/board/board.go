@@ -59,13 +59,13 @@ type held struct {
 
 // Model is the board.
 type Model struct {
-	deps       kernel.Deps
-	search     *app.Search
-	cache      app.Cache
-	styles     *styles
-	cards      *cardCache
-	look       card.Look
-	cardStyles *card.Styles
+	deps   kernel.Deps
+	search *app.Search
+	cache  app.Cache
+	styles *styles
+	cards  *cardCache
+	look   card.Look
+	decked *deck
 
 	browsing map[string]action
 	holding  map[string]action
@@ -140,7 +140,8 @@ type Model struct {
 
 	width, height int
 	lay           layout
-	blank         []string
+	blank         string
+	blanks        []string
 
 	// lines is the frame under construction, kept between frames so that drawing
 	// a screen does not allocate one slice per frame.
@@ -288,7 +289,6 @@ func New(d kernel.Deps) kernel.View {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
 	m.styles = newStyles(m.deps.Theme)
-	m.cardStyles = card.NewStyles(m.deps.Theme)
 	m.look = recallLook()
 	m.cards = newCardCache(cardCacheLimit)
 	m.browsing, m.holding, m.inFind = defaultKeys().tables()
@@ -413,7 +413,6 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.cardStyles = card.NewStyles(msg.Theme)
 		m.forget()
 
 	case card.LookMsg:
@@ -1846,11 +1845,14 @@ func (m *Model) resize(w, h int) {
 
 func (m *Model) relayout() {
 	lay := planLayout(m.width, m.itemsHeight(), len(m.plan.columns))
-	if lay == m.lay && len(m.blank) == m.look.Lines() {
+	if lay == m.lay && (!m.look.Cards() || len(m.blanks) == m.look.Lines()) {
 		return
 	}
 	m.lay = lay
-	m.blank = slices.Repeat([]string{strings.Repeat(" ", max(lay.cell, 0))}, m.look.Lines())
+	m.blank = strings.Repeat(" ", max(lay.cell, 0))
+	if m.look.Cards() {
+		m.blanks = slices.Repeat([]string{m.blank}, m.look.Lines())
+	}
 	m.blankRow = strings.Repeat(" ", max(lay.width, 0))
 	m.forget()
 }
@@ -1860,6 +1862,9 @@ func (m *Model) relayout() {
 // can never be redrawn.
 func (m *Model) forget() {
 	m.cards.reset()
+	if m.decked != nil {
+		clear(m.decked.cards)
+	}
 	m.gridValid = false
 	m.summary, m.head, m.rule, m.sprintHead = "", "", "", ""
 	for i := range m.lanes {

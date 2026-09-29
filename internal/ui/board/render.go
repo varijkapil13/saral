@@ -181,7 +181,6 @@ type cardKey struct {
 	selected bool
 	held     bool
 	picked   bool
-	look     card.Look
 }
 
 // cardLook is how a card is drawn apart from what it says: under the cursor,
@@ -191,33 +190,20 @@ type cardLook struct {
 }
 
 type cardCache struct {
-	cards map[cardKey][]string
+	cards map[cardKey]string
 	limit int
-	// slab backs the one-line values a card drawn in lines is kept as, so a
-	// miss in lines costs no slice of its own. It is replaced, never reused,
-	// once full: the values cut from it may still be held.
-	slab []string
-}
-
-func (c *cardCache) one(s string) []string {
-	if len(c.slab) == cap(c.slab) {
-		c.slab = make([]string, 0, c.limit)
-	}
-	c.slab = append(c.slab, s)
-	n := len(c.slab)
-	return c.slab[n-1 : n : n]
 }
 
 func newCardCache(limit int) *cardCache {
-	return &cardCache{cards: make(map[cardKey][]string, limit), limit: limit}
+	return &cardCache{cards: make(map[cardKey]string, limit), limit: limit}
 }
 
-func (c *cardCache) get(k cardKey) ([]string, bool) {
+func (c *cardCache) get(k cardKey) (string, bool) {
 	s, ok := c.cards[k]
 	return s, ok
 }
 
-func (c *cardCache) put(k cardKey, s []string) {
+func (c *cardCache) put(k cardKey, s string) {
 	if len(c.cards) >= c.limit {
 		clear(c.cards)
 	}
@@ -225,6 +211,29 @@ func (c *cardCache) put(k cardKey, s []string) {
 }
 
 func (c *cardCache) reset() { clear(c.cards) }
+
+// deckKey is a cardKey drawn in a look of cards.
+type deckKey struct {
+	cardKey
+	look card.Look
+}
+
+// deck is the memo of cards drawn by card.Render, built with its styles on the
+// first card drawn, so a board that stays in lines pays for neither.
+type deck struct {
+	cards  map[deckKey][]string
+	styles *card.Styles
+}
+
+func (m *Model) deck() *deck {
+	if m.decked == nil {
+		m.decked = &deck{cards: make(map[deckKey][]string, 64)}
+	}
+	if m.decked.styles == nil || m.decked.styles.Gen != m.deps.Theme.Gen {
+		m.decked.styles = card.NewStyles(m.deps.Theme)
+	}
+	return m.decked
+}
 
 // gridState is everything the composed window of rows depends on, apart from
 // each column's own scroll offset — which cannot be part of a comparable key,
@@ -403,21 +412,30 @@ func (m *Model) line(row int) string {
 // given position on screen, a line for each line a card of the look takes:
 // each column's own offset says which of its cards, if any, belongs there, so
 // a short column runs out and blanks while a long one beside it keeps going.
+//
+// It gathers the cells before building a line so the builder can be grown to
+// the bytes they actually need rather than to the visual width: a styled
+// cell's escape sequences make it wider in bytes than in columns, and growing
+// by columns alone under-sizes the buffer and forces a second allocation
+// mid-write for every rebuilt line rather than the one it returns.
 func (m *Model) composeRow(dst []string, row int) []string {
 	end := min(m.colTop+m.lay.cols, len(m.cols))
+	if !m.look.Cards() {
+		cells := m.rowCells[:0]
+		for c := m.colTop; c < end; c++ {
+			cells = append(cells, m.cell(c, m.rowTopAt(c)+row))
+		}
+		m.rowCells = cells
+		return append(dst, m.joinCells(cells))
+	}
 	cards := m.rowCards[:0]
 	for c := m.colTop; c < end; c++ {
-		cards = append(cards, m.cell(c, m.rowTopAt(c)+row))
+		cards = append(cards, m.cardCell(c, m.rowTopAt(c)+row))
 	}
 	m.rowCards = cards
 	return m.joinRows(dst, cards)
 }
 
-// joinRows gathers the cells before building each line so the builder can be grown
-// to the bytes they actually need rather than to the visual width: a styled
-// cell's escape sequences make it wider in bytes than in columns, and growing
-// by columns alone under-sizes the buffer and forces a second allocation
-// mid-write for every rebuilt line rather than the one it returns.
 func (m *Model) joinRows(dst []string, cards [][]string) []string {
 	for sub := range m.look.Lines() {
 		cells := m.rowCells[:0]
@@ -426,7 +444,7 @@ func (m *Model) joinRows(dst []string, cards [][]string) []string {
 				cells = append(cells, lines[sub])
 				continue
 			}
-			cells = append(cells, m.blank[0])
+			cells = append(cells, m.blank)
 		}
 		m.rowCells = cells
 		dst = append(dst, m.joinCells(cells))
@@ -462,36 +480,57 @@ func (m *Model) joinCells(cells []string) string {
 	return b.String()
 }
 
-// cell is one column's part of one row of cards: the card there, a line for
-// each line of the look, or the blank that keeps the columns to the right
-// where they are.
-func (m *Model) cell(col, row int) []string {
-	iss := m.issueAt(col, row)
+// cell is one column's part of one grid line drawn in lines: the card there,
+// or the blank that keeps the columns to the right where they are.
+func (m *Model) cell(col, row int) string {
+	iss, k := m.memoAt(col, row)
 	if iss == nil {
 		return m.blank
-	}
-	selected := col == m.curCol && row == m.curRow && m.card == nil
-	picked := m.picked[iss.Key]
-	inHand := m.card != nil && (m.card.key == iss.Key || (m.card.set && picked))
-	k := cardKey{
-		key: iss.Key, updated: iss.Updated.UnixNano(), cell: m.lay.cell,
-		selected: selected, held: inHand, picked: picked, gen: m.styles.gen, look: m.look,
 	}
 	if s, ok := m.cards.get(k); ok {
 		return s
 	}
-	var s []string
-	if m.look.Cards() {
-		drawn := card.Render(make([]string, 0, m.look.Lines()), m.facts(iss),
-			card.State{Selected: selected, Picked: picked, Held: inHand}, m.cardStyles,
-			card.Frame{Width: m.lay.cell, Look: m.look, Glyphs: m.deps.Theme.Glyphs, Zones: m.zones})
-		s = m.zones.MarkLines(cardZone(iss.Key), drawn)
-	} else {
-		s = m.cards.one(m.zones.Mark(cardZone(iss.Key), renderCard(iss, m.lay.cell,
-			cardLook{selected: selected, inHand: inHand, picked: picked}, m.styles, m.deps.Theme, m.plan)))
-	}
+	s := m.zones.Mark(cardZone(iss.Key), renderCard(iss, m.lay.cell,
+		cardLook{selected: k.selected, inHand: k.held, picked: k.picked}, m.styles, m.deps.Theme, m.plan))
 	m.cards.put(k, s)
 	return s
+}
+
+// cardCell is cell for a look of cards: a line for each line of the card.
+func (m *Model) cardCell(col, row int) []string {
+	iss, k := m.memoAt(col, row)
+	if iss == nil {
+		return m.blanks
+	}
+	d := m.deck()
+	dk := deckKey{cardKey: k, look: m.look}
+	if s, ok := d.cards[dk]; ok {
+		return s
+	}
+	drawn := card.Render(make([]string, 0, m.look.Lines()), m.facts(iss),
+		card.State{Selected: k.selected, Picked: k.picked, Held: k.held}, d.styles,
+		card.Frame{Width: m.lay.cell, Look: m.look, Glyphs: m.deps.Theme.Glyphs, Zones: m.zones})
+	s := m.zones.MarkLines(cardZone(iss.Key), drawn)
+	if len(d.cards) >= cardCacheLimit {
+		clear(d.cards)
+	}
+	d.cards[dk] = s
+	return s
+}
+
+// memoAt is the issue drawn at a position and the key it is memoized under.
+func (m *Model) memoAt(col, row int) (*jira.Issue, cardKey) {
+	iss := m.issueAt(col, row)
+	if iss == nil {
+		return nil, cardKey{}
+	}
+	picked := m.picked[iss.Key]
+	return iss, cardKey{
+		key: iss.Key, updated: iss.Updated.UnixNano(), cell: m.lay.cell, gen: m.styles.gen,
+		selected: col == m.curCol && row == m.curRow && m.card == nil,
+		held:     m.card != nil && (m.card.key == iss.Key || (m.card.set && picked)),
+		picked:   picked,
+	}
 }
 
 // facts is what a card on the board says. The column already names the
