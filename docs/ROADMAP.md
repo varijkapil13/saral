@@ -1885,7 +1885,7 @@ record of what was built, what was left and why.
   drawn. **Left for later:** the lanes view keeps its numeric `laneTop` rather than anchoring it to
   a card.
 
-- [x] **P11.5 — The card renderer, its look and its key** · PR_LINK · **owns** `internal/ui/widget/card/**`, `internal/config/{uistate.go,uistate_look_test.go}`, `internal/ui/keys_test.go` (the `keyOwners` row and `adopting` for `cards.look`), `pkg/jira/cloud/conformance_roomy_test.go`, `docs/{ARCHITECTURE,UX,SETTINGS,PERFORMANCE,ROADMAP}.md`
+- [x] **P11.5 — The card renderer, its look and its key** · [#176](https://github.com/varijkapil13/saral/pull/176) · **owns** `internal/ui/widget/card/**`, `internal/config/{uistate.go,uistate_look_test.go}`, `internal/ui/keys_test.go` (the `keyOwners` row and `adopting` for `cards.look`), `pkg/jira/cloud/conformance_roomy_test.go`, `docs/{ARCHITECTURE,UX,SETTINGS,PERFORMANCE,ROADMAP}.md`
   Serial, and blocks P11.6 to P11.8. `card.Render` draws an issue as a roomy card (five lines, the
   default) or a compact one (three) of exactly the width asked for, with a bracket coloured by status
   category, the board's mark cell, and a fixed order of cells given up as it narrows. `V` and the
