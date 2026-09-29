@@ -64,11 +64,13 @@ type lane struct {
 	headGen int
 }
 
-func (l *lane) lines() int {
+// lines is how many lines the lane takes when a card takes per of them: its
+// header, and its cards unless it is folded.
+func (l *lane) lines(per int) int {
 	if l.folded {
 		return 1
 	}
-	return 1 + l.height
+	return 1 + l.height*per
 }
 
 func laneMemoryKey(boardID int64) string { return "lanes:" + strconv.FormatInt(boardID, 10) }
@@ -202,14 +204,23 @@ func (m *Model) layLanes() {
 		}
 		m.cols[c], m.folded[c] = kept, folded
 	}
-	line := 0
 	for L := range m.lanes {
 		l := &m.lanes[L]
 		for c := range l.n {
 			l.height = max(l.height, l.n[c])
 		}
+	}
+	m.stackLanes()
+}
+
+// stackLanes works out where each lane starts in the run of lanes, which
+// moves whenever a card's height does.
+func (m *Model) stackLanes() {
+	per, line := m.look.Lines(), 0
+	for L := range m.lanes {
+		l := &m.lanes[L]
 		l.start = line
-		line += l.lines()
+		line += l.lines(per)
 	}
 	m.laneLines = line
 }
@@ -248,8 +259,8 @@ func (m *Model) laneSpan(col, row int) (lo, hi int) {
 	return l.at[col], l.at[col] + l.n[col]
 }
 
-// cursorLine is the line the cursor's card is drawn on within the run of
-// lanes, and whether it is drawn at all.
+// cursorLine is the first line the cursor's card is drawn on within the run
+// of lanes, and whether it is drawn at all.
 func (m *Model) cursorLine() (line int, first, ok bool) {
 	L := m.laneAt(m.curCol, m.curRow)
 	if L < 0 {
@@ -257,26 +268,52 @@ func (m *Model) cursorLine() (line int, first, ok bool) {
 	}
 	l := &m.lanes[L]
 	r := m.curRow - l.at[m.curCol]
-	return l.start + 1 + r, r == 0, true
+	return l.start + 1 + r*m.look.Lines(), r == 0, true
 }
 
-// followLanes scrolls the run of lanes as little as keeps the cursor's card on
-// screen, bringing its lane's header along when the card is the lane's first.
+// followLanes scrolls the run of lanes as little as keeps the whole of the
+// cursor's card on screen, bringing its lane's header along when the card is
+// the lane's first.
 func (m *Model) followLanes() {
 	h := m.rowsHeight()
 	if line, first, ok := m.cursorLine(); ok {
-		top := line
+		top, end := line, line+m.look.Lines()
 		if first {
 			top--
 		}
 		switch {
 		case top < m.laneTop:
 			m.laneTop = top
-		case line >= m.laneTop+h:
-			m.laneTop = line - h + 1
+		case end > m.laneTop+h:
+			m.laneTop = end - h
 		}
 	}
 	m.clampLanes()
+}
+
+// laneMark is where the top of the lane window is, as a lane and the card in
+// it rather than as a line, since a line moves when the look does. The card
+// is -1 on the lane's header.
+func (m *Model) laneMark() (at, row int, ok bool) {
+	L := m.laneFrom(m.laneTop)
+	if L >= len(m.lanes) {
+		return 0, 0, false
+	}
+	rel := m.laneTop - m.lanes[L].start
+	if rel == 0 {
+		return L, -1, true
+	}
+	return L, (rel - 1) / m.look.Lines(), true
+}
+
+func (m *Model) toLaneMark(at, row int) {
+	if at < 0 || at >= len(m.lanes) {
+		return
+	}
+	m.laneTop = m.lanes[at].start
+	if row >= 0 {
+		m.laneTop += 1 + row*m.look.Lines()
+	}
 }
 
 func (m *Model) clampLanes() {
@@ -285,9 +322,10 @@ func (m *Model) clampLanes() {
 
 // laneFrom is the lane whose lines include line.
 func (m *Model) laneFrom(line int) int {
+	per := m.look.Lines()
 	at, _ := slices.BinarySearchFunc(m.lanes, line, func(l lane, line int) int {
 		switch {
-		case l.start+l.lines() <= line:
+		case l.start+l.lines(per) <= line:
 			return -1
 		case l.start > line:
 			return 1
@@ -298,12 +336,15 @@ func (m *Model) laneFrom(line int) int {
 }
 
 // laneGrid is the window of lines a board with lanes draws: each lane's header
-// and, unless it is folded, its rows.
+// and, unless it is folded, its rows. The window is in lines, so a card at
+// either edge of it can be cut; the cursor's card never is.
 func (m *Model) laneGrid(lines []string, h int) []string {
+	per := m.look.Lines()
 	L := m.laneFrom(m.laneTop)
+	builtLane, builtRow := -1, -1
 	for row := range h {
 		line := m.laneTop + row
-		for L < len(m.lanes) && m.lanes[L].start+m.lanes[L].lines() <= line {
+		for L < len(m.lanes) && m.lanes[L].start+m.lanes[L].lines(per) <= line {
 			L++
 		}
 		if L >= len(m.lanes) {
@@ -315,23 +356,28 @@ func (m *Model) laneGrid(lines []string, h int) []string {
 			lines = append(lines, m.laneHead(l))
 			continue
 		}
-		lines = append(lines, m.composeLaneRow(l, line-l.start-1))
+		r, sub := (line-l.start-1)/per, (line-l.start-1)%per
+		if L != builtLane || r != builtRow {
+			m.laneRow = m.composeLaneRow(m.laneRow[:0], l, r)
+			builtLane, builtRow = L, r
+		}
+		lines = append(lines, m.laneRow[sub])
 	}
 	return lines
 }
 
-func (m *Model) composeLaneRow(l *lane, r int) string {
+func (m *Model) composeLaneRow(dst []string, l *lane, r int) []string {
 	end := min(m.colTop+m.lay.cols, len(m.cols))
-	cells := m.rowCells[:0]
+	cards := m.rowCards[:0]
 	for c := m.colTop; c < end; c++ {
 		if r < l.n[c] {
-			cells = append(cells, m.cell(c, l.at[c]+r))
+			cards = append(cards, m.cell(c, l.at[c]+r))
 			continue
 		}
-		cells = append(cells, m.blank)
+		cards = append(cards, m.blank)
 	}
-	m.rowCells = cells
-	return m.joinCells(cells)
+	m.rowCards = cards
+	return m.joinRows(dst, cards)
 }
 
 // laneHead is a lane's header: whether it is folded, what it is and how many
@@ -433,11 +479,11 @@ func (m *Model) clickLane(msg tea.MouseMsg) (tea.Cmd, bool) {
 }
 
 // eachDrawn calls fn for every card position on screen, and stops when it says
-// so.
+// so. A card in lanes counts as drawn when any of its lines is.
 func (m *Model) eachDrawn(fn func(col, row int) bool) {
-	h := m.rowsHeight()
 	last := min(m.colTop+m.lay.cols, len(m.cols))
 	if !m.lanesOn() {
+		h := m.itemsHeight()
 		for c := m.colTop; c < last; c++ {
 			top := m.rowTopAt(c)
 			for r := top; r < min(top+h, m.columnLen(c)); r++ {
@@ -448,6 +494,7 @@ func (m *Model) eachDrawn(fn func(col, row int) bool) {
 		}
 		return
 	}
+	h, per := m.rowsHeight(), m.look.Lines()
 	for L := m.laneFrom(m.laneTop); L < len(m.lanes); L++ {
 		l := &m.lanes[L]
 		if l.start >= m.laneTop+h {
@@ -457,8 +504,8 @@ func (m *Model) eachDrawn(fn func(col, row int) bool) {
 			continue
 		}
 		for r := range l.height {
-			line := l.start + 1 + r
-			if line < m.laneTop || line >= m.laneTop+h {
+			line := l.start + 1 + r*per
+			if line+per <= m.laneTop || line >= m.laneTop+h {
 				continue
 			}
 			for c := m.colTop; c < last; c++ {

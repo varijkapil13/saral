@@ -1,0 +1,20 @@
+PROJ board · Sprint 2                              24 cards | 3 columns | ranked
+  Goal: Make it usable      4 days left | ---------- 0 of 36 Story Points done  
+To Do                    8 In Progress              8 Done                     8
++ > PROJ-3                 + o PROJ-1               2 + o PROJ-2                
+| Investigate the onboa... | Add the nightly export   | Rework webhook retries  
++ Ada Lovelace | Urgent    + Grace Hopper | Normal    + Alan Turing | Whenever  
++ o PROJ-6                 + o PROJ-4               5 + o PROJ-5                
+| Speed up session expiry  | Document CSV import      | Retire the audit trail  
++ Ada Lovelace | Urgent    + Normal | customer        + Alan Turing | Whenever  
++ o PROJ-9                 + o PROJ-7               8 + o PROJ-8                
+| Rework the mobile layout | Fix the search index     | Add invoice rounding    
++ Ada Lovelace | Urgent    + Grace Hopper | Normal    + Whenever                
++ o PROJ-12                + o PROJ-10              3 + o PROJ-11               
+| Retire the nightly ex... | Investigate the relea... | Document the login flow 
++ Urgent                   + Grace Hopper | Normal    + Alan Turing | Whenever  
++ o PROJ-15                + o PROJ-13              6 + o PROJ-14               
+| Add CSV import           | Speed up webhook retries | Fix the onboarding wi...
++ Ada Lovelace | Urgent    + Grace Hopper | frontend  + Alan Turing | Whenever  
+                                                                                
+------------------------ 0 ----------------------- 36 ------------------------ 0

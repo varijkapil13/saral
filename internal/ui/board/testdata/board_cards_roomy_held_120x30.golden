@@ -1,0 +1,30 @@
+PROJ board · Sprint 2                                                      24 cards | 3 columns | ranked | checked 09:00
+  Goal: Make it usable                                              4 days left | ---------- 0 of 36 Story Points done  
+To Do                                 8 In Progress                           8 Done                                  8
++ <> PROJ-3                             + o PROJ-1                            2 + o PROJ-2                              
+| Investigate the onboarding wizard     | Add the nightly export                | Rework webhook retries                
+|                                       |                                       |                                       
+| Ada Lovelace | Urgent                 | Grace Hopper | Normal                 | Alan Turing | Whenever                
++                                       + frontend                              + infra customer                        
++ o PROJ-6                              + o PROJ-4                            5 + o PROJ-5                              
+| Speed up session expiry               | Document CSV import                   | Retire the audit trail                
+|                                       |                                       |                                       
+| Ada Lovelace | due 16 Mar 2025        | Normal                                | Alan Turing | Whenever                
++                                       + customer                              + PROJ-1 Add the nightly export         
++ o PROJ-9                              + o PROJ-7                            8 + o PROJ-8                              
+| Rework the mobile layout              | Fix the search index                  | Add invoice rounding                  
+|                                       |                                       |                                       
+| Ada Lovelace | Urgent                 | Grace Hopper | Normal                 | Whenever                              
++                                       + frontend                              + infra customer                        
++ o PROJ-12                             + o PROJ-10                           3 + o PROJ-11                             
+| Retire the nightly export             | Investigate the release checklist     | Document the login flow               
+|                                       |                                       |                                       
+| Urgent | due 16 Mar 2025              | Grace Hopper | Normal                 | Alan Turing | Whenever                
++                                       + PROJ-1 Add the nightly export         + flaky frontend                        
++ o PROJ-15                             + o PROJ-13                           6 + o PROJ-14                             
+| Add CSV import                        | Speed up webhook retries              | Fix the onboarding wizard             
+|                                       |                                       |                                       
+| Ada Lovelace | Urgent                 | Grace Hopper                          | Alan Turing | Whenever                
++ PROJ-11 Document the login flow       + frontend                              + infra customer                        
+------------------------------------- 0 ------------------------------------ 36 ------------------------------------- 0
+move PROJ-3 from Triage to In Progress                                             enter moves it, ctrl+g puts it back  

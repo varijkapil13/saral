@@ -1,9 +1,11 @@
 package board
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/varijkapil13/saral/internal/app"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -100,6 +102,21 @@ func (p plan) projection() app.Projection {
 		return proj
 	}
 	return proj.With(p.estimate.ID)
+}
+
+// projectionFor is projection, widened by what a roomy card draws beyond it
+// while the look is roomy. Labels are already in it.
+func (p plan) projectionFor(look card.Look) app.Projection {
+	proj := p.projection()
+	if look != card.Roomy {
+		return proj
+	}
+	for _, id := range card.RoomyFields {
+		if !slices.Contains(proj.IDs, id) {
+			proj = proj.With(id)
+		}
+	}
+	return proj
 }
 
 // orderWords says how the board decides the order in a column, which is a

@@ -4,6 +4,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 )
 
 var _ kernel.KeyReporter = (*Model)(nil)
@@ -69,6 +70,7 @@ type keyMap struct {
 	FoldAll kernel.Binding
 	// Create opens the create form for the column under the cursor.
 	Create kernel.Binding
+	Look   kernel.Binding
 	// Toggle, PickColumn and Unpick are the multi-select; Assign and Label act on
 	// what is picked, or on the card under the cursor when nothing is.
 	Toggle     kernel.Binding
@@ -129,6 +131,7 @@ func defaultKeys() keyMap {
 		Fold:    kernel.Bind([]string{"z"}, "z", "fold or unfold this lane"),
 		FoldAll: kernel.Bind([]string{"Z"}, "Z", "fold or unfold every lane"),
 		Create:  kernel.Bind([]string{"c"}, "c", "create an issue in this column"),
+		Look:    card.Binding,
 
 		Toggle:     kernel.Bind([]string{"space"}, "space", "pick or unpick this card"),
 		PickColumn: kernel.Bind([]string{"v"}, "v", "pick every card in this column"),
@@ -160,7 +163,7 @@ func (k keyMap) browsing(narrowed, picked bool) kernel.KeySet {
 		k.Open, kernel.Terse(k.Pick, "move"), kernel.Terse(k.Create, "create"), kernel.Terse(k.Find, "find"),
 		kernel.Terse(k.Mine, "mine"),
 		kernel.Terse(k.Board, "board"), kernel.Terse(k.FilterBy, "filter by"),
-		kernel.Terse(k.Filters, "quick filters"),
+		kernel.Terse(k.Filters, "quick filters"), kernel.Terse(k.Look, "look"),
 	}
 	if picked {
 		acts = []kernel.Binding{
@@ -185,7 +188,7 @@ func (k keyMap) browsing(narrowed, picked bool) kernel.KeySet {
 			{k.ShiftLeft, k.ShiftRight, k.RankUp, k.RankDown, k.RankTop, k.RankBottom},
 			actions,
 			many,
-			{k.Create, k.Lanes, k.Fold, k.FoldAll},
+			{k.Create, k.Lanes, k.Fold, k.FoldAll, k.Look},
 			{k.FindNext, k.FindPrev},
 		},
 	}
@@ -360,6 +363,7 @@ const (
 	actFold
 	actFoldAll
 	actCreate
+	actLook
 	actToggle
 	actPickColumn
 	actUnpick
@@ -425,7 +429,7 @@ func (k keyMap) entries() (browsing, holding, finding []binding) {
 		{k.Mine, actMine}, {k.Find, actFind},
 		{k.FindNext, actFindNext}, {k.FindPrev, actFindPrev},
 		{k.Lanes, actLanes}, {k.Fold, actFold}, {k.FoldAll, actFoldAll},
-		{k.Create, actCreate},
+		{k.Create, actCreate}, {k.Look, actLook},
 		{k.Toggle, actToggle}, {k.PickColumn, actPickColumn}, {k.Unpick, actUnpick},
 		{k.Assign, actAssign}, {k.Label, actLabel},
 	}

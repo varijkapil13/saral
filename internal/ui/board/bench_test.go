@@ -11,6 +11,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -318,3 +319,95 @@ func BenchmarkBoardPlaceLanes5k(b *testing.B) {
 		m.place()
 	}
 }
+
+// dressedCards are manyCards with everything a roomy card draws filled in,
+// so a card benchmark pays for the lines a real board's cards carry.
+func dressedCards(columns, n int) []jira.Issue {
+	out := manyCards(columns, n)
+	people := []jira.User{
+		{AccountID: "acct-1", DisplayName: "Ada Lovelace"},
+		{AccountID: "acct-2", DisplayName: "Grace Hopper"},
+		{AccountID: "acct-3", DisplayName: "Alan Turing"},
+	}
+	for i := range out {
+		u := people[i%len(people)]
+		out[i].Assignee = &u
+		out[i].Priority = &jira.Priority{ID: "3", Name: "Medium"}
+		out[i].Labels = []string{"export", "nightly"}
+		out[i].Due = jira.Date{Year: 2026, Month: time.March, Day: 1 + i%28}
+		out[i].Parent = &jira.IssueRef{Key: "PROJ-9" + strconv.Itoa(i%10), Summary: "Nightly export"}
+		out[i].Subtasks = []jira.IssueRef{{Key: "PROJ-1", Status: jira.Status{Category: jira.CategoryDone}}, {Key: "PROJ-2"}}
+	}
+	return out
+}
+
+func carded(tb testing.TB, look card.Look, columns, cards, w, h int) *Model {
+	tb.Helper()
+	m := marked(tb, columns, 0, w, h)
+	next, _ := m.Update(firstPage(m.gen, dressedCards(columns, cards)))
+	m, _ = next.(*Model)
+	next, _ = m.Update(card.LookMsg{Look: look})
+	m, _ = next.(*Model)
+	if m.look != look || len(m.issues) != cards {
+		tb.Fatal("the board is not drawn in the look asked for, so this benchmark proves nothing")
+	}
+	_ = m.View()
+	return m
+}
+
+func steady(b *testing.B, m *Model) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = m.View()
+	}
+}
+
+func walkDown(b *testing.B, m *Model) {
+	var down, top tea.Msg = keyPress("j"), keyPress("home")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		next, _ := m.Update(down)
+		m, _ = next.(*Model)
+		_ = m.View()
+		if m.curRow >= m.columnLen(m.curCol)-1 {
+			next, _ = m.Update(top)
+			m, _ = next.(*Model)
+		}
+	}
+}
+
+func BenchmarkBoardViewCards10k(b *testing.B) { steady(b, carded(b, card.Compact, 4, 10000, 120, 40)) }
+
+func BenchmarkBoardViewRoomy10k(b *testing.B) { steady(b, carded(b, card.Roomy, 4, 10000, 120, 40)) }
+
+func BenchmarkBoardWalkCards10k(b *testing.B) {
+	walkDown(b, carded(b, card.Compact, 4, 10000, 120, 40))
+}
+
+func BenchmarkBoardWalkRoomy10k(b *testing.B) { walkDown(b, carded(b, card.Roomy, 4, 10000, 120, 40)) }
+
+func BenchmarkBoardRedrawRoomy200x60(b *testing.B) {
+	steady(b, carded(b, card.Roomy, 8, 10000, 200, 60))
+}
+
+func lanedCards5k(tb testing.TB, look card.Look) *Model {
+	tb.Helper()
+	m := carded(tb, look, 4, 5000, 120, 40)
+	for i := range m.issues {
+		u := jira.User{AccountID: "acct-" + strconv.Itoa(i%8), DisplayName: "Person " + strconv.Itoa(i%8)}
+		m.issues[i].Assignee = &u
+	}
+	m.laneFor, m.laneKnown, m.laneMode = m.plan.boardID, true, lanesByAssignee
+	m.place()
+	m.forget()
+	if len(m.lanes) != 8 || !strings.Contains(m.View(), "Person 0") {
+		tb.Fatal("the board is not drawn in lanes, so this benchmark proves nothing")
+	}
+	return m
+}
+
+func BenchmarkBoardWalkCards5kLanes(b *testing.B) { walkDown(b, lanedCards5k(b, card.Compact)) }
+
+func BenchmarkBoardWalkRoomy5kLanes(b *testing.B) { walkDown(b, lanedCards5k(b, card.Roomy)) }

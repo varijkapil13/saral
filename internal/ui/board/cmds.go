@@ -8,6 +8,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -154,6 +155,7 @@ type cardsQuery struct {
 	sprints      []jira.Sprint
 	noSprints    bool
 	sprint       int64
+	look         card.Look
 }
 
 // cards fills the board, through the read that applies the board's own saved
@@ -171,7 +173,7 @@ type cardsQuery struct {
 // parts of a board the endpoint leaves to the caller.
 func cards(ctx context.Context, reader site, search *app.Search, q cardsQuery, gen int) tea.Cmd {
 	return func() tea.Msg {
-		wanted, err := search.Resolve(ctx, q.plan.projection())
+		wanted, err := search.Resolve(ctx, q.plan.projectionFor(q.look))
 		if err != nil {
 			return failedMsg{gen: gen, step: stepIssues, err: err}
 		}

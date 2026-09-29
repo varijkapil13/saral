@@ -806,8 +806,8 @@ flight and the quit goes ahead once it has answered.
 
 ### Cards
 
-**The issue list and the backlog draw cards; the board follows in the next packet.** Until a view
-handles the look, `V` does nothing there and the view keeps drawing one line per issue.
+**The issue list, the backlog and the board all draw cards.** `V` changes the look in each of them,
+and the one choice covers all three.
 
 `V` cycles how an issue is drawn: **roomy** cards (the default, five lines), **compact** cards
 (three), and **lines** (one row per issue, as today), then round to roomy. One choice covers all three
@@ -853,6 +853,24 @@ three lines and lands on the row there, and the lines left under the last card t
 A click anywhere on a card selects it, a drag between cards of one section ranks, and a drag onto a
 head moves, as in the lines look. Moving to roomy over issues read without its fields reads the board
 once more in the background, keeping the cursor; a failed read keeps the cards, badged stale.
+
+**On the board** a card is exactly its column's width. Its first line is the mark (the type's glyph
+at rest), the key and the board's estimate on the right; the column already names the status, so
+the card does not. Then the summary, then the assignee, the priority, the due date (`due 12 Mar`,
+with the year only when it is not this one, overdue once the day has passed in the site's own zone)
+and the subtasks done. A roomy card's last line is the parent's key and summary, or else the
+labels; a compact card carries the labels on its third line. The columns show as many whole cards as fit and leave the lines under the last one
+blank. `j`/`k`, the pages and every column's own offset move by cards, and a notch of the wheel is
+one card. A click anywhere on a card selects it, a double-click opens it, and a drag onto another
+column moves it, as with lines. In lanes each lane's header is still one line and each of its rows is
+a card tall; the lanes scroll by lines, three a notch, so a card at the top or bottom edge can be
+cut, but the card under the cursor is always whole. Changing the look keeps the cursor on its card,
+every column on the card it opened on, and the lane at the top of the window. Moving to roomy over
+cards read without the due date, subtasks, fix versions or labels reads the board again once, in the
+background, and swaps the cards in whole when it is done, the reader's place kept; a refused read
+keeps the cards and badges them stale. Moving away from roomy never reads anything. `V` works
+wherever the board is being looked at, cards picked or not; while a card is in hand, a status is
+being chosen, or a search, a name or a label is being typed, it is not the look key.
 
 ## Releases: order and state
 

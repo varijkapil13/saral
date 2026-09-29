@@ -161,3 +161,51 @@ func TestBudget_BoardLanesCostNothingOffAndABoundedAmountOn(t *testing.T) {
 			time.Duration(res.NsPerOp()))
 	}
 }
+
+// Cards cost a steady-state frame what lines do: the grid's memo holds the
+// composed window whatever a card's height, so the frame string is the one
+// allocation in either look.
+func TestBudget_BoardCardsCostNothingPerFrame(t *testing.T) {
+	for name, bench := range map[string]func(*testing.B){
+		"compact": BenchmarkBoardViewCards10k,
+		"roomy":   BenchmarkBoardViewRoomy10k,
+	} {
+		if got := testing.Benchmark(bench).AllocsPerOp(); got > 1 {
+			t.Errorf("a steady-state frame of 10k %s cards allocates %d times, want the frame string alone", name, got)
+		}
+	}
+}
+
+// A step down a column of cards misses the memo the way a step in lines does:
+// two cards drawn again and the window composed again, a line for every line
+// a card takes. On an M2 Pro over dressed cards: 126 compact and 167 roomy
+// down the columns, 124 and 167 in lanes, each ceiling a tenth above.
+func TestBudget_ABoardOfCardsMemoMissCostsTwoCardsAndTheWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		bench   func(*testing.B)
+		ceiling int64
+	}{
+		{"compact cards down a column", BenchmarkBoardWalkCards10k, 139},
+		{"roomy cards down a column", BenchmarkBoardWalkRoomy10k, 184},
+		{"compact cards down a column in lanes", BenchmarkBoardWalkCards5kLanes, 137},
+		{"roomy cards down a column in lanes", BenchmarkBoardWalkRoomy5kLanes, 184},
+	} {
+		res := testing.Benchmark(tc.bench)
+		got := res.AllocsPerOp()
+		t.Logf("%s: %d allocations, ceiling %d", tc.name, got, tc.ceiling)
+		if got > tc.ceiling {
+			t.Errorf("a step with %s allocates %d times, over the ceiling of %d", tc.name, got, tc.ceiling)
+		}
+		if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+			t.Errorf("keystroke to frame with %s took %s, want under the 16ms in docs/PERFORMANCE.md", tc.name, per)
+		}
+	}
+}
+
+func TestBudget_BoardRoomyFullRedrawAt200x60(t *testing.T) {
+	res := testing.Benchmark(BenchmarkBoardRedrawRoomy200x60)
+	if per := time.Duration(res.NsPerOp()); per > 4*time.Millisecond {
+		t.Errorf("a full redraw of roomy cards at 200x60 took %s, want under the 4ms in docs/PERFORMANCE.md", per)
+	}
+}

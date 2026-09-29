@@ -143,12 +143,15 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/backlog` | `TestBudget_BacklogScrollingOverCardsCostsTheFrameAlone` |
 | `internal/ui/backlog` | `TestBudget_BacklogSectionTotalsCostNothingPerFrame` |
 | `internal/ui/board` | `TestBudget_ABoardMemoMissCostsTwoLinesAndNotAScreen` |
+| `internal/ui/board` | `TestBudget_ABoardOfCardsMemoMissCostsTwoCardsAndTheWindow` |
 | `internal/ui/board` | `TestBudget_BoardCardsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/board` | `TestBudget_BoardCardsCostNothingPerFrame` |
 | `internal/ui/board` | `TestBudget_BoardColumnsAreVirtualizedAsWellAsItsRows` |
 | `internal/ui/board` | `TestBudget_BoardFindAllocatesNothingPerCard` |
 | `internal/ui/board` | `TestBudget_BoardFullRedrawAt200x60` |
 | `internal/ui/board` | `TestBudget_BoardKeystrokeToFrame` |
 | `internal/ui/board` | `TestBudget_BoardLanesCostNothingOffAndABoundedAmountOn` |
+| `internal/ui/board` | `TestBudget_BoardRoomyFullRedrawAt200x60` |
 | `internal/ui/board` | `TestBudget_BoardScrollCostsTheFrameAndNothingElse` |
 | `internal/ui/board` | `TestBudget_BoardScrollingCostsTheSameUnderATermInForce` |
 | `internal/ui/board` | `TestBudget_BoardSprintHeaderCostsNothingPerFrame` |
@@ -412,15 +415,25 @@ visible window the moment any one column scrolls, which is the same cost as not 
 all.
 
 So the board caches its visible window as one unit (`Model.grid`, `internal/ui/board/render.go`),
-valid for the layout, the data generation, the cursor and the held card, and separately for the exact
-per-column offsets (a `[]int`, compared by value) it was built from — a slice cannot sit in the
-comparable key the rest of that state does. A column scrolling still costs rebuilding the whole
+valid for the layout, the data generation, the cursor, the held card and the look, and separately
+for the exact per-column offsets (a `[]int`, compared by value) it was built from — a slice cannot
+sit in the comparable key the rest of that state does. A column scrolling still costs rebuilding the whole
 window rather than the one row an absolute-index memo would have, but composing a row stays cheap:
 every cell in it is a `cardCache` lookup by issue identity, already reusable at any screen position,
 so the rebuild is a window of string concatenation rather than a window of card rendering — 83
 allocations measured against `TestBudget_ABoardMemoMissCostsTwoLinesAndNotAScreen`'s ceiling of 105,
 comfortably short of the "a screen" a card re-render of the same window would cost. The ceiling was
 not moved for this: see that test's own comment for the numbers it replaced.
+
+Cards keep the same shape. `itemsHeight` is `rowsHeight` divided by the look's lines, the offsets and
+the cursor stay in cards, and the window is still the unit: a step rebuilds it, a line for every line
+of a card, and draws the two cards whose selection changed through `card.Render` and
+`Zoner.MarkLines`. The card memo now holds a card's lines as a `[]string`; a card drawn in lines is
+cut from one shared backing array, so a miss in lines costs no slice of its own and the 83 above did
+not move. A step costs 126 allocations over compact cards and 167 over roomy ones, 124 and 167 in
+lanes, each held a tenth above by `TestBudget_ABoardOfCardsMemoMissCostsTwoCardsAndTheWindow`; a
+steady frame is still the frame string alone in either look
+(`TestBudget_BoardCardsCostNothingPerFrame`).
 
 The `--bench-first-paint` flag used above is built in P0.1: it starts the program, renders the first
 frame from cache, prints elapsed microseconds and exits. Without it the two start-up budgets are
