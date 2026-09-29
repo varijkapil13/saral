@@ -7,6 +7,8 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-09-29
+
 ### Fixed
 
 - `brew` no longer warns that the saral cask calls the deprecated `postflight`. The cask clears
@@ -223,7 +225,8 @@ transitions, comments with markdown ⇄ ADF, attachments with inline image previ
 backlog, sprints, releases with the unresolved-issue decision, the cross-project move wizard, the
 timeline, plans, the command palette, full mouse support and cache-first paint.
 
-[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/varijkapil13/saral/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/varijkapil13/saral/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/varijkapil13/saral/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/varijkapil13/saral/compare/v0.6.0...v0.6.1
