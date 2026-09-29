@@ -43,7 +43,7 @@ this workflow and not from somewhere else:
 
 - **`checksums.txt` is cosign-signed, keyless.** The release job signs it with the workflow's own
   GitHub Actions OIDC identity (`id-token: write`) rather than a long-lived key, and publishes
-  `checksums.txt.sig` and `checksums.txt.pem` alongside it. `scripts/install.sh` verifies this itself
+  `checksums.txt.sigstore.json`, a cosign bundle holding the signature and certificate, alongside it. `scripts/install.sh` verifies this itself
   when `cosign` is on the machine running it.
 - **Every archive gets a build provenance attestation.** `actions/attest-build-provenance` runs after
   `goreleaser release` and attests each file `checksums.txt` names, against GitHub's own attestation
@@ -170,6 +170,11 @@ the glyph tier and the field work cost about 200 KiB between them.
 - **`force_token: github`.** GoReleaser picks its SCM from whichever token it finds in the
   environment. A `GITLAB_TOKEN` sitting in a developer's shell is enough to rewrite every URL in the
   generated cask to `gitlab.com` — which is exactly what a local dry run did before this was pinned.
+- **Signing only runs on a real tag.** `goreleaser check` and a `--snapshot` dry run both skip the
+  `signs` step, so a cosign flag change surfaces at release time. `cosign-installer` v4 installs
+  cosign v3, which writes only a `--bundle`; the old `--output-signature`/`--output-certificate`
+  pair makes `sign-blob` fail with `create bundle file: open : no such file or directory` after every
+  archive is built, and nothing is published.
 - **The binaries themselves are not Apple-code-signed or notarized.** Cosign signs `checksums.txt`,
   which is a different kind of signing and does nothing for Gatekeeper. The cask's `postflight` clears
   the quarantine attribute instead, which is why a `brew install`ed binary runs on macOS. Notarizing
