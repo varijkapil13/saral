@@ -7,6 +7,11 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+### Fixed
+
+- `brew` no longer warns that the saral cask calls the deprecated `postflight`. The cask clears
+  macOS quarantine with Homebrew's `postflight_steps` instead.
+
 ## [0.7.1] - 2026-09-29
 
 The first published release of everything listed under 0.7.0: that tag was pushed, but its release
