@@ -13,8 +13,8 @@ import (
 // Facts is what a card shows, already read off the issue and formatted by the
 // view. A blank field draws nothing, never a placeholder, so a view leaves out
 // what it does not show: the board fills no status, since its column says it.
-// The type cell beside the key is drawn only with a TypeName; TypeGlyph alone
-// is the resting mark.
+// The type cell beside the key is drawn only with a TypeName; without one,
+// TypeGlyph is the resting mark.
 type Facts struct {
 	Key, Summary, TypeGlyph, TypeName, StatusGlyph, StatusName string
 	Assignee, Priority, Updated, Estimate                      string
@@ -26,9 +26,9 @@ type Facts struct {
 	TypeZone, StatusZone, WhoZone string
 }
 
-// State is how the card sits in its view. Mark is the resting mark cell, the
-// type glyph when blank; Held, Picked and Selected take the cell over, in that
-// order.
+// State is how the card sits in its view. Mark is the resting mark cell. Left
+// blank, it is empty while the type cell draws the type's glyph and the type
+// glyph otherwise; Held, Picked and Selected take the cell over, in that order.
 type State struct {
 	Selected, Picked, Held bool
 	Mark                   string
@@ -176,19 +176,23 @@ func (r *renderer) one(text string, t tone) []seg {
 
 func (r *renderer) cat() tone { return toneCategory + tone(r.f.Category) }
 
-func (r *renderer) mark() (string, tone) {
+// mark is the mark cell's glyph, or a blank as wide as the type glyph while
+// the type cell beside the key already draws it.
+func (r *renderer) mark(typeDrawn bool) (text string, t tone, blank int) {
 	g := r.fr.Glyphs
 	switch {
 	case r.st.Held:
-		return g.Diamond, toneBase
+		return g.Diamond, toneBase, 0
 	case r.st.Picked:
-		return g.Check, toneKey
+		return g.Check, toneKey, 0
 	case r.st.Selected:
-		return g.Collapsed, toneBase
+		return g.Collapsed, toneBase, 0
 	case r.st.Mark != "":
-		return r.st.Mark, toneMuted
+		return r.st.Mark, toneMuted, 0
+	case typeDrawn && r.f.TypeGlyph != "":
+		return "", toneBase, ansi.StringWidth(r.f.TypeGlyph)
 	}
-	return r.f.TypeGlyph, toneMuted
+	return r.f.TypeGlyph, toneMuted, 0
 }
 
 // head is the key's line. What it gives up as the width shrinks, in order:
@@ -236,8 +240,11 @@ func (r *renderer) headCells(typ, updated, status, estimate string) (left, right
 	f := r.f
 	left = r.buf[:0]
 	right = r.right[:0]
-	if m, t := r.mark(); m != "" {
+	switch m, t, blank := r.mark(typ != ""); {
+	case m != "":
 		left = append(left, seg{text: m, tone: t}, seg{pad: 1})
+	case blank > 0:
+		left = append(left, seg{pad: blank + 1})
 	}
 	left = append(left, seg{text: f.Key, tone: toneKey})
 	if typ != "" {

@@ -233,7 +233,7 @@ func TestRender_TheMarkCellFollowsTheBoardsRule(t *testing.T) {
 		st   State
 		want string
 	}{
-		{State{}, g.TypeBug},
+		{State{}, " "},
 		{State{Mark: "x"}, "x"},
 		{State{Selected: true}, g.Collapsed},
 		{State{Picked: true}, g.Check},
@@ -243,6 +243,41 @@ func TestRender_TheMarkCellFollowsTheBoardsRule(t *testing.T) {
 		head := ansi.Strip(draw(listFacts(g), tc.st, theme, Compact, 80)[0])
 		if !strings.HasPrefix(head, g.CornerTL+" "+tc.want+" ") {
 			t.Errorf("%+v draws %q, want the mark %q", tc.st, head, tc.want)
+		}
+	}
+	board := ansi.Strip(draw(boardFacts(g), State{}, theme, Compact, 80)[0])
+	if !strings.HasPrefix(board, g.CornerTL+" "+g.TypeTask+" EX-87 ") {
+		t.Errorf("a card with no type name draws %q, want the type glyph as its mark", board)
+	}
+}
+
+func TestRender_TheTypeGlyphIsDrawnOnceAndNeverLost(t *testing.T) {
+	t.Parallel()
+
+	for _, tier := range tiers {
+		theme := kernel.NewTheme(kernel.ThemeNoColor, false, tier.glyphs)
+		g := theme.Glyphs
+		blankMark := g.CornerTL + strings.Repeat(" ", ansi.StringWidth(g.TypeBug)+2) + "EX-1234"
+		glyphMark := g.CornerTL + " " + g.TypeBug + " EX-1234"
+		seen := map[string]bool{}
+		for width := 80; width >= 12; width-- {
+			head := ansi.Strip(draw(listFacts(g), State{}, theme, Roomy, width)[0])
+			after, ok := strings.CutPrefix(head, blankMark)
+			switch {
+			case ok && strings.HasPrefix(after, " "+g.TypeBug+" Bug"):
+				seen["type cell whole"] = true
+			case ok && strings.HasPrefix(after, " "+g.TypeBug+" "):
+				seen["type cell down to its glyph"] = true
+			case strings.HasPrefix(head, glyphMark) && !strings.Contains(strings.TrimPrefix(head, glyphMark), g.TypeBug):
+				seen["type cell gone, glyph in the mark"] = true
+			default:
+				t.Fatalf("%s at %d draws %q: the type glyph is doubled or lost", tier.name, width, head)
+			}
+		}
+		for _, c := range []string{"type cell whole", "type cell down to its glyph", "type cell gone, glyph in the mark"} {
+			if !seen[c] {
+				t.Errorf("%s: no width between 12 and 80 drew the case %q", tier.name, c)
+			}
 		}
 	}
 }

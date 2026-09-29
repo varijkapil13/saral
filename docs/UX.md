@@ -823,7 +823,9 @@ subtasks done out of all of them, `2/5`. A roomy card's last line is the parent,
 and fix versions; a compact card puts the labels at the end of its third line. A field the issue does
 not have draws nothing.
 
-The mark cell is the type's glyph at rest, `▸` under the cursor, `✓` when picked and `◆` while held.
+The mark cell is `▸` under the cursor, `✓` when picked and `◆` while held. At rest it is blank
+wherever the type is drawn beside the key, and carries the type's glyph where it is not (the board,
+or a card too narrow for the type), so the type shows exactly once.
 The card under the cursor is drawn inverted, bracket included; a held card is in the warning colour.
 As a card gets narrower it gives up the labels and versions first, then the priority, then shortens
 the assignee, then the type's name (its glyph stays), then when it changed. The key and the summary

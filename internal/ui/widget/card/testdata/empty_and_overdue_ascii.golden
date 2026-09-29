@@ -5,7 +5,7 @@
 |                       |
 +                       |
 -- overdue, roomy, 24 --
-+ ! EX-1234 !          ~|
++   EX-1234 !          ~|
 | Checkout fails when   |
 | the basket is empty...|
 | Ada Lo... | 2026-10-02|
@@ -17,7 +17,7 @@
 |                                                                               |
 +                                                                               |
 -- overdue, roomy, 80 --
-+ ! EX-1234 ! Bug                                                ~ In Review  3d|
++   EX-1234 ! Bug                                                ~ In Review  3d|
 | Checkout fails when the basket is empty and the coupon field is still open    |
 |                                                                               |
 | Ada Lovelace | High | 2026-10-02 | 2/5                                        |
@@ -27,7 +27,7 @@
 |                       |
 +                       |
 -- overdue, compact, 24 --
-+ ! EX-1234 !          ~|
++   EX-1234 !          ~|
 | Checkout fails when...|
 + Ada Lo... | 2026-10-02|
 -- nothing but a key, compact, 80 --
@@ -35,6 +35,6 @@
 |                                                                               |
 +                                                                               |
 -- overdue, compact, 80 --
-+ ! EX-1234 ! Bug                                                ~ In Review  3d|
++   EX-1234 ! Bug                                                ~ In Review  3d|
 | Checkout fails when the basket is empty and the coupon field is still open    |
 + Ada Lovelace | High | 2026-10-02 | 2/5 | checkout payments | 2026.4           |
