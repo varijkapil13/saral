@@ -80,11 +80,11 @@ at 80×20 the body is 17 rows with a status line up, and the issue list has as f
 |---|---|
 | root | the **root** view's title — where `esc` lands, and what a click there goes back to |
 | actions | what can be done to the thing on screen, most-used first, terse; whatever is left over becomes `+N` |
-| globals | `? ctrl+k esc`, or `q` at the bottom of the stack — bare keys, never given up to make room. A view taking typing swallows all but `ctrl+k`, and the cell drops what will not arrive |
+| globals | `? g ctrl+k esc`, or `q` at the bottom of the stack — bare keys, never given up to make room. A view taking typing swallows all but `ctrl+k`, and the cell drops what will not arrive |
 
 ```
- Issues  tab pane  e edit  t status  C comment                     ? ctrl+k esc
- Issues  enter open  c comment  e edit  t status  / filter  +3    ? ctrl+k q
+ Issues  tab pane  e edit  t status  C comment                   ? g ctrl+k esc
+ Issues  enter open  c comment  e edit  t status  / filter  +3  ? g ctrl+k q
 ```
 
 **The order things are given up in is the point.** Actions fold into a `+N` from the right, then the
@@ -111,9 +111,11 @@ they are not going on it.** One row cannot hold nine destinations and the action
 destinations are the half needed least often, and the header already says what is on top. What was
 wrong with that was not the trade but the consequence: at rest the row said `? ctrl+k esc` and
 nothing anywhere said the other views existed, so somebody using the built binary asked how to open
-the board and was right to. **The destinations are now taught at the moment of asking** — pressing
-`g` draws them, see *Behind the prefix* below — as well as by `?` and by the palette's *Go to* rows.
-The row itself still names only the root you are in, at every width.
+the board and was right to. `g` itself is now in the globals cell, wherever pressing it would do
+something — so a new user reads the way in off the row rather than having to already know it. **The
+destinations it opens are taught at the moment of asking** — see *Behind the prefix* below — as well
+as by `?` and by the palette's *Go to* rows. The row itself still names only the root you are in, at
+every width.
 
 While the prefix is latched the row says what that overlay answers to and nothing else, which is what
 it already does under `?` and under the right-click menu:

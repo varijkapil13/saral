@@ -1,36 +1,36 @@
 attach
- Issues                                                             ? ctrl+k esc
+ Issues                                                           ? g ctrl+k esc
 backlog
- Issues  space pick  v pick all  m move  c create  / find  +3       ? ctrl+k esc
+ Issues  space pick  v pick all  m move  c create  / find  +3     ? g ctrl+k esc
 board
- Issues  enter open  m move  c create  / find  M mine  b board  +2  ? ctrl+k esc
+ Issues  enter open  m move  c create  / find  M mine  +3         ? g ctrl+k esc
 comment
- Issues  a write  e edit  d delete                                  ? ctrl+k esc
+ Issues  a write  e edit  d delete                                ? g ctrl+k esc
 filter
- Issues  enter choose                                               ? ctrl+k esc
+ Issues  enter choose                                             ? g ctrl+k esc
 form
- Issues  enter use this issue type                                  ? ctrl+k esc
+ Issues  enter use this issue type                                ? g ctrl+k esc
 issue
- Issues  tab pane  e edit  E open in $EDITOR  t status  C comment   ? ctrl+k esc
+ Issues  tab pane  e edit  E open in $EDITOR  t status  C comment ? g ctrl+k esc
 list
- Issues  enter open  f filter by  / filter  a all  e search  +2       ? ctrl+k q
+ Issues  enter open  f filter by  / filter  a all  e search  +2     ? g ctrl+k q
 move
- Issues  enter use it  i type a key                                 ? ctrl+k esc
+ Issues  enter use it  i type a key                               ? g ctrl+k esc
 onboarding
  Issues  enter continue                                                   ctrl+k
 palette
  Issues  enter run it  esc close                                          ctrl+k
 plans
- Issues  enter sources                                              ? ctrl+k esc
+ Issues  enter sources                                            ? g ctrl+k esc
 release.bulk
  Issues  enter preview  tab on/off  esc leave                             ctrl+k
 release.flow
- Issues  enter choose                                               ? ctrl+k esc
+ Issues  enter choose                                             ? g ctrl+k esc
 releases
- Issues  enter release  n new  e edit  A archive  b assign          ? ctrl+k esc
+ Issues  enter release  n new  e edit  A archive  b assign        ? g ctrl+k esc
 settings
- Issues  enter apply, open or run                                   ? ctrl+k esc
+ Issues  enter apply, open or run                                 ? g ctrl+k esc
 sprints
- Issues  o closed                                                   ? ctrl+k esc
+ Issues  o closed                                                 ? g ctrl+k esc
 timeline
- Issues  n notes                                                    ? ctrl+k esc
+ Issues  n notes                                                  ? g ctrl+k esc

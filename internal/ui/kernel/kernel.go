@@ -1880,9 +1880,9 @@ func (m Model) globalCell() (cell string, width int) {
 	}
 	_, palette := LookupView(PaletteViewID)
 	capturing := m.capturing()
-	keys := make([]string, 0, 3)
+	keys := make([]string, 0, 4)
 	if !capturing {
-		keys = append(keys, m.keys.Help.Help().Key)
+		keys = append(keys, m.keys.Help.Help().Key, m.keys.Go.Help().Key)
 	}
 	if palette {
 		keys = append(keys, m.keys.Palette.Help().Key)

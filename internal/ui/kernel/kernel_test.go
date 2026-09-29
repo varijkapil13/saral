@@ -820,7 +820,7 @@ func TestFooter_SaysNothingAboutGlobalsAViewIsSwallowing(t *testing.T) {
 	RegisterKeys("board", KeySet{Short: []Binding{Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter")}})
 
 	m := newAt(t, testDeps(), 140, 30)
-	if got := lastLine(ansi.Strip(m.Frame())); !strings.HasSuffix(got, "? q") {
+	if got := lastLine(ansi.Strip(m.Frame())); !strings.HasSuffix(got, "? g q") {
 		t.Fatalf("the globals should show while nothing is capturing:\n%s", got)
 	}
 

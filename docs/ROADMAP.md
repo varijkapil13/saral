@@ -1311,6 +1311,19 @@ Wave 4:
 
 ---
 
+## Batch 11 — Corrections
+
+- [x] **P11.2 — `g` itself is on the toolbar** · **owns** `internal/ui/kernel/{kernel.go,kernel_test.go,footer_test.go,testdata/{footer,frame,status}_*.golden}`, `internal/ui/{footer_test.go,testdata/footer_*.golden}`, `internal/ui/issue/{comments_kernel_test.go,testdata/session_*.golden}`, `internal/ui/list/testdata/*.golden`, `docs/{UX,SETTINGS}.md`, `CHANGELOG.md`, this section
+  K7 taught the destinations at the moment of asking, but a user who never presses `g` never gets to
+  that moment: nothing on the row said the key existed. The globals cell now carries `g` itself,
+  right after `?`, wherever pressing it would do something — not while a view is capturing typing
+  (already down to `ctrl+k` there) and not under help, the menu or the prefix overlay (already empty
+  there). Clicking is not wired: the globals cell mints no mouse zones for any of its other entries
+  either, so `g` follows suit rather than being the first. The view slots stay off the row, per K7 —
+  this is the prefix key, not the destinations.
+
+---
+
 ## Timeline date resolution
 
 The timeline is derived from **start and end dates**, not only releases. Per issue, first match wins,
