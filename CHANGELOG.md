@@ -7,7 +7,19 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-09-29
+## [0.7.1] - 2026-09-29
+
+The first published release of everything listed under 0.7.0: that tag was pushed, but its release
+failed at signing and published nothing.
+
+### Changed
+
+- `checksums.txt` is signed into a single cosign bundle, `checksums.txt.sigstore.json`, instead of a
+  separate `.sig` and `.pem`. To verify by hand: `cosign verify-blob --bundle
+  checksums.txt.sigstore.json --certificate-identity-regexp '^https://github.com/varijkapil13/saral/'
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt`.
+
+## [0.7.0] - 2026-09-29 [UNPUBLISHED]
 
 ### Changed: read these before upgrading
 
@@ -206,7 +218,8 @@ transitions, comments with markdown ⇄ ADF, attachments with inline image previ
 backlog, sprints, releases with the unresolved-issue decision, the cross-project move wizard, the
 timeline, plans, the command palette, full mouse support and cache-first paint.
 
-[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/varijkapil13/saral/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/varijkapil13/saral/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/varijkapil13/saral/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/varijkapil13/saral/compare/v0.5.0...v0.6.0
