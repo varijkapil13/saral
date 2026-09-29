@@ -1873,6 +1873,18 @@ record of what was built, what was left and why.
   is kept per machine with `config.SaveSort`, the filter per profile with `kernel.Keep`. A created
   version the filter would hide switches the filter back to all.
 
+- [x] **P11.4 — A board refresh swaps the cards in whole and keeps the reader's place** · PRLINK · **owns** `internal/ui/board/{board.go,quickfilter.go,pick.go,refresh_test.go,memory_test.go}`, `docs/{ARCHITECTURE,UX,ROADMAP}.md`, `CHANGELOG.md`
+  A walk that starts over cards already on screen (`r`, focus after the TTL, a stale snapshot, a
+  quick filter toggled) gathers its pages in `Model.next` and swaps them in when the last one lands;
+  a walk from nothing still fills page by page. The swap puts the cursor back on its card by key, or
+  on the card now in its old row of the same column, and each column back on its top card, or on
+  its old offset, clamped. Picks are pruned only against the swapped-in set, and cards changed on
+  screen during the walk keep the on-screen copy. A walk that breaks off keeps the old cards, badged
+  stale. Quick filters now have their own generation. A revalidation of the same board keeps them,
+  and a cold open with a recalled filter reads them before the cards, so no unfiltered page is ever
+  drawn. **Left for later:** the lanes view keeps its numeric `laneTop` rather than anchoring it to
+  a card.
+
 ## Later, deliberately not now
 
 - **Confluence.** Arrives as `pkg/confluence` behind its own port. Note that Confluence storage

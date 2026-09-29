@@ -16,7 +16,9 @@ for six months.
 4. **Nothing destructive without a named confirmation.** The confirm shows what will change, in
    words, including counts ("release 2.4.0 with 12 unresolved issues?").
 5. **Never lose the user's place.** A background refresh patches rows; it does not reset the cursor,
-   scroll offset, filter or focus.
+   scroll offset, filter or focus. The board reads a refresh's pages off screen and swaps them in at
+   once, so no column empties and refills. The cursor stays on its card, or moves to the card that
+   took its row in that column, and each column still opens on the card it opened on.
 6. **Never lose the user's text.** Anything typed survives a failed request, a 409, and a crash —
    drafts are persisted per issue.
 

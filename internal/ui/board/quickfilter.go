@@ -36,16 +36,21 @@ func quickFiltersCmd(ctx context.Context, reader jira.BoardReader, boardID int64
 }
 
 func (m *Model) tookQuickFilters(msg quickFiltersMsg) tea.Cmd {
-	if !m.current(msg.gen) {
+	if msg.gen != m.qfGen {
 		return nil
 	}
+	asked := m.activeQuickFilterJQL()
 	m.quickFilters = msg.filters
 	m.qfOn = make(map[int64]bool, len(msg.filters))
+	m.applyRecalledQuickFilters()
 	kept := stored(m.pagePut(nil, false))
-	// loadCards already ran once in tookConfig, before this board's own live
-	// quick filters were known, so a recalled selection reaches the cards on
-	// screen only by asking again now that there is something to turn on.
-	if m.applyRecalledQuickFilters() {
+	if m.qfWait {
+		m.qfWait = false
+		return tea.Batch(kept, m.loadCards())
+	}
+	// The cards were asked for with the filters held before this answer, so
+	// they are read again only when the live list turns on something else.
+	if !slices.Equal(asked, m.activeQuickFilterJQL()) {
 		return tea.Batch(kept, m.readCards(false))
 	}
 	return kept

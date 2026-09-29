@@ -24,6 +24,17 @@ such change is listed under **Changed**.
 
 - The toolbar shows `g`, the key that opens the list of views and where to go.
 
+### Fixed
+
+- Refreshing a board no longer empties its columns and refills them. This covers `r`, coming back to
+  a board after a while and a board opened from its stored copy. The cards on screen stay until the
+  whole board has been read again, then change at once. The cursor stays on the card it was on, or
+  on the card that took its place when that card has left the board. Each column stays scrolled to
+  where it was, and cards you picked stay picked. If the refresh fails partway, the board keeps what
+  it showed and marks it stale.
+- A board whose quick filter was left on no longer shows its unfiltered cards for a moment when it
+  opens, and the quick-filter line no longer disappears while the board refreshes.
+
 ## [0.7.2] - 2026-09-29
 
 ### Fixed

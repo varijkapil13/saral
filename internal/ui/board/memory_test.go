@@ -136,8 +136,8 @@ func TestClearFilter_ForgetsItInMemory(t *testing.T) {
 
 // A quick filter this board's live list still offers, and that was toggled on
 // last time, comes back on once the live list is known — and the cards on
-// screen are asked for again under it, since the very first read already ran
-// without it.
+// screen are asked for again under it, since the list they were read under
+// did not turn it on.
 func TestTookQuickFilters_ReappliesARememberedSelectionAndReloadsCards(t *testing.T) {
 	t.Parallel()
 
@@ -153,7 +153,7 @@ func TestTookQuickFilters_ReappliesARememberedSelectionAndReloadsCards(t *testin
 	dr := newDriver(t, withMemory(testDeps(fake), mem), 120, 20)
 	before := countCalls(fake, "SprintIssues")
 
-	dr.send(quickFiltersMsg{gen: dr.m.gen, filters: qfs})
+	dr.send(quickFiltersMsg{gen: dr.m.qfGen, filters: qfs})
 
 	if !dr.m.qfOn[20] {
 		t.Errorf("qfOn = %+v, want 20 turned on from memory", dr.m.qfOn)
@@ -180,7 +180,7 @@ func TestTookQuickFilters_AnUnknownRememberedIDIsIgnored(t *testing.T) {
 	mem.state[ViewID+"."+quickFiltersMemoryKey] = string(ids)
 
 	dr := newDriver(t, withMemory(testDeps(newFake(6)), mem), 120, 20)
-	dr.send(quickFiltersMsg{gen: dr.m.gen, filters: []jira.QuickFilter{{ID: 10, Name: "Mine"}}})
+	dr.send(quickFiltersMsg{gen: dr.m.qfGen, filters: []jira.QuickFilter{{ID: 10, Name: "Mine"}}})
 
 	if len(dr.m.qfOn) != 0 {
 		t.Errorf("qfOn = %+v, want nothing turned on", dr.m.qfOn)
@@ -194,7 +194,7 @@ func TestToggleQuickFilter_KeepsTheSelectionInMemory(t *testing.T) {
 
 	mem := newFakeMemory()
 	dr := newDriver(t, withMemory(testDeps(newFake(6)), mem), 120, 20)
-	dr.send(quickFiltersMsg{gen: dr.m.gen, filters: []jira.QuickFilter{{ID: 10, Name: "Mine"}, {ID: 20, Name: "Bugs"}}})
+	dr.send(quickFiltersMsg{gen: dr.m.qfGen, filters: []jira.QuickFilter{{ID: 10, Name: "Mine"}, {ID: 20, Name: "Bugs"}}})
 
 	if !dr.m.toggleQuickFilter(2) {
 		t.Fatal("toggleQuickFilter(2) reported nothing bound to it")
