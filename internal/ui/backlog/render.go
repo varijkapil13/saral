@@ -151,9 +151,8 @@ func newStyles(t *kernel.Theme) *styles {
 
 // rowKey is what makes two renderings of a row the same rendering: the tuple
 // docs/PERFORMANCE.md asks for — updated, width, selected, theme generation —
-// widened to the column plan, to whether the row is picked, to what a section
-// head is built from, and for a card to the look, the fields the issue was
-// read with and the day its due date is overdue against.
+// widened to the column plan, to whether the row is picked, and to what a
+// section head is built from.
 type rowKey struct {
 	name     string
 	state    string
@@ -162,9 +161,6 @@ type rowKey struct {
 	points   float64
 	lay      layout
 	gen      int
-	fields   int
-	today    int
-	look     card.Look
 	head     bool
 	more     bool
 	pointed  bool
@@ -265,7 +261,13 @@ func (m *Model) warm(end int) {
 	}
 }
 
-// drawn keeps a single line out of a slice, which would cost every memo miss an allocation.
+// cardKey adds what a card draws beyond a row: the fields the issue was read
+// with and the day its due date is overdue against.
+type cardKey struct {
+	row           rowKey
+	fields, today int
+}
+
 type drawn struct {
 	one  string
 	card []string
@@ -273,7 +275,7 @@ type drawn struct {
 
 func (m *Model) line(at int) drawn {
 	r := m.rows[at]
-	k := rowKey{lay: m.lay, selected: at == m.cursor, gen: m.styles.gen, look: m.look}
+	k := rowKey{lay: m.lay, selected: at == m.cursor, gen: m.styles.gen}
 	cards := !r.head && m.look.Cards()
 	if r.head {
 		g := &m.groups[r.group]
@@ -285,23 +287,42 @@ func (m *Model) line(at int) drawn {
 		k.name, k.updated = iss.Key, iss.Updated.UnixNano()
 		k.picked = m.picked[iss.Key]
 		if cards {
-			k.fields, k.today = iss.Requested.Len(), m.today
+			return drawn{card: m.cardLines(at, cardKey{row: k, fields: iss.Requested.Len(), today: m.today})}
 		}
 	}
 	if s, ok := m.memo.Get(k); ok {
-		return s
+		return drawn{one: s}
 	}
-	var out drawn
-	switch {
-	case r.head:
-		out.one = m.zones.Mark(m.zoneOf(at), m.renderHead(&m.groups[r.group], k.selected, k.more))
-	case cards:
-		out.card = m.zones.MarkLines(m.zoneOf(at), m.renderCard(&m.issues[r.issue], k.selected, k.picked))
-	default:
-		out.one = m.zones.Mark(m.zoneOf(at), m.renderRow(&m.issues[r.issue], k.selected, k.picked))
+	var s string
+	if r.head {
+		s = m.renderHead(&m.groups[r.group], k.selected, k.more)
+	} else {
+		s = m.renderRow(&m.issues[r.issue], k.selected, k.picked)
 	}
-	m.memo.Put(k, out)
-	return out
+	s = m.zones.Mark(m.zoneOf(at), s)
+	m.memo.Put(k, s)
+	return drawn{one: s}
+}
+
+// cardLines keeps its memo apart from the rows' and builds it on the first
+// card, so a session in lines pays nothing for it.
+func (m *Model) cardLines(at int, k cardKey) []string {
+	if m.cards == nil {
+		m.cards = widget.NewRowCache[cardKey, []string](rowCacheLimit)
+	}
+	if lines, ok := m.cards.Get(k); ok {
+		return lines
+	}
+	lines := m.zones.MarkLines(m.zoneOf(at), m.renderCard(&m.issues[m.rows[at].issue], k.row.selected, k.row.picked))
+	m.cards.Put(k, lines)
+	return lines
+}
+
+func (m *Model) resetMemo() {
+	m.memo.Reset()
+	if m.cards != nil {
+		m.cards.Reset()
+	}
 }
 
 func (m *Model) renderCard(iss *jira.Issue, sel, picked bool) []string {
@@ -322,6 +343,9 @@ func (m *Model) renderCard(iss *jira.Issue, sel, picked bool) []string {
 		f.Priority = iss.Priority.Name
 	}
 	f.Due, f.Overdue = m.dueText(iss.Due)
+	if m.cardSty == nil {
+		m.cardSty = card.NewStyles(m.deps.Theme)
+	}
 	return card.Render(make([]string, 0, m.look.Lines()), f, card.State{Selected: sel, Picked: picked}, m.cardSty,
 		card.Frame{Width: m.lay.width, Look: m.look, Glyphs: g, Zones: m.zones})
 }

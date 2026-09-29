@@ -21,6 +21,8 @@ import (
 func ownUIState(t *testing.T) {
 	t.Helper()
 	t.Setenv("SARAL_CACHE_DIR", t.TempDir())
+	card.ResetRecall()
+	t.Cleanup(card.ResetRecall)
 }
 
 func lookDriver(t *testing.T, d kernel.Deps, look card.Look, w, h int) *driver {

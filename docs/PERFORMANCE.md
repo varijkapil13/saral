@@ -562,8 +562,10 @@ this table still measures it unchanged.
 | `BenchmarkBacklogPickAndFrameCards` | 2,100 | 2 | 4 |
 | `BenchmarkBacklogRegroup10k` | 790,000 | 6,711 | 16 ms |
 
-A memoized row is one line or a card's lines, never a slice of one line, which would put an
-allocation on every memo miss of the lines look.
+Rows and heads keep their `string` memo exactly as before cards. Cards have a memo of their own,
+built on the first card drawn, as are the card styles. Keeping them apart holds the lines walk at 51
+allocations and first paint where it was: `BenchmarkBacklogFirstPaintFromCache`, 50 stored issues
+drawn in lines at 120x40, measures 1,084 allocations and 379 KB against main's 1,083 and 378 KB.
 
 ## Measuring for real
 

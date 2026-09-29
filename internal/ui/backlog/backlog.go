@@ -125,7 +125,8 @@ type Model struct {
 
 	styles  *styles
 	cardSty *card.Styles
-	memo    *widget.RowCache[rowKey, drawn]
+	memo    *widget.RowCache[rowKey, string]
+	cards   *widget.RowCache[cardKey, []string]
 	zones   widget.Zoner
 	clicks  *widget.Clicks
 	drag    widget.Drag
@@ -289,9 +290,8 @@ func New(d kernel.Deps) kernel.View {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
 	m.styles = newStyles(m.deps.Theme)
-	m.cardSty = card.NewStyles(m.deps.Theme)
 	m.look = card.Recall()
-	m.memo = widget.NewRowCache[rowKey, drawn](rowCacheLimit)
+	m.memo = widget.NewRowCache[rowKey, string](rowCacheLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.bar = filterbar.New(m.zones)
@@ -424,19 +424,19 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case kernel.SetMouseMsg:
 		m.termsGen++
-		m.memo.Reset()
+		m.resetMemo()
 		m.head = ""
 
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.cardSty = card.NewStyles(msg.Theme)
-		m.memo.Reset()
+		m.cardSty = nil
+		m.resetMemo()
 		m.head = ""
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
-		m.memo.Reset()
+		m.resetMemo()
 		m.head = ""
 
 	case card.LookMsg:
@@ -561,7 +561,7 @@ func (m *Model) relayout() {
 		return
 	}
 	m.lay = lay
-	m.memo.Reset()
+	m.resetMemo()
 	m.head = ""
 }
 
@@ -655,7 +655,7 @@ func (m *Model) setLook(look card.Look) tea.Cmd {
 		return nil
 	}
 	m.look = look
-	m.memo.Reset()
+	m.resetMemo()
 	m.relayout()
 	m.rebuildLines()
 	m.keepVisible()
@@ -753,7 +753,7 @@ func (m *Model) forget() {
 	m.loaded, m.stale, m.failure, m.absent, m.said = false, false, nil, "", ""
 	m.mode = browsing
 	m.endMove()
-	m.memo.Reset()
+	m.resetMemo()
 	m.head = ""
 }
 
@@ -1120,6 +1120,9 @@ func (m *Model) rebuildRows() {
 
 func (m *Model) rebuildLines() {
 	n := m.look.Lines()
+	if cap(m.lineAt) < len(m.rows)+1 {
+		m.lineAt = make([]int, 0, len(m.rows)+1)
+	}
 	m.lineAt = append(m.lineAt[:0], 0)
 	at := 0
 	for i := range m.rows {
