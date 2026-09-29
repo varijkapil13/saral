@@ -153,9 +153,9 @@ func wayOut(t *testing.T, id string) string {
 		return "ctrl+k"
 	}
 	if id == list.ViewID {
-		return "? ctrl+k q"
+		return "? g ctrl+k q"
 	}
-	return "? ctrl+k esc"
+	return "? g ctrl+k esc"
 }
 
 func golden(t *testing.T, name, got string) {

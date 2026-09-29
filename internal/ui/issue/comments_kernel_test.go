@@ -294,7 +294,7 @@ func TestSession_TheSmallestTerminalStillTeachesThePanesKeys(t *testing.T) {
 	f := newFake(12)
 	s := boot(t, testDeps(t, f), seedOf(t, f, "PROJ-7"), kernel.MinWidth, kernel.MinHeight)
 
-	mustContain(t, s.footer(), "Issues", "tab pane", "e edit", "t status", "C comment", "? esc")
+	mustContain(t, s.footer(), "Issues", "tab pane", "e edit", "t status", "C comment", "? g esc")
 	mustNotContain(t, s.footer(), "…")
 }
 

@@ -58,7 +58,7 @@ func TestFooter_TheGlobalsSurviveEveryWidth(t *testing.T) {
 	for width := MinWidth; width <= 132; width++ {
 		m := newAt(t, testDeps(), width, 24)
 		footer := lastLine(ansi.Strip(m.Frame()))
-		if !strings.HasSuffix(footer, "? ctrl+k q") {
+		if !strings.HasSuffix(footer, "? g ctrl+k q") {
 			t.Fatalf("at %d columns the row does not end in the globals:\n%q", width, footer)
 		}
 		if got := ansi.StringWidth(footer); got > width {
@@ -79,22 +79,22 @@ func TestFooter_GivesThingsUpInOrder(t *testing.T) {
 	}{
 		"everything fits": {
 			acts: []Binding{act("e", "edit"), act("t", "status")},
-			want: " Board  e edit  t status                                              ? ctrl+k q",
+			want: " Board  e edit  t status                                            ? g ctrl+k q",
 		},
 		"what is left over folds into a count": {
 			acts: []Binding{
 				act("enter", "open"), act("e", "edit"), act("t", "status"),
 				act("c", "comment"), act("/", "filter"), act("a", "all"), act("s", "save"),
 			},
-			want: " Board  enter open  e edit  t status  c comment  / filter  a all  +1  ? ctrl+k q",
+			want: " Board  enter open  e edit  t status  c comment  / filter  +2       ? g ctrl+k q",
 		},
 		"the root cell goes before the last action does": {
 			acts: []Binding{act("e", long)},
-			want: "e " + long + "      ? ctrl+k q",
+			want: "e " + long + "    ? g ctrl+k q",
 		},
 		"the descriptions go last": {
 			acts: []Binding{act("e", long+" whatsoever")},
-			want: "e                                                                     ? ctrl+k q",
+			want: "e                                                                   ? g ctrl+k q",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -303,5 +303,49 @@ func TestFooter_Golden(t *testing.T) {
 			m := newAt(t, testDeps(), size.w, size.h)
 			golden(t, "footer_"+size.label+".golden", lastLine(ansi.Strip(m.Frame()))+"\n")
 		})
+	}
+}
+
+// TestFooter_ShowsGWhereverGWorks is the toolbar half of the g prefix: a new
+// user has nowhere else to learn it exists, so the globals cell carries it
+// exactly when pressing g would do anything.
+func TestFooter_ShowsGWhereverGWorks(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	view := &stubView{id: "board"}
+	RegisterView(spec("board", 1, "", view))
+	RegisterKeys("board", KeySet{Short: []Binding{Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter")}})
+
+	m := newAt(t, testDeps(), 120, 30, WithMouse(true))
+	if got := lastLine(ansi.Strip(m.Frame())); !strings.HasSuffix(got, "? g q") {
+		t.Fatalf("g is not offered at rest:\n%s", got)
+	}
+
+	view.capturing = true
+	if got := lastLine(ansi.Strip(m.Frame())); strings.Contains(got, "? ") || strings.Contains(got, " g ") {
+		t.Fatalf("g is offered while the view is capturing typing:\n%s", got)
+	}
+	view.capturing = false
+
+	next, _ := m.Update(keyPress("?"))
+	help := next.(Model)
+	if !help.showHelp {
+		t.Fatal("? did not open help")
+	}
+	if got := lastLine(ansi.Strip(help.Frame())); strings.Contains(got, " g ") {
+		t.Fatalf("g is offered while help is up:\n%s", got)
+	}
+
+	menu := openedMenu(t, acting(act("e", "edit")))
+	if got := lastLine(ansi.Strip(menu.Frame())); strings.Contains(got, " g ") {
+		t.Fatalf("g is offered while the menu is up:\n%s", got)
+	}
+
+	prefixed, _ := press(m, "g")
+	if !prefixed.prefixSet {
+		t.Fatal("g did not latch the prefix")
+	}
+	if got := lastLine(ansi.Strip(prefixed.Frame())); strings.Contains(got, " g ") {
+		t.Fatalf("g is offered while the prefix is latched:\n%s", got)
 	}
 }

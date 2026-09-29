@@ -231,7 +231,7 @@ you could enter from an issue and not get out of. The kernel builds it through t
       the view this profile opens on next time, and every view's kept filters
 
 ────────────────────────────────────────────────────────────────────────────
- Settings  up/down choose  ←/→ pick  enter open  esc back      ? ctrl+k q
+ Settings  up/down choose  ←/→ pick  enter open  esc back    ? g ctrl+k q
 ```
 
 ### The control vocabulary

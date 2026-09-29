@@ -14,6 +14,10 @@ such change is listed under **Changed**.
   the arrow keys and `enter`, or click it, and `esc` puts the card back. Moving several picked cards
   there asks once, and each card moves to the status chosen.
 
+### Changed
+
+- The toolbar shows `g`, the key that opens the list of views and where to go.
+
 ## [0.7.2] - 2026-09-29
 
 ### Fixed
