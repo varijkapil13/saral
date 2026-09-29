@@ -7,6 +7,8 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-29
+
 ### Added
 
 - A board column that holds more than one status now asks which one a card is moving to. Dropping a
@@ -253,7 +255,8 @@ transitions, comments with markdown ⇄ ADF, attachments with inline image previ
 backlog, sprints, releases with the unresolved-issue decision, the cross-project move wizard, the
 timeline, plans, the command palette, full mouse support and cache-first paint.
 
-[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/varijkapil13/saral/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/varijkapil13/saral/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/varijkapil13/saral/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/varijkapil13/saral/compare/v0.6.1...v0.7.0
