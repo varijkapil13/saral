@@ -176,9 +176,14 @@ the glyph tier and the field work cost about 200 KiB between them.
   pair makes `sign-blob` fail with `create bundle file: open : no such file or directory` after every
   archive is built, and nothing is published.
 - **The binaries themselves are not Apple-code-signed or notarized.** Cosign signs `checksums.txt`,
-  which is a different kind of signing and does nothing for Gatekeeper. The cask's `postflight` clears
+  which is a different kind of signing and does nothing for Gatekeeper. The cask's `postflight_steps` clears
   the quarantine attribute instead, which is why a `brew install`ed binary runs on macOS. Notarizing
   needs an Apple Developer account and is not set up.
+- **The quarantine step is a `custom_block`, not `hooks.post.install`.** Homebrew 7 deprecated the Ruby
+  `postflight` those hooks write, and every `brew` command touching the cask warned about it. The
+  declarative `postflight_steps` accepts only Homebrew's steps DSL, and its `{{staged_path}}` has to
+  be escaped as `{{ "{{staged_path}}" }}` so GoReleaser's own template leaves it alone. Move it back
+  to `hooks.post.install_steps` once GoReleaser ships that (goreleaser/goreleaser#6873).
 - **`repository.token` takes only the bare `{{ .Env.VAR_NAME }}` form.** `homebrew_casks[].repository`
   is a `repository` block, and GoReleaser refuses any other templating on its `token` — `{{ index .Env
   "HOMEBREW_TAP_TOKEN" }}` fails at publish time with "expected `{{ .Env.VAR_NAME }}` only", which

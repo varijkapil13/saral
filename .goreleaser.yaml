@@ -101,12 +101,13 @@ homebrew_casks:
     homepage: https://github.com/varijkapil13/saral
     description: Jira in your terminal, made simple
     license: MIT
-    hooks:
-      post:
-        install: |
-          if system_command("/usr/bin/xattr", args: ["-h"], print_stderr: false).exit_status == 0
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/saral"]
-          end
+    # GoReleaser's hooks still emit Homebrew's deprecated `postflight`; {{staged_path}} is Homebrew's token.
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/saral"], must_succeed: false
+        end
+      end
     zap:
       trash:
         - ~/.config/saral
