@@ -50,7 +50,10 @@ type held struct {
 	row    int
 	target int
 	// set is every picked card in hand at once rather than the one keyed.
-	set bool
+	set     bool
+	choices []jira.Transition
+	labels  []string
+	choice  int
 }
 
 // Model is the board.
@@ -190,11 +193,12 @@ type Model struct {
 
 	// picked is the multi-select, by key; bulk is a change to it being asked
 	// for, confirmed or run.
-	picked map[string]bool
-	bulk   *bulk
-	inAsk  map[string]action
-	inSure map[string]action
-	inRun  map[string]action
+	picked   map[string]bool
+	bulk     *bulk
+	inAsk    map[string]action
+	inSure   map[string]action
+	inRun    map[string]action
+	inChoice map[string]action
 
 	creating  *creation
 	landingTo *creation
@@ -254,8 +258,12 @@ func (m *Model) WantsRawKeys() bool {
 var backKeys = kernel.DefaultGlobalKeys().Back.Keys()
 
 // WantsBack claims esc while cards are picked or terms narrow the board, so esc
-// lets go of the picks first and the terms after.
+// lets go of the picks first and the terms after, and while a move asks which
+// status it lands in, so esc puts the card back.
 func (m *Model) WantsBack() bool {
+	if m.choosing() && !m.moving {
+		return true
+	}
 	return (len(m.terms) > 0 || len(m.picked) > 0) && m.card == nil && !m.moving && !m.finding && m.bulk == nil
 }
 
@@ -271,6 +279,7 @@ func New(d kernel.Deps) kernel.View {
 	m.cards = newCardCache(cardCacheLimit)
 	m.browsing, m.holding, m.inFind = defaultKeys().tables()
 	m.inAsk, m.inSure, m.inRun = defaultKeys().bulkTables()
+	m.inChoice = table(defaultKeys().choiceEntries()...)
 	m.find = newFindInput()
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
@@ -475,6 +484,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case movesMsg:
 		cmd = m.tookMoves(msg)
+
+	case targetsMsg:
+		cmd = m.tookTargets(msg)
 
 	case movedMsg:
 		cmd = m.moved(msg)
@@ -1194,10 +1206,11 @@ func (m *Model) drop() tea.Cmd {
 	return kernel.Reply(moves(ctx, m.deps.Jira, key, target, gen), m.addr)
 }
 
-// tookMoves picks the transition that lands the issue in the column it was
-// dropped on, by the id the site gave it. A status is not writable and a status
-// name is not an identity, so the target column's status ids are what a
-// transition is matched against.
+// tookMoves finds the transitions that land the issue in the column it was
+// dropped on, by the id the site gave them. A status is not writable and a
+// status name is not an identity, so the target column's status ids are what a
+// transition is matched against. One is taken straight away; several are put to
+// the user, with the card still in hand.
 func (m *Model) tookMoves(msg movesMsg) tea.Cmd {
 	if msg.gen != m.moveGen {
 		return nil
@@ -1211,44 +1224,19 @@ func (m *Model) tookMoves(msg movesMsg) tea.Cmd {
 		m.putBack()
 		return nil
 	}
-	tr, found := m.moveInto(msg.moves, col)
-	name := m.plan.columns[col].name
-	if !found {
-		from := m.card.status
+	into := m.movesInto(msg.moves, col)
+	switch len(into) {
+	case 0:
+		from, name := m.card.status, m.plan.columns[col].name
 		m.putBack()
 		return kernel.Warn("no workflow move takes " + msg.key + " from " + from + " into " + name +
 			"; the columns a board draws and the moves a workflow allows are two different things")
+	case 1:
+		return m.land(msg.key, col, into[0])
 	}
-	if needsScreen(tr) {
-		iss := m.byKey(msg.key)
-		m.putBack()
-		if iss == nil {
-			return nil
-		}
-		return tea.Batch(
-			kernel.Status(tr.Name+" needs more than a column, so it is being asked for"),
-			kernel.Push(issue.ViewID, iss.Key, issue.New(m.deps, *iss, issue.WithTransition(tr.ID))),
-		)
-	}
-	if m.deps.Jira == nil {
-		m.putBack()
-		return kernel.Warn("there is no Jira connection in this session")
-	}
-	from := m.plan.columns[m.card.from].name
-	ctx, gen := m.beginMove()
-	return kernel.Reply(apply(ctx, m.deps.Jira, msg.key, tr, name, from, gen), m.addr)
-}
-
-// moveInto is the first transition landing in a column. First rather than best:
-// the site decides the order it offers them in, and a column with two statuses
-// in it has no way of preferring one of them that is not a guess.
-func (m *Model) moveInto(list []jira.Transition, col int) (jira.Transition, bool) {
-	for _, tr := range list {
-		if at, mapped := m.plan.columnOf(tr.To.ID); mapped && at == col {
-			return tr, true
-		}
-	}
-	return jira.Transition{}, false
+	m.card.choices, m.card.labels, m.card.choice = into, choiceLabels(into), 0
+	m.forget()
+	return nil
 }
 
 func (m *Model) byKey(key string) *jira.Issue {
@@ -1365,6 +1353,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	if m.finding {
 		return m.findKey(msg)
+	}
+	if m.choosing() {
+		return m.chooseKey(stroke)
 	}
 	if m.WantsBack() && slices.Contains(backKeys, stroke) {
 		if len(m.picked) > 0 {
@@ -1510,7 +1501,15 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	if m.bulk != nil {
+		if m.bulk.stage == stageAskStatus && len(m.bulk.choices) > 0 {
+			if at, on := m.choiceUnder(msg, len(m.bulk.choices)); on {
+				return m.takeTarget(at)
+			}
+		}
 		return nil
+	}
+	if m.choosing() {
+		return m.clickChoice(msg)
 	}
 	if m.card != nil {
 		// A press while a card is in hand aims it, so a keyboard pick-up can be

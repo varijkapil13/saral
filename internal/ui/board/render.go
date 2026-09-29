@@ -760,6 +760,9 @@ func (m *Model) prompt() string {
 		return m.quickFilterPrompt()
 	case m.finding:
 		return m.findPrompt()
+	case m.choosing() && !m.moving:
+		return m.choicePrompt("move "+m.card.key+" from "+m.card.status+" to "+
+			m.plan.columns[m.card.target].name+" as", m.card.labels, m.card.choice, choiceHints)
 	case m.card != nil:
 		said := "move " + m.card.key + " from " + m.card.status + " to " +
 			m.plan.columns[m.card.target].name

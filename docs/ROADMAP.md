@@ -1802,9 +1802,10 @@ issue's, every single time — spinner and all.
   a `choices` map beside `values` so the pair survives a crash the same way a text edit does.
   **`edit_transition.go`'s `moveModel` is not deleted.** The packet that named this one asked for it to
   be, on the premise that its behaviour would live entirely inline once this packet landed — but
-  `internal/ui/board` pushes `issue.NewMove` directly, for a card's drag that needs a screen the board
-  has no sidebar to draw inline in, and deleting it would have broken a real, working consumer to honour
-  an instruction written before that consumer existed. Grepping for `NewMove`/`MoveViewID` found it
+  `internal/ui/board` then pushed `issue.NewMove` directly, for a card's drag that needs a screen the
+  board has no sidebar to draw inline in, and deleting it would have broken a real, working consumer to
+  honour an instruction written before that consumer existed. (Since #157 the board pushes
+  `issue.New(…, issue.WithTransition(id))` instead, and `NewMove` and `MoveViewID` are gone.) Grepping for `NewMove`/`MoveViewID` found it
   before any code moved; `moveModel`, `MoveViewID`, `edit_keys.go` and `edit_transition_test.go` are
   therefore untouched, and only the issue pane's own route to the gesture — `openMove` in
   `edit_register.go` — now opens the inline picker instead of pushing the shared view. Filed as the
@@ -1835,6 +1836,23 @@ issue's, every single time — spinner and all.
   `leftForNextPacket`) were judged out of scope again: the header still names the summary's row as its
   one click target, and the three new rows are reached from the sidebar itself, which the design's own
   wording ties less tightly to than the row kinds it names first.
+
+## Batch 11 — Board follow-ups
+
+Single packets asked for after 0.7.2. Each links the PR that closed it; the PR description is the
+record of what was built, what was left and why.
+
+- [x] **P11.1 — Ask which status when a column holds several** · [#171](https://github.com/varijkapil13/saral/pull/171) · **owns** `internal/ui/board/**`, `docs/{UX,ROADMAP}.md`, `CHANGELOG.md`
+  A card dropped on a column whose statuses the workflow reaches by more than one transition stays in
+  hand and the prompt line lists every option, by target status and in the site's order, with the
+  transition's name beside it only where that tells two apart. `←`/`→` (and `↑`/`↓`, `h`/`l`, `j`/`k`)
+  move, `enter` or a click takes one, `esc` or `ctrl+g` puts the card back; the chosen move then goes
+  on exactly as a single one did, to the issue pane when it needs a screen. Every way of landing a card
+  reaches it: `m` and `enter`, a drag, a click on a column, `H`/`L` and the palette. A picked set aimed
+  at such a column reads the first card's moves and asks once, by status; every card then takes its own
+  transition to that status id, and one with none is reported. **Left for later:** a card created with
+  `c` in such a column still lands through the first move the site offers, because the landing runs as
+  one command and asking in the middle of it is a prompt state of its own.
 
 ## Later, deliberately not now
 

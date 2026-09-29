@@ -7,6 +7,13 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+### Added
+
+- A board column that holds more than one status now asks which one a card is moving to. Dropping a
+  card there, by key, drag, `H`/`L` or the palette, lists each status the card can reach; pick one with
+  the arrow keys and `enter`, or click it, and `esc` puts the card back. Moving several picked cards
+  there asks once, and each card moves to the status chosen.
+
 ## [0.7.2] - 2026-09-29
 
 ### Fixed

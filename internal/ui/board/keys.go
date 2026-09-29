@@ -84,6 +84,11 @@ type keyMap struct {
 	Next    kernel.Binding
 	Run     kernel.Binding
 	Halt    kernel.Binding
+	// PutBack is esc, which reaches the board only while WantsBack claims it.
+	ChoosePrev kernel.Binding
+	ChooseNext kernel.Binding
+	Choose     kernel.Binding
+	PutBack    kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -137,6 +142,11 @@ func defaultKeys() keyMap {
 		Next:    kernel.Bind([]string{"down"}, "↓", "next person"),
 		Run:     kernel.Bind([]string{"enter", "y"}, "enter", "go ahead"),
 		Halt:    kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "stop after the card in flight"),
+
+		ChoosePrev: kernel.Bind([]string{"left", "h", "up", "k"}, "↑/←", "previous status"),
+		ChooseNext: kernel.Bind([]string{"right", "l", "down", "j"}, "↓/→", "next status"),
+		Choose:     kernel.Bind([]string{"enter"}, "enter", "move it to this status"),
+		PutBack:    kernel.Bind([]string{"esc"}, "esc", "put it back"),
 	}
 }
 
@@ -199,6 +209,9 @@ const (
 	keysAskingLabel
 	keysConfirming
 	keysRunning
+	keysChoosing
+	keysAskingTargets
+	keysChoosingTarget
 	keyStates
 )
 
@@ -257,6 +270,21 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Acts: []kernel.Binding{kernel.Terse(k.Halt, "stop")},
 		Full: [][]kernel.Binding{{k.Halt}},
 	}
+	sets[keysChoosing] = kernel.KeySet{
+		Acts: []kernel.Binding{kernel.Terse(k.Choose, "move it"), kernel.Terse(k.PutBack, "put it back")},
+		Full: [][]kernel.Binding{{k.ChoosePrev, k.ChooseNext}, {k.Choose, k.PutBack, k.Cancel}},
+	}
+	sets[keysAskingTargets] = kernel.KeySet{
+		Acts: []kernel.Binding{kernel.Terse(k.PutBack, "cancel")},
+		Full: [][]kernel.Binding{{kernel.Terse(k.PutBack, "cancel"), kernel.Terse(k.Cancel, "cancel")}},
+	}
+	sets[keysChoosingTarget] = kernel.KeySet{
+		Acts: []kernel.Binding{kernel.Terse(k.Choose, "take it"), kernel.Terse(k.PutBack, "cancel")},
+		Full: [][]kernel.Binding{
+			{k.ChoosePrev, k.ChooseNext},
+			{kernel.Terse(k.Choose, "move them to this status"), kernel.Terse(k.PutBack, "cancel"), kernel.Terse(k.Cancel, "cancel")},
+		},
+	}
 	return sets
 }()
 
@@ -271,6 +299,8 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = m.bulk.keyState()
 	case m.moving:
 		state = keysMoving
+	case m.choosing():
+		state = keysChoosing
 	case m.card != nil:
 		state = keysHolding
 	case m.pendingFilter:
@@ -364,6 +394,13 @@ func (k keyMap) bulkEntries() (asking, confirming, running []binding) {
 	confirming = []binding{{k.Run, actRun}, {k.Decline, actDecline}}
 	running = []binding{{k.Halt, actHalt}}
 	return asking, confirming, running
+}
+
+func (k keyMap) choiceEntries() []binding {
+	return []binding{
+		{k.ChoosePrev, actPrev}, {k.ChooseNext, actNext},
+		{k.Choose, actAccept}, {k.PutBack, actCancel}, {k.Cancel, actCancel},
+	}
 }
 
 // entries are the three tables as lists, which is what lets a test see a stroke
