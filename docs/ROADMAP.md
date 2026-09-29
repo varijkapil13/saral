@@ -1873,7 +1873,7 @@ record of what was built, what was left and why.
   is kept per machine with `config.SaveSort`, the filter per profile with `kernel.Keep`. A created
   version the filter would hide switches the filter back to all.
 
-- [x] **P11.4 — A board refresh swaps the cards in whole and keeps the reader's place** · PRLINK · **owns** `internal/ui/board/{board.go,quickfilter.go,pick.go,refresh_test.go,memory_test.go}`, `docs/{ARCHITECTURE,UX,ROADMAP}.md`, `CHANGELOG.md`
+- [x] **P11.4 — A board refresh swaps the cards in whole and keeps the reader's place** · [#174](https://github.com/varijkapil13/saral/pull/174) · **owns** `internal/ui/board/{board.go,quickfilter.go,pick.go,refresh_test.go,memory_test.go}`, `docs/{ARCHITECTURE,UX,ROADMAP}.md`, `CHANGELOG.md`
   A walk that starts over cards already on screen (`r`, focus after the TTL, a stale snapshot, a
   quick filter toggled) gathers its pages in `Model.next` and swaps them in when the last one lands;
   a walk from nothing still fills page by page. The swap puts the cursor back on its card by key, or
