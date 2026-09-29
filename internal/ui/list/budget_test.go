@@ -86,6 +86,56 @@ func TestBudget_AMemoMissCostsOneRowAndNotAWindow(t *testing.T) {
 	}
 }
 
+// A card is three or five lines where a row is one, and the memo holds the
+// whole card, so a steady frame over cards is still the frame string alone.
+func TestBudget_ScrollingOverCardsCostsTheFrameAlone(t *testing.T) {
+	for name, bench := range map[string]func(*testing.B){
+		"compact": BenchmarkListSteadyScrollCards10k,
+		"roomy":   BenchmarkListSteadyScrollRoomy10k,
+	} {
+		res := testing.Benchmark(bench)
+		if res.N == 0 {
+			t.Fatalf("the %s scroll did not run", name)
+		}
+		if got := res.AllocsPerOp(); got > 1 {
+			t.Errorf("a steady-state frame over %s cards allocates %d times, want the frame string and nothing else", name, got)
+		}
+	}
+}
+
+// A memo miss over cards renders one fresh card rather than a window of them.
+//
+// 69 compact and 109 roomy on an M2 Pro when the ceilings were set.
+func TestBudget_AMemoMissCostsOneCardAndNotAWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		bench    func(*testing.B)
+		ceiling  int64
+		measured int64
+	}{
+		{"compact", BenchmarkListWalkCards10k, 76, 69},
+		{"roomy", BenchmarkListWalkRoomy10k, 120, 109},
+	} {
+		res := testing.Benchmark(tc.bench)
+		if res.N == 0 {
+			t.Fatalf("the %s walk did not run", tc.name)
+		}
+		got := res.AllocsPerOp()
+		t.Logf("a frame that renders one fresh %s card: %d allocations, ceiling %d", tc.name, got, tc.ceiling)
+		if got > tc.ceiling {
+			t.Errorf("a frame that renders a %s card it has never rendered allocates %d times, over the "+
+				"ceiling of %d; it measured %d when the ceiling was set", tc.name, got, tc.ceiling, tc.measured)
+		}
+	}
+}
+
+func TestBudget_KeystrokeToFrameOverRoomyCards(t *testing.T) {
+	res := testing.Benchmark(BenchmarkListWalkRoomy10k)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("keystroke to frame over roomy cards took %s at 10k rows, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+}
+
 func TestBudget_RowRenderingCostsNothingOnceMemoized(t *testing.T) {
 	m := loaded(t, 10000, 120, 40)
 	if got := testing.AllocsPerRun(200, func() { _ = m.row(0, false) }); got != 0 {

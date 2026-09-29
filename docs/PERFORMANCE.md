@@ -168,17 +168,20 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/kernel` | `TestBudget_AFrameCostsWhatTheChromeCosts` |
 | `internal/ui/kernel` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/kernel` | `TestBudget_KeystrokeToFrame` |
+| `internal/ui/list` | `TestBudget_AMemoMissCostsOneCardAndNotAWindow` |
 | `internal/ui/list` | `TestBudget_AMemoMissCostsOneRowAndNotAWindow` |
 | `internal/ui/list` | `TestBudget_FilterKeystrokeAtTenThousandRows` |
 | `internal/ui/list` | `TestBudget_FilterRankingReusesItsBuffers` |
 | `internal/ui/list` | `TestBudget_FirstPaintFromCache` |
 | `internal/ui/list` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/list` | `TestBudget_KeystrokeToFrameAtTenThousandRows` |
+| `internal/ui/list` | `TestBudget_KeystrokeToFrameOverRoomyCards` |
 | `internal/ui/list` | `TestBudget_RowRenderingCostsNothingOnceMemoized` |
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameOnTenThousandRowsAsOnTwenty` |
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameUnderAFilterThatHasBeenAccepted` |
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameUnderTermsInForce` |
 | `internal/ui/list` | `TestBudget_ScrollingCostsTheSameWithTheMouseOn` |
+| `internal/ui/list` | `TestBudget_ScrollingOverCardsCostsTheFrameAlone` |
 | `internal/ui/move` | `TestBudget_MoveFullRedrawAt200x60` |
 | `internal/ui/move` | `TestBudget_MoveKeystrokeToFrame` |
 | `internal/ui/move` | `TestBudget_MoveRemapKeystrokeToFrame` |
@@ -510,6 +513,34 @@ The floor is one allocation a line. What is left over it at 24 cells is the trun
 that do not fit. `NewStyles` asks each style once what it puts around its text, the way the document
 renderer does, so a card writes those sequences itself rather than calling `Render` per cell; that
 took a compact card from 65 allocations to 8.
+
+### What the issue list costs in cards
+
+Measured on an M2 Pro over `internal/ui/list` at ten thousand rows, 120x40, with the lines-look
+guards above unchanged beside them. The ceilings are in `internal/ui/list/budget_test.go`, a tenth
+over what was measured.
+
+| Benchmark | ns/op | allocs/op | ceiling |
+|---|---|---|---|
+| `BenchmarkListSteadyScrollCards10k` — compact | 1,500 | 1 | 1 |
+| `BenchmarkListSteadyScrollRoomy10k` | 1,100 | 1 | 1 |
+| `BenchmarkListWalkCards10k` — compact, one fresh card a frame | 19,200 | 69 | 76 |
+| `BenchmarkListWalkRoomy10k` — one fresh card a frame | 23,600 | 109 | 120 |
+| `BenchmarkListWalk10k` — lines, for comparison | 9,500 | 46 | 48 |
+
+The memo holds a whole card as its lines, so a steady frame is the frame string whatever the look.
+The lines a memo miss renders are carved out of one backing array the model keeps rather than given a
+slice each, which is why the lines walk costs what it did before a row became a `[]string`. A walk
+over cards costs more than one over rows because a card draws more than a row does — the priority,
+the due date, the subtasks, the labels and the versions — and each is a string of its own.
+
+First paint in lines costs what it did before cards (`BenchmarkFirstPaintFromCache`, 899 allocations
+against 897). That holds because of three choices:
+
+- `card.Recall` reads `ui.toml` once per process rather than on every `New`, since decoding it cost
+  about 70 allocations.
+- The card styles are built on the first card drawn, not at `New`.
+- The slab of memoized lines starts at 64 and doubles.
 
 ## Measuring for real
 

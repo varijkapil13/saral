@@ -19,6 +19,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -58,7 +59,13 @@ type Model struct {
 	inAsk    map[string]action
 	inSort   map[string]action
 	styles   *styles
-	rows     *widget.RowCache[rowKey, string]
+	cards    *card.Styles
+	rows     *widget.RowCache[rowKey, []string]
+
+	look card.Look
+	// slab backs the memoized rows, so that a row rendered on a memo miss does
+	// not cost a slice header of its own.
+	slab []string
 
 	jql   string
 	title string
@@ -231,8 +238,8 @@ func New(d kernel.Deps) kernel.View {
 		deps:   d,
 		addr:   kernel.NewAddr(),
 		cache:  d.Cache,
-		styles: newStyles(d.Theme),
-		rows:   widget.NewRowCache[rowKey, string](rowCacheLimit),
+		rows:   widget.NewRowCache[rowKey, []string](rowCacheLimit),
+		look:   card.Recall(),
 		filter: newFilterInput(),
 		ask:    newAskInput(),
 		saved:  d.Saved,
@@ -240,8 +247,8 @@ func New(d kernel.Deps) kernel.View {
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
-		m.styles = newStyles(m.deps.Theme)
 	}
+	m.styles = newStyles(m.deps.Theme)
 	if d.Jira != nil {
 		m.search = app.NewSearch(d.Jira)
 	}
@@ -383,7 +390,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.setFocus(msg.Focused)
 
 	case kernel.ThemeMsg:
-		m.styles = newStyles(msg.Theme)
+		m.styles, m.cards = newStyles(msg.Theme), nil
 		m.deps.Theme = msg.Theme
 		m.rows.Reset()
 		m.relayout()
@@ -394,6 +401,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case kernel.ProjectMsg:
 		cmd = m.reproject(msg.Project)
+
+	case card.LookMsg:
+		cmd = m.setLook(msg.Look)
 
 	case kernel.RefreshMsg:
 		cmd = m.refresh(msg.Purge)
@@ -529,10 +539,14 @@ func (m *Model) widestKey() int {
 	return widest
 }
 
-// rowsHeight is how many issue rows fit: the box, less the summary line, the
-// column captions and whichever of the four lines below the rows are drawn.
+// rowsHeight is how many lines the issues get: the box, less the summary line,
+// the column captions a lines look draws and whichever of the four lines below
+// the issues are drawn.
 func (m *Model) rowsHeight() int {
-	h := m.height - 2
+	h := m.height - 1
+	if !m.look.Cards() {
+		h--
+	}
 	if len(m.terms) > 0 {
 		h--
 	}
@@ -543,6 +557,51 @@ func (m *Model) rowsHeight() int {
 		h--
 	}
 	return max(h, 1)
+}
+
+// itemsHeight is how many whole issues fit in rowsHeight.
+func (m *Model) itemsHeight() int { return max(m.rowsHeight()/m.look.Lines(), 1) }
+
+// setLook redraws the issues in another look. Moving to roomy over rows read
+// without what a roomy card draws re-reads them in the background, keeping the
+// cursor and the scroll; a walk in flight is restarted rather than left to
+// land rows without those fields. Moving away never asks for anything.
+func (m *Model) setLook(l card.Look) tea.Cmd {
+	if l == m.look {
+		return nil
+	}
+	was := m.look
+	m.look = l
+	m.rows.Reset()
+	m.relayout()
+	m.scrollToCursor()
+	if l != card.Roomy || was == card.Roomy || (!m.loading && !m.lacksRoomy()) {
+		return nil
+	}
+	return m.refetch(whyBackground)
+}
+
+// projection is the fields this view's search asks for in the look on screen.
+func (m *Model) projection() app.Projection {
+	p := app.ListProjection()
+	if m.look == card.Roomy {
+		p = p.With(card.RoomyFields...)
+	}
+	return p
+}
+
+// lacksRoomy reports whether any row was read without a field a roomy card
+// draws. A field the site has none of is never going to arrive, so it does not
+// count.
+func (m *Model) lacksRoomy() bool {
+	for i := range m.issues {
+		for _, id := range card.RoomyFields {
+			if !m.issues[i].Requested.Has(id) && !slices.Contains(m.missing, id) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // --- fetching ---------------------------------------------------------------
@@ -589,7 +648,7 @@ func (m *Model) loadFor(w why) tea.Cmd {
 		return nil
 	}
 	ctx, gen := m.begin()
-	return m.reply(load(ctx, m.search, m.cache, m.jql, gen, w))
+	return m.reply(load(ctx, m.search, m.cache, m.jql, m.projection(), gen, w))
 }
 
 func (m *Model) refresh(purge bool) tea.Cmd {
@@ -619,7 +678,7 @@ func (m *Model) refetch(w why) tea.Cmd {
 		return tea.Batch(said, m.loadFor(w))
 	}
 	ctx, gen := m.begin()
-	return tea.Batch(said, m.reply(reload(ctx, m.search, m.cache, m.jql, len(m.issues), gen, w)))
+	return tea.Batch(said, m.reply(reload(ctx, m.search, m.cache, m.jql, m.projection(), len(m.issues), gen, w)))
 }
 
 func (m *Model) retarget(msg QueryMsg) tea.Cmd {
@@ -848,7 +907,7 @@ func (m *Model) pageAheadFrom(at int) tea.Cmd {
 		return nil
 	}
 	near := at >= len(m.view)-lookahead
-	starved := m.filtered() && len(m.view) < m.rowsHeight() && len(m.issues) < autoFillCap
+	starved := m.filtered() && len(m.view) < m.itemsHeight() && len(m.issues) < autoFillCap
 	if !near && !starved {
 		return nil
 	}
@@ -856,7 +915,7 @@ func (m *Model) pageAheadFrom(at int) tea.Cmd {
 	// Rows that came off disk carry no cursor to follow, so the page after them
 	// is reached by asking the search again and walking to where they end.
 	if !m.page.HasMore() {
-		return m.reply(reload(ctx, m.search, m.cache, m.jql, len(m.issues)+pageSize, gen, whyPage))
+		return m.reply(reload(ctx, m.search, m.cache, m.jql, m.projection(), len(m.issues)+pageSize, gen, whyPage))
 	}
 	return m.reply(more(ctx, m.cache, m.jql, m.issues, m.page, gen))
 }
@@ -998,7 +1057,7 @@ func (m *Model) moveTo(at int) tea.Cmd {
 }
 
 func (m *Model) scrollToCursor() {
-	h := m.rowsHeight()
+	h := m.itemsHeight()
 	if m.cursor < m.top {
 		m.top = m.cursor
 	}
@@ -1009,7 +1068,7 @@ func (m *Model) scrollToCursor() {
 }
 
 func (m *Model) clampScroll() {
-	m.top = min(max(m.top, 0), max(len(m.view)-m.rowsHeight(), 0))
+	m.top = min(max(m.top, 0), max(len(m.view)-m.itemsHeight(), 0))
 }
 
 // --- input ------------------------------------------------------------------
@@ -1046,13 +1105,13 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	case actUp:
 		return m.moveTo(m.cursor - 1)
 	case actPageDown:
-		return m.moveTo(m.cursor + m.rowsHeight())
+		return m.moveTo(m.cursor + m.itemsHeight())
 	case actPageUp:
-		return m.moveTo(m.cursor - m.rowsHeight())
+		return m.moveTo(m.cursor - m.itemsHeight())
 	case actHalfDown:
-		return m.moveTo(m.cursor + m.rowsHeight()/2)
+		return m.moveTo(m.cursor + max(m.itemsHeight()/2, 1))
 	case actHalfUp:
-		return m.moveTo(m.cursor - m.rowsHeight()/2)
+		return m.moveTo(m.cursor - max(m.itemsHeight()/2, 1))
 	case actTop:
 		return m.moveTo(0)
 	case actBottom:
@@ -1075,6 +1134,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.startSort()
 	case actSave:
 		m.startBind()
+	case actLook:
+		return card.Cycle(m.look)
 	case actNone, actAccept, actRun, actKeep,
 		actSortPrev, actSortNext, actSortChoose, actSortCancel:
 	}
@@ -1228,7 +1289,7 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		m.clicks.Forget()
 		return cmd
 	}
-	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.view)); i++ {
+	for i := m.top; i < min(m.top+m.itemsHeight(), len(m.view)); i++ {
 		iss := &m.issues[m.view[i]]
 		if cmd, narrowed := m.clickFacet(msg, iss); narrowed {
 			m.clicks.Forget()
@@ -1247,18 +1308,20 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 }
 
 // wheel scrolls the rows without moving the selection, which is what a wheel
-// does everywhere else.
+// does everywhere else. A notch moves WheelStep lines' worth of whole issues,
+// and never less than one.
 func (m *Model) wheel(msg tea.MouseWheelMsg) tea.Cmd {
+	step := max(widget.WheelStep/m.look.Lines(), 1)
 	switch msg.Button {
 	case tea.MouseWheelUp:
-		m.top -= widget.WheelStep
+		m.top -= step
 	case tea.MouseWheelDown:
-		m.top += widget.WheelStep
+		m.top += step
 	default:
 		return nil
 	}
 	m.clampScroll()
-	return m.pageAheadFrom(m.top + m.rowsHeight())
+	return m.pageAheadFrom(m.top + m.itemsHeight())
 }
 
 // --- rendering --------------------------------------------------------------
@@ -1271,19 +1334,24 @@ func (m *Model) View() string {
 	}
 	h := m.rowsHeight()
 	lines := m.lines[:0]
-	lines = append(lines, m.summaryLine(), m.head)
+	lines = append(lines, m.summaryLine())
+	if !m.look.Cards() {
+		lines = append(lines, m.head)
+	}
 
 	switch {
 	case len(m.view) == 0:
 		lines = m.appendEmpty(lines, h)
 	default:
-		end := min(m.top+h, len(m.view))
+		at := len(lines)
+		end := min(m.top+m.itemsHeight(), len(m.view))
 		for i := m.top; i < end; i++ {
-			lines = append(lines, m.row(m.view[i], i == m.cursor))
+			lines = append(lines, m.row(m.view[i], i == m.cursor)...)
 		}
-		for i := end - m.top; i < h; i++ {
+		for len(lines)-at < h {
 			lines = append(lines, "")
 		}
+		lines = lines[:at+h]
 		m.warm(end)
 	}
 	if len(m.terms) > 0 {
@@ -1319,19 +1387,56 @@ func (m *Model) warm(end int) {
 	}
 }
 
-func (m *Model) row(at int, selected bool) string {
+func (m *Model) row(at int, selected bool) []string {
 	iss := &m.issues[at]
 	k := rowKey{
-		key: iss.Key, updated: iss.Updated.UnixNano(), lay: m.lay, selected: selected,
-		gen: m.styles.gen, mouse: m.zones.Enabled(),
+		key: iss.Key, updated: iss.Updated.UnixNano(), lay: m.lay, width: int32(m.width), selected: selected,
+		gen: int32(m.styles.gen), mouse: m.zones.Enabled(), look: m.look,
 	}
 	if s, ok := m.rows.Get(k); ok {
 		return s
 	}
-	s := renderRow(iss, m.lay, selected, m.styles, m.deps.Theme, m.deps.Caps.Location(), m.now(), m.zones)
-	s = m.zones.Mark(rowZone(iss.Key), s)
-	m.rows.Put(k, s)
-	return s
+	var out []string
+	if m.look.Cards() {
+		out = m.zones.MarkLines(rowZone(iss.Key), m.hold(m.look.Lines(), func(dst []string) []string {
+			return card.Render(dst, m.facts(iss), card.State{Selected: selected}, m.cardStyles(), card.Frame{
+				Width: m.width, Look: m.look, Glyphs: m.deps.Theme.Glyphs, Zones: m.zones,
+			})
+		}))
+	} else {
+		s := renderRow(iss, m.lay, selected, m.styles, m.deps.Theme, m.deps.Caps.Location(), m.now(), m.zones)
+		s = m.zones.Mark(rowZone(iss.Key), s)
+		out = m.hold(1, func(dst []string) []string { return append(dst, s) })
+	}
+	m.rows.Put(k, out)
+	return out
+}
+
+// cardStyles builds the card styles on the first card drawn, so that a list in
+// lines never pays for them on its first paint.
+func (m *Model) cardStyles() *card.Styles {
+	if m.cards == nil {
+		m.cards = card.NewStyles(m.deps.Theme)
+	}
+	return m.cards
+}
+
+// The slab starts at a screenful and doubles up to slabSize, so a first paint
+// does not pay for a thousand lines it will not draw.
+const (
+	slabFirst = 64
+	slabSize  = 1024
+)
+
+// hold appends n lines to the slab and returns them as a slice of their own,
+// capped so that nothing appended to it can reach the next row's lines.
+func (m *Model) hold(n int, fill func([]string) []string) []string {
+	if cap(m.slab)-len(m.slab) < n {
+		m.slab = make([]string, 0, max(min(2*cap(m.slab), slabSize), slabFirst, n))
+	}
+	at := len(m.slab)
+	m.slab = fill(m.slab)
+	return m.slab[at:len(m.slab):len(m.slab)]
 }
 
 func (m *Model) now() time.Time {

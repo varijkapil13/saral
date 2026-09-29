@@ -806,9 +806,8 @@ flight and the quit goes ahead once it has answered.
 
 ### Cards
 
-**Landing in the list, the backlog and the board in the next packets.** The renderer and the saved
-choice exist; until a view handles the look, `V` does nothing there and the view keeps drawing one
-line per issue.
+**The issue list draws them; the backlog and the board follow in the next packets.** Until a view
+handles the look, `V` does nothing there and the view keeps drawing one line per issue.
 
 `V` cycles how an issue is drawn: **roomy** cards (the default, five lines), **compact** cards
 (three), and **lines** (one row per issue, as today), then round to roomy. One choice covers all three
@@ -830,6 +829,19 @@ The card under the cursor is drawn inverted, bracket included; a held card is in
 As a card gets narrower it gives up the labels and versions first, then the priority, then shortens
 the assignee, then the type's name (its glyph stays), then when it changed. The key and the summary
 never go.
+
+**In the issue list** a card spans the pane's width and the column captions go, since a card names
+its own fields. It shows the key, the type, the status, when it changed (as the updated column spells
+it), the assignee, the priority, the due date as `due 02 Mar` (with the year only when it is not this
+one, overdue judged by the account's own today), the subtasks, the labels and the fix versions. The
+type, the status and the assignee on a card are the same click-to-filter cells the row has, and a
+click anywhere else on a card selects it, a double-click opens it. `j`/`k` move a card at a time,
+page and half-page moves count whole cards, a wheel notch moves one card, and the lines left under
+the last card that fits whole stay blank. The footer shows `V look`. Roomy cards ask the site for the
+due date, the subtasks, the labels and the fix versions; compact cards and lines do not. Moving to
+roomy over rows read without them re-reads them in the background, keeping the cursor on its issue
+and the window where it was, and a refusal keeps the rows and badges them stale. Moving away from
+roomy asks for nothing.
 
 ## Releases: order and state
 

@@ -1896,7 +1896,7 @@ record of what was built, what was left and why.
   `V`. A conformance test proves both adapters fill `Due`, `Subtasks` (with their status category)
   and `FixVersions` from a search page that asks for them.
 
-- [ ] **P11.6 — Cards in the issue list** · after P11.5 · **owns** `internal/ui/list/**`; append-only `docs/{PERFORMANCE,UX,ROADMAP}.md`, `CHANGELOG.md`
+- [x] **P11.6 — Cards in the issue list** · [#177](https://github.com/varijkapil13/saral/pull/177) · **owns** `internal/ui/list/**`; append-only `docs/{PERFORMANCE,UX,ROADMAP}.md`, `CHANGELOG.md`
   The list draws `card.Render` in roomy and compact, with no column header in cards mode, the
   click-to-filter cells through `Facts.TypeZone`/`StatusZone`/`WhoZone`, `card.RoomyFields` added to
   the search only while roomy, and `itemsHeight()` wherever `rowsHeight()` counted rows. Lines mode

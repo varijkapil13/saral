@@ -530,6 +530,7 @@ func firstMsg(t *testing.T, cmd tea.Cmd) tea.Msg {
 }
 
 func BenchmarkFirstPaintFromCache(b *testing.B) {
+	linesByDefault()
 	cache := newFakeCache()
 	deps := kernel.Deps{
 		Caps:    fullCaps(),

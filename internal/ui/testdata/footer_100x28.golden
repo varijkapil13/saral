@@ -13,7 +13,7 @@ form
 issue
  Issues  tab pane  e edit  E open in $EDITOR  t status  C comment                     ? g ctrl+k esc
 list
- Issues  enter open  f filter by  / filter  a all  e search  s sort  S save             ? g ctrl+k q
+ Issues  enter open  f filter by  / filter  a all  e search  s sort  S save  V look     ? g ctrl+k q
 move
  Issues  enter use it  i type a key                                                   ? g ctrl+k esc
 onboarding

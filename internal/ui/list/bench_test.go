@@ -10,6 +10,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -41,6 +42,7 @@ func markedList(tb testing.TB, n, w, h int) *Model {
 
 func listOf(tb testing.TB, d kernel.Deps, n, w, h int) *Model {
 	tb.Helper()
+	linesByDefault()
 	view, ok := New(d).(*Model)
 	if !ok {
 		tb.Fatal("New did not return a *Model")
@@ -133,8 +135,41 @@ func narrowed(tb testing.TB, n, w, h int) *Model {
 // what the benchmark reports is a blend of walking and standing still, weighted
 // by how many iterations the machine got through — which is a number about the
 // machine and not about the code.
-func BenchmarkListWalk10k(b *testing.B) {
-	m := loaded(b, 10000, 120, 40)
+func BenchmarkListWalk10k(b *testing.B) { walk(b, loaded(b, 10000, 120, 40)) }
+
+// BenchmarkListWalkCards10k and BenchmarkListWalkRoomy10k are the same walk
+// over compact and roomy cards, where one fresh issue is three or five lines.
+func BenchmarkListWalkCards10k(b *testing.B) { walk(b, inCards(b, card.Compact, 10000, 120, 40)) }
+
+func BenchmarkListWalkRoomy10k(b *testing.B) { walk(b, inCards(b, card.Roomy, 10000, 120, 40)) }
+
+// BenchmarkListSteadyScrollCards10k and BenchmarkListSteadyScrollRoomy10k are
+// the steady scroll over cards: a frame is still the frame string and nothing
+// else, however many lines each issue takes.
+func BenchmarkListSteadyScrollCards10k(b *testing.B) {
+	scroll(b, inCards(b, card.Compact, 10000, 120, 40))
+}
+
+func BenchmarkListSteadyScrollRoomy10k(b *testing.B) {
+	scroll(b, inCards(b, card.Roomy, 10000, 120, 40))
+}
+
+// inCards is the loaded list moved to a card look. It has no site to ask, so
+// moving to roomy draws the generated issues as they are.
+func inCards(tb testing.TB, look card.Look, n, w, h int) *Model {
+	tb.Helper()
+	m := loaded(tb, n, w, h)
+	next, _ := m.Update(card.LookMsg{Look: look})
+	m, _ = next.(*Model)
+	if m.look != look {
+		tb.Fatalf("the list is in %s, want %s", m.look.Word(), look.Word())
+	}
+	_ = m.View()
+	return m
+}
+
+func walk(b *testing.B, m *Model) {
+	b.Helper()
 	var down, top tea.Msg = keyPress("j"), keyPress("home")
 	b.ReportAllocs()
 	b.ResetTimer()

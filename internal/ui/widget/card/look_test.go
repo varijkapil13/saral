@@ -57,6 +57,7 @@ func TestLook_CyclesRoomyCompactLinesAndParsesItsOwnWords(t *testing.T) {
 }
 
 func TestRecall_FallsBackToRoomyOnAMissingOrUnknownLook(t *testing.T) {
+	t.Cleanup(ResetRecall)
 	for _, tc := range []struct {
 		saved string
 		want  Look
@@ -69,12 +70,56 @@ func TestRecall_FallsBackToRoomyOnAMissingOrUnknownLook(t *testing.T) {
 		if err := config.SaveLook(tc.saved); err != nil {
 			t.Fatal(err)
 		}
+		ResetRecall()
 		if got := Recall(); got != tc.want {
 			t.Errorf("with %q saved, Recall() = %s, want %s", tc.saved, got.Word(), tc.want.Word())
 		}
 	}
 	if err := config.SaveLook(""); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRecall_ReadsTheFileOncePerProcess(t *testing.T) {
+	t.Cleanup(func() {
+		_ = config.SaveLook("")
+		ResetRecall()
+	})
+	if err := config.SaveLook("compact"); err != nil {
+		t.Fatal(err)
+	}
+	ResetRecall()
+	if got := Recall(); got != Compact {
+		t.Fatalf("with compact saved, Recall() = %s", got.Word())
+	}
+	if err := config.SaveLook("lines"); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if got := Recall(); got != Compact {
+			t.Fatalf("a second Recall read the file again and got %s, want the compact it read first", got.Word())
+		}
+	}
+}
+
+func TestRecall_SeesACycleBeforeItsSaveHasRun(t *testing.T) {
+	t.Cleanup(func() {
+		_ = config.SaveLook("")
+		ResetRecall()
+	})
+	if err := config.SaveLook(""); err != nil {
+		t.Fatal(err)
+	}
+	ResetRecall()
+	if got := Recall(); got != Roomy {
+		t.Fatalf("with nothing saved, Recall() = %s, want roomy", got.Word())
+	}
+	_ = Cycle(Roomy)
+	if got := Recall(); got != Compact {
+		t.Errorf("after a Cycle whose save never ran, Recall() = %s, want compact", got.Word())
+	}
+	if saved := config.LoadUIState().Look(); saved != "" {
+		t.Errorf("the file holds %q, so this did not prove Recall skipped it", saved)
 	}
 }
 
@@ -115,7 +160,10 @@ func broadcastLook(t *testing.T, msgs []tea.Msg) (look Look, rest []tea.Msg) {
 }
 
 func TestCycle_BroadcastsTheNextLookAndKeepsIt(t *testing.T) {
-	t.Cleanup(func() { _ = config.SaveLook("") })
+	t.Cleanup(func() {
+		_ = config.SaveLook("")
+		ResetRecall()
+	})
 
 	look, rest := broadcastLook(t, runAll(Cycle(Roomy)))
 	if look != Compact {
@@ -124,8 +172,9 @@ func TestCycle_BroadcastsTheNextLookAndKeepsIt(t *testing.T) {
 	if len(rest) != 0 {
 		t.Errorf("a save that worked said %#v", rest)
 	}
+	ResetRecall()
 	if got := Recall(); got != Compact {
-		t.Errorf("after the save Recall() = %s, want compact", got.Word())
+		t.Errorf("after the save the file says %s, want compact", got.Word())
 	}
 
 	cmd := commandRun(t)
@@ -157,7 +206,10 @@ func TestCycle_AFailedSaveWarnsOnceAndStillBroadcasts(t *testing.T) {
 	}
 	t.Setenv("SARAL_CACHE_DIR", filepath.Join(blocker, "cache"))
 	saveFailed.Store(false)
-	t.Cleanup(func() { saveFailed.Store(false) })
+	t.Cleanup(func() {
+		saveFailed.Store(false)
+		ResetRecall()
+	})
 
 	look, rest := broadcastLook(t, runAll(Cycle(Compact)))
 	if look != Lines {

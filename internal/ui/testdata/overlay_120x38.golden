@@ -76,6 +76,7 @@ a     all issues                               pgup page up      G / g e last ro
 e     edit this search
 s     sort
 S     save this query to a key
+V     roomy / compact / lines
 
 move
 enter use the project under the cursor    ↓/j  down         1-9          saved query           ctrl+k commands
