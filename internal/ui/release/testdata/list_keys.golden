@@ -1,11 +1,13 @@
 reading the versions
-  acts   enter release · n new · e edit · A archive · b assign
+  acts   enter release · n new · e edit · A archive · b assign · s sort · f filter
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G last version]
   full   [enter release this version, n new version, e edit this version, A archive or unarchive it, b put it on issues, or take it off]
+  full   [s sort the versions, f filter by state]
 counting what is open on one
-  acts   n new · e edit · A archive · b assign
+  acts   n new · e edit · A archive · b assign · s sort · f filter
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G last version]
   full   [n new version, e edit this version, A archive or unarchive it, b put it on issues, or take it off]
+  full   [s sort the versions, f filter by state]
 typing a version
   acts   ctrl+s save · esc leave it
   full   [tab next field, shift+tab previous field]
@@ -13,3 +15,7 @@ typing a version
   full   [alt+k delete to end of line]
 a save in flight
   acts   
+choosing an order
+  acts   ←/h prev · →/l next · enter choose · esc cancel
+  full   [←/h previous field, →/l next field]
+  full   [enter choose this order, esc leave the order as it is]

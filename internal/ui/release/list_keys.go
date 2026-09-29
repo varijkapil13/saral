@@ -38,6 +38,15 @@ type keyMap struct {
 	// Assign opens the screen that puts the version on the issues a query
 	// matches, or takes it off them.
 	Assign kernel.Binding
+	Sort   kernel.Binding
+	// Filter moves the rows on to the next state: all, unreleased, released,
+	// archived and round again.
+	Filter kernel.Binding
+
+	SortPrev   kernel.Binding
+	SortNext   kernel.Binding
+	SortChoose kernel.Binding
+	SortCancel kernel.Binding
 
 	NextField kernel.Binding
 	PrevField kernel.Binding
@@ -63,6 +72,13 @@ func defaultKeys() keyMap {
 		Edit:    kernel.Bind([]string{"e"}, "e", "edit this version"),
 		Archive: kernel.Bind([]string{"A"}, "A", "archive or unarchive it"),
 		Assign:  kernel.Bind([]string{"b"}, "b", "put it on issues, or take it off"),
+		Sort:    kernel.Bind([]string{"s"}, "s", "sort the versions"),
+		Filter:  kernel.Bind([]string{"f"}, "f", "filter by state"),
+
+		SortPrev:   kernel.Bind([]string{"left", "h"}, "←/h", "previous field"),
+		SortNext:   kernel.Bind([]string{"right", "l"}, "→/l", "next field"),
+		SortChoose: kernel.Bind([]string{"enter"}, "enter", "choose this order"),
+		SortCancel: kernel.Bind([]string{"esc"}, "esc", "leave the order as it is"),
 
 		NextField: kernel.Bind([]string{"tab", "down"}, "tab", "next field"),
 		PrevField: kernel.Bind([]string{"shift+tab", "up"}, "shift+tab", "previous field"),
@@ -84,6 +100,7 @@ const (
 	keysCounting
 	keysEditing
 	keysSaving
+	keysSorting
 	keyStates
 )
 
@@ -94,24 +111,27 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	create, edit := kernel.Terse(k.New, "new"), kernel.Terse(k.Edit, "edit")
 	archive := kernel.Terse(k.Archive, "archive")
 	assign := kernel.Terse(k.Assign, "assign")
+	sort, filter := kernel.Terse(k.Sort, "sort"), kernel.Terse(k.Filter, "filter")
 	motions := [][]kernel.Binding{
 		{k.Down, k.Up, k.PageDown, k.PageUp, k.Top, k.Bottom},
 	}
 
 	var sets [keyStates]kernel.KeySet
 	sets[keysBrowsing] = kernel.KeySet{
-		Acts: []kernel.Binding{kernel.Terse(k.Release, "release"), create, edit, archive, assign},
+		Acts: []kernel.Binding{kernel.Terse(k.Release, "release"), create, edit, archive, assign, sort, filter},
 		Full: append(append([][]kernel.Binding(nil), motions...),
-			[]kernel.Binding{k.Release, k.New, k.Edit, k.Archive, k.Assign}),
+			[]kernel.Binding{k.Release, k.New, k.Edit, k.Archive, k.Assign},
+			[]kernel.Binding{k.Sort, k.Filter}),
 	}
 	// While the site is being asked what is open on a version, releasing is the
 	// one thing that cannot be done: the count is what the decision is made
 	// against. Everything else still works, so the row says so rather than
 	// falling back to the globals.
 	sets[keysCounting] = kernel.KeySet{
-		Acts: []kernel.Binding{create, edit, archive, assign},
+		Acts: []kernel.Binding{create, edit, archive, assign, sort, filter},
 		Full: append(append([][]kernel.Binding(nil), motions...),
-			[]kernel.Binding{k.New, k.Edit, k.Archive, k.Assign}),
+			[]kernel.Binding{k.New, k.Edit, k.Archive, k.Assign},
+			[]kernel.Binding{k.Sort, k.Filter}),
 	}
 	sets[keysEditing] = kernel.KeySet{
 		Acts: []kernel.Binding{kernel.Terse(k.Save, "save"), kernel.Terse(k.Cancel, "leave it")},
@@ -125,6 +145,13 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// still the reader's, and a key that appeared to take it back while the
 	// write was out with the site would be a lie about which of the two won.
 	sets[keysSaving] = kernel.KeySet{}
+	sets[keysSorting] = kernel.KeySet{
+		Acts: []kernel.Binding{
+			kernel.Terse(k.SortPrev, "prev"), kernel.Terse(k.SortNext, "next"),
+			kernel.Terse(k.SortChoose, "choose"), kernel.Terse(k.SortCancel, "cancel"),
+		},
+		Full: [][]kernel.Binding{{k.SortPrev, k.SortNext}, {k.SortChoose, k.SortCancel}},
+	}
 	return sets
 }()
 
@@ -136,6 +163,8 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysSaving
 	case m.mode == editing:
 		state = keysEditing
+	case m.mode == sorting:
+		state = keysSorting
 	case m.counting != "":
 		state = keysCounting
 	}
@@ -158,14 +187,21 @@ const (
 	actEdit
 	actArchive
 	actAssign
+	actSort
+	actFilter
+	actSortPrev
+	actSortNext
+	actSortChoose
+	actSortCancel
 	actNextField
 	actPrevField
 	actSave
 	actCancel
 )
 
-// tables are the two keystroke lookups, one per half of the keymap.
-func (k keyMap) tables() (browsing, editor map[string]action) {
+// tables are the three keystroke lookups: the rows, the editor and the sort
+// picker.
+func (k keyMap) tables() (browsing, editor, sorter map[string]action) {
 	browsing = table(
 		binding[action]{k.Down, actDown}, binding[action]{k.Up, actUp},
 		binding[action]{k.PageDown, actPageDown}, binding[action]{k.PageUp, actPageUp},
@@ -174,12 +210,17 @@ func (k keyMap) tables() (browsing, editor map[string]action) {
 		binding[action]{k.Release, actRelease}, binding[action]{k.New, actNew},
 		binding[action]{k.Edit, actEdit}, binding[action]{k.Archive, actArchive},
 		binding[action]{k.Assign, actAssign},
+		binding[action]{k.Sort, actSort}, binding[action]{k.Filter, actFilter},
 	)
 	editor = table(
 		binding[action]{k.NextField, actNextField}, binding[action]{k.PrevField, actPrevField},
 		binding[action]{k.Save, actSave}, binding[action]{k.Cancel, actCancel},
 	)
-	return browsing, editor
+	sorter = table(
+		binding[action]{k.SortPrev, actSortPrev}, binding[action]{k.SortNext, actSortNext},
+		binding[action]{k.SortChoose, actSortChoose}, binding[action]{k.SortCancel, actSortCancel},
+	)
+	return browsing, editor, sorter
 }
 
 // binding pairs a keybinding with what it does. It is generic because the list

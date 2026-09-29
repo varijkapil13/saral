@@ -37,6 +37,26 @@ func TestBudget_ReleasesScrollingCostsTheSameOnTwoThousandVersionsAsOnTwenty(t *
 	}
 }
 
+// A chosen order and a state filter change which rows are drawn, never what a
+// frame costs once they are.
+func TestBudget_ReleasesScrollingUnderASortAndAFilterCostsWhatItDoesWithout(t *testing.T) {
+	got := testing.Benchmark(BenchmarkReleasesSteadyScrollSortedFiltered2000).AllocsPerOp()
+	t.Logf("a steady frame under a sort and a filter: %d allocations over 2000 versions", got)
+	if got > 2 {
+		t.Errorf("a steady-state frame under a sort and a filter allocates %d times, want at most 2", got)
+	}
+}
+
+// Moving the filter on reorders and refilters every version, and still has to
+// land inside a frame.
+func TestBudget_ReleasesFilterKeystrokeToFrame(t *testing.T) {
+	res := testing.Benchmark(BenchmarkReleasesFilterKeystroke)
+	t.Logf("f to frame over 2000 versions sorted by name: %s", time.Duration(res.NsPerOp()))
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("f to frame took %s over two thousand versions, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+}
+
 // Walking a fresh row into view on every frame misses the memo by construction,
 // which is what says the miss itself is bounded: the rows that moved are
 // rendered and the window around them is not.

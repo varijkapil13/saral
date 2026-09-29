@@ -13,6 +13,12 @@ such change is listed under **Changed**.
   card there, by key, drag, `H`/`L` or the palette, lists each status the card can reach; pick one with
   the arrow keys and `enter`, or click it, and `esc` puts the card back. Moving several picked cards
   there asks once, and each card moves to the status chosen.
+- Releases can be sorted with `s`: by the project's own order (the default), name, release date,
+  start date or state. Choosing the same field again reverses it, versions with no date stay at the
+  bottom, and the choice is remembered on this machine.
+- Releases can be filtered by state with `f`, which cycles through all, unreleased, released and
+  archived. The summary line shows the filter and how many versions it keeps, and the choice is
+  remembered for the profile. A version you have just created is always shown.
 
 ### Changed
 

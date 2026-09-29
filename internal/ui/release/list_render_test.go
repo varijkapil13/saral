@@ -64,6 +64,30 @@ func TestReleases_Golden(t *testing.T) {
 				m.sum = ""
 			},
 		},
+		"choosing an order": {
+			width: 120, height: 16, golden: "sorting_120x16.golden",
+			after: func(dr *driver) { dr.key("s", "l") },
+		},
+		"choosing an order on a narrow terminal": {
+			width: 80, height: 16, golden: "sorting_80x16.golden",
+			after: func(dr *driver) { dr.key("s", "l") },
+		},
+		"a filter and a sort in force": {
+			width: 120, height: 16, golden: "filtered_120x16.golden",
+			after: sortedAndFiltered,
+		},
+		"a filter and a sort in force on a narrow terminal": {
+			width: 80, height: 16, golden: "filtered_80x16.golden",
+			after: sortedAndFiltered,
+		},
+		"a filter nothing matches": {
+			width: 120, height: 16, golden: "filtered_empty_120x16.golden",
+			after: func(dr *driver) { dr.key("f", "f", "f") },
+		},
+		"a filter nothing matches on a narrow terminal": {
+			width: 80, height: 16, golden: "filtered_empty_80x16.golden",
+			after: func(dr *driver) { dr.key("f", "f", "f") },
+		},
 		"a project with no versions": {
 			width: 100, height: 14, golden: "empty_100x14.golden",
 			after: func(dr *driver) {
@@ -83,6 +107,17 @@ func TestReleases_Golden(t *testing.T) {
 			golden(t, tc.golden, dr.view())
 		})
 	}
+}
+
+// sortedAndFiltered sets the order directly rather than through the picker,
+// which would write it to the cache directory the parallel tests share.
+func sortedAndFiltered(dr *driver) {
+	dr.key("f")
+	m := dr.list()
+	m.sort = sortChoice{field: "name", desc: true}
+	m.reorder()
+	m.moveOnto(twoOh)
+	m.sum = ""
 }
 
 // A version is drawn from the port's own flags and dates, never from a word the

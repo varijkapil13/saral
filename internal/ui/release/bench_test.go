@@ -43,7 +43,8 @@ func stocked(tb testing.TB, n, w, h int) *Model {
 }
 
 // benchVersions is a project's worth of versions, half of them counted so that
-// both forms of the open column are drawn.
+// both forms of the open column are drawn, and one in ten archived so that
+// every state filter keeps some of them.
 func benchVersions(n int) []jira.Version {
 	out := make([]jira.Version, 0, n)
 	for i := range n {
@@ -52,6 +53,7 @@ func benchVersions(n int) []jira.Version {
 			Name:        "release-1." + strconv.Itoa(i),
 			Description: "the release that carries the work of week " + strconv.Itoa(i%52),
 			Released:    i%4 == 0,
+			Archived:    i%10 == 9,
 			StartDate:   jira.Date{Year: 2026, Month: time.January, Day: i%28 + 1},
 			ReleaseDate: jira.Date{Year: 2026, Month: time.March, Day: i%28 + 1},
 		}
@@ -142,7 +144,45 @@ func scrollOver(b *testing.B, n int) {
 }
 
 func BenchmarkReleasesSteadyScroll2000(b *testing.B) { scrollOver(b, 2000) }
-func BenchmarkReleasesSteadyScroll20(b *testing.B)   { scrollOver(b, 20) }
+
+// BenchmarkReleasesSteadyScrollSortedFiltered2000 is the steady state under a
+// chosen order and a state filter, which route every row through the order.
+func BenchmarkReleasesSteadyScrollSortedFiltered2000(b *testing.B) {
+	m := stocked(b, 2000, 120, 40)
+	m.sort, m.filter = sortChoice{field: "name", desc: true}, filterUnreleased
+	m.reorder()
+	m.sum = ""
+	_ = m.View()
+	var down, up tea.Msg = keyPress("down"), keyPress("up")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		key := down
+		if i%2 == 1 {
+			key = up
+		}
+		next, _ := m.Update(key)
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
+// BenchmarkReleasesFilterKeystroke is f pressed and drawn over two thousand
+// versions sorted by name, which reorders and refilters all of them.
+func BenchmarkReleasesFilterKeystroke(b *testing.B) {
+	m := stocked(b, 2000, 120, 40)
+	m.sort = sortChoice{field: "name"}
+	m.reorder()
+	var f tea.Msg = keyPress("f")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		next, _ := m.Update(f)
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+func BenchmarkReleasesSteadyScroll20(b *testing.B) { scrollOver(b, 20) }
 
 // stockedFlow is a release screen with somewhere to move the open issues to, and
 // no site behind it.
