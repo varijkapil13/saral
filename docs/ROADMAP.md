@@ -1911,10 +1911,10 @@ record of what was built, what was left and why.
   Cards are drawn with `card.Render` at the column's cell width, the card cache holds `[]string`, and
   the lane arithmetic counts `Look.Lines()` per card. Lines mode stays byte-identical.
 
-- [x] **P11.9 — Copy key, copy link and open in the right-click menu** · [#181](https://github.com/varijkapil13/saral/pull/181) · **owns** `internal/ui/kernel/{view.go,menu.go,menu_test.go}`, `internal/ui/{list,board,backlog}/{keys.go,share_test.go}`, the right-click handling in `internal/ui/{list/list.go,board/board.go,backlog/backlog.go,issue/issue.go}`, `internal/ui/issue/{keys.go,collab.go,share_test.go}`, `internal/ui/uitest/menu.go`, the goldens under `internal/ui/testdata/` and `internal/ui/issue/testdata/`, `docs/{UX,ROADMAP}.md`, `CHANGELOG.md`
+- [x] **P11.9 — Copy key, copy link and open in the right-click menu** · [#181](https://github.com/varijkapil13/saral/pull/181) · **owns** `internal/ui/kernel/{view.go,menu.go,menu_test.go}`, `internal/ui/{list,board,backlog}/{keys.go,share_test.go}`, the right-click handling in `internal/ui/{list/list.go,board/board.go,backlog/backlog.go,issue/issue.go}`, `internal/ui/issue/{keys.go,share_test.go}`, `internal/ui/uitest/menu.go`, `internal/ui/testdata/menu_120x38.golden`, `docs/{UX,ROADMAP}.md`, `CHANGELOG.md`
   `KeySet.Menu` is what the menu offers after `Acts` and the row never draws; the three views and the
   pane put `issue.ShareBindings` there. A right-click selects the row or card under the pointer first,
-  so the entries act on the clicked issue. The pane's row gains `Y link`; `o` does not fit at 80.
+  so the entries act on the clicked issue. No footer changes: every row is byte-identical to 0.9.0.
 
 ## Later, deliberately not now
 

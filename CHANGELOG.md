@@ -11,7 +11,7 @@ such change is listed under **Changed**.
 
 - Right-clicking a card or row in the issue list, the board or the backlog selects that issue and
   offers *Copy key*, *Copy link* and *Open in browser* (`y`, `Y`, `o`) for it. The issue pane's menu
-  offers the same three, and its toolbar shows `Y link`.
+  offers the same three.
 
 ### Fixed
 

@@ -219,7 +219,6 @@ func (k keyMap) keySet() kernel.KeySet {
 			kernel.Terse(k.Save, "save"),
 			kernel.Terse(k.Move, "status"),
 			k.Comments,
-			shareLink,
 		},
 		Menu: ShareBindings,
 		// Two columns of motions and one of actions. The overlay is one row of
@@ -275,7 +274,7 @@ var sideLiveSets = func() [lkCount]kernel.KeySet {
 	dirtyFull := []kernel.Binding{k.Save, k.UndoRow, k.UndoAll}
 	commentsDirtyActs := []kernel.Binding{kernel.Terse(k.Save, "save"), k.UndoAll}
 	commentsDirtyFull := []kernel.Binding{k.Save, k.UndoAll}
-	restActs := []kernel.Binding{kernel.Terse(k.Move, "status"), k.Comments, shareLink}
+	restActs := []kernel.Binding{kernel.Terse(k.Move, "status"), k.Comments}
 	restFull := append([]kernel.Binding{k.Assign, k.Move, k.Comments}, collabKeys...)
 
 	build := func(dirty bool, editActs, editFull []kernel.Binding) kernel.KeySet {

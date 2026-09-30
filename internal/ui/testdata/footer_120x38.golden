@@ -11,7 +11,7 @@ filter
 form
  Issues  enter use this issue type                                                                        ? g ctrl+k esc
 issue
- Issues  tab pane  e edit  E open in $EDITOR  t status  C comment  Y link                                 ? g ctrl+k esc
+ Issues  tab pane  e edit  E open in $EDITOR  t status  C comment                                         ? g ctrl+k esc
 list
  Issues  enter open  f filter by  / filter  a all  e search  s sort  S save  V look                         ? g ctrl+k q
 move

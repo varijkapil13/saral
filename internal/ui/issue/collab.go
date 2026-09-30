@@ -29,8 +29,6 @@ var ShareBindings = []kernel.Binding{
 	kernel.Bind([]string{"o"}, "o", "open in browser"),
 }
 
-var shareLink = kernel.Terse(ShareBindings[ShareLink-1], "link")
-
 // ShareStroke is the act a stroke asks for, if it is one of ShareBindings.
 func ShareStroke(stroke string) ShareAct {
 	for i := range ShareBindings {

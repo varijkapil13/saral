@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
 func TestPane_TheMenuOffersEveryShareActAndARightClickOnAFactOpensNothing(t *testing.T) {
@@ -33,9 +35,14 @@ func TestPane_TheMenuOffersEveryShareActAndARightClickOnAFactOpensNothing(t *tes
 	}
 	row := make([]string, 0, len(set.Acts))
 	for _, b := range set.Acts {
-		row = append(row, b.Help().Key+" "+b.Help().Desc)
+		row = append(row, b.Help().Key)
 	}
-	if !slices.Contains(row, "Y link") {
-		t.Errorf("the pane's row is %q, with no Y link", row)
+	if got, want := strings.Join(row, " "), "tab e E t C"; got != want {
+		t.Errorf("the pane's row is %q, want %q: the menu entries do not belong on it", got, want)
+	}
+	if !slices.ContainsFunc(set.Full, func(column []kernel.Binding) bool {
+		return slices.ContainsFunc(column, func(b kernel.Binding) bool { return b.Help().Key == "Y" })
+	}) {
+		t.Error("Y is not listed in the pane's Full, so ? no longer names it")
 	}
 }

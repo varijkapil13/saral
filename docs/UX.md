@@ -85,7 +85,7 @@ at 80×20 the body is 17 rows with a status line up, and the issue list has as f
 | globals | `? g ctrl+k esc`, or `q` at the bottom of the stack — bare keys, never given up to make room. A view taking typing swallows all but `ctrl+k`, and the cell drops what will not arrive |
 
 ```
- Issues  tab pane  enter edit  t status  C comment  Y link       ? g ctrl+k esc
+ Issues  tab pane  e edit  t status  C comment                   ? g ctrl+k esc
  Issues  enter open  c comment  e edit  t status  / filter  +3  ? g ctrl+k q
 ```
 
@@ -905,9 +905,9 @@ for a narrower one (`docs/API-NOTES.md`). Order and state are both laid over it 
 browse link built from the profile's site, and `o` opens that link in the desktop's browser — in the
 detail pane, the list, the board and the backlog alike, and from the palette as *Copy this issue's key*, *Copy the
 link to this issue* and *Open this issue in the browser*. Right-clicking an issue offers the same three
-in the menu, about the issue that was clicked. The detail pane's row names `Y link`; `o` is not on it,
-because at 80 columns the description's row is full before `Y` is added, and `Y` already folds
-`C comment` into the `+N` there. A copy names what it copied, because OSC 52 cannot confirm one landed.
+in the menu, about the issue that was clicked. None of the three is on the row: at 80 columns the
+detail pane's row is already full, and the list, the board and the backlog already fold into a `+N`.
+A copy names what it copied, because OSC 52 cannot confirm one landed.
 
 **Links, time and watchers are sheets pushed over the pane**, one list with one prompt under it, so
 `esc` comes back to the fields exactly as they were. Each change is written at once and the pane

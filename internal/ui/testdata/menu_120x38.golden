@@ -66,8 +66,8 @@ issue
 │ E    open in $EDITOR  │
 │ t    change status    │
 │ C    comment          │
-│ Y    copy the link    │
 │ y    copy the key     │
+│ Y    copy the link    │
 │ o    open in browser  │
 └───────────────────────┘
 
