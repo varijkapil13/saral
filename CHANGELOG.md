@@ -7,6 +7,16 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+### Added
+
+- Right-clicking a card or row in the issue list, the board or the backlog selects that issue and
+  offers *Copy key*, *Copy link* and *Open in browser* (`y`, `Y`, `o`) for it. The issue pane's menu
+  offers the same three, and its toolbar shows `Y link`.
+
+### Fixed
+
+- A right-click on the issue pane's status, priority or assignee no longer opens that field's list.
+
 ## [0.9.0] - 2026-09-30
 
 ### Added

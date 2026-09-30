@@ -64,6 +64,31 @@ func TestMenu_ARightClickOffersWhatTheFocusedViewSaysApplies(t *testing.T) {
 	}
 }
 
+func TestMenu_OffersTheViewsMenuEntriesAfterItsActsAndNotOnTheRow(t *testing.T) {
+	view := menuBoard()
+	copyKey := Bind([]string{"y"}, "y", "copy the key")
+	view.set.Menu = []Binding{Bind([]string{"e"}, "e", "edit"), copyKey}
+	view.set.Full = append(view.set.Full, []Binding{copyKey})
+	m := openedMenu(t, view)
+
+	keys := make([]string, 0, len(m.menu.acts))
+	for _, b := range m.menu.acts {
+		keys = append(keys, b.Help().Key)
+	}
+	if got, want := strings.Join(keys, " "), "enter e t y"; got != want {
+		t.Errorf("the menu offers %q, want %q", got, want)
+	}
+	if frame := ansi.Strip(m.Frame()); !strings.Contains(frame, "copy the key") {
+		t.Errorf("the menu does not spell out its own entry:\n%s", frame)
+	}
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	footer := ansi.Strip(next.(Model).footer())
+	if !strings.Contains(footer, "t status") || strings.Contains(footer, "y copy") {
+		t.Errorf("an entry only the menu offers reached the row: %q", footer)
+	}
+}
+
 // TestMenu_ChoosingAnEntryArrivesAtTheViewAsItsKey is the rule that keeps the
 // key, the palette and the pointer one implementation of an action.
 func TestMenu_ChoosingAnEntryArrivesAtTheViewAsItsKey(t *testing.T) {

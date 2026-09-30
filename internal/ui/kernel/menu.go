@@ -42,7 +42,7 @@ type menuState struct {
 // spelt out the way the ? overlay spells it rather than the way the footer's row
 // has room for.
 //
-// It is the view's Acts and deliberately not the command registry:
+// It is the view's Acts, then its Menu, and deliberately not the command registry:
 // Command.Requires answers whether this token may do a thing on this site, and
 // nothing on a Command says whether it applies to what is on screen, so a menu
 // built from the registry would offer "set up a Jira profile" over an issue row.
@@ -55,6 +55,9 @@ func (m Model) menuActs() []Binding {
 	if len(acts) == 0 {
 		return nil
 	}
+	if len(set.Menu) > 0 {
+		acts = append(append(make([]Binding, 0, len(acts)+len(set.Menu)), acts...), without(set.Menu, acts)...)
+	}
 	return spellOut(acts, set.Full)
 }
 
@@ -63,9 +66,8 @@ func (m Model) menuActs() []Binding {
 // The click is forwarded to the focused view first. Only the view can turn a
 // coordinate into a row — it owns the zones, and the kernel has a frame — so a
 // view that maps a right-click to selecting the row under the pointer makes the
-// pointer and this menu agree about what it is for. No view does that yet, and
-// until one does the menu is about the row the view draws highlighted, which
-// docs/UX.md says in as many words.
+// pointer and this menu agree about what it is for. A view that does not leaves
+// the menu about the row it draws highlighted.
 func (m Model) openMenu(click tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	// A view taking typing owns the keyboard, and this menu spends the arrows and
 	// enter: opening it over a half-typed API token would eat the rest of it.

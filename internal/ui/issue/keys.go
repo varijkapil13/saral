@@ -219,7 +219,9 @@ func (k keyMap) keySet() kernel.KeySet {
 			kernel.Terse(k.Save, "save"),
 			kernel.Terse(k.Move, "status"),
 			k.Comments,
+			shareLink,
 		},
+		Menu: ShareBindings,
 		// Two columns of motions and one of actions. The overlay is one row of
 		// columns shared with the globals, which take 47 of a 120-column screen,
 		// and the actions column another 21 — so a third motion column, or a
@@ -273,7 +275,7 @@ var sideLiveSets = func() [lkCount]kernel.KeySet {
 	dirtyFull := []kernel.Binding{k.Save, k.UndoRow, k.UndoAll}
 	commentsDirtyActs := []kernel.Binding{kernel.Terse(k.Save, "save"), k.UndoAll}
 	commentsDirtyFull := []kernel.Binding{k.Save, k.UndoAll}
-	restActs := []kernel.Binding{kernel.Terse(k.Move, "status"), k.Comments}
+	restActs := []kernel.Binding{kernel.Terse(k.Move, "status"), k.Comments, shareLink}
 	restFull := append([]kernel.Binding{k.Assign, k.Move, k.Comments}, collabKeys...)
 
 	build := func(dirty bool, editActs, editFull []kernel.Binding) kernel.KeySet {
@@ -289,7 +291,7 @@ var sideLiveSets = func() [lkCount]kernel.KeySet {
 		}
 		acts = append(acts, restActs...)
 		full = append(full, restFull...)
-		return kernel.KeySet{Acts: acts, Full: [][]kernel.Binding{acts, full}}
+		return kernel.KeySet{Acts: acts, Full: [][]kernel.Binding{acts, full}, Menu: ShareBindings}
 	}
 
 	descActs, descFull := []kernel.Binding{kernel.Terse(k.Edit, "edit"), k.Editor}, []kernel.Binding{k.Edit, k.Editor}

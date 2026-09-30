@@ -1677,6 +1677,10 @@ func (m *Model) open() tea.Cmd {
 // click selects the card under the pointer, opens it on a real double-click, and
 // grabs it so that a drag out of its column becomes the same move the keys make.
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
+	if msg.Button == tea.MouseRight {
+		m.pointAt(msg)
+		return nil
+	}
 	if msg.Button != tea.MouseLeft {
 		return nil
 	}
@@ -1726,6 +1730,17 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		m.moveTo(col, m.curRow)
 	}
 	return nil
+}
+
+// pointAt selects the card under a right-click, so the kernel's menu is about it.
+func (m *Model) pointAt(msg tea.MouseClickMsg) {
+	if m.bulk != nil || m.choosing() || m.card != nil {
+		return
+	}
+	if col, row, on := m.cardUnder(msg); on {
+		m.clicks.Forget()
+		m.moveTo(col, row)
+	}
 }
 
 // dragging turns a press that has left the card's own column into the pick-up
