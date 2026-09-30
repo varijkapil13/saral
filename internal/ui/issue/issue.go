@@ -879,6 +879,9 @@ func (m *Model) foldAt(msg tea.MouseMsg) bool {
 }
 
 func (m *Model) clicked(msg tea.MouseClickMsg) tea.Cmd {
+	if msg.Button != tea.MouseLeft {
+		return nil
+	}
 	if m.leaving {
 		return m.clickLeavePrompt(msg)
 	}

@@ -1274,6 +1274,9 @@ func (m *Model) open() tea.Cmd {
 // click count nor an instant, so the second click is timed against this
 // session's clock rather than inferred from the row already being selected.
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
+	if msg.Button == tea.MouseRight {
+		return m.pointAt(msg)
+	}
 	if msg.Button != tea.MouseLeft {
 		return nil
 	}
@@ -1303,6 +1306,17 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 			return m.open()
 		}
 		return m.moveTo(i)
+	}
+	return nil
+}
+
+// pointAt selects the row under a right-click, so the kernel's menu is about it.
+func (m *Model) pointAt(msg tea.MouseClickMsg) tea.Cmd {
+	for i := m.top; i < min(m.top+m.itemsHeight(), len(m.view)); i++ {
+		if m.zones.Hit(rowZone(m.issues[m.view[i]].Key), msg) {
+			m.clicks.Forget()
+			return m.moveTo(i)
+		}
 	}
 	return nil
 }

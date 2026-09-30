@@ -410,7 +410,7 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 | click the line that names the search | show its JQL and offer to change it, the same as `e` |
 | click the footer's root cell | go back to that root, the same as `esc` from a pushed view |
 | click a footer action | do it — the view is handed the first stroke of the key that entry names |
-| right-click the body | open the menu of what can be done to what is in front of you: the footer's action cell, in full, with the descriptions the row had no room for |
+| right-click the body | select the row or card under the pointer, and open the menu of what can be done to it: the footer's action cell, in full, with the descriptions the row had no room for, then *copy the key*, *copy the link* and *open in browser* over an issue |
 | click the footer's `+N` | open `?`, which lists what did not fit |
 | click the footer while `?` is up | close the overlay — the one entry the row has there |
 | click anything else a view draws | do what it says — write, send, delete, confirm, put aside, pick a value, go back to an onboarding step |
@@ -457,16 +457,22 @@ from the command registry would offer *Write a comment* and *Set up a Jira profi
 with equal confidence. Rather than adding a scope to `Command` and sweeping all five registrars, the
 menu is built from the **focused view's `Acts`**: the view's own inventory of what can be done to the
 thing it is showing, which is already what the footer's middle cell draws and already moves with the
-view's state through `kernel.KeyReporter`. Choosing an entry delivers the first stroke of the key that
+view's state through `kernel.KeyReporter`. After them come the set's **`Menu`** entries, which the row
+never draws: the list, the board, the backlog and the detail pane put *copy the key*, *copy the link*
+and *open in browser* there, so the menu offers them without three more labels folding into the row's
+`+N`. Choosing an entry delivers the first stroke of the key that
 entry names, exactly as clicking a footer action does, so the key, the palette and the pointer stay
 one implementation and cannot drift.
 
-**The granularity is the row, and the row is the one the view has focused — not the one under the
-pointer.** Only the view can turn a coordinate into a row: it owns the zones, and the kernel sees a
-frame. A menu that guessed would offer *transition* and *delete* against the wrong issue, which is
-worse than no menu at all. So the right-click is forwarded to the focused view before the menu opens —
-a view that maps it to *select this row* makes the pointer and the menu agree, and none does yet — and
-until then the menu is about the row the view draws highlighted. It is deliberately not per **cell**:
+**The granularity is the row, and the row is the one under the pointer.** Only the view can turn a
+coordinate into a row: it owns the zones, and the kernel sees a frame. A menu that guessed would offer
+*transition* and *delete* against the wrong issue, which is worse than no menu at all. So the
+right-click is forwarded to the focused view before the menu opens, and the list, the board and the
+backlog answer it by selecting the row or card under the pointer — any line of a card — so the menu
+and every entry in it are about that issue. A board with a card in hand or a question on screen, and a
+backlog that is not browsing, leave the cursor where it is, and the menu is then about the row drawn
+highlighted. The detail pane holds one issue, so a right-click anywhere in it is about that issue and
+does nothing else: a right-click on the header's status does not open the status list. It is deliberately not per **cell**:
 a cell is already a left-click gesture of its own (*filter by this value*), and a view has one focused
 thing rather than one per column.
 
@@ -898,8 +904,10 @@ for a narrower one (`docs/API-NOTES.md`). Order and state are both laid over it 
 **Sharing is the same three keys wherever an issue is under the cursor.** `y` copies the key, `Y` the
 browse link built from the profile's site, and `o` opens that link in the desktop's browser — in the
 detail pane, the list, the board and the backlog alike, and from the palette as *Copy this issue's key*, *Copy the
-link to this issue* and *Open this issue in the browser*. A copy names what it copied, because OSC 52
-cannot confirm one landed.
+link to this issue* and *Open this issue in the browser*. Right-clicking an issue offers the same three
+in the menu, about the issue that was clicked. None of the three is on the row: at 80 columns the
+detail pane's row is already full, and the list, the board and the backlog already fold into a `+N`.
+A copy names what it copied, because OSC 52 cannot confirm one landed.
 
 **Links, time and watchers are sheets pushed over the pane**, one list with one prompt under it, so
 `esc` comes back to the fields exactly as they were. Each change is written at once and the pane

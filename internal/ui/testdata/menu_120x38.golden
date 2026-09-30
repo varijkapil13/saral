@@ -16,6 +16,9 @@ backlog
 │ f      filter by a person, a status, a label        │
 │ s      sort                                         │
 │ V      roomy / compact / lines                      │
+│ y      copy the key                                 │
+│ Y      copy the link                                │
+│ o      open in browser                              │
 └─────────────────────────────────────────────────────┘
 
 board
@@ -30,6 +33,9 @@ board
 │ f      filter by a person, a status, a label │
 │ F 1-9  quick filters                         │
 │ V      roomy / compact / lines               │
+│ y      copy the key                          │
+│ Y      copy the link                         │
+│ o      open in browser                       │
 └──────────────────────────────────────────────┘
 
 comment
@@ -60,6 +66,9 @@ issue
 │ E    open in $EDITOR  │
 │ t    change status    │
 │ C    comment          │
+│ y    copy the key     │
+│ Y    copy the link    │
+│ o    open in browser  │
 └───────────────────────┘
 
 list
@@ -73,6 +82,9 @@ list
 │ s      sort                                  │
 │ S      save this query to a key              │
 │ V      roomy / compact / lines               │
+│ y      copy the key                          │
+│ Y      copy the link                         │
+│ o      open in browser                       │
 └──────────────────────────────────────────────┘
 
 move

@@ -182,6 +182,7 @@ func (k keyMap) browsing(narrowed, picked bool) kernel.KeySet {
 	}
 	return kernel.KeySet{
 		Acts: acts,
+		Menu: issue.ShareBindings,
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.Left, k.Right},
 			{k.PageDown, k.PageUp, k.Top, k.Bottom},

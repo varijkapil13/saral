@@ -170,15 +170,19 @@ type Deps struct {
 // it for a set that names no Acts. Every view in this build names Acts; the
 // fallback is what keeps a key set that has not been partitioned yet from
 // drawing an empty footer.
+//
+// Menu is offered by the right-click menu after Acts and never drawn on the row.
+// An entry needs a Full entry of its own to be spelt out there and listed by ?.
 type KeySet struct {
 	Acts  []Binding
 	Short []Binding
 	Full  [][]Binding
+	Menu  []Binding
 }
 
 // IsZero reports whether the set carries no bindings.
 func (k KeySet) IsZero() bool {
-	return len(k.Acts) == 0 && len(k.Short) == 0 && len(k.Full) == 0
+	return len(k.Acts) == 0 && len(k.Short) == 0 && len(k.Full) == 0 && len(k.Menu) == 0
 }
 
 // KeyReporter is the optional interface a view implements when the keys that

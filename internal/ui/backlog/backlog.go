@@ -1693,6 +1693,9 @@ func (m *Model) confirmKey(stroke string) tea.Cmd {
 // --- mouse ------------------------------------------------------------------
 
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
+	if msg.Button == tea.MouseRight {
+		return m.pointAt(msg)
+	}
 	if msg.Button != tea.MouseLeft {
 		return nil
 	}
@@ -1749,6 +1752,22 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 			m.pick()
 		}
 		return m.pageAheadIfNeeded()
+	}
+	return nil
+}
+
+// pointAt selects the row under a right-click, so the kernel's menu is about it.
+func (m *Model) pointAt(msg tea.MouseClickMsg) tea.Cmd {
+	if m.mode != browsing {
+		return nil
+	}
+	for i, end := m.top, m.visibleEnd(); i < end; i++ {
+		if m.zones.Hit(m.zoneOf(i), msg) {
+			m.clicks.Forget()
+			m.cursor = i
+			m.scrollToCursor()
+			return m.pageAheadIfNeeded()
+		}
 	}
 	return nil
 }

@@ -220,6 +220,7 @@ func (k keyMap) keySet() kernel.KeySet {
 			kernel.Terse(k.Move, "status"),
 			k.Comments,
 		},
+		Menu: ShareBindings,
 		// Two columns of motions and one of actions. The overlay is one row of
 		// columns shared with the globals, which take 47 of a 120-column screen,
 		// and the actions column another 21 — so a third motion column, or a
@@ -289,7 +290,7 @@ var sideLiveSets = func() [lkCount]kernel.KeySet {
 		}
 		acts = append(acts, restActs...)
 		full = append(full, restFull...)
-		return kernel.KeySet{Acts: acts, Full: [][]kernel.Binding{acts, full}}
+		return kernel.KeySet{Acts: acts, Full: [][]kernel.Binding{acts, full}, Menu: ShareBindings}
 	}
 
 	descActs, descFull := []kernel.Binding{kernel.Terse(k.Edit, "edit"), k.Editor}, []kernel.Binding{k.Edit, k.Editor}
