@@ -7,6 +7,8 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-30
+
 ### Added
 
 - Right-clicking a card or row in the issue list, the board or the backlog selects that issue and
@@ -278,7 +280,8 @@ transitions, comments with markdown ⇄ ADF, attachments with inline image previ
 backlog, sprints, releases with the unresolved-issue decision, the cross-project move wizard, the
 timeline, plans, the command palette, full mouse support and cache-first paint.
 
-[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/varijkapil13/saral/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/varijkapil13/saral/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/varijkapil13/saral/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/varijkapil13/saral/compare/v0.7.1...v0.7.2
