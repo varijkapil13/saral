@@ -89,7 +89,9 @@ that people usually go back to the browser for:
 - **Fast first paint.** Views draw from a local cache straight away and then check the site in the
   background, so a refresh never moves your cursor or your scroll position.
 - **The mouse works too.** Click a row, a status or a column, drag a card or a divider, or
-  right-click for the actions that apply. `--mouse=false` turns it off for text selection.
+  right-click for the actions that apply. To select and copy text, hold your terminal's
+  mouse-bypass modifier while you drag: Shift in Ghostty, kitty, WezTerm, Alacritty and Windows
+  Terminal, Option in iTerm2. `--mouse=false` turns the mouse off for the whole session.
 - **Missing permissions are explained.** If your token cannot do something, the feature is hidden or
   disabled, and Saral shows the site's own reason. It does not crash, and it does not show an empty
   list without saying why.
