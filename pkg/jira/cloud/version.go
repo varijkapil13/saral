@@ -92,10 +92,10 @@ type apiVersionRef struct {
 // Unresolved is nil on every version, which says nobody asked: no version read
 // reports the count, and a zero reads as a version with nothing open on it.
 // More versions than versionBound is refused rather than cut short.
-func (c *Client) Versions(ctx context.Context, projectKey string) ([]jira.Version, error) {
-	key := strings.TrimSpace(projectKey)
+func (c *Client) Versions(ctx context.Context, projectIDOrKey string) ([]jira.Version, error) {
+	key := strings.TrimSpace(projectIDOrKey)
 	if key == "" {
-		return nil, invalidField("projectKey", "a project key is required to list versions")
+		return nil, invalidField("projectKey", "a project key or id is required to list versions")
 	}
 	if _, err := projectRef("projectKey", key); err != nil {
 		return nil, err

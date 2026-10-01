@@ -7,6 +7,11 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+### Fixed
+
+- Opening a plan read from the site now lists the releases of its projects. It used to say they
+  could not be read, because the site names a plan's projects by id rather than by key.
+
 ## [0.9.1] - 2026-09-30
 
 ### Added

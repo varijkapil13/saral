@@ -184,8 +184,9 @@ func (m *Model) appendDetail(rows []viewRow, at int) []viewRow {
 
 func (m *Model) appendReleases(rows []viewRow, at int) []viewRow {
 	row := &m.plans[at]
-	if len(projectKeys(row)) == 0 {
-		return append(rows, viewRow{plan: at, kind: rowWarn, text: line("releases", noReleases(row))})
+	if len(projectRefs(row)) == 0 {
+		return append(rows, viewRow{plan: at, kind: rowWarn,
+			text: line("releases", "this plan names no project, so there is none to read releases from")})
 	}
 	held := m.rel[row.plan.ID]
 	switch {
@@ -199,7 +200,7 @@ func (m *Model) appendReleases(rows []viewRow, at int) []viewRow {
 		return append(rows, viewRow{plan: at, kind: rowDetail, text: line("releases", "not read yet")})
 	case len(held.versions) == 0:
 		return append(rows, viewRow{plan: at, kind: rowDetail,
-			text: line("releases", "none on "+strings.Join(projectKeys(row), ", "))})
+			text: line("releases", "none on "+projectWords(row))})
 	}
 	for i := range held.versions {
 		rows = append(rows, viewRow{plan: at, kind: rowDetail, text: line(labelOf(i), versionWords(&held.versions[i]))})
@@ -214,22 +215,18 @@ func labelOf(i int) string {
 	return ""
 }
 
-// noReleases says why a plan's releases are not on screen. A plan the site
-// answered with names each project by a numeric id, and no port method turns
-// one into the key a version read takes — so the honest answer is that this
-// cannot be read here, rather than a number drawn as if it were a project.
-func noReleases(row *planRow) string {
-	if !row.plan.Local {
-		return "not readable for a plan the site defines: its projects arrive as ids, " +
-			"and nothing here turns a project id into a key"
+// projectWords names a plan's projects the way its source rows do.
+func projectWords(row *planRow) string {
+	refs := projectRefs(row)
+	if row.plan.Local {
+		return strings.Join(refs, ", ")
 	}
-	return "this plan names no project, so there is none to read releases from"
+	return "project id " + strings.Join(refs, ", ")
 }
 
 // sourceWords is one issue source in words. A local plan names a project by its
-// key, which is what a version read and a JQL clause both take; the site names
-// it by an id that is neither, and the row says so instead of printing the
-// number as though it were a project.
+// key; the site names it by an id, and the row says so instead of printing the
+// number as though it were a key.
 func sourceWords(s jira.PlanSource, local bool) string {
 	value := strings.TrimSpace(s.Value)
 	if value == "" {
@@ -239,7 +236,7 @@ func sourceWords(s jira.PlanSource, local bool) string {
 	case s.Type == jira.PlanSourceProject && local:
 		return "project " + value
 	case s.Type == jira.PlanSourceProject:
-		return "project id " + value + " (this port cannot resolve an id to a project key)"
+		return "project id " + value
 	case s.Type == jira.PlanSourceFilter:
 		return "filter " + value
 	case s.Type == jira.PlanSourceBoard:

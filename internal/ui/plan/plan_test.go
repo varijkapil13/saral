@@ -175,27 +175,28 @@ func TestPlans_OpeningAPlanReadsTheReleasesOfItsProjects(t *testing.T) {
 	}
 }
 
-// A plan the site answered with names each project by a numeric id. Nothing in
-// the port turns one into a key, so the row says that rather than printing the
-// number as though it were a project, and no version read is attempted.
-func TestPlans_ASitePlanSaysWhyItsProjectsCannotBeNamed(t *testing.T) {
+// A plan the site answered with names each project by its numeric id, which the
+// version read takes as readily as a key.
+func TestPlans_ASitePlanReadsTheReleasesOfItsProjectsByID(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(5)
+	plans, err := f.Plans(context.Background())
+	if err != nil || len(plans) == 0 {
+		t.Fatalf("the fake answered %d plans and %v; the test needs one", len(plans), err)
+	}
+	id := plans[0].Sources[0].Value
 	dr := newDriver(t, testDeps(f), 120, 30)
-	dr.send(plansMsg{gen: dr.m.gen, plans: []jira.Plan{{
-		ID: "42", Name: "Delivery", Status: "Active",
-		Sources: []jira.PlanSource{{Type: jira.PlanSourceProject, Value: "10432"}},
-	}}})
+	dr.send(plansMsg{gen: dr.m.gen, plans: plans[:1]})
 	before := countCalls(f, "Versions")
 	dr.key("enter")
 
-	frame := dr.view()
-	mustContain(t, frame, "project id 10432", "cannot resolve an id to a project key")
-	mustNotContain(t, frame, "project 10432")
-	if got := countCalls(f, "Versions") - before; got != 0 {
-		t.Errorf("the view made %d version reads for a project it only has an id for", got)
+	if got := countCalls(f, "Versions") - before; got != 1 {
+		t.Fatalf("opening a site plan read the versions %d times, want once", got)
 	}
+	frame := dr.view()
+	mustContain(t, frame, "project id "+id, "releases", "1.0", "released")
+	mustNotContain(t, frame, "not readable", "cannot resolve")
 }
 
 // A board source cannot be searched or read either, and it must not be dropped:
