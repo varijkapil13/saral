@@ -461,13 +461,9 @@ func (m *Model) tookReleases(msg releasesMsg) {
 }
 
 // releasesFor asks for the versions of every project this plan draws from.
-//
-// Only a plan the profile defines can be asked: the site names a project source
-// by a numeric id, no port method turns one into the key Versions takes, and
-// guessing would ask about a project nobody named.
 func (m *Model) releasesFor(at int) tea.Cmd {
 	row := &m.plans[at]
-	keys := projectKeys(row)
+	keys := projectRefs(row)
 	if len(keys) == 0 || m.deps.Jira == nil {
 		return nil
 	}
@@ -481,13 +477,9 @@ func (m *Model) releasesFor(at int) tea.Cmd {
 	return m.reply(readReleases(ctx, m.deps.Jira, row.plan.ID, keys, gen))
 }
 
-// projectKeys are the project sources this view may read releases for, which is
-// only ever a plan the profile defined: those name a key, and the site's name an
-// id.
-func projectKeys(row *planRow) []string {
-	if !row.plan.Local {
-		return nil
-	}
+// projectRefs are the projects a plan draws from, as a version read takes them:
+// a key where the profile defined the plan, a numeric id where the site did.
+func projectRefs(row *planRow) []string {
 	var out []string
 	for _, s := range row.plan.Sources {
 		if s.Type == jira.PlanSourceProject && strings.TrimSpace(s.Value) != "" {

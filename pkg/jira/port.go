@@ -77,8 +77,9 @@ type Client interface {
 	// DeleteAttachment removes an attachment.
 	DeleteAttachment(ctx context.Context, id string) error
 
-	// Versions lists a project's versions.
-	Versions(ctx context.Context, projectKey string) ([]Version, error)
+	// Versions lists a project's versions. It takes the project's key or its
+	// numeric id, which is how a plan's issue source names one.
+	Versions(ctx context.Context, projectIDOrKey string) ([]Version, error)
 	// SaveVersion creates a version, or updates it when VersionInput.ID is set.
 	SaveVersion(ctx context.Context, v VersionInput) (Version, error)
 	// UnresolvedCount reports how many issues on a version are still open.

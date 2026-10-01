@@ -525,16 +525,24 @@ func (f *Fake) DeleteAttachment(ctx context.Context, id string) error {
 	return nil
 }
 
-// Versions lists a project's versions.
-func (f *Fake) Versions(ctx context.Context, projectKey string) ([]jira.Version, error) {
+// Versions lists a project's versions, found by its key or its id.
+func (f *Fake) Versions(ctx context.Context, projectIDOrKey string) ([]jira.Version, error) {
 	if err := f.fakeBegin(ctx, "Versions"); err != nil {
 		return nil, err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	proj, ok := f.projects[projectKey]
+	proj, ok := f.projects[projectIDOrKey]
 	if !ok {
-		return nil, fakeNotFound("project", projectKey)
+		for _, p := range f.projects {
+			if p.ref.ID == projectIDOrKey {
+				proj, ok = p, true
+				break
+			}
+		}
+	}
+	if !ok {
+		return nil, fakeNotFound("project", projectIDOrKey)
 	}
 	out := make([]jira.Version, 0, len(proj.versionIDs))
 	for _, id := range proj.versionIDs {

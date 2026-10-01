@@ -163,7 +163,7 @@ type Attacher interface {
 // release decision turns on, and asking for it on a list of forty versions is
 // forty requests — so a list is read without it and a release screen asks.
 type VersionReader interface {
-	Versions(ctx context.Context, projectKey string) ([]Version, error)
+	Versions(ctx context.Context, projectIDOrKey string) ([]Version, error)
 	UnresolvedCount(ctx context.Context, versionID string) (int, error)
 }
 
