@@ -415,6 +415,12 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 | click the footer while `?` is up | close the overlay — the one entry the row has there |
 | click anything else a view draws | do what it says — write, send, delete, confirm, put aside, pick a value, go back to an onboarding step |
 
+**Selecting text is the terminal's job, not Saral's.** With mouse mode on, the terminal hands every
+drag to the program, and here a left-drag already ranks, moves and resizes. Terminals skip mouse
+reporting while a modifier is held, so holding it and dragging selects text the usual way: Shift in
+Ghostty, kitty, WezTerm, Alacritty and Windows Terminal, Option in iTerm2. `--mouse=false` or
+`mouse = false` in the config turns capture off for the whole session.
+
 **A double-click is timed, because nothing else can time it.** `tea.MouseClickMsg` carries a
 position, a button and a modifier: no click count and no instant. Every view here first reached for
 "a second click on the row that is already selected", which cannot tell a double-click from two
