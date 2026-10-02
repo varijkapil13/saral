@@ -7,6 +7,11 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+### Fixed
+
+- A plan that spans a project you cannot browse now lists the releases of the projects you can,
+  and names the one it left out with the site's reason. It used to show no releases at all.
+
 ## [0.9.2] - 2026-10-01
 
 ### Fixed

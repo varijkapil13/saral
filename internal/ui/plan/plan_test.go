@@ -369,21 +369,19 @@ func TestPlans_ARefreshOverTheSitesPlansReadsThemAgain(t *testing.T) {
 	}
 }
 
-// A read that fails for one of a plan's projects fails the whole expansion: a
-// plan drawn from two projects and answered for by one is a shorter list that
-// nothing on screen explains.
-func TestPlans_AProjectThatRefusesFailsTheWholeExpansion(t *testing.T) {
+// A project the token may not browse is left out and named, and the releases of
+// the projects that answered are still drawn, as the web UI does.
+func TestPlans_AProjectThatRefusesIsLeftOutOfTheExpansion(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(5, jiratest.WithProject("OPS", jiratest.Kanban))
-	dr := newDriver(t, refusedDeps(f), 120, 30, WithDefined([]Defined{
+	dr := newDriver(t, refusedDeps(f), 160, 30, WithDefined([]Defined{
 		{Name: "Both", Projects: []string{"PROJ", "OPS"}},
 	}))
-	f.FailNext(&jira.CapabilityError{Capability: jira.CapBoards, Reason: "you may not browse OPS"})
+	f.FailNext(&jira.CapabilityError{Capability: jira.CapBoards, Reason: "you may not browse PROJ"})
 	dr.key("enter")
 
-	mustContain(t, dr.view(), "you may not browse OPS")
-	mustNotContain(t, dr.view(), "1.0")
+	mustContain(t, dr.view(), "project PROJ left out: you may not browse PROJ", "1.0")
 }
 
 func TestPlans_ASessionWithNoConnectionStillDrawsTheProfilesPlans(t *testing.T) {
