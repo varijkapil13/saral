@@ -102,6 +102,8 @@ type Command struct {
 	// about a keybinding, and one command's is byte-identical to a view ID whose
 	// keys belong to something else entirely.
 	Keys []string
+	// Action is the canonical action the command performs, when it has one.
+	Action Action
 	// Run performs the command.
 	Run func(Deps) tea.Cmd
 }
@@ -178,6 +180,26 @@ type KeySet struct {
 	Short []Binding
 	Full  [][]Binding
 	Menu  []Binding
+	// Mode says which rules hold the set to the vocabulary.
+	Mode KeyMode
+}
+
+// KeyMode is the kind of state a KeySet describes.
+type KeyMode uint8
+
+const (
+	// Browse is the zero value: a state of looking at things, held to the whole
+	// vocabulary.
+	Browse KeyMode = iota
+	// Modal is a state that has taken the keyboard, such as typing, a
+	// confirmation or a picker. It may reuse y, n, enter, esc and tab.
+	Modal
+)
+
+// KeyStateLister is implemented by a view that can name every KeySet it ever
+// reports, so that the vocabulary sweep reaches states a fresh view is not in.
+type KeyStateLister interface {
+	KeyStates() []KeySet
 }
 
 // IsZero reports whether the set carries no bindings.

@@ -75,18 +75,18 @@ type GlobalKeys struct {
 // always bound inside views; these are the ones the kernel itself handles.
 func DefaultGlobalKeys() GlobalKeys {
 	return GlobalKeys{
-		Quit:     Bind([]string{"q", "ctrl+c"}, "q", "quit"),
-		Back:     Bind([]string{"esc"}, "esc", "back"),
-		Help:     Bind([]string{"?"}, "?", "help"),
-		Palette:  Bind([]string{"ctrl+k"}, "ctrl+k", "commands"),
-		Refresh:  Bind([]string{"r"}, "r", "refresh"),
-		Purge:    Bind([]string{"R"}, "R", "refetch everything"),
-		Go:       Bind([]string{"g"}, "g", "where to go"),
-		Slot:     Bind(digits, "g 1-9", "switch view"),
-		Saved:    Bind(digits, "1-9", "saved query"),
-		Jump:     Bind([]string{"i"}, "g i", "jump to an issue"),
-		Settings: Bind([]string{"ctrl+,", "s"}, "ctrl+, / g s", "settings"),
-		Search:   Bind([]string{"/"}, "g /", "search issues"),
+		Quit:     Canon(ActQuit),
+		Back:     Canon(ActBack),
+		Help:     Canon(ActHelp),
+		Palette:  Canon(ActPalette),
+		Refresh:  Canon(ActRefresh),
+		Purge:    Canon(ActRefreshAll),
+		Go:       Canon(ActGo),
+		Slot:     Canon(ActSlot),
+		Saved:    Canon(ActSaved),
+		Jump:     Canon(ActJump),
+		Settings: Canon(ActSettings),
+		Search:   Canon(ActSearch),
 	}
 }
 

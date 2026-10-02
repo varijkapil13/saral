@@ -73,6 +73,10 @@ func RegisterCommand(cmd Command) {
 		reg.errs = append(reg.errs, fmt.Errorf("kernel: command %q registered with nothing to run", cmd.ID))
 		return
 	}
+	if _, known := byAction[cmd.Action]; cmd.Action != "" && !known {
+		reg.errs = append(reg.errs, fmt.Errorf("kernel: command %q names unknown action %q", cmd.ID, cmd.Action))
+		return
+	}
 	if _, dup := reg.commands[cmd.ID]; dup {
 		reg.errs = append(reg.errs, fmt.Errorf("kernel: command %q is registered twice", cmd.ID))
 		return

@@ -22,6 +22,84 @@ for six months.
 6. **Never lose the user's text.** Anything typed survives a failed request, a 409, and a crash —
    drafts are persisted per issue.
 
+## Keys
+
+One key means one thing in every view. `internal/ui/kernel/vocab.go` holds the table below as
+`kernel.Vocabulary()`, a view builds its bindings with `kernel.Canon(kernel.ActAssign)` or declares a
+key of its own with `kernel.Local`, and `internal/ui/vocabulary_test.go` fails a binding that is
+neither.
+
+**This is the target, not the current state.** Only the kernel's own keys are on it today. Each
+view's section further down still describes the keys it has now, and moves to this table in its own
+change; the closed `unmigrated` list in that test names every view that has not, with the violations
+it still has. The per-view sections are rewritten as the view migrates, and the list shrinks to
+nothing.
+
+| Action | Key | Notes |
+|---|---|---|
+| up / down / left / right | `↑`/`k` `↓`/`j` `←`/`h` `→`/`l` | |
+| page up / down | `pgup` (`ctrl+b`), `pgdn` (`ctrl+f`) | `space` is not paging |
+| half page up / down | `ctrl+u` / `ctrl+d` | |
+| top / bottom | `g g` (`home`), `G` (`end`, `g e`) | everywhere that scrolls |
+| next / previous pane, field or scope | `tab` / `shift+tab` | the search scope stays on `tab` |
+| open, expand | `enter` | never a write |
+| back | `esc` | |
+| clear filters | `ctrl+g` | |
+| edit / edit in `$EDITOR` | `e` / `E` | |
+| save | `ctrl+s` | |
+| revert / revert all | `u` / `U` | |
+| status | `t` | |
+| assign a person | `@` | |
+| priority | `P` | |
+| labels | `#` | |
+| move to a sprint | `m` | |
+| comment | `C` | |
+| add to this collection | `a` | a link, a watcher, a worklog, a comment, a file |
+| create an issue, version or sprint | `c` | |
+| delete, remove | `d` | |
+| sort, and the picker's choices | `s` | the picker is modal: `←`/`h` `→`/`l` `enter` `esc`, `kernel.SortPickerKeys()` |
+| filter by facet | `f` | |
+| find, then next / previous | `/`, `n` / `N` | |
+| type into a box | `i` | |
+| group, arrange, lanes | `v` | |
+| row look | `V` | |
+| fold / fold all | `z` / `Z` | |
+| show or hide hidden items | `.` | |
+| advance the lifecycle | `!` | start or complete a sprint, release a version |
+| refresh / refetch everything | `r` / `R` | |
+| copy the key / the link | `y` / `Y` | |
+| open in the browser | `o` | |
+| parent / children | `p` / `]` | |
+| send to the full list | `I` | |
+| links / log time / watchers | `&` / `w` / `W` | |
+| toggle / select the group / select none | `space` / `*` / `x` | |
+| rank up / down, first / last | `K` `J`, `{` `}` | |
+| shift left / right | `H` `L` | |
+| mine | `M` | |
+
+The kernel's own keys are `q`, `?`, `ctrl+k`, `g` and what follows it (`1`-`9`, `i`, `s`, `/`),
+`ctrl+,` and the bare digits for saved queries.
+
+Some keys belong to one view and nothing else, and are unique app-wide: `b` other board, `S` other
+sprint, `F` quick filters (board); `A` archive, `B` bulk fix version (releases); `T` today, `+` `-`
+zoom (timeline); `0` all issues (list); `<` `>` `=` split (issue). A view declares them with
+`kernel.Local`, and the test refuses one that borrows a key the table owns or that two views claim.
+
+Rules the test holds:
+
+- A capital is the declared variant of its lowercase (`G`/`g`, `N`/`n`, `E`/`e`, `U`/`u`, `Y`/`y`,
+  `Z`/`z`, and `J` `K` `H` `L` as the shifted motions) or one reserved view-local key, never both.
+- A symbol has one concept: `@` person, `#` label, `*` all, `.` hidden, `!` advance, `&` links,
+  `/` text.
+- A modal state (typing, a confirmation, a picker, a flow) may reuse `y`, `n`, `enter`, `esc` and
+  `tab`, and says so by setting `KeySet.Mode` to `kernel.Modal`. Every other set is `kernel.Browse`,
+  the zero value, and is checked.
+- A hidden alias may not belong to another action.
+- A palette command whose ID ends in a verb the table names (`.assign`, `.sort`, `.new`, `.create`
+  and the rest in `Canonical.Aliases`) sets `Command.Action`, and its `Keys` are the canonical label.
+- A view that implements `kernel.KeyReporter` also implements `kernel.KeyStateLister`, so the test
+  reaches every state it can be in and not only the one it opens in.
+
 ## Progressive mastery
 
 The mechanisms that make familiarity pay off, in the order a user meets them:

@@ -1941,13 +1941,15 @@ func (m Model) globalCell() (cell string, width int) {
 	return m.deps.Theme.HintKey.Render(plain), ansi.StringWidth(plain)
 }
 
+var helpClose = Local("kernel", "help.close", []string{"?", "esc", "q"}, "?", "close help")
+
 // footerActs is the inventory the middle cell names. Two of the kernel's own
 // states answer for themselves, because both have taken the view's keys away;
 // everything else is what the focused view says works right now.
 func (m Model) footerActs() []Binding {
 	switch {
 	case m.showHelp:
-		return []Binding{Bind([]string{"?", "esc", "q"}, "?", "close help")}
+		return []Binding{helpClose}
 	case m.menu.open:
 		return menuFooterActs()
 	case m.prefixSet:
