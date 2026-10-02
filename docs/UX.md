@@ -234,8 +234,9 @@ scroll, and the count says `20+` because the index was asked for twenty and stop
 honest total to give.
 
 **Under everything it found, one more row searches the site.** Whatever was typed, the last row reads
-*Search issues for "…"* and `enter` on it puts the palette away and opens the site search with those
-words already in its box and already running (see *Searching the site*). It is last so that it never
+*Search issues for "…"*, with `g /` in the key column, and `enter` on it puts the palette away and
+opens the site search with those words already in its box and already running (see *Searching the
+site*). It is last so that it never
 takes the cursor from a match, and it is the only row left, with the cursor on it, when nothing in
 the cache or the commands matched. The reasons a command was refused are still drawn under it. The
 palette itself never asks the site anything: it ranks on every keystroke against ten thousand cached

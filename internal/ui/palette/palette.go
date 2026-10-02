@@ -44,6 +44,8 @@ const (
 	zoneFind = "find:"
 )
 
+var findKey = kernel.DefaultGlobalKeys().Search.Help().Key
+
 var (
 	_ kernel.View        = (*Model)(nil)
 	_ kernel.KeyCapturer = (*Model)(nil)

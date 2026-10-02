@@ -108,7 +108,7 @@ func optionalWidth(lay layout) int {
 // widestKey is how much room the key column needs. Zero means no command in
 // this build has a key, and the column is not drawn at all.
 func widestKey(rows []row) int {
-	widest := 0
+	widest := ansi.StringWidth(findKey)
 	for i := range rows {
 		widest = max(widest, ansi.StringWidth(rows[i].keys))
 	}
@@ -240,7 +240,13 @@ func renderFind(query string, lay layout, sel bool, st *styles, t *kernel.Theme)
 		b.WriteString(strings.Repeat(" ", lay.slack))
 	}
 	if lay.keys > 0 {
-		b.WriteString(strings.Repeat(" ", gap+lay.keys))
+		b.WriteString(strings.Repeat(" ", gap))
+		cell := widget.PadLeft(findKey, lay.keys, ell)
+		if sel {
+			b.WriteString(cell)
+		} else {
+			b.WriteString(st.keys.Render(cell))
+		}
 	}
 	if sel {
 		return st.selected.Render(b.String())

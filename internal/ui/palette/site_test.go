@@ -29,7 +29,13 @@ func TestPalette_OffersASiteSearchUnderEverythingItFound(t *testing.T) {
 	if p.m.onFind() {
 		t.Error("the site search took the cursor from a better match")
 	}
-	mustContain(t, p.frame(), `Search issues for "login"`)
+	frame := p.frame()
+	mustContain(t, frame, `Search issues for "login"`)
+	for _, line := range strings.Split(frame, "\n") {
+		if strings.Contains(line, "Search issues for") && !strings.HasSuffix(strings.TrimRight(line, " "), "g /") {
+			t.Errorf("the row does not carry the gesture that reaches the same view: %q", line)
+		}
+	}
 }
 
 func TestPalette_NothingCachedMatchesSoTheSiteSearchIsSelected(t *testing.T) {
