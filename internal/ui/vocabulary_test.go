@@ -24,6 +24,15 @@ func (n namedSet) bindings() []kernel.Binding {
 	return append(out, n.set.Menu...)
 }
 
+var vocabulary = func() []*kernel.Canonical {
+	all := kernel.Vocabulary()
+	out := make([]*kernel.Canonical, len(all))
+	for i := range all {
+		out[i] = &all[i]
+	}
+	return out
+}()
+
 var canonByAction = func() map[kernel.Action]kernel.Canonical {
 	m := make(map[kernel.Action]kernel.Canonical)
 	for _, c := range kernel.Vocabulary() {
@@ -73,7 +82,7 @@ func vocabularyFindings(sets []namedSet) []string {
 						add(fmt.Sprintf("local %s.%s uses %q, which is %s: %s", m.Owner, m.ID, k, owner, label(b)))
 					}
 				}
-				for _, c := range kernel.Vocabulary() {
+				for _, c := range vocabulary {
 					for _, alias := range c.Aliases {
 						if strings.HasSuffix(m.Owner+"."+m.ID, alias) {
 							add(fmt.Sprintf("local %s.%s is named for %s: %s", m.Owner, m.ID, c.Action, label(b)))
@@ -689,7 +698,7 @@ func TestVocabulary_EveryScopeIsHeldToIt(t *testing.T) {
 		for _, ns := range sets {
 			bindings += len(ns.bindings())
 		}
-		got := append(structural, vocabularyFindings(sets)...)
+		got := slices.Concat(structural, vocabularyFindings(sets))
 		got = append(got, commands[s.name]...)
 		delete(commands, s.name)
 		slices.Sort(got)
@@ -884,7 +893,7 @@ func commandFindings(cmds []kernel.Command) map[string][]string {
 		if renamed, ok := commandScope[scope]; ok {
 			scope = renamed
 		}
-		for _, c := range kernel.Vocabulary() {
+		for _, c := range vocabulary {
 			for _, alias := range c.Aliases {
 				if strings.HasSuffix(cmd.ID, alias) && cmd.Action != c.Action {
 					out[scope] = append(out[scope], fmt.Sprintf("command %s ends in %q and does not set Action %s", cmd.ID, alias, c.Action))
