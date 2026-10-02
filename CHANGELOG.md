@@ -17,9 +17,12 @@ such change is listed under **Changed**.
   your words already in it. When nothing cached matched, it is the only row.
 - Open an issue's parent and linked issues from its pane: the parent, subtasks and links are rows
   on the sidebar cursor that `enter` or a click on the key opens, and `p` opens the parent.
-
 - An epic's pane lists its children with how many are done, and `c` opens them in a sheet where
   `@`, `t` and `P` change a child's assignee, status or priority without opening it.
+- The release list can browse the versions of several projects at once. It arranges them under their
+  cross-space release, by project or not at all (`v`), filters by project (`p`) and by text (`/`),
+  and hides the versions a plan leaves out until `x` shows them. A plan opens it in a following
+  release.
 
 ### Fixed
 

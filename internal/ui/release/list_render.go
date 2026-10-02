@@ -31,6 +31,7 @@ const (
 	// to the name.
 	minDescription = 12
 	stateWidth     = 10
+	projectWidth   = 8
 	openWidth      = 5
 	dateWidth      = 10
 	// labelWidth is the gutter the editor's field names sit in.
@@ -90,6 +91,7 @@ func newStyles(t *kernel.Theme) *styles {
 type layout struct {
 	width       int
 	name        int
+	project     int
 	state       int
 	open        int
 	start       int
@@ -101,16 +103,19 @@ type layout struct {
 // their room. Those two are what says which version this is and whether it has
 // shipped; a description squeezed to nothing costs nothing that cannot be read
 // in the editor.
-func planLayout(width, widestName int) layout {
+func planLayout(width, widestName int) layout { return planColumns(width, widestName, 0) }
+
+func planColumns(width, widestName, project int) layout {
 	lay := layout{
 		width: max(width, marker+minName+gap+stateWidth),
 		name:  min(max(widestName, minName), maxName),
 		state: stateWidth, open: openWidth, start: dateWidth, release: dateWidth,
+		project: project,
 	}
 	// The columns are given up from the right: the description first, since it
 	// is the one thing the editor shows in full anyway, then the dates, then the
 	// count.
-	for _, drop := range []*int{&lay.release, &lay.start, &lay.open} {
+	for _, drop := range []*int{&lay.release, &lay.start, &lay.open, &lay.project} {
 		if lay.fixed() <= lay.width {
 			break
 		}
@@ -125,7 +130,7 @@ func planLayout(width, widestName int) layout {
 // fixed is what every column but the description takes, gaps included.
 func (lay layout) fixed() int {
 	n := marker + lay.name + gap + lay.state
-	for _, w := range []int{lay.open, lay.start, lay.release} {
+	for _, w := range []int{lay.project, lay.open, lay.start, lay.release} {
 		if w > 0 {
 			n += gap + w
 		}
@@ -134,12 +139,20 @@ func (lay layout) fixed() int {
 }
 
 func (m *Model) relayout() {
-	lay := planLayout(m.width, m.widestName())
+	var lay layout
+	if m.set != nil {
+		lay = planColumns(m.width, m.widestName(), projectWidth)
+	} else {
+		lay = planLayout(m.width, m.widestName())
+	}
 	if lay == m.lay && m.head != "" {
 		return
 	}
 	m.lay = lay
 	m.head = lay.caption(m.styles, m.deps.Theme.Glyphs.Ellipsis)
+	if m.set != nil {
+		m.set.title = m.titleLine()
+	}
 	m.rows.Reset()
 }
 
@@ -162,8 +175,8 @@ func (lay layout) caption(st *styles, ell string) string {
 		text  string
 		width int
 	}{
-		{"state", lay.state}, {"open", lay.open}, {"starts", lay.start},
-		{"releases", lay.release}, {"description", lay.description},
+		{"project", lay.project}, {"state", lay.state}, {"open", lay.open},
+		{"starts", lay.start}, {"releases", lay.release}, {"description", lay.description},
 	} {
 		if cell.width <= 0 {
 			continue
@@ -186,6 +199,9 @@ type rowCells struct {
 	start       string
 	release     string
 	description string
+	project     string
+	fold        string
+	excluded    bool
 }
 
 // rowKey is what makes two renderings of a row the same rendering.
@@ -194,6 +210,8 @@ type rowKey struct {
 	lay      layout
 	selected bool
 	gen      int
+	header   bool
+	folded   bool
 }
 
 // rowZone is the click target one row is marked with, named by the version's id
@@ -218,12 +236,24 @@ func (m *Model) rebuildCells() {
 	for i := range m.versions {
 		m.cells = append(m.cells, cellsOf(m.versions[i], m.day))
 	}
+	if m.set != nil {
+		m.decorate()
+	}
 	m.reorder()
 	m.rows.Reset()
 }
 
 func (m *Model) rowKeyOf(at int, selected bool) rowKey {
-	return rowKey{cells: m.cells[m.order[at]], lay: m.lay, selected: selected, gen: m.styles.gen}
+	sl := m.order[at]
+	if sl.v < 0 {
+		h := &m.set.heads[sl.g]
+		return rowKey{
+			cells: rowCells{id: h.zone, name: h.name, description: h.text},
+			lay:   m.lay, selected: selected, gen: m.styles.gen,
+			header: true, folded: m.set.folded[h.key],
+		}
+	}
+	return rowKey{cells: m.cells[sl.v], lay: m.lay, selected: selected, gen: m.styles.gen}
 }
 
 func (m *Model) row(at int, selected bool) string {
@@ -231,7 +261,12 @@ func (m *Model) row(at int, selected bool) string {
 	if s, ok := m.rows.Get(k); ok {
 		return s
 	}
-	s := m.zones.Mark(rowZone(k.cells.id), renderRow(k, m.styles, m.deps.Theme))
+	var s string
+	if k.header {
+		s = m.zones.Mark(k.cells.id, renderHeader(k, m.styles, m.deps.Theme))
+	} else {
+		s = m.zones.Mark(rowZone(k.cells.id), renderRow(k, m.styles, m.deps.Theme))
+	}
 	m.rows.Put(k, s)
 	return s
 }
@@ -295,10 +330,22 @@ func renderRow(k rowKey, st *styles, t *kernel.Theme) string {
 		b.WriteString(strings.Repeat(" ", marker))
 	}
 	name := widget.PadTruncate(k.cells.name, k.lay.name, ell)
-	if k.selected {
+	switch {
+	case k.selected:
 		b.WriteString(name)
-	} else {
+	case k.cells.excluded:
+		b.WriteString(st.muted.Render(name))
+	default:
 		b.WriteString(st.name.Render(name))
+	}
+	if k.lay.project > 0 {
+		b.WriteString(strings.Repeat(" ", gap))
+		project := widget.PadTruncate(k.cells.project, k.lay.project, ell)
+		if k.selected {
+			b.WriteString(project)
+		} else {
+			b.WriteString(st.muted.Render(project))
+		}
 	}
 	state := widget.PadTruncate(k.cells.state, k.lay.state, ell)
 	b.WriteString(strings.Repeat(" ", gap))
@@ -367,6 +414,7 @@ type summaryKey struct {
 	creating   bool
 	stale      bool
 	checked    int64
+	set        setSummary
 }
 
 func (m *Model) summaryKey() summaryKey {
@@ -376,7 +424,7 @@ func (m *Model) summaryKey() summaryKey {
 			released++
 		}
 	}
-	return summaryKey{
+	key := summaryKey{
 		project: m.deps.Project, width: m.width, gen: m.styles.gen,
 		versions: len(m.versions), shown: len(m.order), released: released,
 		filter: m.filter, sortField: m.sort.fieldID(), sortDesc: m.sort.desc,
@@ -386,6 +434,11 @@ func (m *Model) summaryKey() summaryKey {
 		stale:   m.stale,
 		checked: m.checked.UnixNano(),
 	}
+	if m.set != nil {
+		key.shown = m.set.shown
+		key.set = m.setSummaryKey()
+	}
+	return key
 }
 
 // summaryLine says what is on screen and what is being waited for. It keeps the
@@ -395,6 +448,9 @@ func (m *Model) summaryLine() string {
 	key := m.summaryKey()
 	if m.sum != "" && key == m.sumAt {
 		return m.sum
+	}
+	if m.set != nil {
+		return m.setSummaryLine(key)
 	}
 	var b strings.Builder
 	b.WriteString("  ")
@@ -417,11 +473,21 @@ func (m *Model) summaryLine() string {
 		}
 	}
 	sum := m.styles.muted.Render(b.String())
-	b.Reset()
 	if m.sort.chosen() {
 		sum += m.styles.muted.Render(" · ") +
 			m.zones.Mark(sortZone, m.styles.accent.Render(m.sort.label(m.deps.Theme.Glyphs)))
 	}
+	m.sum = sum + m.styles.muted.Render(m.progress(key))
+	if key.stale {
+		m.sum += " " + m.deps.Theme.StaleBadge.Render(staleLabel)
+	}
+	m.sum = ansi.Truncate(m.sum, max(m.width, 8), m.deps.Theme.Glyphs.Ellipsis)
+	m.sumAt = key
+	return m.sum
+}
+
+func (m *Model) progress(key summaryKey) string {
+	var b strings.Builder
 	switch {
 	case key.counting:
 		b.WriteString(" · counting what is open")
@@ -438,16 +504,10 @@ func (m *Model) summaryLine() string {
 	}
 	// Counts are one request each, so the pane says out loud that the column is
 	// unread rather than leaving a reader to wonder why it is full of marks.
-	if key.shown > 0 && m.anyUncounted() {
+	if key.shown > 0 && m.set == nil && m.anyUncounted() {
 		b.WriteString(" · open counts are read when a version is released")
 	}
-	m.sum = sum + m.styles.muted.Render(b.String())
-	if key.stale {
-		m.sum += " " + m.deps.Theme.StaleBadge.Render(staleLabel)
-	}
-	m.sum = ansi.Truncate(m.sum, max(m.width, 8), m.deps.Theme.Glyphs.Ellipsis)
-	m.sumAt = key
-	return m.sum
+	return b.String()
 }
 
 // staleLabel is a word and not a glyph, the way the list's is.
@@ -474,6 +534,9 @@ func plural(n int, one, many string) string {
 // session, no project to read versions of, a read in flight, a read that
 // failed, and a project that genuinely has no versions.
 func (m *Model) appendEmpty(lines []string, h int) []string {
+	if m.set != nil {
+		return m.appendSetEmpty(lines, h)
+	}
 	at := len(lines)
 	room := max(m.width-marker, 8)
 	ell := m.deps.Theme.Glyphs.Ellipsis
@@ -568,6 +631,9 @@ func (m *Model) View() string {
 		m.moveOnto(under)
 	}
 	lines := m.lines[:0]
+	if m.set != nil {
+		lines = append(lines, m.set.title)
+	}
 	lines = append(lines, m.summaryLine(), m.head)
 	h := m.rowsHeight()
 	if len(m.order) == 0 {
@@ -582,11 +648,16 @@ func (m *Model) View() string {
 		}
 		m.warm(end)
 	}
+	if m.set != nil {
+		lines = m.appendNotes(lines)
+	}
 	switch m.mode {
 	case editing:
 		lines = m.appendForm(lines)
 	case sorting:
 		lines = append(lines, m.sortPrompt())
+	case finding:
+		lines = append(lines, m.findPrompt())
 	case browsing:
 	}
 	m.lines = lines

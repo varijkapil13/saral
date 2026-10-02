@@ -1,0 +1,20 @@
+  Delivery: 11 releases from EX, OPS, WEB   cross-space release = one release across several projects ("spaces")
+  by cross-space release · matching "ops" · 2 of 11 versions · 2 excluded by the plan, x shows · read 09:00
+  version      project  state      open  starts     releases   description                                              
+v Spring launch   1 of 4 · EX, OPS, WEB · 2026-02-01 to 2026-04-30 · 1 of 4 released                                    
+  ops-2026.3   OPS      unreleased ?     2026-02-10 2026-04-15                                                          
+v Summer launch   1 of 3 · EX, OPS · 2026-05-01 to 2026-07-31 · 0 of 3 released                                         
+  ops-2026.4   OPS      unreleased ?     2026-05-10 2026-07-20                                                          
+
+
+
+
+
+
+
+
+
+
+
+  board 18 left out: the site named no project behind it
+/ ops                                                                                                                 

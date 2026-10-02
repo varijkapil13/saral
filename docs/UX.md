@@ -951,6 +951,41 @@ for a narrower one (`docs/API-NOTES.md`). Order and state are both laid over it 
   place and the status line says which filter hid it. **A version just created is never hidden**:
   if the filter in force would hide it, the filter goes back to all and the status line says so.
 
+## Releases across a plan
+
+The release list also browses a set of projects at once, which is what a plan's releases are. It is
+the same list with a project column, and everything the project list does with a version it does here:
+`enter` opens the release flow, `e` edits, `A` archives, `b` assigns, `s` sorts, `f` filters by state.
+
+*cross-space release: one release planned across several projects (Jira now calls projects "spaces")*.
+The browser says so once on its title line, and `v` says so in help. The word elsewhere stays *project*.
+
+- **`v` arranges** the versions under headers: by cross-space release, by project, or not at all, and
+  round again. A set with no cross-space releases skips the first. The arrangement is kept per
+  profile. A header shows a fold glyph, the name, `kept of total`, the projects, the earliest start to
+  the latest release, and where the release stands: `1 of 4 released`, `all released`, or `overdue`
+  once its last release date has passed with something still to ship. A version two releases name is
+  drawn under the first; versions in none sit under a last header, *not in a cross-space release*.
+  A header whose versions are all filtered out is not drawn. `enter` or a click on a header folds it.
+- **Sorting follows the groups.** Versions sort within a header, and headers go in the order their
+  first version lands. The picker's first field is *plan order* here, and *project* is added. The order
+  is kept apart from the project list's.
+- **`p` moves the project filter** from every project to each project of the set in turn. **`/`
+  filters by text**: it matches a version's name or the name of a release it is in, case-folded, takes
+  every key as text while it is open (so `q`, `j`, `k` and digits are typed), `enter` keeps it and `esc`
+  clears it. The state filter, the project filter and the text filter narrow together, and the summary
+  line names each one in force.
+- **`x` shows what the plan leaves out.** Excluded versions are hidden by default; the summary says
+  `21 excluded by the plan, x shows`. Shown, they are muted and their description reads *excluded by
+  the plan*.
+- **A version belongs to one project, so what acts on it is scoped to that project.** The release flow
+  offers only that project's versions to move open issues to, and `b` starts from that project. `n` is
+  refused with *a version belongs to one project; open Releases (g 5) on it to create one* and is not
+  in the footer. The project switcher does nothing here.
+- **`r` reads the set again** when the screen that opened it knows how. A read the site refuses
+  keeps the rows, marks them stale and says why on the status line. In the open-count column `?` still
+  means nobody has counted.
+
 ## Around an issue: sharing, links, time, watchers, copies
 
 **Sharing is the same three keys wherever an issue is under the cursor.** `y` copies the key, `Y` the

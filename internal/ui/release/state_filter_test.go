@@ -93,7 +93,7 @@ func TestFilter_IsRememberedForTheProfile(t *testing.T) {
 	}
 
 	mem.state[ViewID+"."+filterMemoryKey] = "shipped-by-a-later-build"
-	if got := recallFilter(d); got != filterAll {
+	if got := recallFilter(d, ViewID); got != filterAll {
 		t.Errorf("a value this build does not know opened on %q, want all", got.name())
 	}
 }

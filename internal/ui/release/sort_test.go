@@ -41,8 +41,8 @@ func mixedVersions() []jira.Version {
 
 func drawnIDs(m *Model) []string {
 	out := make([]string, 0, len(m.order))
-	for _, i := range m.order {
-		out = append(out, m.versions[i].ID)
+	for _, sl := range m.order {
+		out = append(out, m.versions[sl.v].ID)
 	}
 	return out
 }

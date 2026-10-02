@@ -48,6 +48,7 @@ const (
 	browsing mode = iota
 	editing
 	sorting
+	finding
 )
 
 // Model is the versions list.
@@ -64,7 +65,7 @@ type Model struct {
 	// click are positions in order; m.versions stays in the project's own
 	// sequence, which is what the cache keeps and the flow is offered.
 	sorted []int
-	order  []int
+	order  []slot
 	sort   sortChoice
 	filter stateFilter
 
@@ -109,25 +110,32 @@ type Model struct {
 
 	zones  widget.Zoner
 	clicks *widget.Clicks
+
+	set *setView
 }
 
 // New builds the versions list. It draws before anything is asked of the site,
 // because a first frame is drawn without Init ever being called.
 func New(d kernel.Deps) kernel.View {
+	m := newModel(d)
+	m.sort = loadSort(ViewID)
+	m.filter = recallFilter(d, ViewID)
+	m.fromCache()
+	m.relayout()
+	return m
+}
+
+func newModel(d kernel.Deps) *Model {
 	m := &Model{deps: d, addr: kernel.NewAddr()}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
 	m.acts, m.inEdit, m.inSort = defaultKeys().tables()
-	m.sort = loadSort()
-	m.filter = recallFilter(d)
 	m.styles = newStyles(m.deps.Theme)
 	m.rows = widget.NewRowCache[rowKey, string](rowCacheLimit)
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.form = newForm()
-	m.fromCache()
-	m.relayout()
 	return m
 }
 
@@ -135,6 +143,9 @@ func New(d kernel.Deps) kernel.View {
 // site to read them from — and not at all while a stored list is inside its
 // TTL.
 func (m *Model) Init() tea.Cmd {
+	if m.set != nil {
+		return nil
+	}
 	if m.deps.Jira == nil || strings.TrimSpace(m.deps.Project) == "" {
 		return nil
 	}
@@ -150,7 +161,9 @@ func (m *Model) Init() tea.Cmd {
 //
 // The sort picker claims them too, so esc closes it rather than leaving the
 // view.
-func (m *Model) WantsRawKeys() bool { return m.mode == editing || m.mode == sorting }
+func (m *Model) WantsRawKeys() bool {
+	return m.mode == editing || m.mode == sorting || m.mode == finding
+}
 
 // BlocksClose refuses to throw away a version being typed. The kernel asks
 // before quitting, before going back and before switching to another root, and
@@ -192,7 +205,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.sum = ""
 
 	case kernel.ProjectMsg:
-		cmd = m.reproject(msg.Project)
+		if m.set == nil {
+			cmd = m.reproject(msg.Project)
+		}
 
 	case kernel.RefreshMsg:
 		cmd = m.refresh(msg.Purge)
@@ -235,6 +250,21 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case sortSaveFailedMsg:
 		cmd = m.reportSortSaveFailed(msg)
+
+	case setReadMsg:
+		cmd = m.tookSet(msg)
+
+	case ArrangeMsg:
+		cmd = m.cycleArrange()
+
+	case PickProjectMsg:
+		cmd = m.cyclePick()
+
+	case ExcludedMsg:
+		cmd = m.toggleExcluded()
+
+	case FindMsg:
+		cmd = m.startFind()
 
 	case tea.KeyPressMsg:
 		cmd = m.key(msg)
@@ -395,7 +425,7 @@ func (m *Model) tookCount(msg countedMsg) tea.Cmd {
 	m.put(version)
 	m.rebuildCells()
 	return kernel.Push(FlowViewID, "Release "+version.Name,
-		NewFlow(m.deps, version, open, m.moveTargets(version.ID)))
+		NewFlow(m.deps, version, open, m.moveTargets(version)))
 }
 
 // tookRelease patches the row the flow shipped. It is a broadcast rather than a
@@ -418,7 +448,7 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	}
 	m.loading, m.saving, m.counting = false, false, ""
 	m.failure, m.what = msg.err, msg.what
-	if msg.what == whatVersions && len(m.versions) > 0 {
+	if (msg.what == whatVersions || msg.what == whatSet) && len(m.versions) > 0 {
 		m.stale = true
 	}
 	m.sum = ""
@@ -455,11 +485,15 @@ func (m *Model) byID(id string) (jira.Version, bool) {
 // moveTargets are the versions the open issues on one version could move to:
 // the ones that are neither this one, nor already released, nor archived.
 // Moving open work onto a version that has shipped is not somewhere to put it.
-func (m *Model) moveTargets(exclude string) []jira.Version {
+// Over a set a version's issues belong to its own project, so only its versions are offered.
+func (m *Model) moveTargets(from jira.Version) []jira.Version {
 	out := make([]jira.Version, 0, len(m.versions))
 	for i := range m.versions {
 		v := m.versions[i]
-		if v.ID == exclude || v.Released || v.Archived {
+		if v.ID == from.ID || v.Released || v.Archived {
+			continue
+		}
+		if m.set != nil && v.ProjectID != from.ProjectID {
 			continue
 		}
 		out = append(out, v)
@@ -472,6 +506,9 @@ func (m *Model) moveTargets(exclude string) []jira.Version {
 func (m *Model) startCreate() tea.Cmd {
 	if m.saving {
 		return nil
+	}
+	if m.set != nil {
+		return kernel.Warn(createRefusal)
 	}
 	if m.deps.Jira == nil {
 		return kernel.Warn("there is no Jira connection in this session")
@@ -567,7 +604,11 @@ func (m *Model) startAssign() tea.Cmd {
 	case v.Archived:
 		return kernel.Warn(v.Name + " is archived; unarchive it with A before putting it on issues")
 	}
-	return kernel.Push(BulkViewID, "Issues on "+v.Name, NewBulk(m.deps, v))
+	d := m.deps
+	if m.set != nil {
+		d.Project = m.set.ownerOf(int(m.order[m.cursor].v)).Ref
+	}
+	return kernel.Push(BulkViewID, "Issues on "+v.Name, NewBulk(d, v))
 }
 
 func (m *Model) save() tea.Cmd {
@@ -598,6 +639,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.mode == editing {
 		return m.editKey(msg)
 	}
+	if m.mode == finding {
+		return m.findKey(msg)
+	}
 	stroke := msg.String()
 	if m.mode == sorting {
 		return m.sortKey(stroke)
@@ -607,6 +651,11 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		if stroke == "g" {
 			m.moveTo(0)
 			return nil
+		}
+	}
+	if m.set != nil {
+		if cmd, handled := m.setKey(stroke); handled {
+			return cmd
 		}
 	}
 	switch m.acts[stroke] {
@@ -671,10 +720,14 @@ func (m *Model) editKey(msg tea.KeyPressMsg) tea.Cmd {
 // selected is the version under the cursor, which is a position in the order
 // drawn and not an index into the versions as the site sent them.
 func (m *Model) selected() (jira.Version, bool) {
-	if m.cursor < 0 || m.cursor >= len(m.order) || m.order[m.cursor] >= len(m.versions) {
+	if m.cursor < 0 || m.cursor >= len(m.order) {
 		return jira.Version{}, false
 	}
-	return m.versions[m.order[m.cursor]], true
+	at := m.order[m.cursor].v
+	if at < 0 || int(at) >= len(m.versions) {
+		return jira.Version{}, false
+	}
+	return m.versions[at], true
 }
 
 func (m *Model) selectedID() string {
@@ -703,11 +756,15 @@ func (m *Model) moveOnto(id string) {
 		m.moveTo(m.cursor)
 		return
 	}
-	for at, i := range m.order {
-		if m.versions[i].ID == id {
+	for at, s := range m.order {
+		if s.v >= 0 && m.versions[s.v].ID == id {
 			m.moveTo(at)
 			return
 		}
+	}
+	if m.set != nil {
+		m.moveTo(m.cursor)
+		return
 	}
 	shown := 0
 	for _, i := range m.sorted {
@@ -740,8 +797,8 @@ func (m *Model) clampScroll() {
 // rowsHeight is how many rows fit under the summary line and the caption, less
 // whatever the editor is taking below them.
 func (m *Model) rowsHeight() int {
-	h := m.height - headHeight - m.form.height(m.mode == editing)
-	if m.mode == sorting {
+	h := m.height - m.headHeight() - m.form.height(m.mode == editing) - m.notesHeight()
+	if m.mode == sorting || m.mode == finding {
 		h--
 	}
 	return max(h, 1)
@@ -768,7 +825,15 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		return m.startSort()
 	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), len(m.order)); i++ {
-		id := rowZone(m.versions[m.order[i]].ID)
+		s := m.order[i]
+		if s.v < 0 {
+			if m.zones.Hit(m.set.headZone(s.g), msg) {
+				m.moveTo(i)
+				return m.foldHeader(i)
+			}
+			continue
+		}
+		id := rowZone(m.versions[s.v].ID)
 		if !m.zones.Hit(id, msg) {
 			continue
 		}

@@ -22,7 +22,7 @@ getting thirty per cent worse with room to spare.
 | Cold start → first paint (warm cache) | < 60 ms | *measured, not guarded.* `hyperfine` on `saral --bench-first-paint`. Warming the cache needs a site, so CI cannot; the in-process half is `TestBudget_FirstPaintFromCache` |
 | Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the timeline, the palette, the form, settings, the site search and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, and the regression gate reads the same means, so p99 is still unmeasured here and stays on the list below |
 | Scroll a 10k-row list | 1 allocation a frame | the frame string `View` returns, and nothing behind it. Asserted with the mouse on, under a kept filter and under terms in force |
-| Scroll any other list | the frame and the lines the keystroke changed | every view that scrolls asserts `allocs/op` against a ceiling and against the same view at twenty rows: the backlog, the board, the comment thread, the attachment pane, the filter picker, the form, the move confirm screen, the palette, plans, releases, the fix-version assignment preview, sprints, the timeline and the site search (two hundred results against twenty) |
+| Scroll any other list | the frame and the lines the keystroke changed | every view that scrolls asserts `allocs/op` against a ceiling and against the same view at twenty rows: the backlog, the board, the comment thread, the attachment pane, the filter picker, the form, the move confirm screen, the palette, plans, releases, the fix-version assignment preview, releases over a set of projects, sprints, the timeline and the site search (two hundred results against twenty) |
 | Walk an issue's related issues and an epic's children | **< 16 ms** a keystroke over forty related issues and over fifty children, and the children sheet allocates no more over a thousand rows than over a hundred | `TestBudget_RelatedRowsKeystrokeToFrame`, `TestBudget_EpicChildrenKeystrokeToFrame` and `TestBudget_ChildrenSheetScrollingCostsTheSameOnAThousandRowsAsOnAHundred`. An epic's children are one search of fifty rows with the list's narrow field set, read once after the issue, and a child that changes is one narrow read of that child |
 | Pan a chart across a thousand years of calendar | the allocations and the bytes that ten years costs, and **< 16 ms** a frame over either span | the timeline is the one view that scrolls in two dimensions. `TestBudget_TimelinePanningCostsTheSameOverAThousandYearsAsOverTen` compares the two runs on the counts and the bytes, holds the count to a ceiling of 1700 besides, and holds each frame's time against the budget rather than against the other run |
 | Frame allocations at 200×60 | ceilings in `internal/ui/kernel/budget_test.go` | 297 for a frame, 310 for a keystroke and its frame, 324 with the mouse on, each held to a ceiling about a tenth above |
@@ -217,6 +217,11 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/release` | `TestBudget_BulkScrollingCostsTheSameOnAThousandIssuesAsOnTwenty` |
 | `internal/ui/release` | `TestBudget_ReleaseFlowFullRedrawAt200x60` |
 | `internal/ui/release` | `TestBudget_ReleaseFlowScrollingCostsTheSameOnTwoThousandVersionsAsOnTwenty` |
+| `internal/ui/release` | `TestBudget_ReleaseSetFullRedrawAt200x60` |
+| `internal/ui/release` | `TestBudget_ReleaseSetHeadersAreMemoized` |
+| `internal/ui/release` | `TestBudget_ReleaseSetRegroupKeystrokeToFrame` |
+| `internal/ui/release` | `TestBudget_ReleaseSetScrollingCostsTheSameOnTwoThousandVersionsAsOnTwenty` |
+| `internal/ui/release` | `TestBudget_ReleaseSetTypingAFilterKeystrokeToFrame` |
 | `internal/ui/release` | `TestBudget_ReleasesAMemoMissCostsTheRowsThatMovedAndNotAWindow` |
 | `internal/ui/release` | `TestBudget_ReleasesFilterKeystrokeToFrame` |
 | `internal/ui/release` | `TestBudget_ReleasesFirstPaintFromCache` |

@@ -143,13 +143,14 @@ func TestDestinations_TakeNoKeyAViewSpellsBehindThePrefix(t *testing.T) {
 // view that spells any gesture on the prefix has to appear, so the next one to
 // spend g fails this until somebody has said which strokes it takes.
 var secondStrokes = map[string][]string{
-	list.ViewID:    {"g", "e"},
-	issue.ViewID:   {"g", "e"},
-	comment.ViewID: {"g", "e"},
-	board.ViewID:   {"g", "e"},
-	backlog.ViewID: {"g"},
-	release.ViewID: {"g"},
-	search.ViewID:  {"g", "e"},
+	list.ViewID:       {"g", "e"},
+	issue.ViewID:      {"g", "e"},
+	comment.ViewID:    {"g", "e"},
+	board.ViewID:      {"g", "e"},
+	backlog.ViewID:    {"g"},
+	release.ViewID:    {"g"},
+	search.ViewID:     {"g", "e"},
+	release.SetViewID: {"g"},
 }
 
 // A gesture is taught only if a binding spells it, so one a view answers and
