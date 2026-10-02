@@ -170,6 +170,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/issue` | `TestBudget_DragCostsAFrameWhileHeldAndAResizeWhileMoving` |
 | `internal/ui/issue` | `TestBudget_FullRedrawAt200x60` |
 | `internal/ui/issue` | `TestBudget_KeystrokeToFrame` |
+| `internal/ui/issue` | `TestBudget_RelatedRowsKeystrokeToFrame` |
 | `internal/ui/issue` | `TestBudget_ScrollingCostsNoMoreThanStandingStill` |
 | `internal/ui/issue` | `TestBudget_SteadyFrameCostsTheFrameAndTheThreadAndNothingElse` |
 | `internal/ui/kernel` | `TestBudget_AFrameCostsWhatTheChromeCosts` |

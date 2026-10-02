@@ -646,6 +646,9 @@ func (m *Model) actOnCursor() tea.Cmd {
 	if cr == nil {
 		return nil
 	}
+	if cr.kind == rkRef {
+		return m.openRelated(*cr.ref)
+	}
 	row := m.rowByID(cr.id)
 	if row == nil || !row.editable() {
 		return kernel.Warn("read-only")

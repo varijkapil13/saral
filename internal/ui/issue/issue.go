@@ -5,6 +5,7 @@ package issue
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -60,6 +61,8 @@ type Model struct {
 	labels      app.FieldLabels
 	loadedIssue bool
 	loadFailed  bool
+	loadErr     error
+	trail       []string
 
 	// edit is the site's own answer to which fields belong on this issue's
 	// screen right now. A read that never arrives — it failed, or this build
@@ -373,7 +376,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case loadedMsg:
 		if m.current(msg.gen) {
-			m.issue, m.labels, m.loadedIssue, m.loadFailed = msg.issue, msg.labels, true, false
+			m.issue, m.labels, m.loadedIssue, m.loadFailed, m.loadErr = msg.issue, msg.labels, true, false, nil
 			m.dataGen++
 			m.rebaseRows()
 			cmd = m.keepIssue(msg.issue)
@@ -392,9 +395,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case failedMsg:
 		if m.current(msg.gen) {
-			m.loadFailed = true
+			m.loadFailed, m.loadErr = true, msg.err
 			m.dataGen++
-			cmd = kernel.Fail(msg.err)
+			cmd = kernel.Fail(errors.New(m.failureText()))
 		}
 
 	case pendingFlushMsg:
@@ -729,6 +732,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.undoAll()
 	case actAssign:
 		return m.openAssigneePicker()
+	case actParent:
+		return m.openParent()
 	case actMove:
 		cmd, _ := m.moveKey(msg)
 		return cmd
@@ -979,6 +984,12 @@ func (m *Model) openRow(id string) tea.Cmd {
 // clickRow puts the cursor on the row under the pointer, and opens it on a
 // double-click.
 func (m *Model) clickRow(msg tea.MouseClickMsg) tea.Cmd {
+	for i := range m.sideRows {
+		if m.sideRows[i].kind == rkRef && m.zones.Hit(refZone(m.sideRows[i].id), msg) {
+			m.cursor = i
+			return m.openRelated(*m.sideRows[i].ref)
+		}
+	}
 	for i := range m.sideRows {
 		zone := fieldRowZone(m.sideRows[i].id)
 		if !m.zones.Hit(zone, msg) {

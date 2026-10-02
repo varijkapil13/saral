@@ -164,7 +164,7 @@ func (k *cloneKind) answered(s *sheet, text string, _ *sheetRow) tea.Cmd {
 }
 
 func (k *cloneKind) create(s *sheet, in jira.IssueInput, links bool) tea.Cmd {
-	src, types, d := k.src, k.types, s.deps
+	src, types, d, trail := k.src, k.types, s.deps, s.trail
 	return s.write(func(ctx context.Context, c jira.SessionClient) (func(*sheet) tea.Cmd, error) {
 		made, err := c.CreateIssue(ctx, in)
 		if err != nil {
@@ -177,7 +177,7 @@ func (k *cloneKind) create(s *sheet, in jira.IssueInput, links bool) tea.Cmd {
 			}
 		}
 		return func(*sheet) tea.Cmd {
-			return tea.Sequence(kernel.Pop(), openIssue(d, jira.IssueRef{ID: made.ID, Key: made.Key, Summary: made.Summary}), kernel.Status(said))
+			return tea.Sequence(kernel.Pop(), openIssue(d, jira.IssueRef{ID: made.ID, Key: made.Key, Summary: made.Summary}, trail), kernel.Status(said))
 		}, nil
 	})
 }

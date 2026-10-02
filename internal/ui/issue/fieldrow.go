@@ -30,6 +30,7 @@ const (
 	rkPerson
 	rkStatus
 	rkField
+	rkRef
 )
 
 // editableKind reports whether this build can edit a row of this kind at all.

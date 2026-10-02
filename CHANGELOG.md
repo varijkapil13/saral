@@ -15,12 +15,16 @@ such change is listed under **Changed**.
   too, as *Search issues on the site*.
 - The command palette ends its list with *Search issues for "…"*, which opens that search with
   your words already in it. When nothing cached matched, it is the only row.
+- Open an issue's parent and linked issues from its pane: the parent, subtasks and links are rows
+  on the sidebar cursor that `enter` or a click on the key opens, and `p` opens the parent.
 
 ### Fixed
 
 - A plan read from the site that names boards instead of projects now lists the releases of the
   projects behind those boards, and names a board you cannot see with the site's reason. It used to
   say the plan named no project.
+- Two directions of a link type that arrives with no phrasing are no longer listed together, and an
+  issue that cannot be opened says why in its sidebar.
 
 ## [0.9.3] - 2026-10-02
 

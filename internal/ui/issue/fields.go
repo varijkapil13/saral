@@ -193,6 +193,7 @@ type cursorRow struct {
 	label    string
 	kind     rowKind
 	editable bool
+	ref      *jira.IssueRef
 	// lineAt is this row's own line in content.lines, which is what keeps the
 	// cursor's line in view as it moves and what a click resolves a coordinate
 	// back into a row through.
@@ -244,7 +245,9 @@ func (m *Model) detailContent(width int) content {
 	r.heading("Details")
 	switch {
 	case m.loadFailed && !m.loadedIssue:
-		r.note("The issue could not be read.")
+		for _, line := range strings.Split(ansi.Wrap(m.failureText(), max(width-2, 8), ""), "\n") {
+			r.note(line)
+		}
 	case !m.loadedIssue:
 		r.note("Reading the issue" + m.deps.Theme.Glyphs.Ellipsis)
 	}
@@ -475,10 +478,8 @@ func (r *rows) heading(text string) { r.line(r.m.styles.section.Render(text)) }
 
 func (r *rows) note(text string) { r.line("  " + r.m.styles.muted.Render(text)) }
 
-// related draws the parent, the subtasks and the links, each group under what
-// relates them and each issue on a line of its own. The issues themselves are
-// not on the sidebar's cursor: they are not a single value to edit, and what
-// can be done to one already has its own gesture — opening it.
+// related draws the parent, the subtasks and the links, each issue a cursor row
+// under what relates it.
 func (r *rows) related() {
 	for _, d := range related {
 		if !r.m.read(d.id) {
@@ -496,20 +497,31 @@ func (r *rows) related() {
 	for i := range groups {
 		r.heading(groups[i].label)
 		for j := range groups[i].refs {
-			r.ref(&groups[i].refs[j], keyW, statusW)
+			r.ref(groups[i].label, &groups[i].refs[j], keyW, statusW)
 		}
 	}
 }
 
 // ref is one related issue: its key, what state it is in, and what it is about.
-func (r *rows) ref(ref *jira.IssueRef, keyW, statusW int) {
+func (r *rows) ref(group string, ref *jira.IssueRef, keyW, statusW int) {
 	st := r.m.styles
-	line := "    " + st.key.Render(ref.Key) + column(ref.Key, keyW+2)
+	id := refRowID(group, ref.Key)
+	prefix := "    "
+	if len(r.curs) == r.m.cursor {
+		prefix = r.m.arrowPrefix() + "  "
+	}
+	key := st.key.Render(ref.Key)
+	if r.m.zones.Enabled() {
+		key = r.m.zones.Mark(refZone(id), key)
+	}
+	line := prefix + key + column(ref.Key, keyW+2)
 	if statusW > 0 {
 		name := ref.Status.Name
 		line += st.category(ref.Status.Category).Render(name) + column(name, statusW+2)
 	}
 	r.line(line + ref.Summary)
+	r.mark(id, ref.Key, rkRef, false)
+	r.curs[len(r.curs)-1].ref = ref
 }
 
 // custom lists the site's own fields: this profile's pinned ones first, under
@@ -790,7 +802,7 @@ func (m *Model) refGroups() []refGroup {
 	}
 	for i := range m.issue.Links {
 		link := &m.issue.Links[i]
-		label := firstNonEmpty(link.Label, link.Type, "Links")
+		label := groupLabel(link)
 		at := slices.IndexFunc(out, func(g refGroup) bool { return g.label == label })
 		if at < 0 {
 			out = append(out, refGroup{label: label})

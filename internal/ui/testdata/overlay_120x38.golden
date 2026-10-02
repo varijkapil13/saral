@@ -66,13 +66,13 @@ enter use this issue type    ↓/j  down         1-9          saved query       
 
 issue
 tab next pane          @ assign             1-9          saved query           ctrl+k commands
-e   edit fields        y copy the key       g            where to go           ?      help
-E   open in $EDITOR    Y copy the link      g 1-9        switch view           q      quit
-t   change status      o open in browser    ctrl+, / g s settings
-C   comment            L links              g i          jump to an issue
-                       w log time           g /          search issues
-                       W watchers           esc          back
-                                            r            refresh
+e   edit fields        p open the parent    g            where to go           ?      help
+E   open in $EDITOR    y copy the key       g 1-9        switch view           q      quit
+t   change status      Y copy the link      ctrl+, / g s settings
+C   comment            o open in browser    g i          jump to an issue
+                       L links              g /          search issues
+                       w log time           esc          back
+                       W watchers           r            refresh
                                             R            refetch everything
 
 list

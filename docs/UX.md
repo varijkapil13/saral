@@ -444,6 +444,7 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 |---|---|
 | click a row | select it |
 | double-click a row | open it, same as `enter` — and only when both clicks are one gesture |
+| click a related issue's key | open that issue; a click elsewhere on its row selects it |
 | click a status, type or assignee cell | filter by that value; click it again to drop it |
 | click a value's name inside a chip under the rows | drop just that value |
 | click a chip's `×` | drop the whole facet the chip names |
@@ -959,6 +960,18 @@ link to this issue* and *Open this issue in the browser*. Right-clicking an issu
 in the menu, about the issue that was clicked. None of the three is on the row: at 80 columns the
 detail pane's row is already full, and the list, the board and the backlog already fold into a `+N`.
 A copy names what it copied, because OSC 52 cannot confirm one landed.
+
+**Related issues are on the sidebar cursor.** The parent, the subtasks and every linked issue each
+have a row of their own under the phrase that relates them, so `j` and `k` stop on them and `enter`
+(or `e`) opens the issue over this one, seeded from the row so the key, summary and status are on
+screen before the read lands. `p` opens the parent from anywhere in the pane, and says `PROJ-12 has no
+parent` when there is none; it is in `?` and not in the footer. A link with no phrasing is listed under
+its type, and the two directions of one type stay apart. Following a link back to the pane just
+beneath goes back to it instead of stacking a copy, so `esc` is never a walk through your own trail; an
+issue two panes down is pushed, since `esc` would not reach it. A pane that holds unsaved edits asks
+before it is left, whichever gesture leaves it. An issue the token cannot open keeps the row's header
+and says `PROJ-99 could not be opened: it does not exist, or this account cannot browse its project.`
+- a 404 is Jira's answer to both.
 
 **Links, time and watchers are sheets pushed over the pane**, one list with one prompt under it, so
 `esc` comes back to the fields exactly as they were. Each change is written at once and the pane

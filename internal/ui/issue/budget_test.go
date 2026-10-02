@@ -101,3 +101,10 @@ func TestBudget_FullRedrawAt200x60(t *testing.T) {
 		t.Errorf("a full redraw at 200x60 took %s, want under the 4ms in docs/PERFORMANCE.md", per)
 	}
 }
+
+func TestBudget_RelatedRowsKeystrokeToFrame(t *testing.T) {
+	res := testing.Benchmark(BenchmarkIssueScrollRelated)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("a keystroke over forty related issues took %s, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+}

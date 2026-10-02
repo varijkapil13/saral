@@ -2,6 +2,7 @@ package issue
 
 import (
 	"context"
+	"slices"
 	"strconv"
 
 	tea "charm.land/bubbletea/v2"
@@ -46,14 +47,14 @@ func linkRows(links []jira.IssueLink) []sheetRow {
 	var rows []sheetRow
 	seen := map[string]bool{}
 	for i := range links {
-		label := firstNonEmpty(links[i].Label, links[i].Type)
+		label := groupLabel(&links[i])
 		if seen[label] {
 			continue
 		}
 		seen[label] = true
 		rows = append(rows, sheetRow{text: widget.Sanitize(label), head: true})
 		for j := i; j < len(links); j++ {
-			if l := &links[j]; firstNonEmpty(l.Label, l.Type) == label {
+			if l := &links[j]; groupLabel(l) == label {
 				rows = append(rows, sheetRow{text: refText(l.Other), id: l.ID, key: l.Other.Key})
 			}
 		}
@@ -94,7 +95,7 @@ func (k *linksKind) act(s *sheet, a sheetAct) tea.Cmd {
 	case sheetOpen:
 		for i := range k.links {
 			if row != nil && k.links[i].ID == row.id {
-				return openIssue(s.deps, k.links[i].Other)
+				return openIssue(s.deps, k.links[i].Other, append(slices.Clone(s.trail), ""))
 			}
 		}
 	default:

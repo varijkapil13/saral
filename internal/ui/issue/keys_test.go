@@ -21,6 +21,8 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"browsing, the description focused, dirty", lkBrowseDescDirty},
 		{"browsing, the fields focused", lkBrowseDetails},
 		{"browsing, the fields focused, dirty", lkBrowseDetailsDirty},
+		{"browsing, a related issue under the cursor", lkBrowseRef},
+		{"browsing, a related issue under the cursor, dirty", lkBrowseRefDirty},
 		{"browsing, the thread focused", lkBrowseComments},
 		{"browsing, the thread focused, dirty", lkBrowseCommentsDirty},
 		{"a row taking typing", lkTyping},

@@ -1,0 +1,20 @@
+PROJ-12  Rewrite the invoice export
+o Story | ~ In Progress | unassigned
+--------------------------------------------------------------------------------
+#Details                                                                        
+#  Summary      Rewrite the invoice export                                      
+#  Description  empty                                                           
+#  Type         o Story                                                         
+#  Status       ~ In Progress                                                   
+#  Priority     not set                                                         
+#  Assignee     unassigned                                                      
+#  Project      PROJ Billing                                                    
+#  Due          not set                                                         
+#  Labels       not set                                                         
+#Parent                                                                         
+#    PROJ-3   In Progress  Billing rewrite                                      
+#Subtasks                                                                       
+#    PROJ-31  Done         Split the export job                                 
+#->  PROJ-32  To Do        Drop the cron entry                                  
+|blocks                                                                         
+|    PROJ-40  To Do        Ship 2.0                                             
