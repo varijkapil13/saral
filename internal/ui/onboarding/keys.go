@@ -138,4 +138,5 @@ func (m Model) keyState() keyState {
 	}
 }
 
+// KeyStates lists every state the view reports.
 func (m Model) KeyStates() []kernel.KeySet { return liveSets[:] }

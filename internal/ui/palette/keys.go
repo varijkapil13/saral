@@ -143,4 +143,5 @@ func (k keyMap) table() map[string]action {
 	return out
 }
 
+// KeyStates lists every state the view reports.
 func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }
