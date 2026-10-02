@@ -28,6 +28,32 @@ such change is listed under **Changed**.
   the site gave only an id for, at most four at a time, and remembers it for the rest of the
   session. A project whose key cannot be read keeps showing as `id N` and does not stop the
   releases from loading.
+- A key now means the same thing in every view, and `?` and `docs/UX.md` list them. This is a clean
+  break: the old keys below no longer work, with no alias left behind.
+  - Board: `m` → `t` (carry a card, or the picked cards, to another column); `s` → `S` (next
+    running sprint); `w` → `v` (swimlanes); `v` → `*` (pick the whole column); `+` → `#` (add a
+    label to the picked cards).
+  - Backlog: `v` → `*` (pick the whole section).
+  - Issue list: `a` → `0` (all issues); `S` → `ctrl+s` (save the query); `space` no longer pages.
+  - Site search: `L` → `I` (send the search to the issue list); `space` no longer pages.
+  - Issue pane: `s` → `ctrl+s` (save); `x` and `backspace` → `u` (revert this); `X` → `U` (revert
+    all); `c` → `]` (children); `L` → `&` (links); `b` and `f` → `pgup`/`ctrl+b` and `space` →
+    `pgdn`/`ctrl+f` (page); `u` and `d` → `ctrl+u` and `ctrl+d` (half page); `e` no longer opens a
+    related-issue row, `enter` does.
+  - Issue sheets: `w` → `W` in the watchers sheet (watch or stop watching); `w` → `a` in the time
+    sheet (log time); `x` → `d` in the links and watchers sheets (remove); `a` in the clone sheet is
+    gone, `enter` clones.
+  - Sprints: `n` → `c` (plan a sprint); `s` → `!` (start a planned sprint); `c` → `!` (complete a
+    running sprint); `o` → `.` (show or hide closed sprints); `home` and `end` → `g g` and `G`
+    (`g e`).
+  - Timeline: `n` → `.` (notes on or off); `home` → `g g`; `end` → `G` (`g e`).
+  - Attachments: `u` → `a` (attach a file); `home` and `end` → `g g` and `G` (`g e`).
+  - Comments: `c` → `a` (write a comment); `space` no longer pages.
+  - Releases: `enter` → `!` (release a version); `n` → `c` (new version); `b` → `B` (assign a fix
+    version in bulk); `x` → `.` (show or hide the versions a plan excludes); `p` → inside `f`
+    (`f` opens the state and project filters, `tab` switches between them); `enter` in a set only
+    folds a group header.
+  - Plans: `b` → `I` (browse the plan's releases).
 
 ## [0.10.0] - 2026-10-02
 

@@ -29,11 +29,8 @@ One key means one thing in every view. `internal/ui/kernel/vocab.go` holds the t
 key of its own with `kernel.Local`, and `internal/ui/vocabulary_test.go` fails a binding that is
 neither.
 
-**This is the target, not the current state.** Only the kernel's own keys are on it today. Each
-view's section further down still describes the keys it has now, and moves to this table in its own
-change; the closed `unmigrated` list in that test names every view that has not, with the violations
-it still has. The per-view sections are rewritten as the view migrates, and the list shrinks to
-nothing.
+This is the current state: every view's keys are on the table, and the test has no exemption list. A
+key that moves is changed here and in `CHANGELOG.md` in the same change.
 
 | Action | Key | Notes |
 |---|---|---|
