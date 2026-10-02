@@ -21,6 +21,8 @@ type sheet struct {
 	key  string
 	head string
 	addr kernel.Addr
+	// trail is the keys of the panes beneath this sheet, the opener last.
+	trail []string
 
 	note, fail string
 	rows       []sheetRow

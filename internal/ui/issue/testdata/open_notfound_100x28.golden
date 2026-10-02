@@ -1,8 +1,10 @@
-PROJ-1  
+PROJ-99  Retire the old exporter
 o unknown | . unknown | unassigned
 ----------------------------------------------------------------------------------------------------
 |The issue could not be read.                                    |Details                           
-|                                                                |  issue failed: offline           
+|                                                                |  PROJ-99 could not be opened: it 
+|                                                                |  does not exist, or this account 
+|                                                                |  cannot browse its project.      
 |                                                                |->Summary      not asked for      
 |                                                                |  Description  not asked for      
 |                                                                |  Status       not set            
@@ -10,13 +12,9 @@ o unknown | . unknown | unassigned
 |                                                                |  Assignee     not asked for      
 |                                                                |  Due          not asked for      
 |                                                                |  Labels       not asked for      
-|                                                                |PROJ-1 | reading the thread...    
+|                                                                |PROJ-99 | reading the thread...   
 |                                                                |----------------------------------
-|                                                                |  No Jira connection in this se...
-|                                                                |                                  
-|                                                                |                                  
-|                                                                |                                  
-|                                                                |                                  
+|                                                                |  Reading the thread...           
 |                                                                |                                  
 |                                                                |                                  
 |                                                                |                                  

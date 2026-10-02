@@ -236,3 +236,53 @@ func BenchmarkIssueDescriptionTyping(b *testing.B) {
 		_ = m.View()
 	}
 }
+
+func benchRelatedPane(tb testing.TB, subtasks, links int) *Model {
+	tb.Helper()
+
+	iss := navIssue()
+	iss.Subtasks, iss.Links = nil, nil
+	for i := range subtasks {
+		iss.Subtasks = append(iss.Subtasks, jira.IssueRef{
+			Key: "PROJ-" + strconv.Itoa(100+i), Summary: "A subtask worth a line", Status: jira.Status{Name: "To Do"},
+		})
+	}
+	for i := range links {
+		iss.Links = append(iss.Links, jira.IssueLink{
+			ID: strconv.Itoa(i), Type: "Blocks", Label: "blocks", Direction: jira.LinkOutward,
+			Other: jira.IssueRef{Key: "OPS-" + strconv.Itoa(i+1), Summary: "Something it holds up", Status: jira.Status{Name: "To Do"}},
+		})
+	}
+	d := kernel.Deps{
+		Caps:  jira.Capabilities{TimeZone: time.UTC},
+		Theme: kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
+		Now:   func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
+	}
+	view, ok := New(d, iss).(*Model)
+	if !ok {
+		tb.Fatal("New did not return a *Model")
+	}
+	next, _ := view.Update(kernel.SizeMsg{Width: 120, Height: 40})
+	m, _ := next.(*Model)
+	next, _ = m.Update(loadedMsg{gen: m.gen, issue: iss})
+	m, _ = next.(*Model)
+	m.focus = regionDetails
+	_ = m.View()
+	return m
+}
+
+func BenchmarkIssueScrollRelated(b *testing.B) {
+	m := benchRelatedPane(b, 10, 30)
+	down, up := keyPress("j"), keyPress("k")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		press := down
+		if i%2 == 1 {
+			press = up
+		}
+		next, _ := m.Update(press)
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}

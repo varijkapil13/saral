@@ -4,7 +4,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
-	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 // ShareAct is one way of taking an issue out of Saral.
@@ -171,11 +170,7 @@ func (m *Model) openSheet(at collabAct) tea.Cmd {
 	default:
 		return nil
 	}
-	return kernel.Push("issue.sheet", title, newSheet(m.deps, m.issue, kind))
-}
-
-func openIssue(d kernel.Deps, ref jira.IssueRef) tea.Cmd {
-	return kernel.Push(ViewID, ref.Key, New(d, jira.Issue{
-		ID: ref.ID, Key: ref.Key, Summary: ref.Summary, Status: ref.Status, Type: ref.Type,
-	}))
+	sh := newSheet(m.deps, m.issue, kind)
+	sh.trail = m.trailBeneath()
+	return kernel.Push("issue.sheet", title, sh)
 }
