@@ -162,7 +162,8 @@ func TestPlans_OpeningAPlanReadsTheReleasesOfItsProjects(t *testing.T) {
 		t.Fatalf("opening one plan read the versions %d times, want once", n)
 	}
 	frame := dr.view()
-	mustContain(t, frame, "source", "project PROJ", "filter 10023", "search", "releases", "1.0", "released")
+	mustContain(t, frame, "source", "project PROJ", "filter 10023", "search", "releases", "3 in PROJ - enter browses")
+	mustNotContain(t, frame, "1.0", "unreleased")
 	mustContain(t, frame, "Target start")
 
 	dr.key("enter")
@@ -195,8 +196,8 @@ func TestPlans_ASitePlanReadsTheReleasesOfItsProjectsByID(t *testing.T) {
 		t.Fatalf("opening a site plan read the versions %d times, want once", got)
 	}
 	frame := dr.view()
-	mustContain(t, frame, "project id "+id, "releases", "1.0", "released")
-	mustNotContain(t, frame, "not readable", "cannot resolve")
+	mustContain(t, frame, "project id "+id, "releases", "3 in id "+id+" - enter browses", "no cross-space releases")
+	mustNotContain(t, frame, "not readable", "cannot resolve", "cross-space releases not read")
 }
 
 // A source left out turns a plan into a narrower plan that nothing explains.
@@ -241,7 +242,7 @@ func TestPlans_ABoardOnlyPlanListsItsProjectsReleases(t *testing.T) {
 		t.Errorf("opening the plan read versions %d times, want once", n)
 	}
 	frame := dr.view()
-	mustContain(t, frame, "board "+id+", projects PROJ", "releases", "1.0", "released")
+	mustContain(t, frame, "board "+id+", projects PROJ", "releases", "3 in PROJ - enter browses")
 	mustNotContain(t, frame, "none to read releases from", "left out")
 }
 
@@ -251,7 +252,7 @@ func TestPlans_ABoardRateLimitSaysSoOnTheReleasesRow(t *testing.T) {
 	f := newFake(5)
 	dr := newDriver(t, testDeps(f), 120, 30)
 	dr.send(plansMsg{gen: dr.m.gen, plans: []jira.Plan{{
-		ID: "42", Name: "Delivery", Status: "Active",
+		ID: "42", Name: "Delivery", Status: "Active", Local: true,
 		Sources: []jira.PlanSource{{Type: jira.PlanSourceBoard, Value: "17"}},
 	}}})
 	f.FailNext(&jira.RateLimitError{RetryAfter: 30 * time.Second})
@@ -428,7 +429,7 @@ func TestPlans_AProjectThatRefusesIsLeftOutOfTheExpansion(t *testing.T) {
 	f.FailNext(&jira.CapabilityError{Capability: jira.CapBoards, Reason: "you may not browse PROJ"})
 	dr.key("enter")
 
-	mustContain(t, dr.view(), "project PROJ left out: you may not browse PROJ", "1.0")
+	mustContain(t, dr.view(), "project PROJ left out: you may not browse PROJ")
 }
 
 func TestPlans_ASessionWithNoConnectionStillDrawsTheProfilesPlans(t *testing.T) {

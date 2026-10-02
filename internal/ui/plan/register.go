@@ -42,4 +42,12 @@ func init() {
 			return kernel.OpenThen(ViewID, SourcesMsg{})
 		},
 	})
+	kernel.RegisterCommand(kernel.Command{
+		ID:    "plans.releases",
+		Title: "Browse a plan's releases",
+		Group: "Plans",
+		Run: func(kernel.Deps) tea.Cmd {
+			return kernel.OpenThen(ViewID, ReleasesMsg{})
+		},
+	})
 }

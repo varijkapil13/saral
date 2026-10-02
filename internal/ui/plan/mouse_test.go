@@ -9,6 +9,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/release"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -47,6 +48,28 @@ func TestPlans_ClickingAPlanOpensItAndReadsItsReleases(t *testing.T) {
 	}
 	if n := countCalls(f, "Versions"); n != 1 {
 		t.Errorf("the clicks read versions %d times; only the plan with a project has any to read", n)
+	}
+}
+
+func TestPlans_ClickingTheSummaryPushesTheBrowser(t *testing.T) {
+	t.Parallel()
+
+	d := refusedDeps(newFake(5))
+	dr := newDriver(t, d, 120, 30, WithDefined(defined()))
+	dr.key("enter")
+	if len(dr.pushed) != 0 {
+		t.Fatalf("opening a plan pushed %d views", len(dr.pushed))
+	}
+
+	pressOn(t, d, dr, "releases:"+dr.m.plans[0].plan.ID)
+	if len(dr.pushed) != 1 || dr.pushed[0].ID != release.SetViewID {
+		t.Fatalf("clicking the summary pushed %+v, want the release browser", dr.pushed)
+	}
+	if !dr.m.open[dr.m.plans[0].plan.ID] {
+		t.Error("clicking the summary closed the plan")
+	}
+	if dr.m.rows[dr.m.cursor].kind != rowReleases {
+		t.Error("the click left the cursor off the summary row")
 	}
 }
 

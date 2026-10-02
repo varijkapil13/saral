@@ -5,10 +5,10 @@
     source    filter 10023                                                      
     search    (project = "PROJ" OR filter IN (10023)) AND (labels = roadmap)    
     dates     Target start -> Target end                                        
-    releases  1.0  released  2026-01-02                                         
-              2.0  unreleased  2026-04-02                                       
-              3.0  unreleased                                                   
+    releases  3 in PROJ - enter browses                                         
+              defined in this profile, so no cross-space releases               
   Everything open                       profile     defined in this profile     
+
 
 
 

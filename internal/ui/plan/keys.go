@@ -20,6 +20,7 @@ type keyMap struct {
 	Bottom   kernel.Binding
 	Open     kernel.Binding
 	Close    kernel.Binding
+	Browse   kernel.Binding
 }
 
 func defaultKeys() keyMap {
@@ -32,6 +33,7 @@ func defaultKeys() keyMap {
 		Bottom:   kernel.Bind([]string{"end"}, "end", "last plan"),
 		Open:     kernel.Bind([]string{"enter"}, "enter", "show what this plan is made of"),
 		Close:    kernel.Bind([]string{"enter"}, "enter", "hide what this plan is made of"),
+		Browse:   kernel.Bind([]string{"b"}, "b", "browse this plan's releases"),
 	}
 }
 
@@ -47,6 +49,7 @@ type keyState int
 const (
 	keysClosed keyState = iota
 	keysOpen
+	keysReleases
 	keysNothing
 	keyStates
 )
@@ -62,8 +65,13 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Full: [][]kernel.Binding{motions, {k.Open}},
 	}
 	sets[keysOpen] = kernel.KeySet{
-		Acts: []kernel.Binding{kernel.Terse(k.Close, "hide")},
-		Full: [][]kernel.Binding{motions, {k.Close}},
+		Acts: []kernel.Binding{kernel.Terse(k.Close, "hide"), kernel.Terse(k.Browse, "releases")},
+		Full: [][]kernel.Binding{motions, {k.Close, k.Browse}},
+	}
+	browse := kernel.Bind(k.Open.Keys(), k.Open.Help().Key, "browse this plan's releases")
+	sets[keysReleases] = kernel.KeySet{
+		Acts: []kernel.Binding{kernel.Terse(browse, "browse")},
+		Full: [][]kernel.Binding{motions, {browse}},
 	}
 	// With no plan under the cursor there is nothing enter could open, and
 	// naming it would name a stroke that is refused. The way out and the way to
@@ -73,14 +81,18 @@ var liveSets = func() [keyStates]kernel.KeySet {
 }()
 
 // LiveKeys reports the keys that work in the state the view is actually in:
-// enter opens the plan under the cursor, closes it once it is open, and does
-// nothing at all when there is no plan to be on.
+// enter opens the plan under the cursor, closes it once it is open, browses its
+// releases from their summary row, and does nothing at all when there is no plan
+// to be on.
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	state := keysNothing
 	if at := m.planUnderCursor(); at >= 0 {
 		state = keysClosed
 		if m.open[m.plans[at].plan.ID] {
 			state = keysOpen
+			if m.cursor < len(m.rows) && m.rows[m.cursor].kind == rowReleases {
+				state = keysReleases
+			}
 		}
 	}
 	return liveSets[state], int(state)
@@ -97,6 +109,7 @@ const (
 	actTop
 	actBottom
 	actToggle
+	actBrowse
 )
 
 // table turns the bindings into a keystroke lookup, built once per view. The
@@ -108,6 +121,7 @@ func (k keyMap) table() map[string]action {
 		binding{k.PageDown, actPageDown}, binding{k.PageUp, actPageUp},
 		binding{k.Top, actTop}, binding{k.Bottom, actBottom},
 		binding{k.Open, actToggle}, binding{k.Close, actToggle},
+		binding{k.Browse, actBrowse},
 	)
 }
 

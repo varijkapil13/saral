@@ -957,6 +957,19 @@ The release list also browses a set of projects at once, which is what a plan's 
 the same list with a project column, and everything the project list does with a version it does here:
 `enter` opens the release flow, `e` edits, `A` archives, `b` assigns, `s` sorts, `f` filters by state.
 
+**An open plan summarises its releases and does not list them.** A site plan can draw on hundreds of
+versions across several projects, so the plans view (`g 7`) says `releases  476 across EX, OPS, WEB -
+enter browses` and, on a second row, how many cross-space releases the plan names and how many of its
+versions it excludes. A plan the profile defines reads *defined in this profile, so no cross-space
+releases*, and a project the token cannot browse is still named on a row of its own. `enter` on the
+summary row, a click on it, or `b` anywhere in an open plan pushes this browser over the plan, with
+each version's project (a key where one is known, `id N` otherwise), the plan's cross-space releases as
+groups and its exclusions; `esc` comes back to the plan. `enter` on the plan row itself still opens and
+closes it. The command palette has it as *Browse a plan's releases*. The cross-space releases and the
+exclusions come from a second read, made only for a site plan; when the site refuses it (403, 404, a
+rate limit or a dead host) the summary says the cross-space releases were not read, the browser arranges
+by project, and its title gives the site's reason.
+
 *cross-space release: one release planned across several projects (Jira now calls projects "spaces")*.
 The browser says so once on its title line, and `v` says so in help. The word elsewhere stays *project*.
 
@@ -982,7 +995,8 @@ The browser says so once on its title line, and `v` says so in help. The word el
   offers only that project's versions to move open issues to, and `b` starts from that project. `n` is
   refused with *a version belongs to one project; open Releases (g 5) on it to create one* and is not
   in the footer. The project switcher does nothing here.
-- **`r` reads the set again** when the screen that opened it knows how. A read the site refuses
+- **`r` reads the set again** when the screen that opened it knows how; a plan does, and reads its
+  versions and its detail afresh. A read the site refuses
   keeps the rows, marks them stale and says why on the status line. In the open-count column `?` still
   means nobody has counted.
 

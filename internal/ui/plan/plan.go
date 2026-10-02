@@ -60,6 +60,12 @@ type releases struct {
 	boards   map[string][]string
 	refs     []string
 	err      error
+
+	detail    *jira.PlanDetail
+	detailErr error
+	head      string
+	cross     string
+	crossWarn bool
 }
 
 // Option configures the view at construction.
@@ -247,6 +253,9 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 
 	case SourcesMsg:
 		cmd = m.toggle(m.planUnderCursor())
+
+	case ReleasesMsg:
+		cmd = m.browse(m.planUnderCursor())
 
 	case plansMsg:
 		cmd = m.tookPlans(msg)
@@ -459,10 +468,7 @@ func (m *Model) tookReleases(msg releasesMsg) {
 	if msg.gen != m.gen {
 		return
 	}
-	m.rel[msg.plan] = releases{
-		read: true, versions: msg.versions, owners: msg.owners, refused: msg.refused,
-		names: msg.names, boards: msg.boards, refs: msg.read,
-	}
+	m.rel[msg.plan] = releasesOf(m.localPlan(msg.plan), &msg)
 	m.relOf = ""
 	m.reflow()
 	m.head = ""
@@ -481,7 +487,7 @@ func (m *Model) releasesFor(at int) tea.Cmd {
 	m.rel[row.plan.ID] = releases{loading: true}
 	m.relOf = row.plan.ID
 	m.head = ""
-	return m.reply(readReleases(ctx, m.deps.Jira, row.plan.ID, row.plan.Sources, gen))
+	return m.reply(readReleases(ctx, m.deps.Jira, row.plan, gen))
 }
 
 // projectRefs are the projects a plan draws from, as a version read takes them:
@@ -522,7 +528,12 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	case actBottom:
 		m.moveTo(m.rowCount() - 1)
 	case actToggle:
+		if m.cursor < len(m.rows) && m.rows[m.cursor].kind == rowReleases {
+			return m.browse(m.planUnderCursor())
+		}
 		return m.toggle(m.planUnderCursor())
+	case actBrowse:
+		return m.browse(m.planUnderCursor())
 	case actNone:
 	}
 	return nil
@@ -554,6 +565,15 @@ func (m *Model) planUnderCursor() int {
 		return -1
 	}
 	return m.rows[m.cursor].plan
+}
+
+func (m *Model) localPlan(id string) bool {
+	for i := range m.plans {
+		if m.plans[i].plan.ID == id {
+			return m.plans[i].plan.Local
+		}
+	}
+	return false
 }
 
 func (m *Model) rowCount() int { return len(m.rows) }
@@ -628,6 +648,10 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	for i := m.top; i < min(m.top+m.rowsHeight(), m.rowCount()); i++ {
+		if m.rows[i].kind == rowReleases && m.zones.Hit(m.zoneOf(i), msg) {
+			m.moveTo(i)
+			return m.browse(m.rows[i].plan)
+		}
 		if m.rows[i].kind != rowPlan || !m.zones.Hit(m.zoneOf(i), msg) {
 			continue
 		}
