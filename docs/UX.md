@@ -237,6 +237,38 @@ honest total to give.
 an unwritable home — and the palette says so rather than looking half built. The filter's own
 placeholder is the tell: it offers to find an issue only where there is a cache to find one in.
 
+### Searching the site
+
+The palette finds what is already on disk; this finds what the site says. *Search issues on the
+site* in the palette opens a view whose box takes every key, so `q`, `r`, `j`, `k` and the digits are
+letters in it until `enter` or `↓` moves to the results.
+
+| State | What it does |
+|---|---|
+| typing | the box is the view's; `enter` runs now and moves to the results, `↓` or `ctrl+n` moves without running, `tab` switches the scope, `esc` closes |
+| browsing | the ordinary list keys; `/` or `i` goes back to the box, `tab` switches the scope, `L` sends the search to the issue list, `y`, `Y` and `o` share the row, `esc` closes |
+
+A pause of a quarter of a second after the last keystroke runs the search, so a word being typed is
+one request and not one per letter. One letter asks nothing and says `type a little more`; an issue
+key is the exception, and is looked up even at one letter. The scope is every project, or the session's own when
+it has one, and the line under the box names the other (`tab: only PROJ`). The query and the scope are
+remembered for the next time it opens.
+
+What was typed is read as words: Lucene operators and punctuation are spaces, `AND`, `OR` and `NOT`
+are only words, a pair of quotes makes a phrase, and the last word matches by its start. Results are
+newest first. A key typed exactly is listed first, marked `key` where the age would be, and is not
+repeated if the text search found it too. At two hundred results a last row says `more match` and
+`L` or a click on it sends the same search to the issue list, which pages without limit.
+
+| When | The pane says |
+|---|---|
+| waiting | `Searching all projects…` |
+| nothing came back | `Jira found no issues for “foo” in all projects.` Jira answers a refused query the same way, so this is not a claim that nothing says it |
+| a permission refused it | the site's own reason |
+| the site asked to wait | `Jira asked to wait 30s before searching again.` Nothing is retried until then |
+| the site could not be reached | `The site could not be reached: <reason>` |
+| the query was malformed | `Jira refused this search: <reason>` |
+
 ### Who owns the number keys
 
 Settled in PC.2 ([#49](https://github.com/varijkapil13/saral/issues/49)): **the digits are

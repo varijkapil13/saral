@@ -7,6 +7,13 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+### Added
+
+- A search view finds issues by what they say: summary, description and comments, across every
+  project or just the session's (`tab` switches). It is opened from the command palette as *Search
+  issues on the site*. An exact issue key is listed first, `L` sends the same search to the issue
+  list, and the words you typed are painted in the summaries.
+
 ### Fixed
 
 - A plan read from the site that names boards instead of projects now lists the releases of the
