@@ -94,12 +94,13 @@ func (p pending) dest() destination {
 
 // Model is the sprints view.
 type Model struct {
-	deps    kernel.Deps
-	acts    map[string]action
-	inForm  map[string]action
-	inConf  map[string]action
-	keys    keyMap
-	showAll bool
+	deps      kernel.Deps
+	acts      map[string]action
+	inForm    map[string]action
+	inConf    map[string]action
+	pendingGo bool
+	keys      keyMap
+	showAll   bool
 
 	state   state
 	boards  []jira.Board
@@ -696,7 +697,21 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.confirmKey(msg)
 	case browsing:
 	}
-	switch m.acts[msg.String()] {
+	stroke := msg.String()
+	if m.pendingGo {
+		m.pendingGo = false
+		switch stroke {
+		case "g":
+			m.moveTo(0)
+			return nil
+		case "e":
+			m.moveTo(m.rowCount() - 1)
+			return nil
+		}
+	}
+	switch m.acts[stroke] {
+	case actGo:
+		m.pendingGo = true
 	case actUp:
 		m.moveTo(m.cursor - 1)
 	case actDown:
@@ -713,15 +728,20 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.openCreate()
 	case actEdit:
 		return m.openEdit()
-	case actStart:
-		return m.ask(opStart)
-	case actComplete:
-		return m.ask(opComplete)
+	case actAdvance:
+		return m.advance()
 	case actClosed:
 		return m.toggleClosed()
 	case actNone, actNextField, actPrevField, actSave, actDiscard, actYes, actNo, actNextDest, actPrevDest:
 	}
 	return nil
+}
+
+func (m *Model) advance() tea.Cmd {
+	if m.selected().State == jira.SprintFuture {
+		return m.ask(opStart)
+	}
+	return m.ask(opComplete)
 }
 
 func (m *Model) confirmKey(msg tea.KeyPressMsg) tea.Cmd {

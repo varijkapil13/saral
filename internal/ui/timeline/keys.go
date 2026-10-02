@@ -2,7 +2,16 @@ package timeline
 
 import "github.com/varijkapil13/saral/internal/ui/kernel"
 
-var _ kernel.KeyReporter = (*Model)(nil)
+var (
+	_ kernel.KeyReporter    = (*Model)(nil)
+	_ kernel.KeyStateLister = (*Model)(nil)
+)
+
+var (
+	zoomInKeys  = []string{"+"}
+	zoomOutKeys = []string{"-"}
+	todayKeys   = []string{"T"}
+)
 
 type keyMap struct {
 	Up       kernel.Binding
@@ -11,6 +20,7 @@ type keyMap struct {
 	PageDown kernel.Binding
 	Top      kernel.Binding
 	Bottom   kernel.Binding
+	Go       kernel.Binding
 	Earlier  kernel.Binding
 	Later    kernel.Binding
 	Open     kernel.Binding
@@ -31,22 +41,23 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
-		Top:      kernel.Bind([]string{"home"}, "home", "first row"),
-		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "last row"),
-		Earlier:  kernel.Bind([]string{"h", "left"}, "←/h", "earlier"),
-		Later:    kernel.Bind([]string{"l", "right"}, "→/l", "later"),
-		Open:     kernel.Bind([]string{"enter"}, "enter", "open this issue"),
-		ZoomIn:   kernel.Bind([]string{"+"}, "+", "zoom in to a shorter period"),
-		ZoomOut:  kernel.Bind([]string{"-"}, "-", "zoom out to a longer period"),
-		Today:    kernel.Bind([]string{"T"}, "T", "centre the chart on today"),
-		Notes:    kernel.Bind([]string{"n"}, "n", "where these dates came from"),
-		Hide:     kernel.Bind([]string{"n"}, "n", "hide these notes"),
-		FilterBy: kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),
-		Unfilter: kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
+		Top:      kernel.Canon(kernel.ActTop, "first row"),
+		Bottom:   kernel.Canon(kernel.ActBottom, "last row"),
+		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
+		Earlier:  kernel.Canon(kernel.ActLeft, "earlier"),
+		Later:    kernel.Canon(kernel.ActRight, "later"),
+		Open:     kernel.Canon(kernel.ActOpen, "open this issue"),
+		ZoomIn:   kernel.Local("timeline", "zoom-in", zoomInKeys, "+", "zoom in to a shorter period"),
+		ZoomOut:  kernel.Local("timeline", "zoom-out", zoomOutKeys, "-", "zoom out to a longer period"),
+		Today:    kernel.Local("timeline", "today", todayKeys, "T", "centre the chart on today"),
+		Notes:    kernel.Canon(kernel.ActHidden, "where these dates came from"),
+		Hide:     kernel.Canon(kernel.ActHidden, "hide these notes"),
+		FilterBy: kernel.Canon(kernel.ActFilter, "filter by a person, a status, a label"),
+		Unfilter: kernel.Canon(kernel.ActClearFilters, "clear filter"),
 	}
 }
 
@@ -120,6 +131,9 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	return sets
 }()
 
+// KeyStates is every set LiveKeys can return.
+func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }
+
 // LiveKeys reports the keys that work in the state the chart is actually in.
 // The notes pane answers two strokes and the chart's own none, an empty chart
 // offers the notes rather than a zoom over nothing, and a term in force offers
@@ -149,6 +163,7 @@ const (
 	actPageDown
 	actTop
 	actBottom
+	actGo
 	actEarlier
 	actLater
 	actOpen
@@ -167,7 +182,7 @@ func (k keyMap) tables() (chart, notes map[string]action) {
 	chart = table(
 		binding{k.Down, actDown}, binding{k.Up, actUp},
 		binding{k.PageDown, actPageDown}, binding{k.PageUp, actPageUp},
-		binding{k.Top, actTop}, binding{k.Bottom, actBottom},
+		binding{k.Top, actTop}, binding{k.Bottom, actBottom}, binding{k.Go, actGo},
 		binding{k.Earlier, actEarlier}, binding{k.Later, actLater},
 		binding{k.Open, actOpen},
 		binding{k.ZoomIn, actZoomIn}, binding{k.ZoomOut, actZoomOut},

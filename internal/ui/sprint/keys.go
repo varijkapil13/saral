@@ -6,7 +6,10 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-var _ kernel.KeyReporter = (*Model)(nil)
+var (
+	_ kernel.KeyReporter    = (*Model)(nil)
+	_ kernel.KeyStateLister = (*Model)(nil)
+)
 
 // keyMap is what the view answers to: the list, the form that fills a sprint
 // in, and the confirm that stands in front of the two moves nothing can undo.
@@ -21,14 +24,17 @@ type keyMap struct {
 	PageDown kernel.Binding
 	Top      kernel.Binding
 	Bottom   kernel.Binding
+	Go       kernel.Binding
 
-	New      kernel.Binding
-	Edit     kernel.Binding
+	New  kernel.Binding
+	Edit kernel.Binding
+	Open kernel.Binding
+	// Start and Complete are one stroke worded by the sprint under the cursor.
 	Start    kernel.Binding
 	Complete kernel.Binding
 	// Closed is one binding for both directions. What it does is named as the
 	// toggle it is, because a second label for the same stroke is a second
-	// answer to the question of what o does.
+	// answer to the question of what . does.
 	Closed kernel.Binding
 
 	Field     kernel.Binding
@@ -45,18 +51,20 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
-		Top:      kernel.Bind([]string{"home"}, "home", "first sprint"),
-		Bottom:   kernel.Bind([]string{"end"}, "end", "last sprint"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
+		Top:      kernel.Canon(kernel.ActTop, "first sprint"),
+		Bottom:   kernel.Canon(kernel.ActBottom, "last sprint"),
+		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
 
-		New:      kernel.Bind([]string{"n"}, "n", "plan a new sprint"),
-		Edit:     kernel.Bind([]string{"e", "enter"}, "e", "edit name, goal and dates"),
-		Start:    kernel.Bind([]string{"s"}, "s", "start this sprint"),
-		Complete: kernel.Bind([]string{"c"}, "c", "complete this sprint"),
-		Closed:   kernel.Bind([]string{"o"}, "o", "show or hide closed sprints"),
+		New:      kernel.Canon(kernel.ActCreate, "plan a new sprint"),
+		Edit:     kernel.Canon(kernel.ActEdit, "edit name, goal and dates"),
+		Open:     kernel.Canon(kernel.ActOpen, "edit name, goal and dates"),
+		Start:    kernel.Canon(kernel.ActAdvance, "start this sprint"),
+		Complete: kernel.Canon(kernel.ActAdvance, "complete this sprint"),
+		Closed:   kernel.Canon(kernel.ActHidden, "show or hide closed sprints"),
 
 		Field:     kernel.Bind([]string{"tab", "down"}, "tab", "next field"),
 		PrevField: kernel.Bind([]string{"shift+tab", "up"}, "shift+tab", "previous field"),
@@ -147,14 +155,17 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// A prompt keeps its words: two or three answers to one question always
 	// fit, and what they are called is the whole point of asking.
 	sets[keysForm] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Save, k.Field, k.Discard},
 		Full: [][]kernel.Binding{{k.Field, k.PrevField}, {k.Save, k.Discard}, {widget.KillLine}},
 	}
 	sets[keysConfirm] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Yes, k.No},
 		Full: [][]kernel.Binding{{k.Yes, k.No}},
 	}
 	sets[keysConfirmComplete] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Yes, k.NextDest, k.No},
 		Full: [][]kernel.Binding{{k.NextDest, k.PrevDest}, {k.Yes, k.No}},
 	}
@@ -171,6 +182,9 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	state := m.keyState()
 	return liveSets[state], int(state)
 }
+
+// KeyStates is every set LiveKeys can return.
+func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }
 
 func (m *Model) keyState() keyState {
 	switch {
@@ -207,10 +221,10 @@ const (
 	actPageDown
 	actTop
 	actBottom
+	actGo
 	actNew
 	actEdit
-	actStart
-	actComplete
+	actAdvance
 	actClosed
 	actNextField
 	actPrevField
@@ -230,9 +244,9 @@ func (k keyMap) tables() (rows, form, confirm map[string]action) {
 	rows = table(
 		binding{k.Down, actDown}, binding{k.Up, actUp},
 		binding{k.PageDown, actPageDown}, binding{k.PageUp, actPageUp},
-		binding{k.Top, actTop}, binding{k.Bottom, actBottom},
-		binding{k.New, actNew}, binding{k.Edit, actEdit},
-		binding{k.Start, actStart}, binding{k.Complete, actComplete},
+		binding{k.Top, actTop}, binding{k.Bottom, actBottom}, binding{k.Go, actGo},
+		binding{k.New, actNew}, binding{k.Edit, actEdit}, binding{k.Open, actEdit},
+		binding{k.Start, actAdvance},
 		binding{k.Closed, actClosed},
 	)
 	form = table(

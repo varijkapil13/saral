@@ -34,20 +34,22 @@ func init() {
 		Keys:     []string{kernel.SlotGesture(slot)},
 		Run:      func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
 	})
-	for _, c := range []struct {
+	for _, c := range []*struct {
 		id, title string
+		action    kernel.Action
 		key       kernel.Binding
 		msg       tea.Msg
 	}{
-		{id: "sprints.new", title: "Plan a new sprint", key: keys.New, msg: NewMsg{}},
-		{id: "sprints.edit", title: "Edit the sprint you are on", key: keys.Edit, msg: EditMsg{}},
-		{id: "sprints.start", title: "Start the sprint you are on", key: keys.Start, msg: StartMsg{}},
-		{id: "sprints.complete", title: "Complete the sprint you are on", key: keys.Complete, msg: CompleteMsg{}},
-		{id: "sprints.closed", title: "Show or hide the closed sprints", key: keys.Closed, msg: ClosedMsg{}},
+		{id: "sprints.new", action: kernel.ActCreate, title: "Plan a new sprint", key: keys.New, msg: NewMsg{}},
+		{id: "sprints.edit", action: kernel.ActEdit, title: "Edit the sprint you are on", key: keys.Edit, msg: EditMsg{}},
+		{id: "sprints.start", action: kernel.ActAdvance, title: "Start the sprint you are on", key: keys.Start, msg: StartMsg{}},
+		{id: "sprints.complete", action: kernel.ActAdvance, title: "Complete the sprint you are on", key: keys.Complete, msg: CompleteMsg{}},
+		{id: "sprints.closed", action: kernel.ActHidden, title: "Show or hide the closed sprints", key: keys.Closed, msg: ClosedMsg{}},
 	} {
 		kernel.RegisterCommand(kernel.Command{
 			ID:       c.id,
 			Title:    c.title,
+			Action:   c.action,
 			Group:    "Sprints",
 			Requires: jira.CapBoards,
 			Keys:     shown(c.key),

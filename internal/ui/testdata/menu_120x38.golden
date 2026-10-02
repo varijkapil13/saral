@@ -143,12 +143,12 @@ settings
 sprints
 ┌────────────────────────────────┐
 │ What can be done here          │
-│ o  show or hide closed sprints │
+│ .  show or hide closed sprints │
 └────────────────────────────────┘
 
 timeline
 ┌────────────────────────────────┐
 │ What can be done here          │
-│ n  where these dates came from │
+│ .  where these dates came from │
 └────────────────────────────────┘
 

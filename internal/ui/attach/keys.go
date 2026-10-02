@@ -5,7 +5,10 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
-var _ kernel.KeyReporter = (*Model)(nil)
+var (
+	_ kernel.KeyReporter    = (*Model)(nil)
+	_ kernel.KeyStateLister = (*Model)(nil)
+)
 
 // keyMap is what the pane answers to.
 //
@@ -19,6 +22,7 @@ type keyMap struct {
 	PageDown kernel.Binding
 	Top      kernel.Binding
 	Bottom   kernel.Binding
+	Go       kernel.Binding
 	// Show draws the file here where it is an image and hands it to the desktop
 	// where it is not, because a terminal cannot draw a spreadsheet.
 	Show kernel.Binding
@@ -49,17 +53,18 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
-		Top:      kernel.Bind([]string{"home"}, "home", "first file"),
-		Bottom:   kernel.Bind([]string{"end"}, "end", "last file"),
-		Show:     kernel.Bind([]string{"enter"}, "enter", "show this file"),
-		Open:     kernel.Bind([]string{"o"}, "o", "open it outside the terminal"),
-		Upload:   kernel.Bind([]string{"u"}, "u", "attach a file"),
-		Delete:   kernel.Bind([]string{"d"}, "d", "delete this file"),
-		Grow:     kernel.Bind([]string{"z"}, "z", "give the preview the whole pane"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
+		Top:      kernel.Canon(kernel.ActTop, "first file"),
+		Bottom:   kernel.Canon(kernel.ActBottom, "last file"),
+		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
+		Show:     kernel.Canon(kernel.ActOpen, "show this file"),
+		Open:     kernel.Canon(kernel.ActBrowser, "open it outside the terminal"),
+		Upload:   kernel.Canon(kernel.ActAdd, "attach a file"),
+		Delete:   kernel.Canon(kernel.ActDelete, "delete this file"),
+		Grow:     kernel.Canon(kernel.ActFold, "give the preview the whole pane"),
 		Send:     kernel.Bind([]string{"ctrl+s", "enter"}, "ctrl+s", "attach it"),
 		Complete: kernel.Bind([]string{"tab"}, "tab", "complete the path"),
 		Cancel:   kernel.Bind([]string{"esc"}, "esc", "leave it unattached"),
@@ -126,19 +131,25 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Full: [][]kernel.Binding{{k.Upload}},
 	}
 	sets[keysTyping] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Send, k.Cancel},
 		Full: [][]kernel.Binding{{k.Send, k.Cancel}, {k.Complete, widget.KillLine}},
 	}
 	sets[keysConfirming] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Confirm, k.Keep},
 		Full: [][]kernel.Binding{{k.Confirm, k.Keep}},
 	}
 	sets[keysUploading] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Stop},
 		Full: [][]kernel.Binding{{k.Stop}},
 	}
 	return sets
 }()
+
+// KeyStates is every set LiveKeys can return.
+func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }
 
 // LiveKeys reports the keys that work in the state the pane is actually in.
 // Typing a path spends every letter on the path, a deletion waiting for an answer
@@ -178,6 +189,7 @@ const (
 	actPageDown
 	actTop
 	actBottom
+	actGo
 	actShow
 	actOpen
 	actUpload
@@ -202,7 +214,7 @@ func (k keyMap) tables() (browse, prompt, confirm, sending map[string]action) {
 	browse = table(
 		binding{k.Down, actDown}, binding{k.Up, actUp},
 		binding{k.PageDown, actPageDown}, binding{k.PageUp, actPageUp},
-		binding{k.Top, actTop}, binding{k.Bottom, actBottom},
+		binding{k.Top, actTop}, binding{k.Bottom, actBottom}, binding{k.Go, actGo},
 		binding{k.Show, actShow}, binding{k.Open, actOpen},
 		binding{k.Upload, actUpload}, binding{k.Delete, actDelete},
 		binding{k.Grow, actGrow},

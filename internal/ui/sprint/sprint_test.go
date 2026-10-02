@@ -1,6 +1,8 @@
 package sprint
 
 import (
+	tea "charm.land/bubbletea/v2"
+
 	"context"
 	"errors"
 	"strings"
@@ -58,7 +60,7 @@ func TestSprints_EveryReadNamesTheStatesItWants(t *testing.T) {
 		t.Errorf("the first read asked for %v, want the running and the planned sprints and nothing else", got)
 	}
 
-	dr.key("o")
+	dr.key(".")
 	reads = spy.reads()
 	last := reads[len(reads)-1]
 	if !hasState(last, jira.SprintClosed) {
@@ -89,7 +91,7 @@ func TestSprints_TheToggleAnswersBeforeThereIsAnythingToActOn(t *testing.T) {
 		t.Fatal("a view with no connection advertises nothing at all")
 	}
 	before := dr.view()
-	dr.key("o")
+	dr.key(".")
 	after := dr.view()
 	if before == after {
 		t.Errorf("the key the footer advertises changed nothing on screen:\n%s", after)
@@ -101,7 +103,7 @@ func TestSprints_PutTheRunningSprintFirstThenThePlannedThenTheClosed(t *testing.
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake()), 120, 20)
-	dr.key("o")
+	dr.key(".")
 
 	want := []string{"Sprint 2", "Sprint 3", "Sprint 1"}
 	got := dr.names()
@@ -138,7 +140,7 @@ func TestSprints_StartingNeedsBothDatesAndNamesTheOneThatIsMissing(t *testing.T)
 			dr := newDriver(t, testDeps(f), 120, 20)
 			dr.onSprint("Sprint 3")
 			dr.m.sprints[dr.m.cursor].Start, dr.m.sprints[dr.m.cursor].End = tc.start, tc.end
-			dr.key("s")
+			dr.key("!")
 
 			if tc.says == "" {
 				if dr.m.state != confirming {
@@ -169,8 +171,8 @@ func TestSprints_NeitherMoveReachesTheSiteWithoutTheConfirm(t *testing.T) {
 		key    string
 		call   string
 	}{
-		"starting a planned sprint": {sprint: "Sprint 3", key: "s", call: "StartSprint"},
-		"completing a running one":  {sprint: "Sprint 2", key: "c", call: "CompleteSprint"},
+		"starting a planned sprint": {sprint: "Sprint 3", key: "!", call: "StartSprint"},
+		"completing a running one":  {sprint: "Sprint 2", key: "!", call: "CompleteSprint"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -223,7 +225,7 @@ func TestSprints_TheCompleteConfirmSaysWhatHappensToTheIssuesLeftOpen(t *testing
 	}
 	dr.send(kernel.RefreshMsg{})
 	dr.onSprint("Sprint 2")
-	dr.key("c")
+	dr.key("!")
 
 	frame := dr.view()
 	mustContain(t, frame,
@@ -248,13 +250,14 @@ func TestSprints_AMoveThatIsNotInTheStateMachineIsRefusedWithTheReason(t *testin
 	for name, tc := range map[string]struct {
 		state jira.SprintState
 		key   string
+		msg   tea.Msg
 		says  string
 	}{
-		"completing a planned sprint":                        {state: jira.SprintFuture, key: "c", says: "only a running sprint can be completed"},
-		"completing a closed one":                            {state: jira.SprintClosed, key: "c", says: "only a running sprint can be completed"},
-		"starting a running one":                             {state: jira.SprintActive, key: "s", says: "only a planned sprint can be started"},
-		"starting a closed one":                              {state: jira.SprintClosed, key: "s", says: "only a planned sprint can be started"},
-		"starting one in a state this build has no word for": {state: "on hold", key: "s", says: "on hold"},
+		"completing a closed one":                              {state: jira.SprintClosed, key: "!", says: "only a running sprint can be completed"},
+		"completing one in a state this build has no word for": {state: "on hold", key: "!", says: "on hold"},
+		"starting a running one from the palette":              {state: jira.SprintActive, msg: StartMsg{}, says: "only a planned sprint can be started"},
+		"starting a closed one from the palette":               {state: jira.SprintClosed, msg: StartMsg{}, says: "only a planned sprint can be started"},
+		"completing a planned one from the palette":            {state: jira.SprintFuture, msg: CompleteMsg{}, says: "only a running sprint can be completed"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -263,10 +266,14 @@ func TestSprints_AMoveThatIsNotInTheStateMachineIsRefusedWithTheReason(t *testin
 			dr := newDriver(t, testDeps(f), 120, 20)
 			dr.onSprint("Sprint 3")
 			dr.m.sprints[dr.m.cursor].State = tc.state
-			dr.key(tc.key)
+			if tc.msg != nil {
+				dr.send(tc.msg)
+			} else {
+				dr.key(tc.key)
+			}
 
 			if dr.m.state == confirming {
-				t.Fatalf("a %q sprint reached the confirm for %q", tc.state, tc.key)
+				t.Fatalf("a %q sprint reached the confirm", tc.state)
 			}
 			if got := dr.lastStatus().Text; !strings.Contains(got, tc.says) {
 				t.Errorf("the refusal says %q, want %q in it", got, tc.says)
@@ -341,7 +348,7 @@ func TestSprints_AClosedSprintTakesOnlyItsNameAndItsGoal(t *testing.T) {
 
 	spy := scribbling(newFake())
 	dr := newDriver(t, testDeps(spy), 100, 20)
-	dr.key("o")
+	dr.key(".")
 	dr.onSprint("Sprint 1")
 	dr.key("e")
 
@@ -396,7 +403,7 @@ func TestSprints_ARefusalAboutAValueIsDrawnOnTheFieldItNames(t *testing.T) {
 
 	f := newFake()
 	dr := newDriver(t, testDeps(f), 100, 20)
-	dr.key("n")
+	dr.key("c")
 	dr.setField(fieldName, "Sprint 9")
 	f.FailNext(&jira.ValidationError{
 		Fields:   []jira.FieldError{{Field: "name", Message: "a sprint of that name is already on this board"}},
@@ -497,7 +504,7 @@ func TestSprints_ARefusalOnAWriteLeavesTheListAlone(t *testing.T) {
 	before := dr.names()
 	dr.onSprint("Sprint 2")
 	f.FailNext(&jira.RateLimitError{RetryAfter: 5 * time.Second})
-	dr.key("c")
+	dr.key("!")
 	dr.key("y")
 
 	if got := dr.names(); len(got) != len(before) {
@@ -518,7 +525,7 @@ func TestSprints_AFormWithSomethingInItRefusesToBeThrownAway(t *testing.T) {
 	if _, blocked := dr.m.BlocksClose(); blocked {
 		t.Fatal("the list refuses to close and is holding nothing")
 	}
-	dr.key("n")
+	dr.key("c")
 	if _, blocked := dr.m.BlocksClose(); blocked {
 		t.Fatal("an empty form refuses to close")
 	}
@@ -542,13 +549,13 @@ func TestSprints_ClaimsTheKeysOnlyWhileTypingOrAnswering(t *testing.T) {
 	if dr.m.WantsRawKeys() {
 		t.Error("the list swallows q and esc")
 	}
-	dr.key("n")
+	dr.key("c")
 	if !dr.m.WantsRawKeys() {
 		t.Error("the form does not take the keys, so a sprint name loses its digits")
 	}
 	dr.key("esc")
 	dr.onSprint("Sprint 2")
-	dr.key("c")
+	dr.key("!")
 	if !dr.m.WantsRawKeys() {
 		t.Error("the confirm does not take the keys, so esc never reaches it in a root view")
 	}
@@ -617,7 +624,7 @@ func TestSprints_ASprintThatEndsBeforeItStartsNeverReachesTheSite(t *testing.T) 
 
 	f := newFake()
 	dr := newDriver(t, testDeps(f), 100, 20)
-	dr.key("n")
+	dr.key("c")
 	dr.setField(fieldName, "Sprint 9")
 	dr.setField(fieldStart, "2026-04-01")
 	dr.setField(fieldEnd, "2026-03-01")
@@ -641,7 +648,7 @@ func TestSprints_ADateThatIsNotOneSaysWhatShapeItShouldBe(t *testing.T) {
 
 	f := newFake()
 	dr := newDriver(t, testDeps(f), 100, 20)
-	dr.key("n")
+	dr.key("c")
 	dr.setField(fieldName, "Sprint 9")
 	dr.setField(fieldStart, "next tuesday")
 	dr.key("ctrl+s")

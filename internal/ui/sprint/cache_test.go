@@ -197,7 +197,7 @@ func TestSprints_APurgingRefreshDropsTheStoredCopyAndAWriteKeepsIt(t *testing.T)
 
 	before := cache.puts
 	dr.onSprint("Sprint 2")
-	dr.key("c", "y")
+	dr.key("!", "y")
 	if cache.puts == before {
 		t.Error("a completion was not stored, so the next launch draws the sprint as running")
 	}

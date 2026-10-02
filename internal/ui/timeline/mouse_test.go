@@ -149,7 +149,7 @@ func TestMouse_NoClickReachesTheChartUnderTheNotes(t *testing.T) {
 	at := uitest.Zone(t, d.Zones, dr.m.View, dr.m.zones.ID(rowZone(want)))
 
 	under := dr.m.selectedKey()
-	dr.key("n")
+	dr.key(".")
 	dr.send(tea.MouseClickMsg{X: at.StartX, Y: at.StartY, Button: tea.MouseLeft})
 	if got := dr.m.selectedKey(); got != under {
 		t.Errorf("a click under the notes moved the selection from %s to %s", under, got)

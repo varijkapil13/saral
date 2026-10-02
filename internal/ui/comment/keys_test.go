@@ -103,3 +103,14 @@ func writeKeySet(b *strings.Builder, set kernel.KeySet) {
 		fmt.Fprintf(b, "  full   [%s]\n", strings.Join(labels(column), ", "))
 	}
 }
+
+func TestKeys_TheOldStrokesAreGone(t *testing.T) {
+	t.Parallel()
+
+	browse, _ := defaultKeys().tables()
+	for _, stroke := range []string{"c", "space"} {
+		if got := browse[stroke]; got != actNone {
+			t.Errorf("%q still answers with action %d", stroke, got)
+		}
+	}
+}

@@ -23,19 +23,21 @@ func init() {
 	keys := defaultKeys()
 	for _, c := range []struct {
 		id, title string
+		action    kernel.Action
 		keys      []string
 		msg       tea.Msg
 	}{
-		{id: "comments.write", title: "Write a comment", keys: shown(keys.Write), msg: WriteMsg{}},
-		{id: "comments.edit", title: "Edit the comment you are on", keys: shown(keys.Edit), msg: EditMsg{}},
-		{id: "comments.delete", title: "Delete the comment you are on", keys: shown(keys.Delete), msg: DeleteMsg{}},
+		{id: "comments.write", action: kernel.ActAdd, title: "Write a comment", keys: shown(keys.Write), msg: WriteMsg{}},
+		{id: "comments.edit", action: kernel.ActEdit, title: "Edit the comment you are on", keys: shown(keys.Edit), msg: EditMsg{}},
+		{id: "comments.delete", action: kernel.ActDelete, title: "Delete the comment you are on", keys: shown(keys.Delete), msg: DeleteMsg{}},
 	} {
 		kernel.RegisterCommand(kernel.Command{
-			ID:    c.id,
-			Title: c.title,
-			Group: "Comments",
-			Keys:  c.keys,
-			Run:   func(kernel.Deps) tea.Cmd { return kernel.Broadcast(c.msg) },
+			ID:     c.id,
+			Title:  c.title,
+			Action: c.action,
+			Group:  "Comments",
+			Keys:   c.keys,
+			Run:    func(kernel.Deps) tea.Cmd { return kernel.Broadcast(c.msg) },
 		})
 	}
 }

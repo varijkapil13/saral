@@ -69,6 +69,7 @@ type Model struct {
 
 	mode      mode
 	acts      map[string]action
+	pendingGo bool
 	inPrompt  map[string]action
 	inConfirm map[string]action
 	inUpload  map[string]action
@@ -338,7 +339,21 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.uploadingKey(msg)
 	case browsing:
 	}
-	switch m.acts[msg.String()] {
+	stroke := msg.String()
+	if m.pendingGo {
+		m.pendingGo = false
+		switch stroke {
+		case "g":
+			m.moveTo(0)
+			return nil
+		case "e":
+			m.moveTo(len(m.files) - 1)
+			return nil
+		}
+	}
+	switch m.acts[stroke] {
+	case actGo:
+		m.pendingGo = true
 	case actUp:
 		m.moveTo(m.cursor - 1)
 	case actDown:

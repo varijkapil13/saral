@@ -35,6 +35,6 @@ search
 settings
  Issues  enter apply, open or run                                                                         ? g ctrl+k esc
 sprints
- Issues  o closed                                                                                         ? g ctrl+k esc
+ Issues  . closed                                                                                         ? g ctrl+k esc
 timeline
- Issues  n notes                                                                                          ? g ctrl+k esc
+ Issues  . notes                                                                                          ? g ctrl+k esc

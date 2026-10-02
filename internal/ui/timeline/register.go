@@ -62,21 +62,23 @@ func init() {
 		Run:   open(NotesMsg{}),
 	})
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "timeline.filter-by",
-		Title: "Filter this timeline by a person, a status or a label",
-		Group: "Search",
-		Kind:  kernel.KindSearch,
-		Keys:  []string{keys.FilterBy.Help().Key},
-		Run:   open(OpenFilterMsg{}),
+		ID:     "timeline.filter-by",
+		Action: kernel.ActFilter,
+		Title:  "Filter this timeline by a person, a status or a label",
+		Group:  "Search",
+		Kind:   kernel.KindSearch,
+		Keys:   []string{keys.FilterBy.Help().Key},
+		Run:    open(OpenFilterMsg{}),
 	})
 	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that
 	// clears a filter is shown only by the state that has one to clear.
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "timeline.clear-filter",
-		Title: "Clear the filter on this timeline",
-		Group: "Search",
-		Kind:  kernel.KindSearch,
-		Run:   open(ClearFilterMsg{}),
+		ID:     "timeline.clear-filter",
+		Action: kernel.ActClearFilters,
+		Title:  "Clear the filter on this timeline",
+		Group:  "Search",
+		Kind:   kernel.KindSearch,
+		Run:    open(ClearFilterMsg{}),
 	})
 }
 

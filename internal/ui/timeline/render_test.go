@@ -36,7 +36,7 @@ func TestTimeline_Golden(t *testing.T) {
 			width: 140, height: 24, keys: []string{"-", "-"}, golden: "quarter_140x24.golden",
 		},
 		"the notes pane": {
-			width: 140, height: 24, keys: []string{"n"}, golden: "notes_140x24.golden",
+			width: 140, height: 24, keys: []string{"."}, golden: "notes_140x24.golden",
 		},
 		"nothing the cascade could date": {
 			width: 140, height: 20, golden: "undated_140x20.golden",
@@ -125,7 +125,7 @@ func TestTimeline_FitsTheBoxItIsGiven(t *testing.T) {
 			"with notes": newDriver(t, testDeps(newFake(8)), size[0], size[1]),
 		} {
 			if name == "with notes" {
-				dr.key("n")
+				dr.key(".")
 			}
 			got := len(strings.Split(dr.view(), "\n"))
 			if got != size[1] {

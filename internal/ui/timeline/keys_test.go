@@ -46,7 +46,7 @@ func TestLiveKeys_FollowWhatTheChartIsDoing(t *testing.T) {
 		t.Error("the chart advertises nothing while it is being read")
 	}
 
-	dr.key("n")
+	dr.key(".")
 	notes, notesGen := dr.m.LiveKeys()
 	if notesGen == browsingGen {
 		t.Errorf("opening the notes left the generation at %d, so the footer cannot know to repaint", notesGen)
@@ -58,7 +58,7 @@ func TestLiveKeys_FollowWhatTheChartIsDoing(t *testing.T) {
 		t.Errorf("the notes pane advertises the same actions as the chart: %s", actsOf(notes))
 	}
 
-	dr.key("n")
+	dr.key(".")
 	if _, gen := dr.m.LiveKeys(); gen != browsingGen {
 		t.Errorf("closing the notes left the generation at %d, want %d", gen, browsingGen)
 	}
@@ -86,19 +86,17 @@ func TestLiveKeys_CostNothingToAskFor(t *testing.T) {
 	}
 }
 
-// The kernel buffers g as the view-switch prefix and never forwards it, so a
-// binding on it would advertise a stroke that cannot arrive.
-func TestKeys_NothingIsBoundToTheViewSwitchPrefix(t *testing.T) {
+// g is the first half of g g and g e and nothing else: the kernel forwards it
+// only behind the view-switch prefix.
+func TestKeys_GIsOnlyTheLatchForTopAndBottom(t *testing.T) {
 	t.Parallel()
 
-	prefix := kernel.DefaultGlobalKeys().Go.Keys()
 	chart, notes := defaultKeys().tables()
-	for _, table := range []map[string]action{chart, notes} {
-		for _, stroke := range prefix {
-			if got, bound := table[stroke]; bound {
-				t.Errorf("%q is bound to action %d and the kernel never forwards it", stroke, got)
-			}
-		}
+	if got := chart["g"]; got != actGo {
+		t.Errorf("the chart answers g with action %d, want the latch", got)
+	}
+	if got, bound := notes["g"]; bound {
+		t.Errorf("the notes bind g to action %d and the kernel never forwards it", got)
 	}
 }
 
@@ -211,5 +209,33 @@ func TestRegister_TheRegistryAcceptedThisView(t *testing.T) {
 	}
 	if spec.New == nil {
 		t.Error("the view registered no constructor")
+	}
+}
+
+func TestKeys_NotesMoveOffN(t *testing.T) {
+	t.Parallel()
+
+	chart, notes := defaultKeys().tables()
+	for name, table := range map[string]map[string]action{"the chart": chart, "the notes": notes} {
+		if got := table["n"]; got != actNone {
+			t.Errorf("%s still answers n with action %d", name, got)
+		}
+		if got := table["."]; got != actNotes {
+			t.Errorf("%s answers . with action %d, want %d", name, got, actNotes)
+		}
+	}
+}
+
+func TestKeys_GGAndGEReachTheEnds(t *testing.T) {
+	t.Parallel()
+
+	dr := newDriver(t, testDeps(newFake(20)), 120, 24)
+	dr.key("g", "e")
+	if want := len(dr.m.rows) - 1; dr.m.cursor != want {
+		t.Errorf("g e left the cursor on %d, want %d", dr.m.cursor, want)
+	}
+	dr.key("g", "g")
+	if dr.m.cursor != 0 {
+		t.Errorf("g g left the cursor on %d", dr.m.cursor)
 	}
 }

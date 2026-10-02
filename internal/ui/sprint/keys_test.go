@@ -47,7 +47,7 @@ func TestLiveKeys_FollowTheSprintUnderTheCursor(t *testing.T) {
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake()), 120, 20)
-	dr.key("o")
+	dr.key(".")
 	seen := map[int]string{}
 	for _, tc := range []struct {
 		name  string
@@ -58,11 +58,11 @@ func TestLiveKeys_FollowTheSprintUnderTheCursor(t *testing.T) {
 		{"a running sprint", func() { dr.onSprint("Sprint 2") }, keysActive, "complete"},
 		{"a planned sprint", func() { dr.onSprint("Sprint 3") }, keysFuture, "start"},
 		{"a closed sprint", func() { dr.onSprint("Sprint 1") }, keysClosed, "edit"},
-		{"filling a sprint in", func() { dr.key("n") }, keysForm, "ctrl+s"},
+		{"filling a sprint in", func() { dr.key("c") }, keysForm, "ctrl+s"},
 		{"answering the confirm", func() {
 			dr.key("esc")
 			dr.onSprint("Sprint 2")
-			dr.key("c")
+			dr.key("!")
 		}, keysConfirmComplete, "y"},
 	} {
 		tc.enter()
@@ -89,8 +89,6 @@ func TestLiveKeys_FollowTheSprintUnderTheCursor(t *testing.T) {
 func TestLiveKeys_OfferOnlyTheMoveTheStateMachineAllows(t *testing.T) {
 	t.Parallel()
 
-	k := defaultKeys()
-	start, done := k.Start.Help().Key, k.Complete.Help().Key
 	for state, set := range map[keyState]kernel.KeySet{
 		keysFuture:  liveSets[keysFuture],
 		keysActive:  liveSets[keysActive],
@@ -99,8 +97,8 @@ func TestLiveKeys_OfferOnlyTheMoveTheStateMachineAllows(t *testing.T) {
 		keysWaiting: liveSets[keysWaiting],
 	} {
 		acts := actsOf(set)
-		offersStart := strings.Contains(acts, start+" ")
-		offersDone := strings.Contains(acts, done+" ")
+		offersStart := strings.Contains(acts, "! start")
+		offersDone := strings.Contains(acts, "! complete")
 		if offersStart && offersDone {
 			t.Errorf("state %d offers both moves at once: %s", state, acts)
 		}
@@ -137,24 +135,45 @@ func TestLiveKeys_AWriteInFlightAdvertisesNothingAndAnswersNothing(t *testing.T)
 		t.Errorf("a write in flight is in key state %d, want %d", gen, keysWorking)
 	}
 	at := dr.m.cursor
-	dr.key("j", "n", "e", "s", "c")
+	dr.key("j", "c", "e", "!", "!")
 	if dr.m.cursor != at || dr.m.state != browsing {
 		t.Error("a key was answered while a write was out with the site")
 	}
 }
 
-// g reaches nothing here: the kernel buffers it as the view-switch prefix and
-// never forwards it, so a binding on it would name a stroke that cannot arrive.
-func TestKeys_NothingIsBoundToTheViewSwitchPrefix(t *testing.T) {
+// g is the first half of g g and g e and nothing else: the kernel forwards it
+// only behind the view-switch prefix, so a table that gave it any other meaning
+// would name a stroke that cannot arrive.
+func TestKeys_GIsOnlyTheLatchForTopAndBottom(t *testing.T) {
 	t.Parallel()
 
 	rows, form, confirm := defaultKeys().tables()
-	for name, table := range map[string]map[string]action{
-		"the list": rows, "the form": form, "the confirm": confirm,
-	} {
+	if got := rows["g"]; got != actGo {
+		t.Errorf("the list answers g with action %d, want the latch", got)
+	}
+	for name, table := range map[string]map[string]action{"the form": form, "the confirm": confirm} {
 		if _, bound := table["g"]; bound {
 			t.Errorf("%s binds g, which the kernel buffers and never delivers", name)
 		}
+	}
+}
+
+func TestKeys_GGAndGEReachTheEnds(t *testing.T) {
+	t.Parallel()
+
+	dr := newDriver(t, testDeps(newFake()), 120, 20)
+	dr.key("G")
+	last := dr.m.cursor
+	if last == 0 {
+		t.Fatal("G did not leave the first sprint")
+	}
+	dr.key("g", "g")
+	if dr.m.cursor != 0 {
+		t.Errorf("g g left the cursor on %d", dr.m.cursor)
+	}
+	dr.key("g", "e")
+	if dr.m.cursor != last {
+		t.Errorf("g e left the cursor on %d, want %d", dr.m.cursor, last)
 	}
 }
 
@@ -217,5 +236,19 @@ func writeKeySet(b *strings.Builder, set kernel.KeySet) {
 	fmt.Fprintf(b, "  acts   %s\n", actsOf(set))
 	for _, column := range set.Full {
 		fmt.Fprintf(b, "  full   [%s]\n", strings.Join(labels(column), ", "))
+	}
+}
+
+func TestKeys_TheOldStrokesAreGone(t *testing.T) {
+	t.Parallel()
+
+	rows, _, _ := defaultKeys().tables()
+	for stroke, want := range map[string]action{
+		"n": actNone, "s": actNone, "o": actNone,
+		"c": actNew, "!": actAdvance, ".": actClosed,
+	} {
+		if got := rows[stroke]; got != want {
+			t.Errorf("%q answers with action %d, want %d", stroke, got, want)
+		}
 	}
 }

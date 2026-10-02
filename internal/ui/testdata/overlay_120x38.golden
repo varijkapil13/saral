@@ -153,7 +153,7 @@ enter apply, open or run    ↓ move      1-9          saved query           ctr
                                         R            refetch everything
 
 sprints
-o show or hide closed sprints    1-9          saved query           ctrl+k commands
+. show or hide closed sprints    1-9          saved query           ctrl+k commands
                                  g            where to go           ?      help
                                  g 1-9        switch view           q      quit
                                  ctrl+, / g s settings
@@ -164,7 +164,7 @@ o show or hide closed sprints    1-9          saved query           ctrl+k comma
                                  R            refetch everything
 
 timeline
-n where these dates came from    1-9          saved query           ctrl+k commands
+. where these dates came from    1-9          saved query           ctrl+k commands
                                  g            where to go           ?      help
                                  g 1-9        switch view           q      quit
                                  ctrl+, / g s settings
