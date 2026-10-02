@@ -120,6 +120,8 @@ type Client interface {
 	// BoardProjects lists the projects behind a board. An empty answer can mean
 	// the board is not visible to this token.
 	BoardProjects(ctx context.Context, boardID int64) ([]ProjectRef, error)
+	// Project resolves a project by its numeric id or its key.
+	Project(ctx context.Context, idOrKey string) (ProjectRef, error)
 	// Sprints lists a board's sprints, narrowed to the states named. Passing no
 	// state lists them all, which on a board with years of history is a walk
 	// nothing on a first-paint path should be doing.

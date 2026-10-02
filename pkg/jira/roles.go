@@ -134,6 +134,7 @@ type SessionClient interface {
 	Relocator
 	PlanReader
 	BoardProjectReader
+	ProjectReader
 	PlanDetailReader
 	ServerInfoReader
 	SprintIssueReader
@@ -197,6 +198,11 @@ type BoardReader interface {
 // BoardProjectReader reads the projects behind a board.
 type BoardProjectReader interface {
 	BoardProjects(ctx context.Context, boardID int64) ([]ProjectRef, error)
+}
+
+// ProjectReader resolves a project by its id or its key.
+type ProjectReader interface {
+	Project(ctx context.Context, idOrKey string) (ProjectRef, error)
 }
 
 // SprintReader lists a board's sprints. A backlog view holds only this: it
@@ -334,6 +340,7 @@ var (
 	_ Relocator          = Client(nil)
 	_ PlanReader         = Client(nil)
 	_ BoardProjectReader = Client(nil)
+	_ ProjectReader      = Client(nil)
 	_ PlanDetailReader   = Client(nil)
 
 	_ IssueReader       = Client(nil)

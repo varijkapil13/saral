@@ -1,0 +1,10 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/project/10000",
+  "id": "10000",
+  "key": "EX",
+  "name": "Example",
+  "projectTypeKey": "software",
+  "simplified": false,
+  "style": "classic",
+  "isPrivate": false
+}

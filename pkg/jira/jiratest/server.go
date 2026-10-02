@@ -240,6 +240,7 @@ var srvDefaultRoutes = []srvRoute{
 	{http.MethodGet, "/rest/api/3/user/search", srvFixtureHandler(http.StatusOK, "user_search.json")},
 	{http.MethodGet, "/rest/api/3/user/assignable/search", srvFixtureHandler(http.StatusOK, "user_assignable.json")},
 	{http.MethodGet, "/rest/api/3/user/bulk", srvOffsetPages("user_bulk.json", "user_bulk_page2.json")},
+	{http.MethodGet, "/rest/api/3/project/{key}", srvFixtureHandler(http.StatusOK, "project_one.json")},
 	{http.MethodGet, "/rest/api/3/project/{key}/statuses", srvFixtureHandler(http.StatusOK, "project_statuses.json")},
 	{http.MethodGet, "/rest/api/3/priority/search", srvFixtureHandler(http.StatusOK, "priority_search.json")},
 	{http.MethodGet, "/rest/api/3/label", srvOffsetPages("labels.json", "labels_page2.json")},

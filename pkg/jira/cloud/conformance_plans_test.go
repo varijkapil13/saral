@@ -143,7 +143,7 @@ func TestPlans_BothAdaptersAnswerTheSameWay(t *testing.T) {
 						}
 						projects++
 						if _, err := strconv.ParseInt(source.Value, 10, 64); err != nil {
-							t.Errorf("plan %s draws on project %q, and issueSources[].value is a project id: nothing in this port turns a key back into one, so a view rendering this shows a different thing against each adapter",
+							t.Errorf("plan %s draws on project %q, and issueSources[].value is a project id, and Project is what turns it into a key: a value of any other shape is an identifier one adapter invented",
 								plan.ID, source.Value)
 						}
 					}
