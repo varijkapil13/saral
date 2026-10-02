@@ -1261,6 +1261,20 @@ type Plan struct {
 	Local   bool
 }
 
+// PlanDetail is a plan plus what only the single-plan endpoint holds.
+type PlanDetail struct {
+	Plan
+	CrossProjectReleases []CrossProjectRelease
+	ExcludedVersionIDs   []string
+}
+
+// CrossProjectRelease is one release planned across several projects, made of a
+// version in each.
+type CrossProjectRelease struct {
+	Name       string
+	VersionIDs []string
+}
+
 // Query is a search. Fields must be an explicit, narrow list of field IDs:
 // /search/jql returns almost nothing without one, and asking for everything is
 // the single most expensive mistake available.

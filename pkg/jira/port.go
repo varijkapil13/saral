@@ -198,6 +198,8 @@ type Client interface {
 	Task(ctx context.Context, ref TaskRef) (TaskStatus, error)
 	// Plans lists Advanced Roadmaps plans, which need Administer Jira.
 	Plans(ctx context.Context) ([]Plan, error)
+	// PlanDetail reads one plan's cross-project releases and excluded versions.
+	PlanDetail(ctx context.Context, planID string) (PlanDetail, error)
 	// Me returns the authenticated account, including its timezone.
 	Me(ctx context.Context) (User, error)
 

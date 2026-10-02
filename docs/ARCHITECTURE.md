@@ -118,6 +118,7 @@ type Client interface {
 	BulkMove(ctx context.Context, in MoveRequest) (TaskRef, error)
 	Task(ctx context.Context, ref TaskRef) (TaskStatus, error)
 	Plans(ctx context.Context) ([]Plan, error)
+	PlanDetail(ctx context.Context, planID string) (PlanDetail, error)
 	Me(ctx context.Context) (User, error)
 
 	FindPeople(ctx context.Context, q PeopleQuery) ([]User, error)

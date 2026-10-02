@@ -1,0 +1,29 @@
+{
+  "id": 7,
+  "name": "EX Rollout Plan",
+  "scenarioId": 108,
+  "status": "Active",
+  "issueSources": [
+    {
+      "type": "Project",
+      "value": 10000
+    }
+  ],
+  "crossProjectReleases": [
+    {
+      "name": "Spring launch",
+      "releaseIds": [10100, 10200, 10300]
+    },
+    {
+      "name": "Summer launch",
+      "releaseIds": [10400, 10500]
+    }
+  ],
+  "exclusionRules": {
+    "issueIds": [],
+    "workStatusIds": [],
+    "workStatusCategoryIds": [],
+    "issueTypeIds": [],
+    "releaseIds": [10600, 10700]
+  }
+}
