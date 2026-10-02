@@ -7,6 +7,8 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-02
+
 ### Added
 
 - `g /` searches every project's issues by what they say: summary, description and comments, with
@@ -26,6 +28,8 @@ such change is listed under **Changed**.
 
 ### Changed
 
+- `g` then `/` now opens the issue search, so it no longer reaches a view's own `/` filter; `/` on
+  its own still filters.
 - An open plan no longer lists every version. It shows one row (`476 across EX, OPS, WEB - enter
   browses`) and a second saying how many cross-space releases the plan has and how many versions it
   excludes, and `enter` on the first, a click, or `b` opens the releases in a browser you can sort,
@@ -327,7 +331,8 @@ transitions, comments with markdown ⇄ ADF, attachments with inline image previ
 backlog, sprints, releases with the unresolved-issue decision, the cross-project move wizard, the
 timeline, plans, the command palette, full mouse support and cache-first paint.
 
-[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/varijkapil13/saral/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/varijkapil13/saral/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/varijkapil13/saral/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/varijkapil13/saral/compare/v0.9.0...v0.9.1
