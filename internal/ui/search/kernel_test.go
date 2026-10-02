@@ -98,7 +98,7 @@ func TestKernel_EscClosesTheSearchAndTheListIsBack(t *testing.T) {
 func TestKernel_LHandsTheSearchToTheIssueList(t *testing.T) {
 	t.Parallel()
 	m := session(t, testDeps(newFake(baseIssues())), 120, 30, Seed{Query: "login"})
-	m = press(t, m, "down", "L")
+	m = press(t, m, "down", "I")
 	top, ok := m.Top().(*list.Model)
 	if !ok {
 		t.Fatalf("L left %T on top, want the issue list", m.Top())

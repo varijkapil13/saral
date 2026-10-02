@@ -233,11 +233,11 @@ clear everything       ctrl+g / esc   a term the picker set and a typed filter b
                                       state; esc clears the typed one while still typing
 filter by a value      f              pick a facet, then one of the values this site holds. in
                                       releases, f moves the state filter on instead
-every issue here       a              widen the search to the whole of the session's project;
+every issue here       0              widen the search to the whole of the session's project;
                                       also the state with no filter values in force
 edit this search       e              show the JQL on screen and run an edited one
 sort                   s              in issues, the backlog and releases; pick a field and a direction
-save this search       S              bind the query on screen to a number key
+save this search       ctrl+s         bind the query on screen to a number key
 refresh                r / R          current view / purge and refetch. both say what came back
 kill to end of line    alt+k          in any text field. ctrl+k is the palette and never reaches one,
                                       so bubbles' own binding for this is rebound in one place
@@ -334,7 +334,7 @@ on the site* in the palette, opens a view over whatever you were in, whose box t
 | State | What it does |
 |---|---|
 | typing | the box is the view's; `enter` runs now and moves to the results, `↓` or `ctrl+n` moves without running, `tab` switches the scope, `esc` closes |
-| browsing | the ordinary list keys; `/` or `i` goes back to the box, `tab` switches the scope, `L` sends the search to the issue list, `y`, `Y` and `o` share the row, `esc` closes |
+| browsing | the ordinary list keys; `/` or `i` goes back to the box, `tab` switches the scope, `I` sends the search to the issue list, `y`, `Y` and `o` share the row, `esc` closes |
 
 A pause of a quarter of a second after the last keystroke runs the search, so a word being typed is
 one request and not one per letter. One letter asks nothing and says `type a little more`; an issue
@@ -346,7 +346,7 @@ What was typed is read as words: Lucene operators and punctuation are spaces, `A
 are only words, a pair of quotes makes a phrase, and the last word matches by its start. Results are
 newest first. A key typed exactly is listed first, marked `key` where the age would be, and is not
 repeated if the text search found it too. At two hundred results a last row says `more match` and
-`L` or a click on it sends the same search to the issue list, which pages without limit.
+`I` or a click on it sends the same search to the issue list, which pages without limit.
 
 | When | The pane says |
 |---|---|
@@ -675,7 +675,7 @@ board says when more is loaded than is on screen.
 one facet widen it — a person *and* a status, either of two people. The bar under the rows draws one
 chip per facet, its values comma-joined rather than one chip per value — a facet with three assignees
 on it is one narrowing, not three — with `×` to drop the whole facet and a click on a value's name to
-drop just that one. In the issue list, `a` — every issue in this project — is the no-terms state, so
+drop just that one. In the issue list, `0` — every issue in this project — is the no-terms state, so
 dropping the last term lands exactly on it, and a project switch takes the terms with it and says so:
 a status and an issue type are minted per project, so the ids in force name values the new project has
 never heard of. `ctrl+g` clears every term at once in every view that filters, the same key that

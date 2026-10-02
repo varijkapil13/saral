@@ -72,20 +72,20 @@ issue
 └───────────────────────┘
 
 list
-┌──────────────────────────────────────────────┐
-│ What can be done here                        │
-│ enter  open                                  │
-│ f      filter by a person, a status, a label │
-│ /      filter                                │
-│ a      all issues                            │
-│ e      edit this search                      │
-│ s      sort                                  │
-│ S      save this query to a key              │
-│ V      roomy / compact / lines               │
-│ y      copy the key                          │
-│ Y      copy the link                         │
-│ o      open in browser                       │
-└──────────────────────────────────────────────┘
+┌───────────────────────────────────────────────┐
+│ What can be done here                         │
+│ enter   open                                  │
+│ f       filter by a person, a status, a label │
+│ /       filter                                │
+│ 0       all issues                            │
+│ e       edit this search                      │
+│ s       sort                                  │
+│ ctrl+s  save this query to a key              │
+│ V       roomy / compact / lines               │
+│ y       copy the key                          │
+│ Y       copy the link                         │
+│ o       open in browser                       │
+└───────────────────────────────────────────────┘
 
 move
 ┌─────────────────────────────────────────┐

@@ -6,7 +6,10 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
-var _ kernel.KeyReporter = (*Model)(nil)
+var (
+	_ kernel.KeyReporter    = (*Model)(nil)
+	_ kernel.KeyStateLister = (*Model)(nil)
+)
 
 type keyMap struct {
 	Up       kernel.Binding
@@ -21,6 +24,7 @@ type keyMap struct {
 	Open     kernel.Binding
 	Results  kernel.Binding
 	Typing   kernel.Binding
+	TypeIn   kernel.Binding
 	Scope    kernel.Binding
 	InList   kernel.Binding
 	Retry    kernel.Binding
@@ -29,22 +33,23 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f", "space"}, "pgdn", "page down"),
-		HalfUp:   kernel.Bind([]string{"ctrl+u"}, "ctrl+u", "half page up"),
-		HalfDown: kernel.Bind([]string{"ctrl+d"}, "ctrl+d", "half page down"),
-		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
-		Top:      kernel.Bind([]string{"home"}, "g g", "first row"),
-		Bottom:   kernel.Bind([]string{"G", "end"}, "G / g e", "last row"),
-		Open:     kernel.Bind([]string{"enter"}, "enter", "open"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
+		HalfUp:   kernel.Canon(kernel.ActHalfUp),
+		HalfDown: kernel.Canon(kernel.ActHalfDown),
+		Go:       kernel.Canon(kernel.ActGo),
+		Top:      kernel.Canon(kernel.ActTop),
+		Bottom:   kernel.Canon(kernel.ActBottom),
+		Open:     kernel.Canon(kernel.ActOpen),
 		Results:  kernel.Bind([]string{"enter", "down", "ctrl+n"}, "enter", "results"),
-		Typing:   kernel.Bind([]string{"/", "i"}, "/", "search"),
-		Scope:    kernel.Bind([]string{"tab"}, "tab", "search this project or every project"),
-		InList:   kernel.Bind([]string{"L"}, "L", "in list"),
-		Retry:    kernel.Bind([]string{"r"}, "r", "retry"),
-		Close:    kernel.Bind([]string{"esc"}, "esc", "close"),
+		Typing:   kernel.Canon(kernel.ActFind, "search"),
+		TypeIn:   kernel.Canon(kernel.ActType),
+		Scope:    kernel.Canon(kernel.ActNextPane, "search this project or every project"),
+		InList:   kernel.Canon(kernel.ActFull, "in list"),
+		Retry:    kernel.Canon(kernel.ActRefresh, "retry"),
+		Close:    kernel.Canon(kernel.ActBack, "close"),
 	}
 }
 
@@ -83,7 +88,7 @@ var liveSets = func() [2 * keyStatesPerScope]kernel.KeySet {
 		typing := func(lead []kernel.Binding) kernel.KeySet {
 			acts := append(append([]kernel.Binding{}, lead...), scoped(terse, k.Close)...)
 			full := append(append([]kernel.Binding{}, lead...), scoped(spelt, k.Close)...)
-			return kernel.KeySet{Acts: acts, Full: [][]kernel.Binding{full, {widget.KillLine}}}
+			return kernel.KeySet{Mode: kernel.Modal, Acts: acts, Full: [][]kernel.Binding{full, {widget.KillLine}}}
 		}
 		sets[at(keysTypingIdle)] = typing(nil)
 		sets[at(keysTypingRows)] = typing([]kernel.Binding{k.Results})
@@ -103,6 +108,9 @@ var liveSets = func() [2 * keyStatesPerScope]kernel.KeySet {
 }()
 
 func (k keyMap) keySet() kernel.KeySet { return liveSets[int(keysBrowseRows)+int(keyStatesPerScope)] }
+
+// KeyStates is every set LiveKeys can report.
+func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }
 
 // LiveKeys reports the keys that work in the state the view is in.
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
@@ -149,7 +157,7 @@ func (k keyMap) browseTable() map[string]action {
 	}{
 		{k.Down, actDown}, {k.Up, actUp}, {k.PageDown, actPageDown}, {k.PageUp, actPageUp},
 		{k.HalfDown, actHalfDown}, {k.HalfUp, actHalfUp}, {k.Go, actGo}, {k.Top, actTop},
-		{k.Bottom, actBottom}, {k.Open, actOpen}, {k.Typing, actTyping}, {k.Scope, actScope},
+		{k.Bottom, actBottom}, {k.Open, actOpen}, {k.Typing, actTyping}, {k.TypeIn, actTyping}, {k.Scope, actScope},
 		{k.InList, actInList},
 	} {
 		for _, stroke := range e.b.Keys() {

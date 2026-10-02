@@ -394,7 +394,7 @@ func TestSearch_LSendsTheSameSearchToTheIssueList(t *testing.T) {
 	t.Parallel()
 	rec := recorded(newFake(baseIssues()))
 	dr := newDriver(t, testDeps(rec), Seed{Query: "login"}, 120, 30, withAfter(immediately))
-	dr.key("down", "L")
+	dr.key("down", "I")
 	if len(dr.opens) != 1 {
 		t.Fatalf("L opened %d views", len(dr.opens))
 	}

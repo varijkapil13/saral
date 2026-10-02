@@ -38,7 +38,7 @@ func TestList_ShowsEveryIssueInTheProjectIncludingWorkAssignedToNobody(t *testin
 		t.Fatal("the account has nothing of its own, so this proves nothing about widening")
 	}
 
-	dr.key("a")
+	dr.key("0")
 
 	if strings.Contains(dr.m.jql, "currentUser()") {
 		t.Errorf("the whole-project search is %q, which still narrows by who you are", dr.m.jql)
@@ -83,7 +83,7 @@ func TestList_TheWholeProjectSearchIsReachableFromThePaletteToo(t *testing.T) {
 	if all.Group != "Search" {
 		t.Errorf("the command is grouped under %q, want Search beside the other three", all.Group)
 	}
-	if len(all.Keys) != 1 || all.Keys[0] != "a" {
+	if len(all.Keys) != 1 || all.Keys[0] != "0" {
 		t.Errorf("the command teaches the keys %v, want the one the view's own footer shows", all.Keys)
 	}
 
@@ -106,10 +106,10 @@ func TestList_AskingForTheWholeProjectTwiceSaysSoRatherThanSearchingAgain(t *tes
 
 	f := asAda(12)
 	dr := newDriver(t, testDeps(f), 120, 30)
-	dr.key("a")
+	dr.key("0")
 	before := countCalls(f, "Search")
 
-	dr.key("a")
+	dr.key("0")
 
 	if got := countCalls(f, "Search"); got != before {
 		t.Errorf("asking for the search already on screen produced %d more searches", got-before)
@@ -436,7 +436,7 @@ func TestList_TheTitleAlwaysNamesWhatIsOnScreen(t *testing.T) {
 		want  string
 	}{
 		{"the account's own work", func(*driver) {}, "My issues in PROJ"},
-		{"every issue in the project", func(dr *driver) { dr.key("a") }, "All issues in PROJ"},
+		{"every issue in the project", func(dr *driver) { dr.key("0") }, "All issues in PROJ"},
 		{"a saved search the kernel dispatched", func(dr *driver) {
 			dr.send(kernel.RunQueryMsg{JQL: typed, Title: "Shipped work"})
 		}, "Shipped work"},
@@ -574,7 +574,7 @@ func TestList_AsksTheSiteOnceWhetherAnythingIsAssignedToThisAccount(t *testing.T
 	}
 
 	dr.send(kernel.ProjectMsg{Project: "PROJ"})
-	dr.key("a")
+	dr.key("0")
 	if got := len(spy.probes()); got != 1 {
 		t.Errorf("the site was asked %d times in all; the answer is about the credential and does not change", got)
 	}

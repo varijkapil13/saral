@@ -201,13 +201,13 @@ func TestList_DroppingEveryTermLandsOnTheSearchAIsBoundTo(t *testing.T) {
 	dr.send(filter.ChosenMsg{Term: shipped})
 	dr.send(filter.ChosenMsg{Term: adaTerm})
 
-	dr.key("a")
+	dr.key("0")
 
 	if len(dr.m.terms) != 0 {
-		t.Errorf("a left %+v in force", dr.m.terms)
+		t.Errorf("0 left %+v in force", dr.m.terms)
 	}
 	if got := dr.m.jql; got != allUpdated {
-		t.Errorf("a ran %q, want %q", got, allUpdated)
+		t.Errorf("0 ran %q, want %q", got, allUpdated)
 	}
 	mustNotContain(t, dr.view(), "status: Shipped")
 }
