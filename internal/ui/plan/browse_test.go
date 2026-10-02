@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/release"
 	"github.com/varijkapil13/saral/pkg/jira"
