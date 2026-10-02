@@ -13,8 +13,8 @@ import (
 func TestMotions_EveryAdvertisedStrokeMovesSomething(t *testing.T) {
 	t.Parallel()
 
-	down := []string{"j", "down", "f", "pgdown", "space", "d", "ctrl+d", "G", "end"}
-	up := []string{"k", "up", "b", "pgup", "u", "ctrl+u", "home"}
+	down := []string{"j", "down", "pgdown", "ctrl+f", "ctrl+d", "G", "end"}
+	up := []string{"k", "up", "pgup", "ctrl+b", "ctrl+u", "home"}
 
 	for _, stroke := range down {
 		dr := motionPane(t)

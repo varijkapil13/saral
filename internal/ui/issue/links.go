@@ -20,9 +20,9 @@ type linksKind struct {
 }
 
 var linksKeys = newSheetKeys(
-	sheetBind{kernel.Bind([]string{"a"}, "a", "add a link"), sheetAdd},
-	sheetBind{kernel.Bind([]string{"d", "x"}, "d", "remove it"), sheetRemove},
-	sheetBind{kernel.Bind([]string{"enter"}, "enter", "open it"), sheetOpen},
+	sheetBind{kernel.Canon(kernel.ActAdd, "add a link"), sheetAdd},
+	sheetBind{kernel.Canon(kernel.ActDelete, "remove it"), sheetRemove},
+	sheetBind{kernel.Canon(kernel.ActOpen, "open it"), sheetOpen},
 )
 
 func (k *linksKind) keys() *sheetKeys { return linksKeys }

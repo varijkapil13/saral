@@ -488,8 +488,8 @@ const (
 )
 
 var (
-	sheetDown    = kernel.Bind([]string{"j", "down"}, "↓/j", "down")
-	sheetUp      = kernel.Bind([]string{"k", "up"}, "↑/k", "up")
+	sheetDown    = kernel.Canon(kernel.ActDown)
+	sheetUp      = kernel.Canon(kernel.ActUp)
 	sheetChoose  = kernel.Bind([]string{"enter"}, "enter", "go on")
 	sheetCancel  = kernel.Bind([]string{"esc"}, "esc", "cancel")
 	sheetCandUp  = kernel.Bind([]string{"up"}, "↑", "previous suggestion")
@@ -497,6 +497,7 @@ var (
 	sheetYes     = kernel.Bind([]string{"y"}, "y", "yes")
 	sheetNo      = kernel.Bind([]string{"n", "esc"}, "n", "no")
 	sheetKindSeq int
+	sheetKeysets []*sheetKeys
 )
 
 type sheetBind struct {
@@ -507,6 +508,7 @@ type sheetBind struct {
 func newSheetKeys(acts ...sheetBind) *sheetKeys {
 	k := &sheetKeys{acts: map[string]sheetAct{}, base: sheetKindSeq * int(sheetStates)}
 	sheetKindSeq++
+	sheetKeysets = append(sheetKeysets, k)
 	own := make([]kernel.Binding, 0, len(acts))
 	for _, a := range acts {
 		own = append(own, a.b)
@@ -516,10 +518,11 @@ func newSheetKeys(acts ...sheetBind) *sheetKeys {
 	}
 	k.sets[sheetBrowse] = kernel.KeySet{Acts: own, Full: [][]kernel.Binding{own, {sheetDown, sheetUp}}}
 	k.sets[sheetAsking] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{sheetChoose, sheetCancel},
 		Full: [][]kernel.Binding{{sheetChoose, sheetCancel}, {sheetCandDn, sheetCandUp}, {widget.KillLine}},
 	}
-	k.sets[sheetConfirm] = kernel.KeySet{Acts: []kernel.Binding{sheetYes, sheetNo}, Full: [][]kernel.Binding{{sheetYes, sheetNo}}}
+	k.sets[sheetConfirm] = kernel.KeySet{Mode: kernel.Modal, Acts: []kernel.Binding{sheetYes, sheetNo}, Full: [][]kernel.Binding{{sheetYes, sheetNo}}}
 	return k
 }
 

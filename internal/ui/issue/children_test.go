@@ -136,7 +136,7 @@ func TestChildren_FirstEightInlineThenMore(t *testing.T) {
 	if got, more := childRows(p.editor()); got != childrenInline || more != 1 {
 		t.Fatalf("cursor rows: %d children and %d more, want %d and 1", got, more, childrenInline)
 	}
-	mustContain(t, p.frame(), "Children · 12 · 0 done", "+4 more · c lists them all")
+	mustContain(t, p.frame(), "Children · 12 · 0 done", "+4 more · ] lists them all")
 
 	for i, row := range p.editor().sideRows {
 		if row.kind == rkMore {
@@ -171,20 +171,20 @@ func TestChildren_ReadFailureShowsReasonAndRetries(t *testing.T) {
 	mustNotContain(t, p.frame(), "could not be read")
 }
 
-func TestChildren_CKeyOpensTheSheetAndSaysWhenThereIsNone(t *testing.T) {
+func TestChildren_BracketKeyOpensTheSheetAndSaysWhenThereIsNone(t *testing.T) {
 	t.Parallel()
 	f, epic, _ := epicFake(t, 2)
 	p := epicPane(t, f, f, epic, 50)
-	p.keys("c")
+	p.keys("]")
 	if push := p.onlyPush(); push.ID != "issue.sheet" {
-		t.Errorf("c pushed %q", push.ID)
+		t.Errorf("] pushed %q", push.ID)
 	}
 
 	bare := newPanel(t, New(testDeps(t, f), readIssue(t, f, "PROJ-2")), 120, 30)
 	bare.send(loadedMsg{gen: bare.editor().gen, issue: readIssue(t, f, "PROJ-2")})
-	bare.keys("c")
+	bare.keys("]")
 	if len(bare.pushes) != 0 || bare.lastStatus().Text != "PROJ-2 has no children" {
-		t.Errorf("c on an issue with none: %d pushes, status %q", len(bare.pushes), bare.lastStatus().Text)
+		t.Errorf("] on an issue with none: %d pushes, status %q", len(bare.pushes), bare.lastStatus().Text)
 	}
 }
 
@@ -193,10 +193,10 @@ func TestChildren_SheetSeededFromThePaneMakesNoRequest(t *testing.T) {
 	f, epic, _ := epicFake(t, 4)
 	log := &searchLog{Client: f}
 	p := epicPane(t, log, f, epic, 50)
-	p.keys("c")
+	p.keys("]")
 	sh, ok := p.onlyPush().View.(*sheet)
 	if !ok {
-		t.Fatal("c did not push a sheet")
+		t.Fatal("] did not push a sheet")
 	}
 	sh.Update(kernel.SizeMsg{Width: 100, Height: 20})
 	if cmd := sh.Init(); cmd != nil {
@@ -260,7 +260,7 @@ func TestRollup(t *testing.T) {
 func TestChildren_PaletteCommandsAreRegistered(t *testing.T) {
 	t.Parallel()
 	for id, keys := range map[string][]string{
-		"issue.parent": {"p"}, "issue.children": {"c"}, "issue.childrenInList": nil,
+		"issue.parent": {"p"}, "issue.children": {"]"}, "issue.childrenInList": nil,
 	} {
 		cmd, ok := kernel.LookupCommand(id)
 		if !ok {

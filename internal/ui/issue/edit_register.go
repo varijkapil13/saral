@@ -14,11 +14,12 @@ type MoveIssueMsg struct{}
 
 func init() {
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "issue.transition",
-		Title: "Change this issue's status",
-		Group: "Issue",
-		Keys:  []string{moveBinding().Help().Key},
-		Run:   func(kernel.Deps) tea.Cmd { return kernel.Broadcast(MoveIssueMsg{}) },
+		ID:     "issue.transition",
+		Title:  "Change this issue's status",
+		Group:  "Issue",
+		Action: kernel.ActStatus,
+		Keys:   []string{moveBinding().Help().Key},
+		Run:    func(kernel.Deps) tea.Cmd { return kernel.Broadcast(MoveIssueMsg{}) },
 	})
 }
 

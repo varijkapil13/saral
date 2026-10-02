@@ -22,16 +22,17 @@ type CommentsMsg struct{}
 // "comment" and not "comments": one column longer drops the whole hint line in
 // an 80-column terminal, the smallest size docs/UX.md supports.
 func commentsBinding() kernel.Binding {
-	return kernel.Bind([]string{"C"}, "C", "comment")
+	return kernel.Canon(kernel.ActComment)
 }
 
 func init() {
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "issue.comments",
-		Title: "Comment on this issue",
-		Group: "Issue",
-		Keys:  []string{commentsBinding().Help().Key},
-		Run:   func(kernel.Deps) tea.Cmd { return kernel.Broadcast(CommentsMsg{}) },
+		ID:     "issue.comments",
+		Title:  "Comment on this issue",
+		Group:  "Issue",
+		Action: kernel.ActComment,
+		Keys:   []string{commentsBinding().Help().Key},
+		Run:    func(kernel.Deps) tea.Cmd { return kernel.Broadcast(CommentsMsg{}) },
 	})
 }
 

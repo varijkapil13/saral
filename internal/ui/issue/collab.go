@@ -23,9 +23,9 @@ type ShareMsg struct{ Act ShareAct }
 
 // ShareBindings are the keys every view holding an issue answers the same way.
 var ShareBindings = []kernel.Binding{
-	kernel.Bind([]string{"y"}, "y", "copy the key"),
-	kernel.Bind([]string{"Y"}, "Y", "copy the link"),
-	kernel.Bind([]string{"o"}, "o", "open in browser"),
+	kernel.Canon(kernel.ActCopyKey, "copy the key"),
+	kernel.Canon(kernel.ActCopyLink, "copy the link"),
+	kernel.Canon(kernel.ActBrowser),
 }
 
 // ShareStroke is the act a stroke asks for, if it is one of ShareBindings.
@@ -84,9 +84,9 @@ type CollabMsg struct{ Open collabAct }
 type ChangedMsg struct{ Key string }
 
 var collabBindings = [...]kernel.Binding{
-	collabLinks:    kernel.Bind([]string{"L"}, "L", "links"),
-	collabTime:     kernel.Bind([]string{"w"}, "w", "log time"),
-	collabWatchers: kernel.Bind([]string{"W"}, "W", "watchers"),
+	collabLinks:    kernel.Canon(kernel.ActLinks),
+	collabTime:     kernel.Canon(kernel.ActLogTime),
+	collabWatchers: kernel.Canon(kernel.ActWatchers),
 }
 
 var collabStrokes = func() map[string]collabAct {
@@ -105,26 +105,27 @@ var collabKeys = append(append([]kernel.Binding{}, ShareBindings...),
 func init() {
 	for _, c := range []struct {
 		id, title string
+		act       kernel.Action
 		b         *kernel.Binding
 		msg       tea.Msg
 	}{
-		{"issue.copyKey", "Copy this issue's key", &ShareBindings[0], ShareMsg{ShareKey}},
-		{"issue.copyLink", "Copy the link to this issue", &ShareBindings[1], ShareMsg{ShareLink}},
-		{"issue.openBrowser", "Open this issue in the browser", &ShareBindings[2], ShareMsg{ShareBrowser}},
-		{"issue.links", "Link this issue to another", &collabBindings[collabLinks], CollabMsg{collabLinks}},
-		{"issue.worklog", "Log time on this issue", &collabBindings[collabTime], CollabMsg{collabTime}},
-		{"issue.watchers", "Watch this issue, or see who does", &collabBindings[collabWatchers], CollabMsg{collabWatchers}},
-		{"issue.clone", "Clone this issue", nil, CollabMsg{collabClone}},
-		{"issue.parent", "Go to this issue's parent", &parentKey, CollabMsg{collabParent}},
-		{"issue.children", "List this issue's children", &childrenKey, CollabMsg{collabChildren}},
-		{"issue.childrenInList", "Show this issue's children in the issue list", nil, CollabMsg{collabChildList}},
+		{"issue.copyKey", "Copy this issue's key", kernel.ActCopyKey, &ShareBindings[0], ShareMsg{ShareKey}},
+		{"issue.copyLink", "Copy the link to this issue", kernel.ActCopyLink, &ShareBindings[1], ShareMsg{ShareLink}},
+		{"issue.openBrowser", "Open this issue in the browser", kernel.ActBrowser, &ShareBindings[2], ShareMsg{ShareBrowser}},
+		{"issue.links", "Link this issue to another", kernel.ActLinks, &collabBindings[collabLinks], CollabMsg{collabLinks}},
+		{"issue.worklog", "Log time on this issue", kernel.ActLogTime, &collabBindings[collabTime], CollabMsg{collabTime}},
+		{"issue.watchers", "Watch this issue, or see who does", kernel.ActWatchers, &collabBindings[collabWatchers], CollabMsg{collabWatchers}},
+		{"issue.clone", "Clone this issue", "", nil, CollabMsg{collabClone}},
+		{"issue.parent", "Go to this issue's parent", kernel.ActParent, &parentKey, CollabMsg{collabParent}},
+		{"issue.children", "List this issue's children", kernel.ActChildren, &childrenKey, CollabMsg{collabChildren}},
+		{"issue.childrenInList", "Show this issue's children in the issue list", "", nil, CollabMsg{collabChildList}},
 	} {
 		var keys []string
 		if c.b != nil {
 			keys = []string{c.b.Help().Key}
 		}
 		kernel.RegisterCommand(kernel.Command{
-			ID: c.id, Title: c.title, Group: "Issue", Keys: keys,
+			ID: c.id, Title: c.title, Group: "Issue", Action: c.act, Keys: keys,
 			Run: func(kernel.Deps) tea.Cmd { return kernel.Broadcast(c.msg) },
 		})
 	}

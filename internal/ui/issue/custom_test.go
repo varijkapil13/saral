@@ -179,7 +179,7 @@ func TestCustom_NumberFieldIsEditedInPlaceAndSaved(t *testing.T) {
 		t.Fatalf("enter on a number field did not open its input: stage %v", p.editor().stage)
 	}
 	p.editor().input.SetValue("5")
-	p.keys("enter", "s")
+	p.keys("enter", "ctrl+s")
 
 	patch := rec.lastPatch(t)
 	if got := patchFieldNames(patch); !slices.Equal(got, []string{pointsID}) {
@@ -205,7 +205,7 @@ func TestCustom_AValueThisFieldCannotHoldIsNeverSent(t *testing.T) {
 	if row.problem == "" || row.value != "lots" {
 		t.Fatalf("problem %q, value %q: want the typed text kept and flagged", row.problem, row.value)
 	}
-	p.keys("s")
+	p.keys("ctrl+s")
 	if rec.writes() != 0 {
 		t.Fatal("a value that is not a number was written")
 	}
@@ -228,7 +228,7 @@ func TestCustom_SelectChoosesFromTheScreensOwnValues(t *testing.T) {
 		t.Fatalf("the list is %+v, want None and the two allowed values", pick)
 	}
 	pick.cursor = pickOptionByID(t, pick.ranked, "20002")
-	p.keys("enter", "s")
+	p.keys("enter", "ctrl+s")
 
 	v, _ := fieldValue(t, f, phaseID)
 	if v.Kind != jira.KindOption || len(v.Options) != 1 || v.Options[0].ID != "20002" {
@@ -260,7 +260,7 @@ func TestCustom_MultiSelectTogglesSeveralBeforeClosing(t *testing.T) {
 	if !strings.Contains(p.frame(), "[x] Ops") || !strings.Contains(p.frame(), "[ ] Docs") {
 		t.Errorf("the list does not show what is ticked:\n%s", p.frame())
 	}
-	p.keys("esc", "s")
+	p.keys("esc", "ctrl+s")
 
 	v, _ := fieldValue(t, f, checklistID)
 	if v.Kind != jira.KindOptions || len(v.Options) != 1 || v.Options[0].ID != "20013" {
@@ -283,7 +283,7 @@ func TestCustom_CascadeWritesTheParentAndTheChild(t *testing.T) {
 	if got := p.editor().rowByID(scopeID).display(); got != "Region / South" {
 		t.Fatalf("the row reads %q", got)
 	}
-	p.keys("s")
+	p.keys("ctrl+s")
 
 	patch := rec.lastPatch(t)
 	v, _ := patch.Fields.ByID(scopeID)
@@ -307,7 +307,7 @@ func TestCustom_PeopleFieldIsSearchedOnTheSite(t *testing.T) {
 		t.Fatal("a people field did not open a person search")
 	}
 	pick.cursor = pickOptionByID(t, pick.ranked, "acct-grace")
-	p.keys("enter", "esc", "s")
+	p.keys("enter", "esc", "ctrl+s")
 
 	v, _ := fieldValue(t, f, reviewersID)
 	if v.Kind != jira.KindUsers || len(v.Users) != 1 || v.Users[0].AccountID != "acct-grace" {
@@ -326,7 +326,7 @@ func TestCustom_EmptyingARowClearsTheField(t *testing.T) {
 	rowAt(t, p, noteID)
 	p.keys("enter")
 	p.editor().input.SetValue("")
-	p.keys("enter", "s")
+	p.keys("enter", "ctrl+s")
 	if got := patchFieldNames(rec.lastPatch(t)); !slices.Equal(got, []string{noteID + " (emptied)"}) {
 		t.Fatalf("the patch sends %v", got)
 	}
@@ -345,7 +345,7 @@ func TestCustom_ARequiredFieldCannotBeEmptied(t *testing.T) {
 	rowAt(t, p, noteID)
 	p.keys("enter")
 	p.editor().input.SetValue("")
-	p.keys("enter", "s")
+	p.keys("enter", "ctrl+s")
 	if rec.writes() != 0 {
 		t.Fatal("a required field was emptied")
 	}
@@ -385,7 +385,7 @@ func TestCustom_ARefusedSaveKeepsTheEditAndSaysWhere(t *testing.T) {
 			rowAt(t, p, pointsID)
 			p.keys("enter")
 			p.editor().input.SetValue("500")
-			p.keys("enter", "s")
+			p.keys("enter", "ctrl+s")
 
 			row := p.editor().rowByID(pointsID)
 			if !row.dirty() || row.value != "500" {
@@ -462,7 +462,7 @@ func TestCustom_ParagraphFieldOpensTheTextareaWithMentions(t *testing.T) {
 	if !strings.Contains(p.frame(), "@Grace Hopper") {
 		t.Fatalf("no suggestion is drawn:\n%s", p.frame())
 	}
-	p.keys("enter", "ctrl+s", "s")
+	p.keys("enter", "ctrl+s", "ctrl+s")
 
 	v, ok := rec.lastPatch(t).Fields.ByID(notesDocID)
 	if !ok || v.Kind != jira.KindDoc {
@@ -486,7 +486,7 @@ func TestDescriptionEditor_AtOffersPeopleAndWritesAMention(t *testing.T) {
 	if !p.editor().mention.Open() {
 		t.Fatal("@ did not open suggestions")
 	}
-	p.keys("enter", "ctrl+s", "s")
+	p.keys("enter", "ctrl+s", "ctrl+s")
 
 	body, _ := adf.Marshal(*rec.lastPatch(t).Description)
 	if !strings.Contains(string(body), `"type":"mention"`) || !strings.Contains(string(body), "acct-ada") {

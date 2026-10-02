@@ -18,11 +18,12 @@ type UnassignMsg struct{}
 
 func init() {
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "issue.assign",
-		Title: "Assign to…",
-		Group: "Issue",
-		Keys:  []string{assignBinding().Help().Key},
-		Run:   func(kernel.Deps) tea.Cmd { return kernel.Broadcast(AssignMsg{}) },
+		ID:     "issue.assign",
+		Title:  "Assign to…",
+		Group:  "Issue",
+		Action: kernel.ActAssign,
+		Keys:   []string{assignBinding().Help().Key},
+		Run:    func(kernel.Deps) tea.Cmd { return kernel.Broadcast(AssignMsg{}) },
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:    "issue.assignSelf",

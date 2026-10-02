@@ -22,7 +22,7 @@ type timeKind struct {
 	started time.Time
 }
 
-var timeKeys = newSheetKeys(sheetBind{kernel.Bind([]string{"a", "w"}, "a", "log time"), sheetAdd})
+var timeKeys = newSheetKeys(sheetBind{kernel.Canon(kernel.ActAdd, "log time"), sheetAdd})
 
 func (k *timeKind) keys() *sheetKeys { return timeKeys }
 

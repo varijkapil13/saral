@@ -17,9 +17,10 @@ func init() {
 	})
 	kernel.RegisterKeys(ViewID, defaultKeys().keySet())
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "issue.create",
-		Title: "Create an issue",
-		Group: "Issues",
+		ID:     "issue.create",
+		Title:  "Create an issue",
+		Group:  "Issues",
+		Action: kernel.ActCreate,
 		Run: func(d kernel.Deps) tea.Cmd {
 			return kernel.Push(ViewID, "New issue", New(d))
 		},

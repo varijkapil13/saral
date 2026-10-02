@@ -48,10 +48,10 @@ type childrenKind struct {
 }
 
 var childrenKeys = newSheetKeys(
-	sheetBind{kernel.Bind([]string{"enter"}, "enter", "open it"), sheetOpen},
-	sheetBind{kernel.Bind([]string{"@"}, "@", "assign"), sheetAssign},
-	sheetBind{kernel.Bind([]string{"t"}, "t", "status"), sheetStatus},
-	sheetBind{kernel.Bind([]string{"P"}, "P", "priority"), sheetPriority},
+	sheetBind{kernel.Canon(kernel.ActOpen, "open it"), sheetOpen},
+	sheetBind{kernel.Canon(kernel.ActAssign), sheetAssign},
+	sheetBind{kernel.Canon(kernel.ActStatus), sheetStatus},
+	sheetBind{kernel.Canon(kernel.ActPriority), sheetPriority},
 )
 
 func (k *childrenKind) keys() *sheetKeys { return childrenKeys }

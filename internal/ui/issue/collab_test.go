@@ -228,7 +228,7 @@ func TestPane_SheetKeysPushASheetForThisIssue(t *testing.T) {
 	if !ok {
 		t.Fatal("New no longer builds a *Model")
 	}
-	for _, stroke := range []string{"L", "w", "W"} {
+	for _, stroke := range []string{"&", "w", "W"} {
 		cmd, took := m.collabKey(stroke)
 		push, isPush := cmd().(kernel.PushMsg)
 		if !took || !isPush {
@@ -474,7 +474,7 @@ func TestWatchers_WatchAddAndRemove(t *testing.T) {
 	f := collabFake()
 	d := openSheet(t, f, "PROJ-1", &watchKind{})
 	mustContain(t, d.frame(), "you are not one of them")
-	d.keys("w")
+	d.keys("W")
 	mustContain(t, d.frame(), "you among them", "Ada Lovelace")
 
 	d.keys("a")
@@ -490,7 +490,7 @@ func TestWatchers_WatchAddAndRemove(t *testing.T) {
 		d.keys("j")
 	}
 	d.keys("d")
-	d.keys("w")
+	d.keys("W")
 	if list, _ := f.Watchers(t.Context(), "PROJ-1"); list.Count != 0 {
 		t.Errorf("%d still watch it", list.Count)
 	}
@@ -504,7 +504,7 @@ func TestWatchers_FailuresSayWhy(t *testing.T) {
 			f := collabFake()
 			d := openSheet(t, f, "PROJ-1", &watchKind{})
 			f.FailNext(tc.err)
-			d.keys("w")
+			d.keys("W")
 			if d.last().Level != kernel.LevelError {
 				t.Errorf("the failure said %+v", d.last())
 			}

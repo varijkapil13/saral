@@ -153,7 +153,7 @@ func (m *Model) childGroup() (refGroup, bool) {
 		if more {
 			g.more = "+" + strconv.Itoa(rest) + "+ more"
 		}
-		g.more += " · c lists them all"
+		g.more += " · ] lists them all"
 	}
 	return g, true
 }

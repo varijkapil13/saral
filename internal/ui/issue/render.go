@@ -199,17 +199,17 @@ const (
 func (m *Model) dirtyLine() string {
 	if m.draftRestored {
 		return m.styles.selected.Render("unsaved changes from earlier restored") + "  " +
-			m.zones.Mark(zoneDirtySave, m.styles.muted.Render("s save")) + m.styles.muted.Render(" · ") +
-			m.zones.Mark(zoneDirtyUndoAll, m.styles.muted.Render("X discard"))
+			m.zones.Mark(zoneDirtySave, m.styles.muted.Render("ctrl+s save")) + m.styles.muted.Render(" · ") +
+			m.zones.Mark(zoneDirtyUndoAll, m.styles.muted.Render("U discard"))
 	}
 	n := m.dirtyCount()
 	if n == 0 {
 		return ""
 	}
 	return m.styles.selected.Render(pluralChanges(n)+" unsaved") + "  " +
-		m.zones.Mark(zoneDirtySave, m.styles.muted.Render("s save")) + m.styles.muted.Render(" · ") +
-		m.zones.Mark(zoneDirtyUndo, m.styles.muted.Render("x revert this")) + m.styles.muted.Render(" · ") +
-		m.zones.Mark(zoneDirtyUndoAll, m.styles.muted.Render("X revert all"))
+		m.zones.Mark(zoneDirtySave, m.styles.muted.Render("ctrl+s save")) + m.styles.muted.Render(" · ") +
+		m.zones.Mark(zoneDirtyUndo, m.styles.muted.Render("u revert this")) + m.styles.muted.Render(" · ") +
+		m.zones.Mark(zoneDirtyUndoAll, m.styles.muted.Render("U revert all"))
 }
 
 // leavePrompt is what the header shows while AskClose is waiting on an answer.

@@ -19,7 +19,7 @@ type cloneKind struct {
 	types []jira.LinkType
 }
 
-var cloneKeys = newSheetKeys(sheetBind{kernel.Bind([]string{"enter", "a"}, "enter", "clone it"), sheetAdd})
+var cloneKeys = newSheetKeys(sheetBind{kernel.Canon(kernel.ActOpen, "clone it"), sheetAdd})
 
 func (k *cloneKind) keys() *sheetKeys { return cloneKeys }
 

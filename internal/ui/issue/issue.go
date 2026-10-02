@@ -739,6 +739,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		if m.focus == regionDesc {
 			return m.startDescriptionEdit()
 		}
+		if stroke != "enter" && m.onReference() {
+			return nil
+		}
 		return m.actOnCursor()
 	case actEditor:
 		return m.handOffDescription()
@@ -760,6 +763,11 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	default:
 		return m.move(m.focus, steps[at], 1)
 	}
+}
+
+func (m *Model) onReference() bool {
+	cr := m.currentCursorRow()
+	return cr != nil && (cr.kind == rkRef || cr.kind == rkMore)
 }
 
 // startDescriptionEdit is e or enter while the description region has the

@@ -9,5 +9,5 @@ import (
 // in one place, and is named in that keymap so the footer and the help
 // overlay advertise it.
 func moveBinding() kernel.Binding {
-	return kernel.Bind([]string{"t"}, "t", "change status")
+	return kernel.Canon(kernel.ActStatus, "change status")
 }

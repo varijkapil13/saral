@@ -110,7 +110,7 @@ func TestRelated_RefRowsAreOnTheCursor(t *testing.T) {
 
 func TestRelated_EnterOpensRefWithSeed(t *testing.T) {
 	t.Parallel()
-	for _, stroke := range []string{"enter", "e"} {
+	for _, stroke := range []string{"enter"} {
 		t.Run(stroke, func(t *testing.T) {
 			t.Parallel()
 			p, _ := navPanel(t, 120, 38)
@@ -130,6 +130,16 @@ func TestRelated_EnterOpensRefWithSeed(t *testing.T) {
 				t.Errorf("the trail is %v", opened.trail)
 			}
 		})
+	}
+}
+
+func TestRelated_EditKeyLeavesARefRowAlone(t *testing.T) {
+	t.Parallel()
+	p, _ := navPanel(t, 120, 38)
+	p.cursorOnRef("PROJ-3")
+	p.keys("e")
+	if len(p.pushes) != 0 {
+		t.Errorf("e on a reference row pushed %d views", len(p.pushes))
 	}
 }
 

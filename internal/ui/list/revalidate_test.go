@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -148,7 +150,8 @@ func TestList_ARowRevalidatesAfterAFieldSaveLandsInThePushedPane(t *testing.T) {
 		t.Fatal("enter did not push the issue pane over the list")
 	}
 	m = send(t, m, kernel.BroadcastMsg{Msg: issue.UnassignMsg{}})
-	m = keys(t, m, "s", "esc")
+	m = send(t, m, tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	m = keys(t, m, "esc")
 
 	lm, ok := m.Top().(*Model)
 	if !ok {
