@@ -153,7 +153,7 @@ func (m *Model) relayout() {
 	if m.set != nil {
 		m.set.title = m.titleLine()
 	}
-	m.rows.Reset()
+	m.resetRows()
 }
 
 func (m *Model) widestName() int {
@@ -199,9 +199,6 @@ type rowCells struct {
 	start       string
 	release     string
 	description string
-	project     string
-	fold        string
-	excluded    bool
 }
 
 // rowKey is what makes two renderings of a row the same rendering.
@@ -210,8 +207,6 @@ type rowKey struct {
 	lay      layout
 	selected bool
 	gen      int
-	header   bool
-	folded   bool
 }
 
 // rowZone is the click target one row is marked with, named by the version's id
@@ -240,35 +235,31 @@ func (m *Model) rebuildCells() {
 		m.decorate()
 	}
 	m.reorder()
-	m.rows.Reset()
+	m.resetRows()
 }
 
 func (m *Model) rowKeyOf(at int, selected bool) rowKey {
-	sl := m.order[at]
-	if sl.v < 0 {
-		h := &m.set.heads[sl.g]
-		return rowKey{
-			cells: rowCells{id: h.zone, name: h.name, description: h.text},
-			lay:   m.lay, selected: selected, gen: m.styles.gen,
-			header: true, folded: m.set.folded[h.key],
-		}
-	}
-	return rowKey{cells: m.cells[sl.v], lay: m.lay, selected: selected, gen: m.styles.gen}
+	return rowKey{cells: m.cells[m.order[at].v], lay: m.lay, selected: selected, gen: m.styles.gen}
 }
 
 func (m *Model) row(at int, selected bool) string {
+	if m.set != nil {
+		return m.setRow(at, selected)
+	}
 	k := m.rowKeyOf(at, selected)
 	if s, ok := m.rows.Get(k); ok {
 		return s
 	}
-	var s string
-	if k.header {
-		s = m.zones.Mark(k.cells.id, renderHeader(k, m.styles, m.deps.Theme))
-	} else {
-		s = m.zones.Mark(rowZone(k.cells.id), renderRow(k, m.styles, m.deps.Theme))
-	}
+	s := m.zones.Mark(rowZone(k.cells.id), renderRow(k, m.styles, m.deps.Theme))
 	m.rows.Put(k, s)
 	return s
+}
+
+func (m *Model) resetRows() {
+	m.rows.Reset()
+	if m.set != nil {
+		m.set.rows.Reset()
+	}
 }
 
 // warm renders the overscan into the memo so that the next scroll step is a
@@ -320,6 +311,10 @@ func openLabel(v jira.Version) string {
 
 // renderRow draws one row to exactly lay.width columns.
 func renderRow(k rowKey, st *styles, t *kernel.Theme) string {
+	return drawRow(k, "", false, st, t)
+}
+
+func drawRow(k rowKey, project string, excluded bool, st *styles, t *kernel.Theme) string {
 	ell := t.Glyphs.Ellipsis
 	var b strings.Builder
 	b.Grow(k.lay.width + 32)
@@ -333,18 +328,18 @@ func renderRow(k rowKey, st *styles, t *kernel.Theme) string {
 	switch {
 	case k.selected:
 		b.WriteString(name)
-	case k.cells.excluded:
+	case excluded:
 		b.WriteString(st.muted.Render(name))
 	default:
 		b.WriteString(st.name.Render(name))
 	}
 	if k.lay.project > 0 {
 		b.WriteString(strings.Repeat(" ", gap))
-		project := widget.PadTruncate(k.cells.project, k.lay.project, ell)
+		cell := widget.PadTruncate(project, k.lay.project, ell)
 		if k.selected {
-			b.WriteString(project)
+			b.WriteString(cell)
 		} else {
-			b.WriteString(st.muted.Render(project))
+			b.WriteString(st.muted.Render(cell))
 		}
 	}
 	state := widget.PadTruncate(k.cells.state, k.lay.state, ell)

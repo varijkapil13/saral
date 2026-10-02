@@ -68,6 +68,9 @@ type setView struct {
 	acts map[string]setAct
 
 	// memberGroup is -1 for a version in no group, and heads has one more entry than there are groups, for them.
+	projects    []string
+	folds       []string
+	rows        *widget.RowCache[setKey, string]
 	memberGroup []int32
 	heads       []head
 	owned       []Owner
@@ -102,6 +105,7 @@ func newSetModel(d kernel.Deps, s Set) *Model {
 	m := newModel(d)
 	m.set = &setView{
 		folded: map[string]bool{},
+		rows:   widget.NewRowCache[setKey, string](rowCacheLimit),
 		find:   widget.NewInput(),
 		acts:   defaultSetKeys().table(),
 	}
@@ -175,14 +179,10 @@ func (s *setView) hasOwner(ref string) bool {
 func (m *Model) decorate() {
 	s := m.set
 	named := s.groupNames(m.versions)
+	s.projects, s.folds = s.projects[:0], s.folds[:0]
 	for i := range m.cells {
-		c := &m.cells[i]
-		c.project = widget.Sanitize(s.owners[i].Label)
-		c.excluded = s.excluded[i]
-		if c.excluded {
-			c.description = excludedCell
-		}
-		c.fold = strings.ToLower(c.name + "\x00" + named[i])
+		s.projects = append(s.projects, widget.Sanitize(s.owners[i].Label))
+		s.folds = append(s.folds, strings.ToLower(m.cells[i].name+"\x00"+named[i]))
 	}
 	m.regroup()
 }

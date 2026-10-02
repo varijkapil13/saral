@@ -100,6 +100,13 @@ func (m *Model) fields() []sortField {
 	return sortFields
 }
 
+func (m *Model) ownerLabel(i int) string {
+	if m.set == nil {
+		return ""
+	}
+	return m.set.projects[i]
+}
+
 func (m *Model) viewID() string {
 	if m.set != nil {
 		return SetViewID
@@ -219,8 +226,8 @@ func (m *Model) compareRows(f sortField, desc bool, a, b int) int {
 		c = compareDates(da, db)
 	} else {
 		c = f.compare(
-			sortable{&m.versions[a], m.cells[a].state, m.cells[a].project},
-			sortable{&m.versions[b], m.cells[b].state, m.cells[b].project})
+			sortable{&m.versions[a], m.cells[a].state, m.ownerLabel(a)},
+			sortable{&m.versions[b], m.cells[b].state, m.ownerLabel(b)})
 	}
 	if desc {
 		return -c

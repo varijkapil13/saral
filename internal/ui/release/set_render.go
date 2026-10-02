@@ -125,7 +125,7 @@ func (m *Model) setSummaryLine(key summaryKey) string {
 	return m.sum
 }
 
-func renderHeader(k rowKey, st *styles, t *kernel.Theme) string {
+func renderHeader(k setKey, st *styles, t *kernel.Theme) string {
 	ell := t.Glyphs.Ellipsis
 	glyph := t.Glyphs.Expanded
 	if k.folded {
@@ -139,6 +139,53 @@ func renderHeader(k rowKey, st *styles, t *kernel.Theme) string {
 	}
 	line := widget.PadTruncate(glyph, marker, ell) + st.accent.Render(name) + gap + st.muted.Render(k.cells.description)
 	return widget.PadTruncate(line, k.lay.width, ell)
+}
+
+type setKey struct {
+	rowKey
+	project  string
+	excluded bool
+	header   bool
+	folded   bool
+}
+
+func (m *Model) setRowKey(at int, selected bool) setKey {
+	s := m.set
+	sl := m.order[at]
+	if sl.v < 0 {
+		h := &s.heads[sl.g]
+		return setKey{
+			rowKey: rowKey{
+				cells: rowCells{id: h.zone, name: h.name, description: h.text},
+				lay:   m.lay, selected: selected, gen: m.styles.gen,
+			},
+			header: true, folded: s.folded[h.key],
+		}
+	}
+	k := setKey{
+		rowKey:   rowKey{cells: m.cells[sl.v], lay: m.lay, selected: selected, gen: m.styles.gen},
+		project:  s.projects[sl.v],
+		excluded: s.excluded[sl.v],
+	}
+	if k.excluded {
+		k.cells.description = excludedCell
+	}
+	return k
+}
+
+func (m *Model) setRow(at int, selected bool) string {
+	k := m.setRowKey(at, selected)
+	if s, ok := m.set.rows.Get(k); ok {
+		return s
+	}
+	var s string
+	if k.header {
+		s = m.zones.Mark(k.cells.id, renderHeader(k, m.styles, m.deps.Theme))
+	} else {
+		s = m.zones.Mark(rowZone(k.cells.id), drawRow(k.rowKey, k.project, k.excluded, m.styles, m.deps.Theme))
+	}
+	m.set.rows.Put(k, s)
+	return s
 }
 
 func (m *Model) appendNotes(lines []string) []string {

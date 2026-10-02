@@ -301,21 +301,17 @@ func (m *Model) arrangeSlots() {
 }
 
 func (m *Model) keeps(i int) bool {
-	c := &m.cells[i]
-	if !m.filter.keeps(c.state) {
+	if !m.filter.keeps(m.cells[i].state) {
 		return false
 	}
 	s := m.set
-	if s == nil {
-		return true
-	}
-	if c.excluded && !s.showExcluded {
+	if s.excluded[i] && !s.showExcluded {
 		return false
 	}
 	if s.pick != "" && s.owners[i].Ref != s.pick {
 		return false
 	}
-	return s.needle == "" || strings.Contains(c.fold, s.needle)
+	return s.needle == "" || strings.Contains(s.folds[i], s.needle)
 }
 
 func (m *Model) toggleExcluded() tea.Cmd {

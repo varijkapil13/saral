@@ -192,16 +192,16 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case kernel.ThemeMsg:
 		m.deps.Theme = msg.Theme
 		m.styles = newStyles(msg.Theme)
-		m.rows.Reset()
+		m.resetRows()
 		m.head, m.sum = "", ""
 		m.relayout()
 
 	case kernel.SetMouseMsg:
-		m.rows.Reset()
+		m.resetRows()
 
 	case kernel.CapabilitiesMsg:
 		m.deps.Caps = msg.Caps
-		m.rows.Reset()
+		m.resetRows()
 		m.sum = ""
 
 	case kernel.ProjectMsg:
@@ -283,7 +283,7 @@ func (m *Model) resize(w, h int) {
 		return
 	}
 	m.width, m.height = w, h
-	m.rows.Reset()
+	m.resetRows()
 	m.sum = ""
 	m.relayout()
 	m.form.resize(w)
