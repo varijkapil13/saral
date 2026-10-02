@@ -64,6 +64,15 @@ type Model struct {
 	loadErr     error
 	trail       []string
 
+	children    []jira.Issue
+	childPage   jira.Page[jira.Issue]
+	childAsked  bool
+	childRead   bool
+	childErr    error
+	childGen    int
+	childCtx    context.Context
+	childCancel context.CancelFunc
+
 	// edit is the site's own answer to which fields belong on this issue's
 	// screen right now. A read that never arrives — it failed, or this build
 	// has no site to ask — leaves it at its zero value, which fields.go reads
@@ -379,12 +388,18 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 			m.issue, m.labels, m.loadedIssue, m.loadFailed, m.loadErr = msg.issue, msg.labels, true, false, nil
 			m.dataGen++
 			m.rebaseRows()
-			cmd = m.keepIssue(msg.issue)
+			cmd = join(m.keepIssue(msg.issue), m.fetchChildren())
 			if m.moved > 0 {
 				m.saveFail = movedNote(m.moved)
 				cmd = join(cmd, join(m.keepDraft(), kernel.Warn(m.saveFail)))
 			}
 		}
+
+	case childrenMsg:
+		m.childrenArrived(msg)
+
+	case childPatchedMsg:
+		m.childPatched(msg)
 
 	case editMetaMsg:
 		if m.current(msg.gen) {
@@ -514,6 +529,9 @@ func (m *Model) stop() {
 // would leave the pane unsure whether it landed.
 func (m *Model) Close() {
 	m.stop()
+	if m.childCancel != nil {
+		m.childCancel()
+	}
 	if m.pickCancel != nil {
 		m.pickCancel()
 	}
@@ -734,6 +752,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.openAssigneePicker()
 	case actParent:
 		return m.openParent()
+	case actChildren:
+		return m.openChildren()
 	case actMove:
 		cmd, _ := m.moveKey(msg)
 		return cmd

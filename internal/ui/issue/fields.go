@@ -177,6 +177,8 @@ func bookkeepingSetting() kernel.Setting {
 type refGroup struct {
 	label string
 	refs  []jira.IssueRef
+	// title replaces label as the heading; more is the cursor row that opens the rest.
+	title, note, more string
 }
 
 // cursorRow is one row the sidebar's own cursor can land on: every field-value
@@ -245,9 +247,7 @@ func (m *Model) detailContent(width int) content {
 	r.heading("Details")
 	switch {
 	case m.loadFailed && !m.loadedIssue:
-		for _, line := range strings.Split(ansi.Wrap(m.failureText(), max(width-2, 8), ""), "\n") {
-			r.note(line)
-		}
+		r.notes(m.failureText())
 	case !m.loadedIssue:
 		r.note("Reading the issue" + m.deps.Theme.Glyphs.Ellipsis)
 	}
@@ -478,6 +478,12 @@ func (r *rows) heading(text string) { r.line(r.m.styles.section.Render(text)) }
 
 func (r *rows) note(text string) { r.line("  " + r.m.styles.muted.Render(text)) }
 
+func (r *rows) notes(text string) {
+	for _, line := range strings.Split(ansi.Wrap(text, max(r.width-2, 8), ""), "\n") {
+		r.note(line)
+	}
+}
+
 // related draws the parent, the subtasks and the links, each issue a cursor row
 // under what relates it.
 func (r *rows) related() {
@@ -495,11 +501,26 @@ func (r *rows) related() {
 		}
 	}
 	for i := range groups {
-		r.heading(groups[i].label)
+		r.heading(firstNonEmpty(groups[i].title, groups[i].label))
+		if groups[i].note != "" {
+			r.notes(groups[i].note)
+		}
 		for j := range groups[i].refs {
 			r.ref(groups[i].label, &groups[i].refs[j], keyW, statusW)
 		}
+		if groups[i].more != "" {
+			r.moreRow(groups[i].more)
+		}
 	}
+}
+
+func (r *rows) moreRow(text string) {
+	prefix := "    "
+	if len(r.curs) == r.m.cursor {
+		prefix = r.m.arrowPrefix() + "  "
+	}
+	r.line(prefix + r.m.styles.muted.Render(text))
+	r.mark(moreRowID, text, rkMore, false)
 }
 
 // ref is one related issue: its key, what state it is in, and what it is about.
@@ -799,6 +820,9 @@ func (m *Model) refGroups() []refGroup {
 	}
 	if len(m.issue.Subtasks) > 0 {
 		out = append(out, refGroup{label: "Subtasks", refs: m.issue.Subtasks})
+	}
+	if g, ok := m.childGroup(); ok {
+		out = append(out, g)
 	}
 	for i := range m.issue.Links {
 		link := &m.issue.Links[i]

@@ -18,7 +18,7 @@ func TestStrokes_TheTableIsTheKeymapTurnedInsideOut(t *testing.T) {
 		k.Up, k.Down, k.PageUp, k.PageDown, k.HalfUp, k.HalfDown,
 		k.Go, k.Top, k.Bottom, k.Left, k.Right,
 		k.Pane, k.PrevPane, k.Expands, k.Sidebar, k.Describe, k.Reset,
-		k.Edit, k.Act, k.Editor, k.Save, k.UndoRow, k.UndoAll, k.Assign, k.Move, k.Comments, k.Parent,
+		k.Edit, k.Act, k.Editor, k.Save, k.UndoRow, k.UndoAll, k.Assign, k.Move, k.Comments, k.Parent, k.Children,
 	} {
 		for _, stroke := range b.Keys() {
 			if other, clash := bound[stroke]; clash {
@@ -50,7 +50,7 @@ func TestStrokes_EveryMotionActionHasAStep(t *testing.T) {
 	for _, at := range []action{
 		actNone, actLeft, actRight, actGo, actPane, actPrevPane,
 		actExpands, actSidebar, actDescribe, actReset, actEdit, actEditor,
-		actSave, actUndoRow, actUndoAll, actAssign, actMove, actComments, actParent,
+		actSave, actUndoRow, actUndoAll, actAssign, actMove, actComments, actParent, actChildren,
 	} {
 		if _, ok := steps[at]; ok {
 			t.Errorf("action %d is not a motion and has a step, so it would scroll as well", at)

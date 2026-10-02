@@ -646,8 +646,11 @@ func (m *Model) actOnCursor() tea.Cmd {
 	if cr == nil {
 		return nil
 	}
-	if cr.kind == rkRef {
+	switch cr.kind {
+	case rkRef:
 		return m.openRelated(*cr.ref)
+	case rkMore:
+		return m.openChildren()
 	}
 	row := m.rowByID(cr.id)
 	if row == nil || !row.editable() {

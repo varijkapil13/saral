@@ -31,6 +31,7 @@ const (
 	rkStatus
 	rkField
 	rkRef
+	rkMore
 )
 
 // editableKind reports whether this build can edit a row of this kind at all.

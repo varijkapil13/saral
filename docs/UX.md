@@ -973,6 +973,23 @@ before it is left, whichever gesture leaves it. An issue the token cannot open k
 and says `PROJ-99 could not be opened: it does not exist, or this account cannot browse its project.`
 - a 404 is Jira's answer to both.
 
+**An epic's children are listed in the pane and changed from a sheet.** An issue whose type sits above
+standard on the site's hierarchy reads its children once after the issue, as one search of fifty
+rows. They are drawn under `Children · 12 · 7 done` (`50+ · 7 done so far` when there are more),
+the first eight as rows of their own and then `+42 more · c lists them all`, which `enter` opens.
+An issue of a standard type has no such search: its subtasks are its children and are already on
+screen. `c` opens the children sheet for either, and says `PROJ-3 has no children` when there are
+none. The sheet shows each child's key, type, status, assignee, priority and summary, pages in as the
+cursor nears the end, and takes `enter` to open the child, `@` to assign it (me, unassigned, or a
+name searched in the child's own project), `t` to move it and `P` to set its priority. Each is
+written at once, the row is read again, and the pane underneath patches that one child and the count
+above it, without reading the epic. A move that asks for fields opens the child's own pane on its
+status picker rather than guessing a value; a field the child's edit screen does not carry says so
+(`Priority is not on PROJ-31's edit screen`); a child someone else changed first is read again and not
+overwritten (`assignee changed on the site; read again`). *Show this issue's children in the issue
+list* in the palette runs the same search in the list, replacing the stack as `g 1` does. Labels,
+sprint and bulk changes are not here.
+
 **Links, time and watchers are sheets pushed over the pane**, one list with one prompt under it, so
 `esc` comes back to the fields exactly as they were. Each change is written at once and the pane
 underneath rereads the issue.

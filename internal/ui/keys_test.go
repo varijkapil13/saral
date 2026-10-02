@@ -53,6 +53,8 @@ var keyOwners = map[string]string{
 	"issue.links":             issue.ViewID,
 	"issue.worklog":           issue.ViewID,
 	"issue.watchers":          issue.ViewID,
+	"issue.parent":            issue.ViewID,
+	"issue.children":          issue.ViewID,
 	"issues.filter-by":        list.ViewID,
 	"issues.sort":             list.ViewID,
 	"issues.save-query":       list.ViewID,

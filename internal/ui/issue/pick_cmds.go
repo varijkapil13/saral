@@ -8,6 +8,10 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
+func assignable(ctx context.Context, finder jira.PeopleFinder, project, match string, limit int) ([]jira.User, error) {
+	return finder.FindPeople(ctx, jira.PeopleQuery{Match: match, Project: project, Limit: limit})
+}
+
 // peopleFoundMsg carries the accounts one assignee search brought back. needle
 // is what was asked for, so a keystroke changed while this was in flight is
 // never mistaken for the query it actually answers.
@@ -22,7 +26,7 @@ type peopleFoundMsg struct {
 // app accounts for free — see jira.PeopleQuery's own documentation.
 func findAssignees(ctx context.Context, finder jira.PeopleFinder, project, match string, limit, gen int) tea.Cmd {
 	return func() tea.Msg {
-		people, err := finder.FindPeople(ctx, jira.PeopleQuery{Match: match, Project: project, Limit: limit})
+		people, err := assignable(ctx, finder, project, match, limit)
 		if err != nil {
 			return editFailedMsg{gen: gen, err: err}
 		}
