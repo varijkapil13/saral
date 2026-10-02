@@ -441,6 +441,7 @@ var pickerSets = func() [pickerStates]kernel.KeySet {
 	k := defaultPickerKeys()
 	var sets [pickerStates]kernel.KeySet
 	sets[pickerPicking] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Choose, k.Close},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
@@ -449,6 +450,7 @@ var pickerSets = func() [pickerStates]kernel.KeySet {
 		},
 	}
 	sets[pickerNothing] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Close},
 		Full: [][]kernel.Binding{{k.Close}, {widget.KillLine}},
 	}
@@ -465,3 +467,5 @@ func (m *pickerModel) LiveKeys() (set kernel.KeySet, gen int) {
 	}
 	return pickerSets[state], int(state)
 }
+
+func (m *pickerModel) KeyStates() []kernel.KeySet { return pickerSets[:] }

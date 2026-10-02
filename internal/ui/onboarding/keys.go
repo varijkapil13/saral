@@ -35,6 +35,7 @@ func defaultKeys() keyMap {
 // field is focused throughout, so the motion that edits it works here too.
 func (k keyMap) keySet() kernel.KeySet {
 	return kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Continue, k.Back},
 		Full: [][]kernel.Binding{{k.Continue, k.Back, k.Retry}, {widget.KillLine}},
 	}
@@ -65,12 +66,14 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// The first step has nowhere to go back to, and back() knows it, so the
 	// footer says so by leaving the key out.
 	sets[keysFirstStep] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Continue},
 		Full: [][]kernel.Binding{{k.Continue}},
 	}
 	// A site that could not be reached is the commonest way this flow fails, and
 	// it fails on the one step with nothing behind it.
 	sets[keysFirstStepFailed] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Retry, k.Continue},
 		Full: [][]kernel.Binding{{k.Retry, k.Continue}},
 	}
@@ -78,18 +81,22 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// The arrows are the action on this step rather than a way of moving around
 	// it: they are how the option is picked, on the first screen anybody sees.
 	sets[keysChoosing] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Choose, k.Continue, k.Back},
 		Full: [][]kernel.Binding{{k.Choose, k.Continue, k.Back, k.Retry}},
 	}
 	sets[keysReview] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Write, k.Back},
 		Full: [][]kernel.Binding{{k.Write, k.Back}},
 	}
 	sets[keysDone] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Finish},
 		Full: [][]kernel.Binding{{k.Finish}},
 	}
 	sets[keysFailed] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Retry, k.Back},
 		Full: [][]kernel.Binding{{k.Retry, k.Back, k.Continue}},
 	}
@@ -130,3 +137,5 @@ func (m Model) keyState() keyState {
 		return keysTyping
 	}
 }
+
+func (m Model) KeyStates() []kernel.KeySet { return liveSets[:] }

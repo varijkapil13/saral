@@ -22,6 +22,7 @@ func defaultKeys() settingsKeys {
 func keySet() kernel.KeySet {
 	k := defaultKeys()
 	return kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Choose},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.Left, k.Right},

@@ -56,6 +56,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	k := defaultKeys()
 	var sets [keyStates]kernel.KeySet
 	sets[keysOffering] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Run, k.Close},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
@@ -64,6 +65,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		},
 	}
 	sets[keysIssue] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Open, k.Close},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
@@ -72,6 +74,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		},
 	}
 	sets[keysFind] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Find, k.Close},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
@@ -80,6 +83,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		},
 	}
 	sets[keysNothing] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Close},
 		Full: [][]kernel.Binding{{k.Close}, {widget.KillLine}},
 	}
@@ -138,3 +142,5 @@ func (k keyMap) table() map[string]action {
 	}
 	return out
 }
+
+func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }

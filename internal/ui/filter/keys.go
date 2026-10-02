@@ -39,10 +39,10 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
 		Top:      kernel.Bind([]string{"home"}, "home", "first row"),
 		Bottom:   kernel.Bind([]string{"end"}, "end", "last row"),
 		Choose:   kernel.Bind([]string{"enter"}, "enter", "choose what to filter by"),
@@ -78,6 +78,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	k := defaultKeys()
 	var sets [keyStates]kernel.KeySet
 	sets[keysFacets] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Choose, "choose")},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp, k.Top, k.Bottom},
@@ -85,6 +86,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		},
 	}
 	sets[keysValues] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Use, "use it"), kernel.Terse(k.Back, "facets")},
 		Full: [][]kernel.Binding{
 			{k.TypeDown, k.TypeUp, k.TypePageDown, k.TypePageUp},
@@ -95,6 +97,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// Nothing to choose is not nothing to do: the way back is the whole of what
 	// works, and naming enter there names a stroke that is refused.
 	sets[keysNothing] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Back, "facets")},
 		Full: [][]kernel.Binding{{k.Back}, {widget.KillLine}},
 	}
@@ -166,3 +169,5 @@ func table(entries ...binding) map[string]action {
 	}
 	return out
 }
+
+func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }

@@ -643,6 +643,7 @@ var fieldSets = func() [fieldStates]kernel.KeySet {
 	k := defaultFieldKeys()
 	var sets [fieldStates]kernel.KeySet
 	sets[fieldPicking] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Toggle, k.Close},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
@@ -650,6 +651,7 @@ var fieldSets = func() [fieldStates]kernel.KeySet {
 		},
 	}
 	sets[fieldNothing] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Close},
 		Full: [][]kernel.Binding{{k.Close}},
 	}
@@ -666,3 +668,5 @@ func (m *fieldPickerModel) LiveKeys() (set kernel.KeySet, gen int) {
 	}
 	return fieldSets[state], int(state)
 }
+
+func (m *fieldPickerModel) KeyStates() []kernel.KeySet { return fieldSets[:] }

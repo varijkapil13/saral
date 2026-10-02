@@ -320,43 +320,6 @@ var unmigrated = map[string]legacy{
 		},
 	},
 
-	"filter": {
-		why: "declare Modal",
-		findings: []string{
-			"does not implement kernel.KeyStateLister",
-			"unminted: end | last row",
-			"unminted: enter | choose",
-			"unminted: enter | choose what to filter by",
-			"unminted: home | first row",
-			"unminted: pgdn | page down",
-			"unminted: pgup | page up",
-			"unminted: ↑/k | up",
-			"unminted: ↓/j | down",
-		},
-	},
-
-	"form": {
-		why: "declare Modal",
-		findings: []string{
-			"does not implement kernel.KeyStateLister",
-			"unminted: ctrl+d | empty",
-			"unminted: ctrl+d | empty this field",
-			"unminted: ctrl+s | create",
-			"unminted: ctrl+s | create the issue",
-			"unminted: ctrl+t | change the issue type",
-			"unminted: ctrl+t | type",
-			"unminted: end | last row",
-			"unminted: enter | edit",
-			"unminted: enter | edit this field",
-			"unminted: enter | use this issue type",
-			"unminted: home | first row",
-			"unminted: pgdn | page down",
-			"unminted: pgup | page up",
-			"unminted: ↑/k | up",
-			"unminted: ↓/j | down",
-		},
-	},
-
 	"issue": {
 		why: "s save to ctrl+s, x/X to u/U, c to ], L to &, w to W, drop the b/f/u/d/space/x/e aliases",
 		findings: []string{
@@ -435,61 +398,6 @@ var unmigrated = map[string]legacy{
 			"unminted: y | copy the key",
 			"unminted: ↑/k | up",
 			"unminted: ↓/j | down",
-		},
-	},
-
-	"move": {
-		why: "declare Modal",
-		findings: []string{
-			"does not implement kernel.KeyStateLister",
-			"unminted: end | last row",
-			"unminted: enter | use it",
-			"unminted: enter | use the project under the cursor",
-			"unminted: home | first row",
-			"unminted: i | type a key",
-			"unminted: i | type a project key",
-			"unminted: pgdn | page down",
-			"unminted: pgup | page up",
-			"unminted: ↑/k | up",
-			"unminted: ↓/j | down",
-		},
-	},
-
-	"onboarding": {
-		why: "declare Modal",
-		findings: []string{
-			"does not implement kernel.KeyStateLister",
-			"unminted: alt+k | delete to end of line",
-			"unminted: ctrl+r | try that again",
-			"unminted: enter | continue",
-			"unminted: shift+tab | back a step",
-		},
-	},
-
-	"palette": {
-		why: "declare Modal",
-		findings: []string{
-			"does not implement kernel.KeyStateLister",
-			"unminted: alt+k | delete to end of line",
-			"unminted: enter | run it",
-			"unminted: esc | close",
-			"unminted: pgdn | page down",
-			"unminted: pgup | page up",
-			"unminted: ↑ | up",
-			"unminted: ↓ | down",
-		},
-	},
-
-	"palette.project": {
-		why: "declare Modal",
-		findings: []string{
-			"does not implement kernel.KeyStateLister",
-			"unminted: enter | switch to it",
-			"unminted: esc | cancel",
-			"unminted: pgdn | page down",
-			"unminted: pgup | page up",
-			"unminted: ↑ | up",
-			"unminted: ↓ | down",
 		},
 	},
 
@@ -619,17 +527,6 @@ var unmigrated = map[string]legacy{
 			"unminted: y | copy the key",
 			"unminted: ↑/k | up",
 			"unminted: ↓/j | down",
-		},
-	},
-
-	"settings": {
-		why: "declare Modal",
-		findings: []string{
-			"unminted: enter | apply, open or run",
-			"unminted: ← | change",
-			"unminted: ↑ | move",
-			"unminted: → | change",
-			"unminted: ↓ | move",
 		},
 	},
 
