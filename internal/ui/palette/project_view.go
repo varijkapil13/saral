@@ -70,6 +70,7 @@ var projectSets = func() [projectStates]kernel.KeySet {
 	k := defaultProjectKeys()
 	var sets [projectStates]kernel.KeySet
 	sets[projectPicking] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Choose, k.Close},
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
@@ -77,6 +78,7 @@ var projectSets = func() [projectStates]kernel.KeySet {
 		},
 	}
 	sets[projectNothing] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Close},
 		Full: [][]kernel.Binding{{k.Close}},
 	}
@@ -230,3 +232,5 @@ func (m *projectModel) appendEmpty(lines []string, h int) []string {
 	}
 	return lines[:at+h]
 }
+
+func (m *projectModel) KeyStates() []kernel.KeySet { return projectSets[:] }

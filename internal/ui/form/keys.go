@@ -45,10 +45,10 @@ type keyMap struct {
 // gesture context and those would never reach it.
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
+		Up:       kernel.Canon(kernel.ActUp),
 		Down:     kernel.Bind([]string{"j", "down", "tab"}, "↓/j", "down"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
 		Top:      kernel.Bind([]string{"home"}, "home", "first row"),
 		Bottom:   kernel.Bind([]string{"end"}, "end", "last row"),
 		Edit:     kernel.Bind([]string{"enter"}, "enter", "edit this field"),
@@ -75,6 +75,7 @@ func defaultKeys() keyMap {
 // cannot go stale.
 func (k keyMap) keySet() kernel.KeySet {
 	return kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{
 			kernel.Terse(k.Edit, "edit"),
 			kernel.Terse(k.Clear, "empty"),
@@ -112,23 +113,28 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// that gives that up gives up the way out of the editor with it.
 	keepAndClose := kernel.Terse(k.Done, "keep and close")
 	sets[keysTypes] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Choose},
 		Full: [][]kernel.Binding{{k.Down, k.Up, k.Top, k.Bottom, k.Choose}},
 	}
 	sets[keysFields] = k.keySet()
 	sets[keysText] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Accept, "take it"), keepAndClose},
 		Full: [][]kernel.Binding{{k.Accept, k.Done}, {widget.KillLine}},
 	}
 	sets[keysDoc] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.DocDone, "finish"), keepAndClose},
 		Full: [][]kernel.Binding{{k.DocDone, k.Done}, {widget.KillLine}},
 	}
 	sets[keysChoosing] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Toggle, "pick"), kernel.Terse(k.Accept, "take it"), keepAndClose},
 		Full: [][]kernel.Binding{{k.Next, k.Prev, k.PageDown, k.PageUp}, {k.Toggle, k.Accept, k.Done}, {widget.KillLine}},
 	}
 	sets[keysLeaving] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{
 			kernel.Terse(k.LeaveCreate, "create"), kernel.Terse(k.LeaveDiscard, "discard"),
 			kernel.Terse(k.LeaveKeep, "keep"), kernel.Terse(k.LeaveStay, "stay"),
@@ -221,3 +227,6 @@ func table(entries ...binding) map[string]action {
 	}
 	return out
 }
+
+// KeyStates lists every state the view reports.
+func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }

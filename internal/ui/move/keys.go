@@ -32,15 +32,15 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
 		Top:      kernel.Bind([]string{"home"}, "home", "first row"),
 		Bottom:   kernel.Bind([]string{"end"}, "end", "last row"),
 		Act:      kernel.Bind([]string{"enter"}, "enter", "use the project under the cursor"),
-		Prev:     kernel.Bind([]string{"h", "left"}, "←/h", "previous value"),
-		Next:     kernel.Bind([]string{"l", "right"}, "→/l", "next value"),
+		Prev:     kernel.Canon(kernel.ActLeft, "previous value"),
+		Next:     kernel.Canon(kernel.ActRight, "next value"),
 		Type:     kernel.Bind([]string{"i"}, "i", "type a project key"),
 		Back:     kernel.Bind([]string{"shift+tab"}, "shift+tab", "back a step"),
 		Yes:      kernel.Bind([]string{"y"}, "y", "move them"),
@@ -67,18 +67,22 @@ var liveSets = func() [steps]kernel.KeySet {
 	motions := []kernel.Binding{k.Down, k.Up, k.PageDown, k.PageUp, k.Top, k.Bottom}
 	var sets [steps]kernel.KeySet
 	sets[stepTarget] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Act, "use it"), kernel.Terse(k.Type, "type a key")},
 		Full: [][]kernel.Binding{motions, {k.Act, k.Type}},
 	}
 	sets[stepTyping] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(lookUp, "look it up"), kernel.Terse(k.Cancel, "the list")},
 		Full: [][]kernel.Binding{{lookUp, k.Cancel}, {widget.KillLine}},
 	}
 	sets[stepType] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(useType, "use it"), kernel.Terse(k.Back, "back")},
 		Full: [][]kernel.Binding{motions, {useType, k.Back}},
 	}
 	sets[stepStatus] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{
 			kernel.Terse(k.Prev, "previous"), kernel.Terse(k.Next, "next"),
 			kernel.Terse(onward, "carry on"), kernel.Terse(k.Back, "back"),
@@ -86,6 +90,7 @@ var liveSets = func() [steps]kernel.KeySet {
 		Full: [][]kernel.Binding{motions, {k.Prev, k.Next}, {onward, k.Back}},
 	}
 	sets[stepFields] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{
 			kernel.Terse(k.Prev, "previous"), kernel.Terse(k.Next, "next"),
 			kernel.Terse(onward, "carry on"), kernel.Terse(k.Back, "back"),
@@ -93,6 +98,7 @@ var liveSets = func() [steps]kernel.KeySet {
 		Full: [][]kernel.Binding{motions, {k.Prev, k.Next}, {onward, k.Back}},
 	}
 	sets[stepConfirm] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Yes, kernel.Terse(k.Notify, "notify"), kernel.Terse(k.Back, "back")},
 		Full: [][]kernel.Binding{motions, {k.Yes, k.Notify, k.Back}},
 	}
@@ -100,6 +106,7 @@ var liveSets = func() [steps]kernel.KeySet {
 	// footer then shows the globals alone, which is the truth.
 	sets[stepRunning] = kernel.KeySet{}
 	sets[stepDone] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(closeIt, "close")},
 		Full: [][]kernel.Binding{motions, {closeIt}},
 	}
@@ -168,3 +175,6 @@ func table(entries ...binding) map[string]action {
 	}
 	return out
 }
+
+// KeyStates lists every state the view reports.
+func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }
