@@ -262,9 +262,9 @@ func TestSubcommands_ShadowNoView(t *testing.T) {
 	if len(names) < 3 {
 		t.Fatalf("only %v registered", names)
 	}
-	// A view pushed with an issue has nothing to show opened by name, so a
+	// A view that is only ever pushed has nothing to show opened by name, so a
 	// subcommand may take its name; the list is closed.
-	mayShadow := map[string]bool{"comment": true}
+	mayShadow := map[string]bool{"comment": true, "search": true}
 	for name := range mayShadow {
 		if _, ok := lookupSubcommand(name); !ok {
 			t.Errorf("%s may shadow a view, but no subcommand is called that", name)
