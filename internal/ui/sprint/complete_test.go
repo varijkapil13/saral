@@ -121,7 +121,7 @@ func TestSprints_CompletingSendsTheOpenIssuesWhereverTheReaderChose(t *testing.T
 		t.Parallel()
 		f := newFake()
 		dr := seeded(t, f, f, "PROJ-1", "PROJ-3")
-		dr.key("c", "y")
+		dr.key("!", "y")
 		if n := countCalls(f, "MoveToSprint"); n != 1 {
 			t.Errorf("MoveToSprint ran %d times beyond the seeding; the close itself sends them to the backlog", n-1)
 		}
@@ -138,7 +138,7 @@ func TestSprints_CompletingSendsTheOpenIssuesWhereverTheReaderChose(t *testing.T
 		if len(open) == 0 {
 			t.Fatal("the seeded sprint has nothing open, so this proves nothing")
 		}
-		dr.key("c", "tab")
+		dr.key("!", "tab")
 		if d := dr.m.pending.dest(); d.kind != destNext || d.sprint.Name != "Sprint 3" {
 			t.Fatalf("tab chose %+v, want the next planned sprint", d)
 		}
@@ -161,7 +161,7 @@ func TestSprints_CompletingSendsTheOpenIssuesWhereverTheReaderChose(t *testing.T
 		f := newFake()
 		dr := seeded(t, f, f, "PROJ-1", "PROJ-3")
 		open := slices.Clone(dr.m.progress[dr.m.selected().ID].open)
-		dr.key("c", "tab", "tab")
+		dr.key("!", "tab", "tab")
 		if d := dr.m.pending.dest(); d.kind != destNew || d.name != "Sprint 4" {
 			t.Fatalf("two tabs chose %+v, want a new sprint called Sprint 4", d)
 		}
@@ -181,7 +181,7 @@ func TestSprints_CompletingSendsTheOpenIssuesWhereverTheReaderChose(t *testing.T
 		t.Parallel()
 		f := newFake()
 		dr := seeded(t, f, f, "PROJ-1")
-		dr.key("c", "shift+tab")
+		dr.key("!", "shift+tab")
 		if d := dr.m.pending.dest(); d.kind != destNew {
 			t.Errorf("shift+tab from the first choice chose %+v, want the last", d)
 		}
@@ -237,7 +237,7 @@ func TestSprints_ACompletionThatStopsPartWaySaysHowFarItGot(t *testing.T) {
 			r.mu.Lock()
 			r.method, r.err = tc.method, tc.err
 			r.mu.Unlock()
-			dr.key("c")
+			dr.key("!")
 			dr.key(tc.pick...)
 			dr.key("y")
 
@@ -278,7 +278,7 @@ func TestSprints_ANewSprintAFailedMoveMadeStaysOnTheList(t *testing.T) {
 	r.mu.Unlock()
 	dr.send(kernel.RefreshMsg{})
 	dr.onSprint("Sprint 2")
-	dr.key("c", "tab", "tab", "y")
+	dr.key("!", "tab", "tab", "y")
 	if made := sprintNamed(t, dr, "Sprint 4"); made.State != jira.SprintFuture {
 		t.Errorf("the sprint the completion created is %s", made.State)
 	}

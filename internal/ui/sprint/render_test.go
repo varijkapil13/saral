@@ -102,7 +102,7 @@ func TestSprints_Golden(t *testing.T) {
 			width: 100, height: 20, golden: "form_100x20.golden",
 			build: func(t *testing.T, w, h int) *driver {
 				dr := newDriver(t, testDeps(newFake()), w, h)
-				dr.key("n")
+				dr.key("c")
 				dr.setField(fieldName, "Sprint 4")
 				dr.key("tab")
 				dr.typeText("finish the port")
@@ -122,7 +122,7 @@ func TestSprints_Golden(t *testing.T) {
 				at := time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC)
 				to := at.AddDate(0, 0, 13)
 				dr.m.sprints[dr.m.cursor].Start, dr.m.sprints[dr.m.cursor].End = &at, &to
-				dr.key("s")
+				dr.key("!")
 				return dr
 			},
 		},
@@ -137,7 +137,7 @@ func TestSprints_Golden(t *testing.T) {
 				}
 				dr.send(kernel.RefreshMsg{})
 				dr.onSprint("Sprint 2")
-				dr.key("c", "tab")
+				dr.key("!", "tab")
 				return dr
 			},
 		},
@@ -146,7 +146,7 @@ func TestSprints_Golden(t *testing.T) {
 			build: func(t *testing.T, w, h int) *driver {
 				dr := newDriver(t, testDeps(newFake()), w, h)
 				dr.onSprint("Sprint 2")
-				dr.key("c")
+				dr.key("!")
 				return dr
 			},
 		},
@@ -196,8 +196,8 @@ func TestSprints_FitsTheBoxItIsGiven(t *testing.T) {
 	for _, size := range []struct{ w, h int }{{40, 10}, {80, 20}, {120, 30}, {200, 60}} {
 		for name, open := range map[string]func(dr *driver){
 			"the list":    func(dr *driver) {},
-			"the form":    func(dr *driver) { dr.key("n") },
-			"the confirm": func(dr *driver) { dr.onSprint("Sprint 2"); dr.key("c") },
+			"the form":    func(dr *driver) { dr.key("c") },
+			"the confirm": func(dr *driver) { dr.onSprint("Sprint 2"); dr.key("!") },
 			"a refusal": func(dr *driver) {
 				dr.send(failedMsg{gen: dr.m.gen, op: opRead, err: &jira.TransportError{
 					Op: "GET /rest/agile/1.0/board/1/sprint", Err: errNoRoute,

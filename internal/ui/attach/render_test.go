@@ -48,7 +48,7 @@ func TestPane_Golden(t *testing.T) {
 		},
 		"a path being typed": {
 			width: 120, height: 24, golden: "typing_120x24.golden",
-			drive: func(dr *driver) { dr.key("u"); dr.typeText("/tmp/notes.txt") },
+			drive: func(dr *driver) { dr.key("a"); dr.typeText("/tmp/notes.txt") },
 		},
 		"a deletion waiting for an answer": {
 			width: 120, height: 24, golden: "confirm_120x24.golden",
@@ -132,7 +132,7 @@ func TestPane_FitsTheBoxItIsGiven(t *testing.T) {
 			"listing":    func(*driver) {},
 			"previewing": func(dr *driver) { dr.onto("screenshot.png"); dr.key("enter") },
 			"grown":      func(dr *driver) { dr.key("z") },
-			"typing":     func(dr *driver) { dr.key("u"); dr.typeText("/tmp/x") },
+			"typing":     func(dr *driver) { dr.key("a"); dr.typeText("/tmp/x") },
 			"confirming": func(dr *driver) { dr.key("d") },
 		} {
 			f := newFake(3)

@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/varijkapil13/saral/internal/ui/attach"
 	"github.com/varijkapil13/saral/internal/ui/backlog"
 	"github.com/varijkapil13/saral/internal/ui/board"
 	"github.com/varijkapil13/saral/internal/ui/comment"
@@ -18,6 +19,8 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/list"
 	"github.com/varijkapil13/saral/internal/ui/release"
 	"github.com/varijkapil13/saral/internal/ui/search"
+	"github.com/varijkapil13/saral/internal/ui/sprint"
+	"github.com/varijkapil13/saral/internal/ui/timeline"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -146,6 +149,9 @@ var secondStrokes = map[string][]string{
 	list.ViewID:       {"g", "e"},
 	issue.ViewID:      {"g", "e"},
 	comment.ViewID:    {"g", "e"},
+	attach.ViewID:     {"g", "e"},
+	sprint.ViewID:     {"g", "e"},
+	timeline.ViewID:   {"g", "e"},
 	board.ViewID:      {"g", "e"},
 	backlog.ViewID:    {"g"},
 	release.ViewID:    {"g"},

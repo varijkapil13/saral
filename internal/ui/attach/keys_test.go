@@ -48,7 +48,7 @@ func TestLiveKeys_FollowWhatThePaneIsDoing(t *testing.T) {
 		acts  bool
 	}{
 		{"reading and writing", func() {}, keysReadingWrite, true},
-		{"typing a path", func() { dr.key("u") }, keysTyping, true},
+		{"typing a path", func() { dr.key("a") }, keysTyping, true},
 		{"a deletion waiting", func() { dr.key("esc"); dr.key("d") }, keysConfirming, true},
 		{"nothing attached", func() {
 			dr.key("esc")
@@ -84,14 +84,18 @@ func TestLiveKeys_TheStateWithNothingToOfferStillAnswers(t *testing.T) {
 	}
 }
 
-// g reaches nothing here: the kernel buffers it as the view-switch prefix and
-// never forwards it, so a binding on it would name a stroke that cannot arrive.
-func TestKeys_NothingIsBoundToTheViewSwitchPrefix(t *testing.T) {
+// g is the first half of g g and g e and nothing else: the kernel forwards it
+// only behind the view-switch prefix, so a table that gave it any other meaning
+// would name a stroke that cannot arrive.
+func TestKeys_GIsOnlyTheLatchForTopAndBottom(t *testing.T) {
 	t.Parallel()
 
 	browse, prompt, confirm, sending := defaultKeys().tables()
+	if got := browse["g"]; got != actGo {
+		t.Errorf("the list answers g with action %d, want the latch", got)
+	}
 	for name, table := range map[string]map[string]action{
-		"the list": browse, "the path prompt": prompt, "the confirmation": confirm, "an upload": sending,
+		"the path prompt": prompt, "the confirmation": confirm, "an upload": sending,
 	} {
 		if _, bound := table["g"]; bound {
 			t.Errorf("%s binds g, which the kernel buffers and never delivers", name)
@@ -108,7 +112,7 @@ func TestKeys_TheConfirmationAnswersOnlyItsTwoKeys(t *testing.T) {
 	if len(confirm) != 2 {
 		t.Errorf("the confirmation answers %d strokes: %v", len(confirm), confirm)
 	}
-	for _, stroke := range []string{"d", "enter", "j", "u", "o", "z"} {
+	for _, stroke := range []string{"d", "enter", "j", "a", "o", "z"} {
 		if got, bound := confirm[stroke]; bound {
 			t.Errorf("the confirmation answers %q with action %d", stroke, got)
 		}
@@ -172,5 +176,37 @@ func writeKeySet(b *strings.Builder, set kernel.KeySet) {
 	fmt.Fprintf(b, "  acts   %s\n", actsOf(set))
 	for _, column := range set.Full {
 		fmt.Fprintf(b, "  full   [%s]\n", strings.Join(labels(column), ", "))
+	}
+}
+
+func TestKeys_UploadMovedOffU(t *testing.T) {
+	t.Parallel()
+
+	browse, _, _, _ := defaultKeys().tables()
+	for stroke, want := range map[string]action{
+		"u": actNone, "a": actUpload, "G": actBottom, "home": actTop,
+	} {
+		if got := browse[stroke]; got != want {
+			t.Errorf("%q answers with action %d, want %d", stroke, got, want)
+		}
+	}
+}
+
+func TestKeys_GGAndGEReachTheEnds(t *testing.T) {
+	t.Parallel()
+
+	dr, _ := loadedPane(t)
+	dr.key("G")
+	last := dr.m.cursor
+	if last == 0 {
+		t.Fatal("G did not leave the first file")
+	}
+	dr.key("g", "g")
+	if dr.m.cursor != 0 {
+		t.Errorf("g g left the cursor on %d", dr.m.cursor)
+	}
+	dr.key("g", "e")
+	if dr.m.cursor != last {
+		t.Errorf("g e left the cursor on %d, want %d", dr.m.cursor, last)
 	}
 }

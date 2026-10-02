@@ -59,7 +59,7 @@ func TestPane_ADraggedPathIsReadTheWayTheShellWouldHaveReadIt(t *testing.T) {
 			}
 			dr, _ := loadedPane(t)
 			path := writeFile(t, t.TempDir(), "My Notes.txt", 12)
-			dr.key("u")
+			dr.key("a")
 			dr.typeText(typed(path))
 			dr.key("ctrl+s")
 
@@ -77,7 +77,7 @@ func TestPane_TabCompletesThePathBeingTyped(t *testing.T) {
 	dr, _ := loadedPane(t)
 	root := tree(t, "screens/", "screens/only.png", "report-a.pdf", "report-b.pdf")
 
-	dr.key("u")
+	dr.key("a")
 	dr.typeText(root + "/scr")
 	dr.key("tab")
 	if got := dr.m.input.Value(); got != root+"/screens/" {
@@ -125,7 +125,7 @@ func TestPane_AnUploadInFlightGolden(t *testing.T) {
 	dr, _ := loadedPane(t)
 	dr.send(kernel.SizeMsg{Width: 120, Height: 24})
 	path := writeFile(t, t.TempDir(), "notes.txt", 4096)
-	dr.key("u")
+	dr.key("a")
 	dr.typeText(path)
 	_ = sendNow(t, dr)
 	if !dr.m.WantsRawKeys() {
@@ -142,7 +142,7 @@ func TestPane_AnUploadOfAnEmptyFileSaysNoPercentage(t *testing.T) {
 
 	dr, _ := loadedPane(t)
 	path := writeFile(t, t.TempDir(), "empty.txt", 0)
-	dr.key("u")
+	dr.key("a")
 	dr.typeText(path)
 	_ = sendNow(t, dr)
 
@@ -155,7 +155,7 @@ func TestPane_ProgressFromAnUploadAlreadyStoppedIsDropped(t *testing.T) {
 
 	dr, _ := loadedPane(t)
 	path := writeFile(t, t.TempDir(), "notes.txt", 4096)
-	dr.key("u")
+	dr.key("a")
 	dr.typeText(path)
 	_ = sendNow(t, dr)
 	stale := dr.m.gen
@@ -174,7 +174,7 @@ func TestPane_EscStopsAnUploadInFlightAndSaysSoRatherThanFailing(t *testing.T) {
 
 	dr, f := loadedPane(t)
 	path := writeFile(t, t.TempDir(), "notes.txt", 4096)
-	dr.key("u")
+	dr.key("a")
 	dr.typeText(path)
 	f.Delay(time.Hour)
 	cmds := sendNow(t, dr)
@@ -212,7 +212,7 @@ func TestPane_ThePaletteCannotCancelAnUploadByAskingForSomethingElse(t *testing.
 
 	dr, _ := loadedPane(t)
 	path := writeFile(t, t.TempDir(), "notes.txt", 4096)
-	dr.key("u")
+	dr.key("a")
 	dr.typeText(path)
 	_ = sendNow(t, dr)
 	gen := dr.m.gen
@@ -224,7 +224,7 @@ func TestPane_ThePaletteCannotCancelAnUploadByAskingForSomethingElse(t *testing.
 		}
 		mustContain(t, dr.lastStatus().Text, "notes.txt is still on its way up", stopHint)
 	}
-	dr.key("j", "d", "u")
+	dr.key("j", "d", "a")
 	if dr.m.gen != gen || dr.m.mode != uploading {
 		t.Error("a key other than esc cancelled the upload")
 	}
@@ -258,7 +258,7 @@ func TestPane_AnUploadTheSiteRefusesIsReportedInItsOwnWords(t *testing.T) {
 
 			dr, f := loadedPane(t)
 			path := writeFile(t, t.TempDir(), "notes.txt", 64)
-			dr.key("u")
+			dr.key("a")
 			dr.typeText(path)
 			f.FailNext(tc.err)
 			dr.key("ctrl+s")

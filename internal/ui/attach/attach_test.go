@@ -336,7 +336,7 @@ func TestPane_UploadAndDeleteAreHiddenWithTheReasonWhenTheSiteHasThemOff(t *test
 		t.Errorf("the footer offers a write the site refuses: %s", acts)
 	}
 
-	dr.key("u")
+	dr.key("a")
 	mustContain(t, dr.lastStatus().Text, "attachments are switched off on this site")
 	if dr.m.mode != browsing {
 		t.Error("u opened the prompt on a site that has attachments off")
@@ -363,7 +363,7 @@ func TestPane_UploadingPutsWhatTheSiteStoredOnTheListWithoutReadingItBack(t *tes
 		t.Fatal(err)
 	}
 
-	dr.key("u")
+	dr.key("a")
 	if dr.m.mode != typing {
 		t.Fatal("u did not open the prompt")
 	}
@@ -391,7 +391,7 @@ func TestPane_APathThatIsNotThereIsRefusedBeforeAnythingIsSent(t *testing.T) {
 	dr, f := loadedPane(t)
 	before := countCalls(f, "Upload")
 
-	dr.key("u")
+	dr.key("a")
 	dr.typeText(filepath.Join(t.TempDir(), "nothing-here.png"))
 	dr.key("ctrl+s")
 
@@ -479,7 +479,7 @@ func TestPane_RawKeysAreClaimedOnlyWhileTypingOrConfirming(t *testing.T) {
 	if dr.m.WantsRawKeys() {
 		t.Error("the pane swallows q, r and esc while it is only listing files")
 	}
-	dr.key("u")
+	dr.key("a")
 	if !dr.m.WantsRawKeys() {
 		t.Error("the path prompt does not claim the keys")
 	}

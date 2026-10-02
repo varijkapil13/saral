@@ -40,7 +40,7 @@ func TestSprints_ClickingSelectsAndDoubleClickingOpensTheForm(t *testing.T) {
 
 	d := testDeps(newFake())
 	dr := newDriver(t, d, 120, 20)
-	dr.key("o")
+	dr.key(".")
 
 	pressOn(t, d, dr, sprintZone(dr, "Sprint 1"))
 	if dr.m.selected().Name != "Sprint 1" {
@@ -69,7 +69,7 @@ func TestSprints_TheConfirmIsAnsweredByPointerAsWellAsByKey(t *testing.T) {
 		d := testDeps(f)
 		dr := newDriver(t, d, 120, 20)
 		dr.onSprint("Sprint 2")
-		dr.key("c")
+		dr.key("!")
 		pressOn(t, d, dr, zoneConfirm)
 		if n := countCalls(f, "CompleteSprint"); n != 1 {
 			t.Errorf("clicking the confirm completed the sprint %d times, want once", n)
@@ -82,7 +82,7 @@ func TestSprints_TheConfirmIsAnsweredByPointerAsWellAsByKey(t *testing.T) {
 		d := testDeps(f)
 		dr := newDriver(t, d, 120, 20)
 		dr.onSprint("Sprint 2")
-		dr.key("c")
+		dr.key("!")
 		pressOn(t, d, dr, zoneRefuse)
 		if n := countCalls(f, "CompleteSprint"); n != 0 {
 			t.Errorf("clicking the way out completed the sprint %d times", n)
@@ -98,7 +98,7 @@ func TestSprints_ClickingAFormFieldPutsTheCursorInIt(t *testing.T) {
 
 	d := testDeps(newFake())
 	dr := newDriver(t, d, 120, 20)
-	dr.key("n")
+	dr.key("c")
 	if dr.m.form.at != fieldName {
 		t.Fatalf("the form opened on field %d", dr.m.form.at)
 	}
@@ -150,7 +150,7 @@ func TestSprints_WithTheMouseOffNothingIsHit(t *testing.T) {
 	d.Zones = off
 	dr := newDriver(t, d, 120, 20)
 	dr.onSprint("Sprint 2")
-	dr.key("c")
+	dr.key("!")
 
 	_ = off.Scan(dr.m.View())
 	dr.send(tea.MouseClickMsg{X: 4, Y: 8, Button: tea.MouseLeft})
@@ -205,7 +205,7 @@ func TestSprints_ClickingADestinationChoosesItAndGoesNoFurther(t *testing.T) {
 	f := newFake()
 	d := testDeps(f)
 	dr := seededWith(t, d, f, "PROJ-1", "PROJ-3")
-	dr.key("c")
+	dr.key("!")
 	last := len(dr.m.pending.dests) - 1
 	pressOn(t, d, dr, destZone(last))
 	if dr.m.pending.at != last || dr.m.state != confirming {

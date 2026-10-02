@@ -450,7 +450,8 @@ What it holds, and why each half is there:
   **`ge` was the gap this exposed**: the issue list, the detail pane, the comment thread and the
   board all answer it in the branch behind their own `g`, and none of them registered a binding that
   said so, so neither this overlay nor `?` could teach it. All four now spell it on the binding it
-  lands on. The backlog and the version list answer `gg` only, and say only that.
+  lands on. The sprints, the timeline and the attachments pane answer both, spelt the same way. The
+  backlog and the version list answer `gg` only, and say only that.
 - **The row you are on**, marked, so the overlay teaches its own gesture by example: the cursor opens
   on the view that is up.
 

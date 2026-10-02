@@ -77,13 +77,14 @@ type cascadeConfig struct {
 
 // Model is the timeline.
 type Model struct {
-	deps    kernel.Deps
-	search  *app.Search
-	cache   app.Cache
-	inChart map[string]action
-	inNotes map[string]action
-	styles  *styles
-	memo    *widget.RowCache[rowKey, string]
+	deps      kernel.Deps
+	search    *app.Search
+	cache     app.Cache
+	inChart   map[string]action
+	pendingGo bool
+	inNotes   map[string]action
+	styles    *styles
+	memo      *widget.RowCache[rowKey, string]
 
 	jql   string
 	title string
@@ -775,7 +776,20 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.notes {
 		return m.notesKey(stroke)
 	}
+	if m.pendingGo {
+		m.pendingGo = false
+		switch stroke {
+		case "g":
+			m.moveTo(0)
+			return nil
+		case "e":
+			m.moveTo(len(m.rows) - 1)
+			return nil
+		}
+	}
 	switch m.inChart[stroke] {
+	case actGo:
+		m.pendingGo = true
 	case actDown:
 		m.moveTo(m.cursor + 1)
 	case actUp:

@@ -18,7 +18,7 @@ func TestTimeline_GivesUpItsChromeRatherThanOverflowingAShortBox(t *testing.T) {
 		if got != h {
 			t.Errorf("at 120x%d drew %d lines", h, got)
 		}
-		dr.key("n")
+		dr.key(".")
 		if got := len(strings.Split(dr.m.View(), "\n")); got != h {
 			t.Errorf("notes at 120x%d drew %d lines", h, got)
 		}

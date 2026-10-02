@@ -347,7 +347,7 @@ func TestTimeline_NamesACascadeFieldTheSiteDoesNotHave(t *testing.T) {
 	mustContain(t, notes, "Target start", "Target end")
 	mustContain(t, dr.view(), notesHint)
 
-	dr.key("n")
+	dr.key(".")
 	mustContain(t, dr.view(), "Target start")
 }
 

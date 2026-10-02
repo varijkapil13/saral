@@ -19,30 +19,32 @@ func init() {
 	keys := defaultKeys()
 	for _, c := range []struct {
 		id, title string
+		action    kernel.Action
 		requires  jira.CapabilityKey
 		keys      []string
 		msg       tea.Msg
 	}{
 		{
-			id: "attachments.show", title: "Show the file you are on",
+			id: "attachments.show", action: kernel.ActOpen, title: "Show the file you are on",
 			keys: shown(keys.Show), msg: ShowMsg{},
 		},
 		{
-			id: "attachments.open", title: "Open the file you are on outside the terminal",
+			id: "attachments.open", action: kernel.ActBrowser, title: "Open the file you are on outside the terminal",
 			keys: shown(keys.Open), msg: OpenOutsideMsg{},
 		},
 		{
-			id: "attachments.upload", title: "Attach a file to this issue",
+			id: "attachments.upload", action: kernel.ActAdd, title: "Attach a file to this issue",
 			requires: jira.CapAttachments, keys: shown(keys.Upload), msg: UploadMsg{},
 		},
 		{
-			id: "attachments.delete", title: "Delete the file you are on",
+			id: "attachments.delete", action: kernel.ActDelete, title: "Delete the file you are on",
 			requires: jira.CapAttachments, keys: shown(keys.Delete), msg: DeleteMsg{},
 		},
 	} {
 		kernel.RegisterCommand(kernel.Command{
 			ID:       c.id,
 			Title:    c.title,
+			Action:   c.action,
 			Group:    "Attachments",
 			Requires: c.requires,
 			Keys:     c.keys,

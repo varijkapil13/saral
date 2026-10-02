@@ -1,21 +1,21 @@
 nothing to act on yet
-  acts   o closed
-  full   [o show or hide closed sprints]
+  acts   . closed
+  full   [. show or hide closed sprints]
 a board with no sprint on it
-  acts   n new · o closed
-  full   [n plan a new sprint, o show or hide closed sprints]
+  acts   c new · . closed
+  full   [c plan a new sprint, . show or hide closed sprints]
 a planned sprint
-  acts   s start · e edit · n new · o closed
-  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first sprint, end last sprint]
-  full   [s start this sprint, e edit name, goal and dates, n plan a new sprint, o show or hide closed sprints]
+  acts   ! start · e edit · c new · . closed
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first sprint, G / g e last sprint]
+  full   [! start this sprint, e edit name, goal and dates, c plan a new sprint, . show or hide closed sprints]
 a running sprint
-  acts   c complete · e edit · n new · o closed
-  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first sprint, end last sprint]
-  full   [c complete this sprint, e edit name, goal and dates, n plan a new sprint, o show or hide closed sprints]
+  acts   ! complete · e edit · c new · . closed
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first sprint, G / g e last sprint]
+  full   [! complete this sprint, e edit name, goal and dates, c plan a new sprint, . show or hide closed sprints]
 a closed sprint
-  acts   e edit · n new · o closed
-  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first sprint, end last sprint]
-  full   [e edit name, goal and dates, n plan a new sprint, o show or hide closed sprints]
+  acts   e edit · c new · . closed
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first sprint, G / g e last sprint]
+  full   [e edit name, goal and dates, c plan a new sprint, . show or hide closed sprints]
 filling a sprint in
   acts   ctrl+s send it to Jira · tab next field · esc discard this edit
   full   [tab next field, shift+tab previous field]

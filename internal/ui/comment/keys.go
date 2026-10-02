@@ -5,7 +5,10 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
-var _ kernel.KeyReporter = (*Model)(nil)
+var (
+	_ kernel.KeyReporter    = (*Model)(nil)
+	_ kernel.KeyStateLister = (*Model)(nil)
+)
 
 type keyMap struct {
 	Up       kernel.Binding
@@ -36,20 +39,20 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f", "space"}, "pgdn", "page down"),
-		HalfUp:   kernel.Bind([]string{"ctrl+u"}, "ctrl+u", "half page up"),
-		HalfDown: kernel.Bind([]string{"ctrl+d"}, "ctrl+d", "half page down"),
-		PanLeft:  kernel.Bind([]string{"h", "left"}, "←/h", "pan left"),
-		PanRight: kernel.Bind([]string{"l", "right"}, "→/l", "pan right"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
+		HalfUp:   kernel.Canon(kernel.ActHalfUp),
+		HalfDown: kernel.Canon(kernel.ActHalfDown),
+		PanLeft:  kernel.Canon(kernel.ActLeft, "pan left"),
+		PanRight: kernel.Canon(kernel.ActRight, "pan right"),
 		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
-		Top:      kernel.Bind([]string{"home"}, "g g", "oldest"),
-		Bottom:   kernel.Bind([]string{"G", "end"}, "G / g e", "newest"),
-		Write:    kernel.Bind([]string{"a", "c"}, "a", "write a comment"),
-		Edit:     kernel.Bind([]string{"e"}, "e", "edit this one"),
-		Delete:   kernel.Bind([]string{"d"}, "d", "delete this one"),
+		Top:      kernel.Canon(kernel.ActTop, "oldest"),
+		Bottom:   kernel.Canon(kernel.ActBottom, "newest"),
+		Write:    kernel.Canon(kernel.ActAdd, "write a comment"),
+		Edit:     kernel.Canon(kernel.ActEdit, "edit this one"),
+		Delete:   kernel.Canon(kernel.ActDelete, "delete this one"),
 		Send:     kernel.Bind([]string{"ctrl+s"}, "ctrl+s", "send"),
 		Cancel:   kernel.Bind([]string{"esc"}, "esc", "put it aside"),
 		Confirm:  kernel.Bind([]string{"y"}, "y", "delete it"),
@@ -82,15 +85,19 @@ var liveSets = func() [3]kernel.KeySet {
 	return [3]kernel.KeySet{
 		browsing: k.keySet(),
 		writing: {
+			Mode: kernel.Modal,
 			Acts: []kernel.Binding{k.Send, k.Cancel},
 			Full: [][]kernel.Binding{{k.Send, k.Cancel}, {widget.KillLine}},
 		},
 		confirming: {
+			Mode: kernel.Modal,
 			Acts: []kernel.Binding{k.Confirm, k.Keep},
 			Full: [][]kernel.Binding{{k.Confirm, k.Keep}},
 		},
 	}
 }()
+
+func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }
 
 // LiveKeys reports the keys that work in the mode the thread is actually in.
 // Reading it, writing into it and answering for a deletion have no key in
