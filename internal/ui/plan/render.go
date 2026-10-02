@@ -164,8 +164,9 @@ func (m *Model) reflow() {
 // search it renders to, where its dates come from, and its releases.
 func (m *Model) appendDetail(rows []viewRow, at int) []viewRow {
 	row := &m.plans[at]
+	held := m.rel[row.plan.ID]
 	for _, s := range row.plan.Sources {
-		rows = append(rows, viewRow{plan: at, kind: rowDetail, text: line("source", sourceWords(s, row.plan.Local))})
+		rows = append(rows, viewRow{plan: at, kind: rowDetail, text: line("source", sourceWords(s, row.plan.Local, &held))})
 	}
 	if len(row.plan.Sources) == 0 && row.jql == "" {
 		rows = append(rows, viewRow{plan: at, kind: rowDetail, text: line("source", "nothing")})
@@ -184,9 +185,9 @@ func (m *Model) appendDetail(rows []viewRow, at int) []viewRow {
 
 func (m *Model) appendReleases(rows []viewRow, at int) []viewRow {
 	row := &m.plans[at]
-	if len(projectRefs(row)) == 0 {
+	if !hasReleaseSources(row) {
 		return append(rows, viewRow{plan: at, kind: rowWarn,
-			text: line("releases", "this plan names no project, so there is none to read releases from")})
+			text: line("releases", "this plan names no project or board, so there is none to read releases from")})
 	}
 	held := m.rel[row.plan.ID]
 	switch {
@@ -200,23 +201,28 @@ func (m *Model) appendReleases(rows []viewRow, at int) []viewRow {
 		return append(rows, viewRow{plan: at, kind: rowDetail, text: line("releases", "not read yet")})
 	case len(held.versions) == 0 && len(held.refused) == 0:
 		return append(rows, viewRow{plan: at, kind: rowDetail,
-			text: line("releases", "none on "+projectWords(row))})
+			text: line("releases", "none on "+projectWords(row, &held))})
 	}
+	byProject := len(held.refs) > 1 && len(held.owners) == len(held.versions)
 	for i := range held.versions {
-		rows = append(rows, viewRow{plan: at, kind: rowDetail, text: line(labelOf(i), versionWords(&held.versions[i]))})
+		words := versionWords(&held.versions[i])
+		if byProject {
+			words += "  " + projectLabel(row, &held, held.owners[i])
+		}
+		rows = append(rows, viewRow{plan: at, kind: rowDetail, text: line(labelOf(i), words)})
 	}
 	for i := range held.refused {
 		r := &held.refused[i]
 		rows = append(rows, viewRow{plan: at, kind: rowWarn,
-			text: line(labelOf(len(held.versions)+i), refusedWords(row, r))})
+			text: line(labelOf(len(held.versions)+i), refusedWords(row, &held, r))})
 	}
 	return rows
 }
 
-func refusedWords(row *planRow, r *refusal) string {
-	name := "project " + r.project
-	if !row.plan.Local {
-		name = "project id " + r.project
+func refusedWords(row *planRow, held *releases, r *refusal) string {
+	name := projectLabel(row, held, r.ref)
+	if r.kind == "board" {
+		name = "board " + r.ref
 	}
 	if r.reason == "" {
 		return name + " left out: the site would not list its versions"
@@ -231,19 +237,39 @@ func labelOf(i int) string {
 	return ""
 }
 
-// projectWords names a plan's projects the way its source rows do.
-func projectWords(row *planRow) string {
-	refs := projectRefs(row)
-	if row.plan.Local {
-		return strings.Join(refs, ", ")
+func projectLabel(row *planRow, held *releases, ref string) string {
+	if key := held.names[ref]; key != "" {
+		return "project " + key
 	}
-	return "project id " + strings.Join(refs, ", ")
+	if row.plan.Local {
+		return "project " + ref
+	}
+	return "project id " + ref
+}
+
+func projectWords(row *planRow, held *releases) string {
+	refs := held.refs
+	if len(refs) == 0 {
+		refs = projectRefs(row)
+	}
+	words := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		switch key := held.names[ref]; {
+		case key != "":
+			words = append(words, key)
+		case row.plan.Local:
+			words = append(words, ref)
+		default:
+			words = append(words, "project id "+ref)
+		}
+	}
+	return strings.Join(words, ", ")
 }
 
 // sourceWords is one issue source in words. A local plan names a project by its
 // key; the site names it by an id, and the row says so instead of printing the
 // number as though it were a key.
-func sourceWords(s jira.PlanSource, local bool) string {
+func sourceWords(s jira.PlanSource, local bool, held *releases) string {
 	value := strings.TrimSpace(s.Value)
 	if value == "" {
 		value = "unnamed"
@@ -256,6 +282,9 @@ func sourceWords(s jira.PlanSource, local bool) string {
 	case s.Type == jira.PlanSourceFilter:
 		return "filter " + value
 	case s.Type == jira.PlanSourceBoard:
+		if keys := held.boards[value]; len(keys) > 0 {
+			return "board " + value + ", projects " + strings.Join(keys, ", ")
+		}
 		return "board " + value
 	default:
 		return string(s.Type) + " " + value

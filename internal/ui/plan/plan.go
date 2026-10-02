@@ -54,7 +54,11 @@ type releases struct {
 	loading  bool
 	read     bool
 	versions []jira.Version
+	owners   []string
 	refused  []refusal
+	names    map[string]string
+	boards   map[string][]string
+	refs     []string
 	err      error
 }
 
@@ -455,7 +459,10 @@ func (m *Model) tookReleases(msg releasesMsg) {
 	if msg.gen != m.gen {
 		return
 	}
-	m.rel[msg.plan] = releases{read: true, versions: msg.versions, refused: msg.refused}
+	m.rel[msg.plan] = releases{
+		read: true, versions: msg.versions, owners: msg.owners, refused: msg.refused,
+		names: msg.names, boards: msg.boards, refs: msg.read,
+	}
 	m.relOf = ""
 	m.reflow()
 	m.head = ""
@@ -464,8 +471,7 @@ func (m *Model) tookReleases(msg releasesMsg) {
 // releasesFor asks for the versions of every project this plan draws from.
 func (m *Model) releasesFor(at int) tea.Cmd {
 	row := &m.plans[at]
-	keys := projectRefs(row)
-	if len(keys) == 0 || m.deps.Jira == nil {
+	if !hasReleaseSources(row) || m.deps.Jira == nil {
 		return nil
 	}
 	if held, ok := m.rel[row.plan.ID]; ok && (held.read || held.loading) {
@@ -475,7 +481,7 @@ func (m *Model) releasesFor(at int) tea.Cmd {
 	m.rel[row.plan.ID] = releases{loading: true}
 	m.relOf = row.plan.ID
 	m.head = ""
-	return m.reply(readReleases(ctx, m.deps.Jira, row.plan.ID, keys, gen))
+	return m.reply(readReleases(ctx, m.deps.Jira, row.plan.ID, row.plan.Sources, gen))
 }
 
 // projectRefs are the projects a plan draws from, as a version read takes them:
@@ -488,6 +494,15 @@ func projectRefs(row *planRow) []string {
 		}
 	}
 	return out
+}
+
+func hasReleaseSources(row *planRow) bool {
+	for _, s := range row.plan.Sources {
+		if (s.Type == jira.PlanSourceProject || s.Type == jira.PlanSourceBoard) && strings.TrimSpace(s.Value) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // --- keys and selection -----------------------------------------------------
