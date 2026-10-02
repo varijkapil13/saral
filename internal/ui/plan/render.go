@@ -198,14 +198,30 @@ func (m *Model) appendReleases(rows []viewRow, at int) []viewRow {
 		return append(rows, viewRow{plan: at, kind: rowWarn, text: line("releases", reason)})
 	case !held.read:
 		return append(rows, viewRow{plan: at, kind: rowDetail, text: line("releases", "not read yet")})
-	case len(held.versions) == 0:
+	case len(held.versions) == 0 && len(held.refused) == 0:
 		return append(rows, viewRow{plan: at, kind: rowDetail,
 			text: line("releases", "none on "+projectWords(row))})
 	}
 	for i := range held.versions {
 		rows = append(rows, viewRow{plan: at, kind: rowDetail, text: line(labelOf(i), versionWords(&held.versions[i]))})
 	}
+	for i := range held.refused {
+		r := &held.refused[i]
+		rows = append(rows, viewRow{plan: at, kind: rowWarn,
+			text: line(labelOf(len(held.versions)+i), refusedWords(row, r))})
+	}
 	return rows
+}
+
+func refusedWords(row *planRow, r *refusal) string {
+	name := "project " + r.project
+	if !row.plan.Local {
+		name = "project id " + r.project
+	}
+	if r.reason == "" {
+		return name + " left out: the site would not list its versions"
+	}
+	return name + " left out: " + r.reason
 }
 
 func labelOf(i int) string {

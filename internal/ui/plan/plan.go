@@ -54,6 +54,7 @@ type releases struct {
 	loading  bool
 	read     bool
 	versions []jira.Version
+	refused  []refusal
 	err      error
 }
 
@@ -454,7 +455,7 @@ func (m *Model) tookReleases(msg releasesMsg) {
 	if msg.gen != m.gen {
 		return
 	}
-	m.rel[msg.plan] = releases{read: true, versions: msg.versions}
+	m.rel[msg.plan] = releases{read: true, versions: msg.versions, refused: msg.refused}
 	m.relOf = ""
 	m.reflow()
 	m.head = ""
