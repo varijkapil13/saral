@@ -129,11 +129,3 @@ func TestSortpick_SpecRoundTripsAndRefusesAStrangeField(t *testing.T) {
 		t.Error("Chosen is wrong")
 	}
 }
-
-func BenchmarkLine(b *testing.B) {
-	g := kernel.UnicodeGlyphs()
-	b.ReportAllocs()
-	for b.Loop() {
-		_ = Line(fields, Choice{Field: "key"}, 1, g)
-	}
-}
