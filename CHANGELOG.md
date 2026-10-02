@@ -7,6 +7,8 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-10-02
+
 ### Fixed
 
 - A plan that spans a project you cannot browse now lists the releases of the projects you can,
@@ -292,7 +294,8 @@ transitions, comments with markdown ⇄ ADF, attachments with inline image previ
 backlog, sprints, releases with the unresolved-issue decision, the cross-project move wizard, the
 timeline, plans, the command palette, full mouse support and cache-first paint.
 
-[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/varijkapil13/saral/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/varijkapil13/saral/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/varijkapil13/saral/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/varijkapil13/saral/compare/v0.8.0...v0.9.0
