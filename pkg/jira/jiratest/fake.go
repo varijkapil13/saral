@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -91,10 +92,16 @@ func (f *Fake) Fields(ctx context.Context) ([]jira.Field, error) {
 //   - the operators = , IN (a, b, ...), IS EMPTY and IS NOT EMPTY;
 //   - currentUser() as a value on assignee and reporter;
 //   - clauses joined by AND, or by OR inside one pair of brackets;
+//   - <text|summary|description|comment> ~ "<words>", read as the text
+//     jira.TextQuery.Lucene writes: whole words, quoted phrases and a trailing *.
+//     A term matches the words of the field in order, case-insensitively, with no
+//     stemming and no stop words, which is narrower than Jira; text covers the
+//     summary, the description and every comment;
 //   - an optional trailing ORDER BY <field> [ASC|DESC].
 //
-// Anything else — an unbracketed OR, ~, an inequality, a date function, NOT, a
-// field not on that list — is a *jira.ValidationError naming jql, so a query the
+// Anything else — an unbracketed OR, ~ on another field or with a Lucene
+// operator, an inequality, a date function, NOT, a field not on that list — is
+// a *jira.ValidationError naming jql, so a query the
 // fake cannot honour never passes as a query that matched everything.
 func (f *Fake) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue], error) {
 	mask := jira.NewFieldMask(q.Fields)
@@ -2283,6 +2290,7 @@ type fakeClause struct {
 	field  string
 	op     string
 	values []string
+	terms  []fakeTerm
 }
 
 // fakeGroup is one AND term of a query: a single clause, or several joined by
@@ -2299,6 +2307,8 @@ var fakeJQLFields = []string{
 	"project", "key", "issuekey", "status", "issuetype", "type",
 	"priority", "assignee", "reporter", "labels", "fixversion",
 }
+
+var fakeTextFields = []string{"text", "summary", "description", "comment"}
 
 var fakeJQLOrders = []string{
 	"key", "created", "updated", "summary", "status", "priority", "assignee", "project",
@@ -2396,7 +2406,9 @@ func fakeBalanced(s string) bool {
 	for i := range len(s) {
 		switch {
 		case quote != 0:
-			if s[i] == quote {
+			if s[i] == '\\' {
+				i++
+			} else if s[i] == quote {
 				quote = 0
 			}
 		case s[i] == '"' || s[i] == '\'':
@@ -2426,6 +2438,12 @@ func fakeParseClause(s string) (fakeClause, error) {
 	}
 	field := strings.ToLower(toks[0])
 	switch {
+	case len(toks) == 3 && toks[1] == "~" && slices.Contains(fakeTextFields, field):
+		terms, err := fakeParseLucene(toks[2])
+		if err != nil {
+			return fakeClause{}, err
+		}
+		return fakeClause{field: field, op: "~", terms: terms}, nil
 	case len(toks) == 3 && toks[1] == "=":
 		return fakeNewClause(field, "=", []string{toks[2]}, unsupported)
 	case len(toks) == 5 && toks[1] == "=" && toks[3] == "(" && toks[4] == ")":
@@ -2488,14 +2506,26 @@ func fakeTokenize(s string) ([]string, error) {
 		case '"', '\'':
 			quote := c
 			i++
-			start := i
+			var b strings.Builder
 			for i < len(s) && s[i] != quote {
+				if s[i] == '\\' && i+1 < len(s) {
+					i++
+					switch s[i] {
+					case 'n', 't', 'r':
+						b.WriteByte(' ')
+					default:
+						b.WriteByte(s[i])
+					}
+					i++
+					continue
+				}
+				b.WriteByte(s[i])
 				i++
 			}
 			if i >= len(s) {
 				return nil, fakeJQLError("unterminated quote in %q", s)
 			}
-			toks = append(toks, s[start:i])
+			toks = append(toks, b.String())
 			i++
 		case '=', '!', '~', '<', '>':
 			start := i
@@ -2535,7 +2565,9 @@ func fakeFindPhrase(s, phrase string) int {
 	for i := 0; i+len(phrase) <= len(s); i++ {
 		switch {
 		case quote != 0:
-			if s[i] == quote {
+			if s[i] == '\\' {
+				i++
+			} else if s[i] == quote {
 				quote = 0
 			}
 			continue
@@ -2577,8 +2609,10 @@ func fakeSplitWord(s, word string) []string {
 
 func fakeInQuotes(s string, at int) bool {
 	quote := byte(0)
-	for i := range at {
+	for i := 0; i < at; i++ {
 		switch {
+		case quote != 0 && s[i] == '\\':
+			i++
 		case quote != 0 && s[i] == quote:
 			quote = 0
 		case quote == 0 && (s[i] == '"' || s[i] == '\''):
@@ -2627,6 +2661,9 @@ func (f *Fake) fakeMatchGroup(iss *jira.Issue, g fakeGroup) bool {
 }
 
 func (f *Fake) fakeMatchClause(iss *jira.Issue, c fakeClause) bool {
+	if c.op == "~" {
+		return f.fakeMatchText(iss, c)
+	}
 	values := fakeClauseValues(iss, c.field)
 	switch c.op {
 	case "is empty":
@@ -2760,4 +2797,130 @@ func fakeSplitKey(key string) (prefix string, number int) {
 		return key, -1
 	}
 	return key[:i], n
+}
+
+type fakeTerm struct {
+	words  []string
+	prefix bool
+}
+
+func fakeIsLuceneWordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || strings.ContainsRune(".,;%$#@'_", r)
+}
+
+func fakeTextWords(s string) []string {
+	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+}
+
+// fakeParseLucene reads exactly what jira.TextQuery.Lucene writes. A Lucene
+// operator is refused rather than read as a word, so a test that would depend
+// on Jira's reading of one fails here instead of passing on a guess.
+func fakeParseLucene(v string) ([]fakeTerm, error) {
+	refuse := func(why string) ([]fakeTerm, error) {
+		return nil, fakeJQLError("the fake reads a text search as words, \"quoted phrases\" and a trailing *; %s in %q", why, v)
+	}
+	var terms []fakeTerm
+	for i := 0; i < len(v); {
+		if v[i] == ' ' {
+			i++
+			continue
+		}
+		if v[i] == '"' {
+			end := strings.IndexByte(v[i+1:], '"')
+			if end < 0 {
+				return refuse("an unclosed quote")
+			}
+			inner := v[i+1 : i+1+end]
+			for _, r := range inner {
+				if r != ' ' && !fakeIsLuceneWordRune(r) {
+					return refuse(fmt.Sprintf("%q in a phrase", r))
+				}
+			}
+			i += end + 2
+			if words := fakeTextWords(inner); len(words) > 0 {
+				terms = append(terms, fakeTerm{words: words})
+			}
+			continue
+		}
+		j := i
+		for j < len(v) && v[j] != ' ' && v[j] != '"' {
+			j++
+		}
+		tok := v[i:j]
+		i = j
+		prefix := strings.HasSuffix(tok, "*")
+		tok = strings.TrimSuffix(tok, "*")
+		for _, r := range tok {
+			if !fakeIsLuceneWordRune(r) {
+				return refuse(fmt.Sprintf("%q", r))
+			}
+		}
+		if tok == "AND" || tok == "OR" || tok == "NOT" {
+			return refuse("the operator " + tok)
+		}
+		if words := fakeTextWords(tok); len(words) > 0 {
+			terms = append(terms, fakeTerm{words: words, prefix: prefix})
+		}
+	}
+	return terms, nil
+}
+
+func (f *Fake) fakeMatchText(iss *jira.Issue, c fakeClause) bool {
+	if len(c.terms) == 0 {
+		return false
+	}
+	var fields [][]string
+	add := func(s string) { fields = append(fields, fakeTextWords(s)) }
+	if c.field == "text" || c.field == "summary" {
+		add(iss.Summary)
+	}
+	if c.field == "text" || c.field == "description" {
+		add(fakeDocText(iss.Description))
+	}
+	if c.field == "text" || c.field == "comment" {
+		for i := range f.comments[iss.Key] {
+			add(fakeDocText(f.comments[iss.Key][i].Body))
+		}
+	}
+	for _, t := range c.terms {
+		if !slices.ContainsFunc(fields, func(words []string) bool { return fakeHasRun(words, t) }) {
+			return false
+		}
+	}
+	return true
+}
+
+func fakeDocText(d adf.Doc) string {
+	var parts []string
+	d.Walk(func(n adf.Node) bool {
+		if n.Text != "" {
+			parts = append(parts, n.Text)
+		}
+		return true
+	})
+	return strings.Join(parts, " ")
+}
+
+func fakeHasRun(words []string, t fakeTerm) bool {
+	n := len(t.words)
+	for i := 0; i+n <= len(words); i++ {
+		ok := true
+		for k, want := range t.words {
+			got := words[i+k]
+			if k == n-1 && t.prefix {
+				ok = strings.HasPrefix(got, want)
+			} else {
+				ok = got == want
+			}
+			if !ok {
+				break
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
 }
