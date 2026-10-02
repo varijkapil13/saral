@@ -12,7 +12,11 @@ such change is listed under **Changed**.
 - The Jira port can resolve a project by its id or its key (`Project`), which is what a plan's
   project source needs to be shown by key.
 - `kernel.PopTo` collapses the view stack to a named entry in one step, asking or refusing on the
-  way exactly as `esc` does. Nothing calls it yet.
+  way exactly as `esc` does.
+- Opening an issue that already has a pane beneath the current one, from a related row, `p`, the
+  links sheet or the children sheet, returns to that pane instead of stacking a second copy of it,
+  through any panes and sheets in between. A pane with unsaved edits in the way is asked about, as
+  with `esc`.
 - `/` finds in a project's release list: it keeps the versions whose name holds what you type,
   alongside the state filter and the sort, and the command palette has it as *Find a version or a
   release*.

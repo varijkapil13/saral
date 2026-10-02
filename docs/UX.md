@@ -1105,10 +1105,12 @@ have a row of their own under the phrase that relates them, so `j` and `k` stop 
 opens the issue over this one, seeded from the row so the key, summary and status are on
 screen before the read lands. `p` opens the parent from anywhere in the pane, and says `PROJ-12 has no
 parent` when there is none; it is in `?` and not in the footer. A link with no phrasing is listed under
-its type, and the two directions of one type stay apart. Following a link back to the pane just
-beneath goes back to it instead of stacking a copy, so `esc` is never a walk through your own trail; an
-issue two panes down is pushed, since `esc` would not reach it. A pane that holds unsaved edits asks
-before it is left, whichever gesture leaves it. An issue the token cannot open keeps the row's header
+its type, and the two directions of one type stay apart. Opening an issue that already has a
+pane beneath this one, from a row, `p`, the links sheet or the children sheet, goes back to that
+pane instead of stacking a copy, however many panes and sheets lie between, so `esc` is never a walk
+through your own trail. A pane that holds unsaved edits asks
+before it is left, whichever gesture leaves it, and a return that would leave one is asked about the
+same way. An issue the token cannot open keeps the row's header
 and says `PROJ-99 could not be opened: it does not exist, or this account cannot browse its project.`
 - a 404 is Jira's answer to both.
 

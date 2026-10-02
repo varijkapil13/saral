@@ -201,26 +201,23 @@ func TestParent_PWithoutParentSaysSo(t *testing.T) {
 	}
 }
 
-func TestTrail_OpeningIssueBeneathPops(t *testing.T) {
+func TestTrail_OpeningIssueBeneathReturnsToIt(t *testing.T) {
 	t.Parallel()
 	p, _ := navPanel(t, 120, 38, fromTrail([]string{"PROJ-3"}))
 	p.cursorOnRef("PROJ-3")
 	p.keys("enter")
-	if len(p.pushes) != 0 || p.pops != 1 {
-		t.Errorf("pushes %d, pops %d; want the pane beneath to be returned to", len(p.pushes), p.pops)
+	if len(p.pushes) != 0 || !slices.Equal(p.popTos, []kernel.PopToMsg{{ID: ViewID, Title: "PROJ-3"}}) {
+		t.Errorf("pushes %d, returns %v; want the pane beneath to be returned to", len(p.pushes), p.popTos)
 	}
 }
 
-func TestTrail_DeeperCyclePushes(t *testing.T) {
+func TestTrail_DeeperCycleReturnsToo(t *testing.T) {
 	t.Parallel()
 	p, _ := navPanel(t, 120, 38, fromTrail([]string{"PROJ-3", "PROJ-40"}))
 	p.cursorOnRef("PROJ-3")
 	p.keys("enter")
-	if p.pops != 0 {
-		t.Error("an issue two panes down was treated as the one beneath")
-	}
-	if got := pushedPane(t, p.onlyPush()).trail; !slices.Equal(got, []string{"PROJ-3", "PROJ-40", "PROJ-12"}) {
-		t.Errorf("the trail is %v", got)
+	if len(p.pushes) != 0 || !slices.Equal(p.popTos, []kernel.PopToMsg{{ID: ViewID, Title: "PROJ-3"}}) {
+		t.Errorf("pushes %d, returns %v; want the first PROJ-3 to be returned to", len(p.pushes), p.popTos)
 	}
 }
 
@@ -240,8 +237,8 @@ func TestTrail_DirtyPaneStillBlocksItsOwnClose(t *testing.T) {
 		t.Fatal("the pane with an unsaved edit does not block its own pop")
 	}
 	p.keys("p")
-	if p.pops != 1 || len(p.pushes) != 0 {
-		t.Errorf("p on the pane beneath: pops %d, pushes %d", p.pops, len(p.pushes))
+	if len(p.popTos) != 1 || len(p.pushes) != 0 {
+		t.Errorf("p on the pane beneath: returns %d, pushes %d", len(p.popTos), len(p.pushes))
 	}
 }
 
