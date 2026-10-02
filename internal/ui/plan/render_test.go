@@ -82,10 +82,43 @@ func TestPlans_BoardSourcesGolden(t *testing.T) {
 				names:  map[string]string{"10000": "EX", "10001": "OPS"},
 				boards: map[string][]string{"17": {"EX", "OPS"}},
 				read:   []string{"10000", "10001"},
+				detail: &jira.PlanDetail{
+					CrossProjectReleases: []jira.CrossProjectRelease{{Name: "Spring launch", VersionIDs: []string{"1", "2"}}},
+					ExcludedVersionIDs:   []string{"2"},
+				},
 			})
 			golden(t, tc.golden, dr.view())
 		})
 	}
+}
+
+func TestPlans_CrossSpaceGolden(t *testing.T) {
+	t.Parallel()
+
+	dr := newDriver(t, testDeps(newFake(5)), 120, 20)
+	dr.send(plansMsg{gen: dr.m.gen, plans: []jira.Plan{{
+		ID: "42", Name: "Delivery", Status: "Active",
+		Sources: projectSources("10000", "10001", "10002"),
+	}}})
+	dr.key("enter")
+	versions := []jira.Version{
+		{ID: "1", Name: "2.4.0"}, {ID: "2", Name: "2.5.0"}, {ID: "3", Name: "ops-2026.3"},
+		{ID: "4", Name: "ops-2026.4"}, {ID: "5", Name: "web-9"}, {ID: "6", Name: "1.9.x-hotfix"},
+	}
+	dr.send(releasesMsg{
+		gen: dr.m.gen, plan: "42", versions: versions,
+		owners: []string{"10000", "10000", "10001", "10001", "10002", "10002"},
+		names:  map[string]string{"10000": "EX", "10001": "OPS", "10002": "WEB"},
+		read:   []string{"10000", "10001", "10002"},
+		detail: &jira.PlanDetail{
+			CrossProjectReleases: []jira.CrossProjectRelease{
+				{Name: "Spring launch", VersionIDs: []string{"1", "3", "5"}},
+				{Name: "Summer launch", VersionIDs: []string{"2", "4"}},
+			},
+			ExcludedVersionIDs: []string{"6", "99"},
+		},
+	})
+	golden(t, "open_cross_space_120x20.golden", dr.view())
 }
 
 func TestPlans_FailureGolden(t *testing.T) {

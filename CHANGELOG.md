@@ -21,8 +21,16 @@ such change is listed under **Changed**.
   `@`, `t` and `P` change a child's assignee, status or priority without opening it.
 - The release list can browse the versions of several projects at once. It arranges them under their
   cross-space release, by project or not at all (`v`), filters by project (`p`) and by text (`/`),
-  and hides the versions a plan leaves out until `x` shows them. A plan opens it in a following
-  release.
+  and hides the versions a plan leaves out until `x` shows them. An open plan in the plans view
+  opens it with `enter` on its releases row or `b`.
+
+### Changed
+
+- An open plan no longer lists every version. It shows one row (`476 across EX, OPS, WEB - enter
+  browses`) and a second saying how many cross-space releases the plan has and how many versions it
+  excludes, and `enter` on the first, a click, or `b` opens the releases in a browser you can sort,
+  filter and group. A plan defined in the profile says it has no cross-space releases. When the site
+  refuses the cross-space releases, the browser arranges by project and says why.
 
 ### Fixed
 

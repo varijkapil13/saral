@@ -211,6 +211,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/plan` | `TestBudget_PlanRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
 | `internal/ui/plan` | `TestBudget_PlansFullRedrawAt200x60` |
 | `internal/ui/plan` | `TestBudget_PlansKeystrokeToFrame` |
+| `internal/ui/plan` | `TestBudget_PlansOpeningAPlanOf2000VersionsAddsAFixedNumberOfRows` |
 | `internal/ui/plan` | `TestBudget_PlansScrollingCostsTheSameOnTwoThousandPlansAsOnTwenty` |
 | `internal/ui/plan` | `TestBudget_PlansStandingStillCostsTheFrameAndNothingElse` |
 | `internal/ui/release` | `TestBudget_BulkKeystrokeToFrame` |

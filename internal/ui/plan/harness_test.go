@@ -78,6 +78,7 @@ type driver struct {
 	m          *Model
 	statuses   []kernel.StatusMsg
 	broadcasts []tea.Msg
+	pushed     []kernel.PushMsg
 }
 
 func newDriver(t *testing.T, d kernel.Deps, w, h int, opts ...Option) *driver {
@@ -136,6 +137,8 @@ func (d *driver) run(cmd tea.Cmd) {
 			d.statuses = append(d.statuses, msg)
 		case kernel.BroadcastMsg:
 			d.broadcasts = append(d.broadcasts, msg.Msg)
+		case kernel.PushMsg:
+			d.pushed = append(d.pushed, msg)
 		default:
 			view, follow := d.m.Update(msg)
 			model, ok := view.(*Model)

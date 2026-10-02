@@ -3,8 +3,12 @@ a plan under the cursor
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first plan, end last plan]
   full   [enter show what this plan is made of]
 the plan under the cursor already open
-  acts   enter hide
+  acts   enter hide · b releases
   full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first plan, end last plan]
-  full   [enter hide what this plan is made of]
+  full   [enter hide what this plan is made of, b browse this plan's releases]
+the summary of an open plan's releases
+  acts   enter browse
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, home first plan, end last plan]
+  full   [enter browse this plan's releases]
 no plan to be on
   acts   

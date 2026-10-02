@@ -15,8 +15,20 @@ type versionStub struct {
 	projects map[int64][]jira.ProjectRef
 	boardErr map[int64]error
 
+	details   map[string]jira.PlanDetail
+	detailErr error
+
 	versionCalls []string
 	boardCalls   []int64
+	detailCalls  []string
+}
+
+func (s *versionStub) PlanDetail(_ context.Context, id string) (jira.PlanDetail, error) {
+	s.detailCalls = append(s.detailCalls, id)
+	if s.detailErr != nil {
+		return jira.PlanDetail{}, s.detailErr
+	}
+	return s.details[id], nil
 }
 
 func (s *versionStub) Versions(_ context.Context, ref string) ([]jira.Version, error) {
@@ -57,7 +69,12 @@ func boardSources(ids ...string) []jira.PlanSource {
 
 func readOf(t *testing.T, stub *versionStub, sources []jira.PlanSource) releasesMsg {
 	t.Helper()
-	msg := readReleases(context.Background(), stub, "42", sources, 3)()
+	return readPlanOf(t, stub, jira.Plan{ID: "42", Sources: sources})
+}
+
+func readPlanOf(t *testing.T, stub *versionStub, plan jira.Plan) releasesMsg {
+	t.Helper()
+	msg := readReleases(context.Background(), stub, plan, 3)()
 	got, ok := msg.(releasesMsg)
 	if !ok {
 		t.Fatalf("the read failed: %#v", msg)
@@ -95,6 +112,59 @@ func TestReadReleases_NamesAMissingProjectOnce(t *testing.T) {
 	}
 }
 
+func TestReadReleases_CarriesCrossSpaceReleasesAndExclusions(t *testing.T) {
+	t.Parallel()
+
+	want := jira.PlanDetail{
+		CrossProjectReleases: []jira.CrossProjectRelease{{Name: "Spring launch", VersionIDs: []string{"1", "2"}}},
+		ExcludedVersionIDs:   []string{"2"},
+	}
+	stub := &versionStub{
+		versions: map[string][]jira.Version{"10000": {{ID: "1", Name: "1.0"}, {ID: "2", Name: "2.0"}}},
+		details:  map[string]jira.PlanDetail{"42": want},
+	}
+	got := readOf(t, stub, projectSources("10000"))
+
+	if got.detail == nil || len(got.detail.CrossProjectReleases) != 1 || got.detail.CrossProjectReleases[0].Name != "Spring launch" {
+		t.Errorf("detail = %+v, want the plan's cross-space release", got.detail)
+	}
+	if got.detail == nil || !slices.Equal(got.detail.ExcludedVersionIDs, []string{"2"}) {
+		t.Errorf("detail = %+v, want version 2 excluded", got.detail)
+	}
+	if got.detailErr != nil {
+		t.Errorf("detailErr = %v on a detail that was read", got.detailErr)
+	}
+	if !slices.Equal(stub.detailCalls, []string{"42"}) {
+		t.Errorf("PlanDetail was asked about %v, want the plan once", stub.detailCalls)
+	}
+}
+
+func TestReadReleases_ALocalPlanAsksForNoDetail(t *testing.T) {
+	t.Parallel()
+
+	stub := &versionStub{versions: map[string][]jira.Version{"PROJ": {{ID: "1", Name: "1.0"}}}}
+	got := readPlanOf(t, stub, jira.Plan{ID: "local:0:x", Local: true, Sources: projectSources("PROJ")})
+
+	if len(stub.detailCalls) != 0 || got.detail != nil || got.detailErr != nil {
+		t.Errorf("a local plan read a detail: calls %v, detail %+v, err %v", stub.detailCalls, got.detail, got.detailErr)
+	}
+}
+
+func TestReadReleases_ARefusedDetailLeavesTheVersionsAndKeepsTheReason(t *testing.T) {
+	t.Parallel()
+
+	stub := &versionStub{
+		versions:  map[string][]jira.Version{"10000": {{ID: "1", Name: "1.0"}}},
+		detailErr: &jira.CapabilityError{Capability: jira.CapPlans, Reason: "the Plans API needs Administer Jira"},
+	}
+	got := readOf(t, stub, projectSources("10000"))
+
+	if len(got.versions) != 1 || got.detail != nil || got.detailErr == nil {
+		t.Errorf("versions %d, detail %+v, err %v; want the versions with the refusal beside them",
+			len(got.versions), got.detail, got.detailErr)
+	}
+}
+
 func TestReadReleases_ARateLimitStillFailsTheRead(t *testing.T) {
 	t.Parallel()
 
@@ -102,7 +172,7 @@ func TestReadReleases_ARateLimitStillFailsTheRead(t *testing.T) {
 		versions: map[string][]jira.Version{"10021": {{ID: "1", Name: "1.0"}}},
 		errs:     map[string]error{"10011": &jira.RateLimitError{}},
 	}
-	msg := readReleases(context.Background(), stub, "42", projectSources("10021", "10011"), 3)()
+	msg := readReleases(context.Background(), stub, jira.Plan{ID: "42", Sources: projectSources("10021", "10011")}, 3)()
 	if _, ok := msg.(failedMsg); !ok {
 		t.Fatalf("a rate limit was taken as a refusal of one project: %#v", msg)
 	}
@@ -198,7 +268,7 @@ func TestReadReleases_AFailureOnABoardFailsTheRead(t *testing.T) {
 			t.Parallel()
 
 			stub := &versionStub{boardErr: map[int64]error{17: err}}
-			msg := readReleases(context.Background(), stub, "42", boardSources("17"), 3)()
+			msg := readReleases(context.Background(), stub, jira.Plan{ID: "42", Sources: boardSources("17")}, 3)()
 			if _, ok := msg.(failedMsg); !ok {
 				t.Fatalf("%s on a board was taken as a refusal of it: %#v", name, msg)
 			}
@@ -234,8 +304,9 @@ func TestPlans_ARefusedProjectIsNamedBesideTheReleasesThatWereRead(t *testing.T)
 		gen: dr.m.gen, plan: "42",
 		versions: []jira.Version{{ID: "1", Name: "Spring drop"}},
 		refused:  []refusal{{kind: "project", ref: "10011", reason: browseRefusal}},
+		read:     []string{"10021"},
 	})
 
 	frame := dr.view()
-	mustContain(t, frame, "Spring drop", "project id 10011 left out", "browse project rights")
+	mustContain(t, frame, "1 in id 10021 - enter browses", "project id 10011 left out", "browse project rights")
 }

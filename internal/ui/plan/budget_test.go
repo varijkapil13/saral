@@ -3,8 +3,11 @@
 package plan
 
 import (
+	"strconv"
 	"testing"
 	"time"
+
+	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 // The budgets in docs/PERFORMANCE.md are about the binary that ships, so a
@@ -74,6 +77,37 @@ func TestBudget_PlansStandingStillCostsTheFrameAndNothingElse(t *testing.T) {
 		t.Errorf("redrawing an unchanged frame allocates %d times, want the memo to carry all but the "+
 			"frame string itself", got)
 	}
+}
+
+func TestBudget_PlansOpeningAPlanOf2000VersionsAddsAFixedNumberOfRows(t *testing.T) {
+	small, smallAllocs := openedWith(t, 20)
+	big, bigAllocs := openedWith(t, 2000)
+
+	t.Logf("rows under an open plan: %d for 20 versions, %d for 2000; reflow allocations %.0f and %.0f",
+		len(small.rows), len(big.rows), smallAllocs, bigAllocs)
+	if len(big.rows) != len(small.rows) {
+		t.Errorf("opening a plan of 2000 versions makes %d rows against %d for 20; the releases are not collapsed",
+			len(big.rows), len(small.rows))
+	}
+	if bigAllocs > smallAllocs {
+		t.Errorf("reflowing a plan of 2000 versions allocates %.0f times against %.0f for 20", bigAllocs, smallAllocs)
+	}
+}
+
+func openedWith(t *testing.T, versions int) (m *Model, allocs float64) {
+	t.Helper()
+	m = stocked(t, 3, 120, 40)
+	id := m.plans[0].plan.ID
+	list := make([]jira.Version, 0, versions)
+	owners := make([]string, 0, versions)
+	for i := range versions {
+		list = append(list, jira.Version{ID: strconv.Itoa(i), Name: "release-" + strconv.Itoa(i)})
+		owners = append(owners, "PROJ")
+	}
+	m.open[id] = true
+	m.rel[id] = releasesOf(true, &releasesMsg{versions: list, owners: owners, read: []string{"PROJ"}})
+	m.reflow()
+	return m, testing.AllocsPerRun(50, m.reflow)
 }
 
 func TestBudget_PlanRowsAreMemoizedSoAFrameCostsNothingToRedraw(t *testing.T) {

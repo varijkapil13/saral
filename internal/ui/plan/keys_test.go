@@ -19,6 +19,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 	}{
 		{"a plan under the cursor", keysClosed},
 		{"the plan under the cursor already open", keysOpen},
+		{"the summary of an open plan's releases", keysReleases},
 		{"no plan to be on", keysNothing},
 	}
 	if len(named) != int(keyStates) {
@@ -51,6 +52,10 @@ func TestLiveKeys_FollowWhatTheViewIsDoing(t *testing.T) {
 			held.key("enter")
 			return held
 		}, keysOpen, true},
+		{"the summary of an open plan's releases", func() *driver {
+			held.m.moveTo(rowOfKind(t, held, rowReleases))
+			return held
+		}, keysReleases, true},
 	} {
 		set, gen := tc.enter().m.LiveKeys()
 		if gen != int(tc.state) {

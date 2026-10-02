@@ -117,6 +117,7 @@ const (
 	rowPlan rowKind = iota
 	rowDetail
 	rowWarn
+	rowReleases
 )
 
 // viewRow is one line of the flattened list. The detail of an open plan is
@@ -203,18 +204,20 @@ func (m *Model) appendReleases(rows []viewRow, at int) []viewRow {
 		return append(rows, viewRow{plan: at, kind: rowDetail,
 			text: line("releases", "none on "+projectWords(row, &held))})
 	}
-	byProject := len(held.refs) > 1 && len(held.owners) == len(held.versions)
-	for i := range held.versions {
-		words := versionWords(&held.versions[i])
-		if byProject {
-			words += "  " + projectLabel(row, &held, held.owners[i])
+	n := 0
+	if len(held.versions) > 0 {
+		rows = append(rows,
+			viewRow{plan: at, kind: rowReleases, text: line("releases", held.head+" - enter browses")},
+			viewRow{plan: at, kind: rowDetail, text: line("", held.cross)})
+		if held.crossWarn {
+			rows[len(rows)-1].kind = rowWarn
 		}
-		rows = append(rows, viewRow{plan: at, kind: rowDetail, text: line(labelOf(i), words)})
+		n = 1
 	}
 	for i := range held.refused {
 		r := &held.refused[i]
 		rows = append(rows, viewRow{plan: at, kind: rowWarn,
-			text: line(labelOf(len(held.versions)+i), refusedWords(row, &held, r))})
+			text: line(labelOf(n+i), refusedWords(row, &held, r))})
 	}
 	return rows
 }
@@ -291,30 +294,6 @@ func sourceWords(s jira.PlanSource, local bool, held *releases) string {
 	}
 }
 
-func versionWords(v *jira.Version) string {
-	var b strings.Builder
-	b.WriteString(v.Name)
-	b.WriteString("  ")
-	switch {
-	case v.Archived:
-		b.WriteString("archived")
-	case v.Released:
-		b.WriteString("released")
-	default:
-		b.WriteString("unreleased")
-	}
-	if d := v.ReleaseDate.String(); d != "" {
-		b.WriteString("  ")
-		b.WriteString(d)
-	}
-	if v.Unresolved != nil {
-		b.WriteString("  ")
-		b.WriteString(strconv.Itoa(*v.Unresolved))
-		b.WriteString(" unresolved")
-	}
-	return b.String()
-}
-
 // line indents a detail row under the plan it belongs to and lines its label up
 // with the others.
 func line(word, text string) string {
@@ -322,13 +301,21 @@ func line(word, text string) string {
 	return "    " + word + strings.Repeat(" ", pad) + text
 }
 
-// zoneOf is the click target one row is marked with. Only a plan row has one:
-// the lines under it are prose, and nothing happens when they are pointed at.
+// zoneOf is the click target one row is marked with. Only a plan row and the
+// summary of its releases have one: the other lines under a plan are prose, and
+// nothing happens when they are pointed at.
 func (m *Model) zoneOf(at int) string {
-	if at < 0 || at >= len(m.rows) || m.rows[at].kind != rowPlan {
+	if at < 0 || at >= len(m.rows) {
 		return ""
 	}
-	return "plan:" + m.plans[m.rows[at].plan].plan.ID
+	switch m.rows[at].kind {
+	case rowPlan:
+		return "plan:" + m.plans[m.rows[at].plan].plan.ID
+	case rowReleases:
+		return "releases:" + m.plans[m.rows[at].plan].plan.ID
+	default:
+		return ""
+	}
 }
 
 func (m *Model) row(at int) string {
@@ -337,10 +324,16 @@ func (m *Model) row(at int) string {
 	if r.kind != rowPlan {
 		k := rowKey{kind: r.kind, text: r.text, lay: m.lay, selected: sel,
 			problem: r.kind == rowWarn, gen: m.styles.gen}
+		if r.kind == rowReleases {
+			k.id = m.plans[r.plan].plan.ID
+		}
 		if s, ok := m.memo.Get(k); ok {
 			return s
 		}
 		s := renderDetail(k, m.styles, m.deps.Theme)
+		if r.kind == rowReleases {
+			s = m.zones.Mark(m.zoneOf(at), s)
+		}
 		m.memo.Put(k, s)
 		return s
 	}
