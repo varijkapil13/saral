@@ -1925,7 +1925,7 @@ its PR; the PR description is the record of what was built and what was left.
   `jira.QuoteJQL` and `jira.ParseText` turn what was typed into one JQL string literal that Jira reads
   the same way every time; the fake reads `text`, `summary`, `description` and `comment` with `~`.
 
-- [ ] **TK — `g /`, the search gesture** · **owns** `internal/ui/kernel/{kernel.go,keys.go,destinations.go}` and their tests and goldens, `internal/ui/testdata/overlay_*.golden`, `docs/{UX,PERFORMANCE,ROADMAP}.md`
+- [x] **TK — `g /`, the search gesture** · [#189](https://github.com/varijkapil13/saral/pull/189) · **owns** `internal/ui/kernel/{kernel.go,keys.go,destinations.go}` and their tests and goldens, `internal/ui/testdata/overlay_*.golden`, `docs/{UX,PERFORMANCE,ROADMAP}.md`
   A closed-table prefix gesture that opens the registered `search` view over whatever was on screen.
 
 - [ ] **T2 — The search view** · after T1 · **owns** `internal/ui/search/**`, one line in `internal/ui/views.go`, a row each in `internal/ui/{keys,livekeys}_test.go`; append-only `docs/{UX,PERFORMANCE,ARCHITECTURE,ROADMAP}.md`, `CHANGELOG.md`
