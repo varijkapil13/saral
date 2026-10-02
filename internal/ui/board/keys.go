@@ -1,13 +1,14 @@
 package board
 
 import (
-	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
-	"github.com/varijkapil13/saral/internal/ui/widget/card"
 )
 
-var _ kernel.KeyReporter = (*Model)(nil)
+var (
+	_ kernel.KeyReporter    = (*Model)(nil)
+	_ kernel.KeyStateLister = (*Model)(nil)
+)
 
 type keyMap struct {
 	Up       kernel.Binding
@@ -93,51 +94,63 @@ type keyMap struct {
 	PutBack    kernel.Binding
 }
 
+var shareBindings = []kernel.Binding{
+	kernel.Canon(kernel.ActCopyKey, "copy the key"),
+	kernel.Canon(kernel.ActCopyLink, "copy the link"),
+	kernel.Canon(kernel.ActBrowser, "open in browser"),
+}
+
+var (
+	boardKeys   = []string{"b"}
+	sprintKeys  = []string{"S"}
+	filtersKeys = []string{"F"}
+)
+
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		Left:     kernel.Bind([]string{"h", "left", "shift+tab"}, "←/h", "previous column"),
-		Right:    kernel.Bind([]string{"l", "right", "tab"}, "→/l", "next column"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
-		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
-		Top:      kernel.Bind([]string{"home"}, "g g", "first card in this column"),
-		Bottom:   kernel.Bind([]string{"G", "end"}, "G / g e", "last card in this column"),
-		Open:     kernel.Bind([]string{"enter"}, "enter", "open"),
-		Pick:     kernel.Bind([]string{"m"}, "m", "move this issue to another column"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
+		Left:     kernel.Canon(kernel.ActLeft, "previous column"),
+		Right:    kernel.Canon(kernel.ActRight, "next column"),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
+		Go:       kernel.Canon(kernel.ActGo),
+		Top:      kernel.Canon(kernel.ActTop, "first card in this column"),
+		Bottom:   kernel.Canon(kernel.ActBottom, "last card in this column"),
+		Open:     kernel.Canon(kernel.ActOpen),
+		Pick:     kernel.Canon(kernel.ActStatus, "move this issue to another column"),
 		Drop:     kernel.Bind([]string{"enter"}, "enter", "move it to this column"),
 		Cancel:   kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "put it back"),
-		Board:    kernel.Bind([]string{"b"}, "b", "another board of this project"),
-		Sprint:   kernel.Bind([]string{"s"}, "s", "another sprint running on this board"),
-		Filters:  kernel.Bind([]string{"F"}, "F 1-9", "quick filters"),
-		FilterBy: kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),
-		Unfilter: kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter"),
+		Board:    kernel.Local("board", "board", boardKeys, "b", "another board of this project"),
+		Sprint:   kernel.Local("board", "sprint", sprintKeys, "S", "another sprint running on this board"),
+		Filters:  kernel.Local("board", "quick-filters", filtersKeys, "F 1-9", "quick filters"),
+		FilterBy: kernel.Canon(kernel.ActFilter, "filter by a person, a status, a label"),
+		Unfilter: kernel.Canon(kernel.ActClearFilters, "clear filter"),
 
-		RankUp:     kernel.Bind([]string{"K", "shift+up"}, "K", "rank this card up"),
-		RankDown:   kernel.Bind([]string{"J", "shift+down"}, "J", "rank this card down"),
-		RankTop:    kernel.Bind([]string{"{"}, "{", "rank this card first in its column"),
-		RankBottom: kernel.Bind([]string{"}"}, "}", "rank this card last in its column"),
-		ShiftLeft:  kernel.Bind([]string{"H", "shift+left"}, "H", "move this card to the previous column"),
-		ShiftRight: kernel.Bind([]string{"L", "shift+right"}, "L", "move this card to the next column"),
-		Mine:       kernel.Bind([]string{"M"}, "M", "only my issues"),
-		Find:       kernel.Bind([]string{"/"}, "/", "find a card"),
-		FindNext:   kernel.Bind([]string{"n"}, "n", "next card found"),
-		FindPrev:   kernel.Bind([]string{"N"}, "N", "previous card found"),
+		RankUp:     kernel.Canon(kernel.ActRankUp, "rank this card up"),
+		RankDown:   kernel.Canon(kernel.ActRankDown, "rank this card down"),
+		RankTop:    kernel.Canon(kernel.ActRankFirst, "rank this card first in its column"),
+		RankBottom: kernel.Canon(kernel.ActRankLast, "rank this card last in its column"),
+		ShiftLeft:  kernel.Canon(kernel.ActShiftLeft, "move this card to the previous column"),
+		ShiftRight: kernel.Canon(kernel.ActShiftRight, "move this card to the next column"),
+		Mine:       kernel.Canon(kernel.ActMine, "only my issues"),
+		Find:       kernel.Canon(kernel.ActFind, "find a card"),
+		FindNext:   kernel.Canon(kernel.ActFindNext, "next card found"),
+		FindPrev:   kernel.Canon(kernel.ActFindPrev, "previous card found"),
 		FindKeep:   kernel.Bind([]string{"enter"}, "enter", "keep this search"),
 		FindCancel: kernel.Bind([]string{"esc"}, "esc", "go back to where the search began"),
 
-		Lanes:   kernel.Bind([]string{"w"}, "w", "swimlanes: none, by assignee, by parent"),
-		Fold:    kernel.Bind([]string{"z"}, "z", "fold or unfold this lane"),
-		FoldAll: kernel.Bind([]string{"Z"}, "Z", "fold or unfold every lane"),
-		Create:  kernel.Bind([]string{"c"}, "c", "create an issue in this column"),
-		Look:    card.Binding,
+		Lanes:   kernel.Canon(kernel.ActGroup, "swimlanes: none, by assignee, by parent"),
+		Fold:    kernel.Canon(kernel.ActFold, "fold or unfold this lane"),
+		FoldAll: kernel.Canon(kernel.ActFoldAll, "fold or unfold every lane"),
+		Create:  kernel.Canon(kernel.ActCreate, "create an issue in this column"),
+		Look:    kernel.Canon(kernel.ActLook, "roomy / compact / lines"),
 
-		Toggle:     kernel.Bind([]string{"space"}, "space", "pick or unpick this card"),
-		PickColumn: kernel.Bind([]string{"v"}, "v", "pick every card in this column"),
-		Unpick:     kernel.Bind([]string{"x"}, "x", "unpick every card"),
-		Assign:     kernel.Bind([]string{"@"}, "@", "assign the picked cards"),
-		Label:      kernel.Bind([]string{"+"}, "+", "add a label to the picked cards"),
+		Toggle:     kernel.Canon(kernel.ActToggle, "pick or unpick this card"),
+		PickColumn: kernel.Canon(kernel.ActSelectGroup, "pick every card in this column"),
+		Unpick:     kernel.Canon(kernel.ActSelectNone, "unpick every card"),
+		Assign:     kernel.Canon(kernel.ActAssign, "assign the picked cards"),
+		Label:      kernel.Canon(kernel.ActLabels, "add a label to the picked cards"),
 
 		Accept:  kernel.Bind([]string{"enter"}, "enter", "take this"),
 		Decline: kernel.Bind([]string{"esc"}, "esc", "cancel"),
@@ -171,7 +184,7 @@ func (k keyMap) browsing(narrowed, picked bool) kernel.KeySet {
 			kernel.Terse(k.Toggle, "pick"), kernel.Terse(k.Unpick, "unpick all"),
 		}
 	}
-	actions := append([]kernel.Binding{k.Open, k.Pick, k.Find, k.Mine, k.Board, k.Sprint, k.FilterBy, k.Filters}, issue.ShareBindings...)
+	actions := append([]kernel.Binding{k.Open, k.Pick, k.Find, k.Mine, k.Board, k.Sprint, k.FilterBy, k.Filters}, shareBindings...)
 	if narrowed {
 		acts = append(acts, kernel.Terse(k.Unfilter, "clear"))
 		actions = append(actions, k.Unfilter)
@@ -182,7 +195,7 @@ func (k keyMap) browsing(narrowed, picked bool) kernel.KeySet {
 	}
 	return kernel.KeySet{
 		Acts: acts,
-		Menu: issue.ShareBindings,
+		Menu: shareBindings,
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.Left, k.Right},
 			{k.PageDown, k.PageUp, k.Top, k.Bottom},
@@ -232,6 +245,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// two answers and the two ways of aiming. enter means something else here
 	// than it does above, which is the reason a state reports for itself.
 	sets[keysHolding] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Drop, "move it here"), kernel.Terse(k.Cancel, "put it back")},
 		Full: [][]kernel.Binding{
 			{k.Left, k.Right},
@@ -240,11 +254,12 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	}
 	// A move the site has not answered yet offers nothing: every key is refused
 	// until it does, and naming one would name a stroke being refused.
-	sets[keysMoving] = kernel.KeySet{}
+	sets[keysMoving] = kernel.KeySet{Mode: kernel.Modal}
 	// F has been pressed and the digit has not arrived. The board holds the
 	// keyboard for that one stroke, so the row names what the digit does here
 	// rather than the saved query a bare digit runs everywhere else.
 	sets[keysPickingFilter] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{
 			kernel.Bind(digitKeys, "1-9", "quick filter"),
 			kernel.Bind([]string{"esc"}, "esc", "cancel"),
@@ -254,35 +269,43 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// / is taking typing: every printable stroke goes into the search, so the
 	// row names the two strokes that end it.
 	sets[keysFinding] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.FindKeep, "keep"), kernel.Terse(k.FindCancel, "cancel")},
 		Full: [][]kernel.Binding{{k.FindKeep, k.FindCancel}, {widget.KillLine}},
 	}
 	// @ and + take typing: a name to look an account up by, or a label.
 	sets[keysAskingPerson] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Accept, "choose"), kernel.Terse(k.Decline, "cancel")},
 		Full: [][]kernel.Binding{{k.Prev, k.Next}, {k.Accept, k.Decline}, {widget.KillLine}},
 	}
 	sets[keysAskingLabel] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Accept, "add it"), kernel.Terse(k.Decline, "cancel")},
 		Full: [][]kernel.Binding{{k.Accept, k.Decline}, {widget.KillLine}},
 	}
 	sets[keysConfirming] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Run, kernel.Terse(k.Decline, "leave them as they are")},
 		Full: [][]kernel.Binding{{k.Run, k.Decline}},
 	}
 	sets[keysRunning] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Halt, "stop")},
 		Full: [][]kernel.Binding{{k.Halt}},
 	}
 	sets[keysChoosing] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Choose, "move it"), kernel.Terse(k.PutBack, "put it back")},
 		Full: [][]kernel.Binding{{k.ChoosePrev, k.ChooseNext}, {k.Choose, k.PutBack, k.Cancel}},
 	}
 	sets[keysAskingTargets] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.PutBack, "cancel")},
 		Full: [][]kernel.Binding{{kernel.Terse(k.PutBack, "cancel"), kernel.Terse(k.Cancel, "cancel")}},
 	}
 	sets[keysChoosingTarget] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Choose, "take it"), kernel.Terse(k.PutBack, "cancel")},
 		Full: [][]kernel.Binding{
 			{k.ChoosePrev, k.ChooseNext},
@@ -291,6 +314,8 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	}
 	return sets
 }()
+
+func (*Model) KeyStates() []kernel.KeySet { return liveSets[:] }
 
 // LiveKeys reports the keys that work in the state the board is actually in. A
 // card in hand answers enter and ctrl+g for two things the resting state does
@@ -418,6 +443,7 @@ func (k keyMap) entries() (browsing, holding, finding []binding) {
 	browsing = []binding{
 		{k.Up, actUp}, {k.Down, actDown},
 		{k.Left, actLeft}, {k.Right, actRight},
+		{prevPane, actLeft}, {nextPane, actRight},
 		{k.PageUp, actPageUp}, {k.PageDown, actPageDown},
 		{k.Go, actGo}, {k.Top, actTop}, {k.Bottom, actBottom},
 		{k.Open, actOpen}, {k.Pick, actPick}, {k.Board, actBoard},
@@ -425,8 +451,10 @@ func (k keyMap) entries() (browsing, holding, finding []binding) {
 		{k.Filters, actFilter}, {k.FilterBy, actFilterBy},
 		{k.Unfilter, actUnfilter},
 		{k.RankUp, actRankUp}, {k.RankDown, actRankDown},
+		{shiftUp, actRankUp}, {shiftDown, actRankDown},
 		{k.RankTop, actRankTop}, {k.RankBottom, actRankBottom},
 		{k.ShiftLeft, actShiftLeft}, {k.ShiftRight, actShiftRight},
+		{shiftLeft, actShiftLeft}, {shiftRight, actShiftRight},
 		{k.Mine, actMine}, {k.Find, actFind},
 		{k.FindNext, actFindNext}, {k.FindPrev, actFindPrev},
 		{k.Lanes, actLanes}, {k.Fold, actFold}, {k.FoldAll, actFoldAll},
@@ -441,6 +469,15 @@ func (k keyMap) entries() (browsing, holding, finding []binding) {
 	finding = []binding{{k.FindKeep, actFindKeep}, {k.FindCancel, actFindCancel}}
 	return browsing, holding, finding
 }
+
+var (
+	prevPane   = kernel.Canon(kernel.ActPrevPane, "previous column")
+	nextPane   = kernel.Canon(kernel.ActNextPane, "next column")
+	shiftUp    = kernel.Bind([]string{"shift+up"}, "shift+up", "rank this card up")
+	shiftDown  = kernel.Bind([]string{"shift+down"}, "shift+down", "rank this card down")
+	shiftLeft  = kernel.Bind([]string{"shift+left"}, "shift+left", "move this card to the previous column")
+	shiftRight = kernel.Bind([]string{"shift+right"}, "shift+right", "move this card to the next column")
+)
 
 type binding struct {
 	b kernel.Binding

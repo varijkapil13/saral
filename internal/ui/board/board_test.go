@@ -90,7 +90,7 @@ func TestBoard_TheKeyboardAndThePointerMakeTheSameMove(t *testing.T) {
 
 	byKey := func(t *testing.T, dr *driver, d kernel.Deps) {
 		t.Helper()
-		dr.key("m", "l", "enter")
+		dr.key("t", "l", "enter")
 	}
 	byPointer := func(t *testing.T, dr *driver, d kernel.Deps) {
 		t.Helper()
@@ -146,7 +146,7 @@ func TestBoard_TheTransitionChosenIsTheOneWhoseTargetStatusTheColumnMaps(t *test
 		{Key: "PROJ-1", Summary: "one", Status: jira.Status{ID: "10201", Name: "Triage"}},
 	}, 100, 16)
 
-	dr.key("m", "l")
+	dr.key("t", "l")
 	if dr.m.card == nil || dr.m.card.target != 1 {
 		t.Fatalf("the card is not aimed at the second column: %+v", dr.m.card)
 	}
@@ -174,7 +174,7 @@ func TestBoard_AColumnNoWorkflowMoveReachesIsRefusedWithTheReason(t *testing.T) 
 		{Key: "PROJ-1", Summary: "one", Status: jira.Status{ID: "10201", Name: "Triage"}},
 	}, 100, 16)
 
-	dr.key("m", "l")
+	dr.key("t", "l")
 	dr.send(movesMsg{gen: dr.m.gen, key: "PROJ-1", column: 1, moves: []jira.Transition{
 		{ID: "tr-x", Name: "Somewhere else", To: jira.Status{ID: "10203", Name: "Shipped"}},
 	}})
@@ -198,7 +198,7 @@ func TestBoard_ATransitionNeedingAScreenIsHandedToThePaneThatCanFillOne(t *testi
 	dr := newDriver(t, d, 120, 20)
 
 	// The done column's transition carries a required resolution on this site.
-	dr.key("m", "l", "l", "enter")
+	dr.key("t", "l", "l", "enter")
 
 	if n := countCalls(fake, "Transition"); n != 0 {
 		t.Errorf("%d transitions were applied blind; the move needed a field this view cannot fill", n)
@@ -222,7 +222,7 @@ func TestBoard_ACardPutBackAsksTheSiteForNothing(t *testing.T) {
 	dr := newDriver(t, testDeps(fake), 120, 20)
 	before := len(viewCalls(fake))
 
-	dr.key("m", "l", "ctrl+g")
+	dr.key("t", "l", "ctrl+g")
 
 	if dr.m.card != nil {
 		t.Error("the card is still in hand")
@@ -244,7 +244,7 @@ func TestBoard_DroppingACardWhereItCameFromAsksForNothing(t *testing.T) {
 	dr := newDriver(t, testDeps(fake), 120, 20)
 	before := len(viewCalls(fake))
 
-	dr.key("m", "enter")
+	dr.key("t", "enter")
 
 	if got := viewCalls(fake)[before:]; len(got) != 0 {
 		t.Errorf("the site was asked for %v to move a card to where it already is", got)

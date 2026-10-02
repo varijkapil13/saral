@@ -54,7 +54,7 @@ func TestBoard_ARefusedMovePutsTheCardBackAndLeavesTheBoardFresh(t *testing.T) {
 			dr := newDriver(t, testDeps(fake), 120, 20)
 			moves := transitionInto(t, dr, fake, "PROJ-3", 1)
 
-			dr.key("m", "l")
+			dr.key("t", "l")
 			fake.FailNext(err)
 			dr.send(movesMsg{gen: dr.m.moveGen, key: "PROJ-3", column: 1, moves: moves})
 
@@ -84,7 +84,7 @@ func TestBoard_ACardThatCouldNotBeReadForItsMovesGoesBack(t *testing.T) {
 	fake := newFake(9)
 	dr := newDriver(t, testDeps(fake), 120, 20)
 
-	dr.key("m", "l")
+	dr.key("t", "l")
 	fake.FailNext(&jira.CapabilityError{Reason: "you need Transition Issues in this project"})
 	dr.key("enter")
 
@@ -113,7 +113,7 @@ func TestBoard_AMoveWhileLaterPagesLoadKeepsTheWalkAndTheCursor(t *testing.T) {
 	transitionInto(t, dr, fake, key, 1)
 	pagesBefore := countCalls(fake, "SprintIssues")
 
-	dr.key("m", "l", "enter")
+	dr.key("t", "l", "enter")
 
 	if got := dr.column(1); !slices.Contains(got, key) {
 		t.Fatalf("the second column holds %v, want %s landed in it", got, key)
@@ -154,7 +154,7 @@ func TestBoard_AMovedCardThatCannotBeReadBackStaysWhereItLanded(t *testing.T) {
 	fake := newFake(9)
 	dr := newDriver(t, testDeps(rereadFails{Fake: fake}), 120, 20)
 
-	dr.key("m", "l", "enter")
+	dr.key("t", "l", "enter")
 
 	if got := dr.column(1); !slices.Contains(got, "PROJ-3") {
 		t.Errorf("the second column holds %v, want PROJ-3 where the move put it", got)

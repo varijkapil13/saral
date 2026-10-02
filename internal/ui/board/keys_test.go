@@ -59,7 +59,7 @@ func TestLiveKeys_FollowWhatTheBoardIsDoing(t *testing.T) {
 		t.Fatal("a board being looked at advertises nothing")
 	}
 
-	dr.key("m")
+	dr.key("t")
 	held, holding := dr.m.LiveKeys()
 	if holding == browsing {
 		t.Error("picking a card up did not change the generation, so the footer keeps the row it had")

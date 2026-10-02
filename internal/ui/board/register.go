@@ -136,15 +136,17 @@ func init() {
 		id, title string
 		key       kernel.Binding
 		msg       tea.Msg
+		action    kernel.Action
 	}{
-		{"board.lanes", "Change the swimlanes on the board", keys.Lanes, LanesMsg{}},
-		{"board.fold-lane", "Fold or unfold this swimlane", keys.Fold, FoldMsg{}},
-		{"board.create", "Create an issue in this column", keys.Create, CreateMsg{}},
-		{"board.assign", "Assign the picked cards", keys.Assign, AssignMsg{}},
-		{"board.label", "Add a label to the picked cards", keys.Label, LabelMsg{}},
+		{"board.lanes", "Change the swimlanes on the board", keys.Lanes, LanesMsg{}, ""},
+		{"board.fold-lane", "Fold or unfold this swimlane", keys.Fold, FoldMsg{}, ""},
+		{"board.create", "Create an issue in this column", keys.Create, CreateMsg{}, kernel.ActCreate},
+		{"board.assign", "Assign the picked cards", keys.Assign, AssignMsg{}, kernel.ActAssign},
+		{"board.label", "Add a label to the picked cards", keys.Label, LabelMsg{}, ""},
 	} {
 		kernel.RegisterCommand(kernel.Command{
 			ID:       c.id,
+			Action:   c.action,
 			Title:    c.title,
 			Group:    "Board",
 			Requires: jira.CapBoards,
@@ -154,6 +156,7 @@ func init() {
 	}
 	kernel.RegisterCommand(kernel.Command{
 		ID:       "board.mine",
+		Action:   kernel.ActMine,
 		Title:    "Show only my issues on the board",
 		Group:    "Search",
 		Kind:     kernel.KindSearch,
@@ -165,6 +168,7 @@ func init() {
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:       "board.find",
+		Action:   kernel.ActFind,
 		Title:    "Find a card on the board",
 		Group:    "Search",
 		Kind:     kernel.KindSearch,
@@ -178,6 +182,7 @@ func init() {
 	// clears a filter is shown only by the state that has one to clear.
 	kernel.RegisterCommand(kernel.Command{
 		ID:       "board.clear-filter",
+		Action:   kernel.ActClearFilters,
 		Title:    "Clear the filter on this board",
 		Group:    "Search",
 		Kind:     kernel.KindSearch,

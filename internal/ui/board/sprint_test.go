@@ -126,13 +126,13 @@ func TestBoard_TwoRunningSprintsAreChosenBetweenAndTheChoiceIsKept(t *testing.T)
 		t.Fatalf("the board opened on %q, want the first the site lists", dr.m.sprint.Name)
 	}
 	mustContain(t, dr.view(), first.Name, "1 of 2 running")
-	mustContain(t, dr.lastStatus().Text, "2 sprints are running", "s shows the next")
+	mustContain(t, dr.lastStatus().Text, "2 sprints are running", "S shows the next")
 	golden(t, "board_two_sprints_120x20.golden", dr.view())
 
-	dr.key("s")
+	dr.key("S")
 
 	if dr.m.sprint.ID != second.ID {
-		t.Fatalf("s left the board on %q, want %q", dr.m.sprint.Name, second.Name)
+		t.Fatalf("S left the board on %q, want %q", dr.m.sprint.Name, second.Name)
 	}
 	if got, want := heldKeys(dr), []string{"PROJ-5", "PROJ-6", "PROJ-7", "PROJ-8"}; !slices.Equal(got, want) {
 		t.Errorf("the second sprint's board holds %v, want %v", got, want)

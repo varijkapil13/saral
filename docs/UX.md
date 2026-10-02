@@ -530,7 +530,7 @@ arithmetic (see `docs/ARCHITECTURE.md`). This table is what the program does.
 | click a chip's `×` | drop the whole facet the chip names |
 | wheel | scroll the pane under the pointer, not the focused one |
 | drag a card within its column, or a backlog issue within its section | rank it beside the card it was dropped on, the same as `K`/`J` |
-| drag a card to another column | move it there, the same as `m` and `enter` |
+| drag a card to another column | move it there, the same as `t` and `enter` |
 | click a swimlane's header | fold or unfold that lane, the same as `z` |
 | drag the column between two panes | move the boundary; the panes follow the pointer and the ratio is kept |
 | click the line that names the search | show its JQL and offer to change it, the same as `e` |
@@ -859,9 +859,11 @@ point at, a pointer gesture.
 | `M` | only my issues | only my issues |
 | `/`, then `n` / `N` | find a card by key or words of its summary, then the next and the one before | the same over the rows |
 | `c` | create an issue in the column under the cursor | create an issue in the section under the cursor |
-| `w`, `z`, `Z` | swimlanes: none, by assignee, by parent; fold the cursor's lane; fold or open every lane | — |
-| `space`, `v`, `x` / `esc` | pick a card, pick the whole column, let go of every pick | pick an issue, pick the section, let go (`x`) |
-| `@`, `+`, `m` | assign, add a label to, or move every picked card — or the card under the cursor when none is | `m` moves the picked issues |
+| `v`, `z`, `Z` | swimlanes: none, by assignee, by parent; fold the cursor's lane; fold or open every lane | — |
+| `space`, `*`, `x` / `esc` | pick a card, pick the whole column, let go of every pick | pick an issue, pick the section, let go (`x`) |
+| `@`, `#`, `t` | assign, add a label to, or move to another column every picked card — or the card under the cursor when none is | — |
+| `m` | — | move the picked issues to a sprint or the backlog |
+| `b`, `S`, `F` `1`-`9` | another board of the project; another sprint running on this board; toggle a quick filter | — |
 
 **A rank is drawn before the site answers and taken back if it refuses.** The site's own order lags
 a rank write (`docs/API-NOTES.md`), so nothing re-reads to confirm: the card moves on screen, the
@@ -873,12 +875,12 @@ A board with no rank field is ordered by its filter and says so rather than pret
 card, and so does a backlog sorted by a field of its own: a rank there would not show where it went.
 `}` waits for the rest of a board still loading, because the last card loaded is not the last card.
 
-**`H` and `L` are `m`, an arrow and `enter` in one stroke.** They go through the same transition
+**`H` and `L` are `t`, an arrow and `enter` in one stroke.** They go through the same transition
 read, so a move whose screen needs a field opens the issue pane on that move exactly as a drop does.
 
 **A column holding several statuses asks which.** A board may map *Done* and another closing status
 into one column, and then more than one transition lands a card there. Every way of landing a card —
-`m` and `enter`, a drag, a click on a column, `H`/`L`, the palette — reads the card's moves first; one
+`t` and `enter`, a drag, a click on a column, `H`/`L`, the palette — reads the card's moves first; one
 into the column is taken as before, and several keep the card in hand while the prompt line lists
 them in the order the site offered, the first chosen. Each is named by the status it lands in, with
 the transition's own name beside it when that differs or two share a status name. `←`/`→` (and `↑`/`↓`,
@@ -901,7 +903,7 @@ mapped column, never a status category, and the bar counts the board's estimate 
 estimates and any card carries one, cards otherwise. Each column's rule already carries its estimate
 total; the backlog puts each section's total on the section's head, in the estimation field's own name.
 
-**Swimlanes group the rows, never the columns.** `w` steps through none, by assignee and by parent,
+**Swimlanes group the rows, never the columns.** `v` steps through none, by assignee and by parent,
 and the choice is kept per board. The parent is the issue's own parent field, which is where both a
 company-managed epic and a team-managed parent arrive, so nothing reads an epic-link custom field.
 People are ordered by name and parents by the first of their cards the board ranks; the lane of
@@ -927,9 +929,9 @@ site's index trails a create by seconds, so a re-read that has not caught up doe
 card off again.
 
 **A bulk change is asked for, confirmed, then run one card at a time.** `space` picks the card under
-the cursor and steps on, `v` picks the whole column (or lets it go when it is all picked already), and
+the cursor and steps on, `*` picks the whole column (or lets it go when it is all picked already), and
 `x` or `esc` lets every pick go. `@` asks who: nothing typed offers this session's account and nobody,
-anything typed is asked of the site. `+` asks for a label, which cannot contain a space. `m` with
+anything typed is asked of the site. `#` asks for a label, which cannot contain a space. `t` with
 cards picked takes them all in hand, aimed with the same `h`/`l`; landing them on a column that holds
 several statuses reads the first card's moves and asks once which status, by name, and every card then
 takes its own transition to that status. Each ends on a named confirmation —

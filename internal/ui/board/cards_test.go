@@ -49,13 +49,13 @@ func TestBoardCards_Golden(t *testing.T) {
 		}{
 			"a board at 120":         {width: 120, height: 30, golden: "120x30"},
 			"a board at 80":          {width: 80, height: 20, golden: "80x20"},
-			"a card in hand":         {width: 120, height: 30, keys: []string{"m", "l"}, golden: "held_120x30"},
+			"a card in hand":         {width: 120, height: 30, keys: []string{"t", "l"}, golden: "held_120x30"},
 			"a search under way":     {width: 120, height: 30, keys: []string{"/", "1", "2"}, golden: "find_120x30"},
-			"lanes by assignee":      {width: 120, height: 24, build: lanedCards, keys: []string{"w"}, golden: "lanes_assignee_120x24"},
-			"a folded lane":          {width: 120, height: 24, build: lanedCards, keys: []string{"w", "z"}, golden: "lanes_folded_120x24"},
-			"asking which status":    {width: 120, height: 30, build: choosingCards, keys: []string{"m", "l", "l", "enter", "right"}, golden: "choosing_120x30"},
+			"lanes by assignee":      {width: 120, height: 24, build: lanedCards, keys: []string{"v"}, golden: "lanes_assignee_120x24"},
+			"a folded lane":          {width: 120, height: 24, build: lanedCards, keys: []string{"v", "z"}, golden: "lanes_folded_120x24"},
+			"asking which status":    {width: 120, height: 30, build: choosingCards, keys: []string{"t", "l", "l", "enter", "right"}, golden: "choosing_120x30"},
 			"two cards picked":       {width: 120, height: 30, build: pickedCards, golden: "picked_120x30"},
-			"a picked set in hand":   {width: 120, height: 30, build: pickedCards, keys: []string{"m", "l"}, golden: "picked_held_120x30"},
+			"a picked set in hand":   {width: 120, height: 30, build: pickedCards, keys: []string{"t", "l"}, golden: "picked_held_120x30"},
 			"a board in a short box": {width: 120, height: 9, golden: "short_120x9"},
 		} {
 			t.Run(look.Word()+"/"+name, func(t *testing.T) {
@@ -243,10 +243,10 @@ func TestBoardCards_VIsNotTheLookKeyWhileAGestureHoldsTheKeyboard(t *testing.T) 
 		keys  []string
 		check func(*testing.T, *driver)
 	}{
-		"a card in hand": {keys: []string{"m"}},
+		"a card in hand": {keys: []string{"t"}},
 		"asking which status": {
 			build: func(t *testing.T) *driver { return choosingCards(t, 120, 30) },
-			keys:  []string{"m", "l", "l", "enter"},
+			keys:  []string{"t", "l", "l", "enter"},
 		},
 		"a search under way": {
 			keys: []string{"/"},
@@ -400,7 +400,7 @@ func TestBoardCards_TheLaneWindowKeepsTheWholeCardUnderTheCursor(t *testing.T) {
 		t.Run(look.Word(), func(t *testing.T) {
 			t.Parallel()
 			dr := lanedCards(t, 120, 16)
-			dr.key("w")
+			dr.key("v")
 			dr.look(look)
 			dr.moveTo(0, 0)
 			seen := map[int]bool{}
@@ -430,7 +430,7 @@ func TestBoardCards_ACardInTheSecondLaneIsClickable(t *testing.T) {
 		t.Run(look.Word(), func(t *testing.T) {
 			t.Parallel()
 			d, dr := stocked(t, laneConfig(), laneCards(), 120, 60)
-			dr.key("w")
+			dr.key("v")
 			dr.look(look)
 			second := &dr.m.lanes[1]
 			if second.n[1] == 0 {

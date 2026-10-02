@@ -198,7 +198,7 @@ func TestMove_NothingMovesUntilTheConfirmIsAnswered(t *testing.T) {
 	dr := newDriver(t, testDeps(c), 120, 24)
 	dr.cursorTo("row:PROJ-1")
 
-	for _, stroke := range []string{"space", "v", "x", "y", "enter", "j", "k", "G", "home", "end"} {
+	for _, stroke := range []string{"space", "*", "x", "y", "enter", "j", "k", "G", "home", "end"} {
 		dr.key(stroke)
 		if sprint, backlog := c.calls(); len(sprint)+len(backlog) != 0 {
 			t.Fatalf("%q moved something from the browsing state", stroke)

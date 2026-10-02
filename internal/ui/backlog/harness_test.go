@@ -178,7 +178,7 @@ func (d *driver) loadAll() {
 func (d *driver) pickWholeBacklog() {
 	d.t.Helper()
 	d.cursorTo("head:" + strconv.Itoa(len(d.m.groups)-1))
-	d.key("v")
+	d.key("*")
 }
 
 func (d *driver) key(keys ...string) {
