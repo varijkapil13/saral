@@ -223,6 +223,7 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"priority_search.json",
 		"problem_method_not_allowed.json",
 		"problem_no_endpoint.json",
+		"project_one.json",
 		"project_statuses.json",
 		"rank_partial.json",
 		"rate_limited.json",

@@ -560,6 +560,32 @@ func (f *Fake) Versions(ctx context.Context, projectIDOrKey string) ([]jira.Vers
 	return out, nil
 }
 
+// Project resolves a project by key or by id.
+func (f *Fake) Project(ctx context.Context, idOrKey string) (jira.ProjectRef, error) {
+	if err := f.fakeBegin(ctx, "Project"); err != nil {
+		return jira.ProjectRef{}, err
+	}
+	ref := strings.TrimSpace(idOrKey)
+	if ref == "" || !jira.IsPathSegment(ref) {
+		return jira.ProjectRef{}, fakeInvalid("project", "a project id or key is required")
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	proj, ok := f.projects[ref]
+	if !ok {
+		for _, p := range f.projects {
+			if p.ref.ID == ref {
+				proj, ok = p, true
+				break
+			}
+		}
+	}
+	if !ok {
+		return jira.ProjectRef{}, fakeNotFound("project", ref)
+	}
+	return proj.ref, nil
+}
+
 // SaveVersion creates a version, or updates the one VersionInput.ID names. It
 // cannot release one: that goes through ReleaseVersion, which has to be told
 // what to do about the issues still open on it.

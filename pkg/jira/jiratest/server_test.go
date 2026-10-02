@@ -116,6 +116,7 @@ func TestServer_ServesEveryDefaultRouteWithItsFixture(t *testing.T) {
 		{"a site-wide account search", http.MethodGet, "/rest/api/3/user/search?query=ex", http.StatusOK, "user_search.json"},
 		{"an assignable account search", http.MethodGet, "/rest/api/3/user/assignable/search?project=EX&query=", http.StatusOK, "user_assignable.json"},
 		{"accounts by id", http.MethodGet, "/rest/api/3/user/bulk?accountId=5b10a2844c20165700ede21g", http.StatusOK, "user_bulk.json"},
+		{"one project by key", http.MethodGet, "/rest/api/3/project/EX", http.StatusOK, "project_one.json"},
 		{"a project's statuses", http.MethodGet, "/rest/api/3/project/EX/statuses", http.StatusOK, "project_statuses.json"},
 		{"the site's priorities", http.MethodGet, "/rest/api/3/priority/search", http.StatusOK, "priority_search.json"},
 		{"the site's labels", http.MethodGet, "/rest/api/3/label", http.StatusOK, "labels.json"},

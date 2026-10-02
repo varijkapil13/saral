@@ -65,6 +65,7 @@ var (
 	_ jira.Relocator          = (*Fake)(nil)
 	_ jira.PlanReader         = (*Fake)(nil)
 	_ jira.BoardProjectReader = (*Fake)(nil)
+	_ jira.ProjectReader      = (*Fake)(nil)
 	_ jira.PlanDetailReader   = (*Fake)(nil)
 
 	_ jira.IssueReader       = (*Fake)(nil)

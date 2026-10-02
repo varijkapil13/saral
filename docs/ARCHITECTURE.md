@@ -91,6 +91,7 @@ type Client interface {
 	BoardBacklog(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
 	QuickFilters(ctx context.Context, boardID int64) ([]QuickFilter, error)
 	BoardProjects(ctx context.Context, boardID int64) ([]ProjectRef, error)
+	Project(ctx context.Context, idOrKey string) (ProjectRef, error)
 	Sprints(ctx context.Context, boardID int64, states ...SprintState) (Page[Sprint], error)
 	Sprint(ctx context.Context, id int64) (Sprint, error)
 	CreateSprint(ctx context.Context, in SprintInput) (Sprint, error)
@@ -152,7 +153,7 @@ worklogs, watchers and `ServerInfo` each sit behind a role of their own in `pkg/
 view widens the composite. The board brought in `SprintIssueReader` (a Scrum board shows its running
 sprint, and the sprints view counts a running sprint's progress and reads what is open before a
 completion moves it) and `IssueReader` (a moved card is read back by key rather than through a
-search), and the board's and the backlog's reorder brought in `Ranker`. `BoardProjectReader` answers which projects stand behind a board, which a filter board does not name on itself. `*cloud.Client` and
+search), and the board's and the backlog's reorder brought in `Ranker`. `BoardProjectReader` answers which projects stand behind a board, which a filter board does not name on itself. `ProjectReader` resolves a project by id or key, which is how a plan source's id gets a key to show. `*cloud.Client` and
 `*jiratest.Fake` both implement the whole port.
 
 ### Filtering by a person, and by the site's own words

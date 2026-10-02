@@ -7,6 +7,11 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+### Added
+
+- The Jira port can resolve a project by its id or its key (`Project`), which is what a plan's
+  project source needs to be shown by key.
+
 ## [0.10.0] - 2026-10-02
 
 ### Added
