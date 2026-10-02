@@ -333,35 +333,6 @@ func (m *Model) toggleExcluded() tea.Cmd {
 	return nil
 }
 
-func (m *Model) cyclePick() tea.Cmd {
-	s := m.set
-	if s == nil || m.saving || m.mode != browsing {
-		return nil
-	}
-	if len(s.owned) < 2 {
-		return kernel.Status("this list holds versions of one project")
-	}
-	next := ""
-	if s.pick == "" {
-		next = s.owned[0].Ref
-	} else {
-		for i, o := range s.owned {
-			if o.Ref == s.pick && i+1 < len(s.owned) {
-				next = s.owned[i+1].Ref
-			}
-		}
-	}
-	under, head := m.selectedID(), m.headKeyAtCursor()
-	s.pick = next
-	m.sum = ""
-	m.reorder()
-	m.moveOnto(under)
-	if under == "" {
-		m.moveOntoHead(head)
-	}
-	return nil
-}
-
 func (s *setView) pickLabel() string {
 	for _, o := range s.owned {
 		if o.Ref == s.pick {

@@ -19,7 +19,7 @@ const (
 
 var (
 	excludedHint = defaultSetKeys().Excluded.Help().Key
-	pickHint     = defaultSetKeys().Pick.Help().Key
+	pickHint     = defaultSetKeys().Filter.Help().Key
 	findHint     = defaultSetKeys().Find.Help().Key
 )
 

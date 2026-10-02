@@ -5,7 +5,10 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
-var _ kernel.KeyReporter = (*Model)(nil)
+var (
+	_ kernel.KeyReporter    = (*Model)(nil)
+	_ kernel.KeyStateLister = (*Model)(nil)
+)
 
 // keyMap is what the versions list answers to. It is two keymaps in one value:
 // the rows are browsed with vim keys like every other list here, and the editor
@@ -62,36 +65,41 @@ type keyMap struct {
 	Cancel kernel.Binding
 }
 
+var (
+	archiveKeys = []string{"A"}
+	fixKeys     = []string{"B"}
+)
+
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
 		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
-		Top:      kernel.Bind([]string{"home"}, "g g", "first version"),
-		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "last version"),
+		Top:      kernel.Canon(kernel.ActTop, "first version"),
+		Bottom:   kernel.Canon(kernel.ActBottom, "last version"),
 
-		Release: kernel.Bind([]string{"enter"}, "enter", "release this version"),
-		New:     kernel.Bind([]string{"n"}, "n", "new version"),
-		Edit:    kernel.Bind([]string{"e"}, "e", "edit this version"),
-		Archive: kernel.Bind([]string{"A"}, "A", "archive or unarchive it"),
-		Assign:  kernel.Bind([]string{"b"}, "b", "put it on issues, or take it off"),
-		Sort:    kernel.Bind([]string{"s"}, "s", "sort the versions"),
-		Filter:  kernel.Bind([]string{"f"}, "f", "filter by state"),
-		Find:    kernel.Bind([]string{"/"}, "/", "find a version"),
+		Release: kernel.Canon(kernel.ActAdvance, "release this version"),
+		New:     kernel.Canon(kernel.ActCreate, "new version"),
+		Edit:    kernel.Canon(kernel.ActEdit, "edit this version"),
+		Archive: kernel.Local("release", "archive", archiveKeys, "A", "archive or unarchive it"),
+		Assign:  kernel.Local("release", "fix-version", fixKeys, "B", "put it on issues, or take it off"),
+		Sort:    kernel.Canon(kernel.ActSort, "sort the versions"),
+		Filter:  kernel.Canon(kernel.ActFilter, "filter by state"),
+		Find:    kernel.Canon(kernel.ActFind, "find a version"),
 
 		FindKeep:  kernel.Bind([]string{"enter"}, "enter", "keep the text"),
 		FindClear: kernel.Bind([]string{"esc"}, "esc", "clear it"),
 
-		SortPrev:   kernel.Bind([]string{"left", "h"}, "←/h", "previous field"),
-		SortNext:   kernel.Bind([]string{"right", "l"}, "→/l", "next field"),
-		SortChoose: kernel.Bind([]string{"enter"}, "enter", "choose this order"),
-		SortCancel: kernel.Bind([]string{"esc"}, "esc", "leave the order as it is"),
+		SortPrev:   kernel.Canon(kernel.ActSortPrev),
+		SortNext:   kernel.Canon(kernel.ActSortNext),
+		SortChoose: kernel.Canon(kernel.ActSortChoose),
+		SortCancel: kernel.Canon(kernel.ActSortCancel),
 
 		NextField: kernel.Bind([]string{"tab", "down"}, "tab", "next field"),
 		PrevField: kernel.Bind([]string{"shift+tab", "up"}, "shift+tab", "previous field"),
-		Save:      kernel.Bind([]string{"ctrl+s"}, "ctrl+s", "save this version"),
+		Save:      kernel.Canon(kernel.ActSave, "save this version"),
 		Cancel:    kernel.Bind([]string{"esc"}, "esc", "leave it alone"),
 	}
 }
@@ -145,6 +153,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 			[]kernel.Binding{k.Sort, k.Filter, k.Find}),
 	}
 	sets[keysEditing] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Save, "save"), kernel.Terse(k.Cancel, "leave it")},
 		Full: [][]kernel.Binding{
 			{k.NextField, k.PrevField},
@@ -155,8 +164,9 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// A save in flight answers nothing at all. The text is still on screen and
 	// still the reader's, and a key that appeared to take it back while the
 	// write was out with the site would be a lie about which of the two won.
-	sets[keysSaving] = kernel.KeySet{}
+	sets[keysSaving] = kernel.KeySet{Mode: kernel.Modal}
 	sets[keysSorting] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{
 			kernel.Terse(k.SortPrev, "prev"), kernel.Terse(k.SortNext, "next"),
 			kernel.Terse(k.SortChoose, "choose"), kernel.Terse(k.SortCancel, "cancel"),
@@ -164,6 +174,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Full: [][]kernel.Binding{{k.SortPrev, k.SortNext}, {k.SortChoose, k.SortCancel}},
 	}
 	sets[keysFinding] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.FindKeep, "keep"), kernel.Terse(k.FindClear, "clear")},
 		Full: [][]kernel.Binding{{k.FindKeep, k.FindClear}, {widget.KillLine}},
 	}
@@ -189,6 +200,14 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysCounting
 	}
 	return liveSets[state], int(state)
+}
+
+// KeyStates is every set the list reports.
+func (m *Model) KeyStates() []kernel.KeySet {
+	if m.set != nil {
+		return setSets[:]
+	}
+	return liveSets[:]
 }
 
 type action uint8

@@ -232,7 +232,8 @@ search in view         /              filter rows live
 clear everything       ctrl+g / esc   a term the picker set and a typed filter both, from the browsing
                                       state; esc clears the typed one while still typing
 filter by a value      f              pick a facet, then one of the values this site holds. in
-                                      releases, f moves the state filter on instead
+                                      releases, f moves the state filter on; in a plan's releases it
+                                      opens the state and the project together
 every issue here       0              widen the search to the whole of the session's project;
                                       also the state with no filter values in force
 edit this search       e              show the JQL on screen and run an edited one
@@ -1025,6 +1026,10 @@ for a narrower one (`docs/API-NOTES.md`). Order and state are both laid over it 
   (archived never), archived, and round again. The summary line says what is in force and how much
   it keeps (`unreleased · 4 of 12 versions`); a filter that keeps nothing says so and names what `f`
   shows next. The filter is remembered per profile.
+- **`!` releases** the version under the cursor: it opens the release flow, where the count is shown and
+  the decision is made. `c` creates a version, `e` edits it, `A` archives or unarchives it and `B` puts it
+  on the issues a query matches, or takes it off. `enter` is not bound here, and a double-click on a row
+  still opens the release flow.
 - **`/` finds** by name: it keeps the versions whose name holds what is typed, case-folded. While it is
   open every key is text (so `q`, `j`, `k` and digits are typed), `enter` keeps it and `esc` clears it.
   It narrows together with the state filter and the sort, and the summary line says `matching "x"`
@@ -1039,14 +1044,14 @@ for a narrower one (`docs/API-NOTES.md`). Order and state are both laid over it 
 
 The release list also browses a set of projects at once, which is what a plan's releases are. It is
 the same list with a project column, and everything the project list does with a version it does here:
-`enter` opens the release flow, `e` edits, `A` archives, `b` assigns, `s` sorts, `f` filters by state, `/` finds by text.
+`!` opens the release flow, `e` edits, `A` archives, `B` assigns, `s` sorts, `f` filters by state and project, `/` finds by text. `enter` on a group header folds it.
 
 **An open plan summarises its releases and does not list them.** A site plan can draw on hundreds of
 versions across several projects, so the plans view (`g 7`) says `releases  476 across EX, OPS, WEB -
 enter browses` and, on a second row, how many cross-space releases the plan names and how many of its
 versions it excludes. A plan the profile defines reads *defined in this profile, so no cross-space
 releases*, and a project the token cannot browse is still named on a row of its own. `enter` on the
-summary row, a click on it, or `b` anywhere in an open plan pushes this browser over the plan, with
+summary row, a click on it, or `I` anywhere in an open plan pushes this browser over the plan, with
 each version's project (a key, looked up from the id the site gives; `id N` where that read failed), the plan's cross-space releases as
 groups and its exclusions; `esc` comes back to the plan. `enter` on the plan row itself still opens and
 closes it. The command palette has it as *Browse a plan's releases*. The cross-space releases and the
@@ -1067,15 +1072,17 @@ The browser says so once on its title line, and `v` says so in help. The word el
 - **Sorting follows the groups.** Versions sort within a header, and headers go in the order their
   first version lands. The picker's first field is *plan order* here, and *project* is added. The order
   is kept apart from the project list's.
-- **`p` moves the project filter** from every project to each project of the set in turn. **`/`
+- **`f` opens the filters**: the state and the project, side by side on the line under the rows. `tab`
+  switches between them, `←`/`→` step the one in focus (the project goes from every project to each
+  project of the set in turn), `enter` or `esc` keeps what is set. **`/`
   filters by text**: the project list's find, matching a version's name or the name of a release it is in,
   case-folded. The state filter, the project filter and the text filter narrow together, and the summary
   line names each one in force.
-- **`x` shows what the plan leaves out.** Excluded versions are hidden by default; the summary says
-  `21 excluded by the plan, x shows`. Shown, they are muted and their description reads *excluded by
+- **`.` shows what the plan leaves out.** Excluded versions are hidden by default; the summary says
+  `21 excluded by the plan, . shows`. Shown, they are muted and their description reads *excluded by
   the plan*.
 - **A version belongs to one project, so what acts on it is scoped to that project.** The release flow
-  offers only that project's versions to move open issues to, and `b` starts from that project. `n` is
+  offers only that project's versions to move open issues to, and `B` starts from that project. `c` is
   refused with *a version belongs to one project; open Releases (g 5) on it to create one* and is not
   in the footer. The project switcher does nothing here.
 - **`r` reads the set again** when the screen that opened it knows how; a plan does, and reads its

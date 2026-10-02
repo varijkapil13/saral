@@ -17,6 +17,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/list"
+	"github.com/varijkapil13/saral/internal/ui/plan"
 	"github.com/varijkapil13/saral/internal/ui/release"
 	"github.com/varijkapil13/saral/internal/ui/search"
 	"github.com/varijkapil13/saral/internal/ui/sprint"
@@ -154,9 +155,10 @@ var secondStrokes = map[string][]string{
 	timeline.ViewID:   {"g", "e"},
 	board.ViewID:      {"g", "e"},
 	backlog.ViewID:    {"g"},
-	release.ViewID:    {"g"},
+	release.ViewID:    {"g", "e"},
 	search.ViewID:     {"g", "e"},
-	release.SetViewID: {"g"},
+	release.SetViewID: {"g", "e"},
+	plan.ViewID:       {"g", "e"},
 }
 
 // A gesture is taught only if a binding spells it, so one a view answers and

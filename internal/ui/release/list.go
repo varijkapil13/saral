@@ -49,6 +49,7 @@ const (
 	editing
 	sorting
 	finding
+	faceting
 )
 
 // Model is the versions list.
@@ -165,7 +166,7 @@ func (m *Model) Init() tea.Cmd {
 // The sort picker claims them too, so esc closes it rather than leaving the
 // view.
 func (m *Model) WantsRawKeys() bool {
-	return m.mode == editing || m.mode == sorting || m.mode == finding
+	return m.mode == editing || m.mode == sorting || m.mode == finding || m.mode == faceting
 }
 
 // BlocksClose refuses to throw away a version being typed. The kernel asks
@@ -250,7 +251,11 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.startSort()
 
 	case FilterMsg:
-		cmd = m.cycleFilter()
+		if m.set != nil {
+			cmd = m.startFacets(facetState)
+		} else {
+			cmd = m.cycleFilter()
+		}
 
 	case sortSaveFailedMsg:
 		cmd = m.reportSortSaveFailed(msg)
@@ -262,7 +267,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		cmd = m.cycleArrange()
 
 	case PickProjectMsg:
-		cmd = m.cyclePick()
+		cmd = m.startFacets(facetProject)
 
 	case ExcludedMsg:
 		cmd = m.toggleExcluded()
@@ -648,6 +653,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.findKey(msg)
 	}
 	stroke := msg.String()
+	if m.mode == faceting {
+		return m.facetKey(stroke)
+	}
 	if m.mode == sorting {
 		return m.sortKey(stroke)
 	}
@@ -691,6 +699,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	case actSort:
 		return m.startSort()
 	case actFilter:
+		if m.set != nil {
+			return m.startFacets(facetState)
+		}
 		return m.cycleFilter()
 	case actFind:
 		return m.startFind()
@@ -805,7 +816,7 @@ func (m *Model) clampScroll() {
 // whatever the editor is taking below them.
 func (m *Model) rowsHeight() int {
 	h := m.height - m.headHeight() - m.form.height(m.mode == editing) - m.notesHeight()
-	if m.mode == sorting || m.mode == finding {
+	if m.mode == sorting || m.mode == finding || m.mode == faceting {
 		h--
 	}
 	return max(h, 1)
@@ -820,8 +831,8 @@ func (m *Model) now() time.Time {
 
 // --- mouse ------------------------------------------------------------------
 
-// click selects the row under the pointer, and a double-click on it does what
-// enter does. The pair is timed rather than read as two clicks on one row,
+// click selects the row under the pointer, and a double-click on it opens the
+// release flow. The pair is timed rather than read as two clicks on one row,
 // because pointing at a version and pointing at it again a minute later is not
 // a gesture that should open a release.
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {

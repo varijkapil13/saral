@@ -107,32 +107,31 @@ release.flow
 └───────────────────────────────────────────────┘
 
 release.set
-┌────────────────────────────────────────────────┐
-│ What can be done here                          │
-│ enter  release it, or fold a header            │
-│ e      edit this version                       │
-│ A      archive or unarchive it                 │
-│ b      put it on issues, or take it off        │
-│ s      sort the versions                       │
-│ v      group by cross-space release or project │
-│ p      show one project, or all                │
-│ f      filter by state                         │
-│ x      show or hide what the plan excludes     │
-│ /      find a version or release               │
-└────────────────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│ What can be done here                      │
+│ !  release this version                    │
+│ e  edit this version                       │
+│ A  archive or unarchive it                 │
+│ B  put it on issues, or take it off        │
+│ s  sort the versions                       │
+│ v  group by cross-space release or project │
+│ f  filter by state or project              │
+│ .  show or hide what the plan excludes     │
+│ /  find a version or release               │
+└────────────────────────────────────────────┘
 
 releases
-┌─────────────────────────────────────────┐
-│ What can be done here                   │
-│ enter  release this version             │
-│ n      new version                      │
-│ e      edit this version                │
-│ A      archive or unarchive it          │
-│ b      put it on issues, or take it off │
-│ s      sort the versions                │
-│ f      filter by state                  │
-│ /      find a version                   │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│ What can be done here               │
+│ !  release this version             │
+│ c  new version                      │
+│ e  edit this version                │
+│ A  archive or unarchive it          │
+│ B  put it on issues, or take it off │
+│ s  sort the versions                │
+│ f  filter by state                  │
+│ /  find a version                   │
+└─────────────────────────────────────┘
 
 settings
 ┌───────────────────────────┐

@@ -93,7 +93,7 @@ func BenchmarkReleasesWalk(b *testing.B) {
 // the path a name is typed on.
 func BenchmarkReleasesKeystroke(b *testing.B) {
 	m := stocked(b, 2000, 120, 40)
-	next, _ := m.Update(keyPress("n"))
+	next, _ := m.Update(keyPress("c"))
 	m, _ = next.(*Model)
 	keys := []tea.Msg{tea.KeyPressMsg{Code: 'r', Text: "r"}, tea.KeyPressMsg{Code: tea.KeyBackspace}}
 	b.ReportAllocs()

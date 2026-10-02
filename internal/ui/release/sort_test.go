@@ -229,10 +229,10 @@ func TestSort_EveryActionTakesTheVersionDrawnUnderTheCursor(t *testing.T) {
 		key   string
 		check func(t *testing.T, dr *driver, w *watcher, want jira.Version)
 	}{
-		{key: "enter", check: func(t *testing.T, dr *driver, _ *watcher, want jira.Version) {
+		{key: "!", check: func(t *testing.T, dr *driver, _ *watcher, want jira.Version) {
 			pushed, ok := dr.pushed()
 			if !ok || pushed.Title != "Release "+want.Name {
-				t.Errorf("enter pushed %q, want the release of %s", pushed.Title, want.Name)
+				t.Errorf("! pushed %q, want the release of %s", pushed.Title, want.Name)
 			}
 		}},
 		{key: "e", check: func(t *testing.T, dr *driver, _ *watcher, want jira.Version) {
@@ -246,10 +246,10 @@ func TestSort_EveryActionTakesTheVersionDrawnUnderTheCursor(t *testing.T) {
 				t.Errorf("A archived %+v, want %q", sent, want.ID)
 			}
 		}},
-		{key: "b", check: func(t *testing.T, dr *driver, _ *watcher, want jira.Version) {
+		{key: "B", check: func(t *testing.T, dr *driver, _ *watcher, want jira.Version) {
 			pushed, ok := dr.pushed()
 			if !ok || pushed.ID != BulkViewID || pushed.Title != "Issues on "+want.Name {
-				t.Errorf("b pushed %q %q, want the assignment screen for %s", pushed.ID, pushed.Title, want.Name)
+				t.Errorf("B pushed %q %q, want the assignment screen for %s", pushed.ID, pushed.Title, want.Name)
 			}
 		}},
 	} {

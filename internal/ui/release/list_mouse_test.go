@@ -108,7 +108,7 @@ func TestReleases_AClickDoesNotMoveTheCursorWhileAVersionIsBeingTyped(t *testing
 
 	d := testDeps(newFake(8))
 	dr := listOf(t, d, 120, 24)
-	dr.key("n")
+	dr.key("c")
 	dr.typeText("4.0")
 
 	pressOn(t, d, dr, rowZone(threeOh))

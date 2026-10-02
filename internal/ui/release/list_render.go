@@ -669,6 +669,8 @@ func (m *Model) View() string {
 		lines = append(lines, m.sortPrompt())
 	case finding:
 		lines = append(lines, m.findPrompt())
+	case faceting:
+		lines = append(lines, m.facetsPrompt())
 	case browsing:
 	}
 	m.lines = lines
