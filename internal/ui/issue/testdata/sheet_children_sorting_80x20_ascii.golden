@@ -1,0 +1,20 @@
+PROJ-3  Billing rewrite
+6 children · 2 done
+--------------------------------------------------------------------------------
+  PROJ-31  o Story  Done         Ada L.      Medium  Split the export job       
+  PROJ-32  o Task   To Do        unassigned  High    Drop the cron entry
+  PROJ-33  o Story  In Progress  Ada L.      High    Write the migration
+  PROJ-34  o Task   Done         unassigned  Medium  Backfill last year
+  PROJ-35  o Story  To Do        unassigned          Announce the cut-over
+  PROJ-36  o Task   To Do        unassigned  Medium  Remove the old endpoint
+
+
+
+
+
+
+
+
+
+
+sort by:  [created ^]  updated  due  key  summary  status  priority  assignee...

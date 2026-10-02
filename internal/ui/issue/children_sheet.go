@@ -13,14 +13,17 @@ import (
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/sortpick"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 const nearEnd = 5
 
 type childSeed struct {
-	issues []jira.Issue
-	page   jira.Page[jira.Issue]
+	issues   []jira.Issue
+	page     jira.Page[jira.Issue]
+	haveRank bool
+	restRead bool
 }
 
 type childOp uint8
@@ -38,8 +41,15 @@ type childrenKind struct {
 	issues []jira.Issue
 	page   jira.Page[jira.Issue]
 
-	paging, rereads fetchSlot
-	loadingMore     bool
+	paging, rereads, sorting fetchSlot
+	loadingMore              bool
+
+	order    childOrder
+	haveRank bool
+	restRead bool
+	applied  sortpick.Choice
+	idx      []int
+	bound    int
 
 	op         childOp
 	target     jira.Issue
@@ -52,6 +62,7 @@ var childrenKeys = newSheetKeys(
 	sheetBind{kernel.Canon(kernel.ActAssign), sheetAssign},
 	sheetBind{kernel.Canon(kernel.ActStatus), sheetStatus},
 	sheetBind{kernel.Canon(kernel.ActPriority), sheetPriority},
+	sheetBind{kernel.Canon(kernel.ActSort), sheetSort},
 )
 
 func (k *childrenKind) keys() *sheetKeys { return childrenKeys }
@@ -63,45 +74,90 @@ func (k *childrenKind) load(s *sheet) tea.Cmd {
 	if k.seed != nil {
 		seed := k.seed
 		k.seed = nil
+		k.haveRank, k.restRead = seed.haveRank, seed.restRead
 		k.set(s, seed.issues, seed.page)
-		return nil
+		return k.resort(s)
 	}
 	if k.search == nil {
 		return nil
 	}
-	key, search := s.key, k.search
-	return s.read(&s.loads, func(ctx context.Context, _ jira.SessionClient) func(*sheet) tea.Cmd {
-		res, err := search.Run(ctx, app.Request{
-			JQL: childrenJQL(key), Projection: app.ListProjection(), MaxResults: childrenPage,
-		})
+	in := childRead{
+		key: s.key, search: k.search, choice: currentChildSort(), order: k.order, bound: k.bound,
+	}
+	return s.read(&s.loads, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
+		in.vocab = c
+		d := in.run(ctx)
 		return func(s *sheet) tea.Cmd {
-			if err != nil {
-				return s.failed(err)
+			if d.err != nil {
+				return s.failed(d.err)
 			}
-			k.set(s, res.Page.Items, res.Page)
-			return nil
+			cmd := k.adopt(d)
+			k.set(s, d.page.Items, d.page)
+			return cmd
 		}
 	})
 }
 
+func (k *childrenKind) adopt(d childReadDone) tea.Cmd {
+	warned := k.order.prioWarned
+	k.order, k.haveRank, k.restRead = d.order, d.haveRank, d.restRead
+	k.order.prioWarned = k.order.prioWarned || warned
+	if d.warn == "" || warned {
+		return nil
+	}
+	k.order.prioWarned = true
+	return kernel.Warn(d.warn)
+}
+
 func (k *childrenKind) set(s *sheet, issues []jira.Issue, page jira.Page[jira.Issue]) {
 	k.issues, k.page = slices.Clone(issues), page
+	k.reorder()
 	s.setRows(k.rows(s))
-	s.note = k.note()
+	s.note = k.note(s)
+}
+
+func (k *childrenKind) reorder() {
+	k.applied = k.order.effective(currentChildSort())
+	k.idx = orderIndex(k.issues, k.applied, &k.order, k.idx)
 }
 
 func (k *childrenKind) refresh(s *sheet) {
+	cur := k.cursorKey(s)
+	k.idx = orderIndex(k.issues, k.applied, &k.order, k.idx)
+	k.redraw(s, cur)
+}
+
+func (k *childrenKind) redraw(s *sheet, cur string) {
 	s.rows = k.rows(s)
-	s.note = k.note()
+	s.note = k.note(s)
+	if cur != "" {
+		if at := slices.IndexFunc(s.rows, func(r sheetRow) bool { return r.key == cur }); at >= 0 {
+			s.cursor = at
+		}
+	}
 	s.moveBy(0)
 }
 
-func (k *childrenKind) note() string {
-	n, done := rollup(k.issues)
-	if k.page.HasMore() {
-		return strconv.Itoa(n) + "+ children · " + strconv.Itoa(done) + " done so far"
+func (k *childrenKind) cursorKey(s *sheet) string {
+	if row := s.current(); row != nil {
+		return row.key
 	}
-	return strconv.Itoa(n) + " " + childWord(n) + " · " + strconv.Itoa(done) + " done"
+	return ""
+}
+
+func (k *childrenKind) note(s *sheet) string {
+	n, done := rollup(k.issues)
+	text := strconv.Itoa(n) + " " + childWord(n) + " · " + strconv.Itoa(done) + " done"
+	if k.page.HasMore() {
+		text = strconv.Itoa(n) + "+ children · " + strconv.Itoa(done) + " done so far"
+	}
+	if k.applied.Chosen() {
+		text += " · sort: " + sortLabel(k.applied, s.deps.Theme.Glyphs)
+		if k.page.HasMore() {
+			text += " · sorted over the first " + strconv.Itoa(n) + " of " + strconv.Itoa(n) + "+"
+		}
+	}
+	return text
 }
 
 func childWord(n int) string {
@@ -146,28 +202,30 @@ func (k *childrenKind) rows(s *sheet) []sheetRow {
 		widest(&w.prio, lines[i].prio)
 	}
 	rows := make([]sheetRow, len(lines))
-	for i := range lines {
-		l := &lines[i]
+	for i, at := range k.idx {
+		l := &lines[at]
 		text := l.key + column(l.key, ansi.StringWidth(w.key)+2) +
 			l.typ + column(l.typ, ansi.StringWidth(w.typ)+2) +
 			l.status + column(l.status, ansi.StringWidth(w.status)+2) +
 			l.who + column(l.who, ansi.StringWidth(w.who)+2) +
 			l.prio + column(l.prio, ansi.StringWidth(w.prio)+2) +
 			l.summary
-		rows[i] = sheetRow{text: text, id: k.issues[i].Key, key: k.issues[i].Key}
+		rows[i] = sheetRow{text: text, id: k.issues[at].Key, key: k.issues[at].Key}
 	}
 	return rows
 }
 
 func (k *childrenKind) at(s *sheet) *jira.Issue {
-	if row := s.current(); row != nil && s.cursor < len(k.issues) && k.issues[s.cursor].Key == row.key {
-		return &k.issues[s.cursor]
+	if row := s.current(); row != nil && s.cursor < len(k.idx) {
+		if iss := &k.issues[k.idx[s.cursor]]; iss.Key == row.key {
+			return iss
+		}
 	}
 	return nil
 }
 
 func (k *childrenKind) more(s *sheet) tea.Cmd {
-	if !k.page.HasMore() || k.loadingMore || s.cursor < len(s.rows)-nearEnd {
+	if !k.page.HasMore() || k.loadingMore || k.applied.Chosen() || s.cursor < len(s.rows)-nearEnd {
 		return nil
 	}
 	k.loadingMore = true
@@ -187,6 +245,9 @@ func (k *childrenKind) more(s *sheet) tea.Cmd {
 }
 
 func (k *childrenKind) act(s *sheet, a sheetAct) tea.Cmd {
+	if a == sheetSort {
+		return k.startSort(s)
+	}
 	iss := k.at(s)
 	if iss == nil {
 		return nil
@@ -385,17 +446,105 @@ func (k *childrenKind) edit(s *sheet, target *jira.Issue, do func(context.Contex
 }
 
 func (k *childrenKind) reread(s *sheet, child string) tea.Cmd {
+	rankID := ""
+	if k.haveRank {
+		rankID = k.order.rankID
+	}
 	return s.read(&k.rereads, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
-		iss, err := c.IssueFields(ctx, child, app.ListProjection().IDs)
+		iss, err := c.IssueFields(ctx, child, childProjection(rankID).IDs)
 		return func(s *sheet) tea.Cmd {
 			if err != nil {
 				return s.failed(err)
 			}
 			if at := slices.IndexFunc(k.issues, func(c jira.Issue) bool { return c.Key == child }); at >= 0 {
+				k.issues = slices.Clone(k.issues)
 				k.issues[at] = iss
 				k.refresh(s)
 			}
 			return nil
 		}
 	})
+}
+
+func (k *childrenKind) sortCurrent() sortpick.Choice {
+	if c := k.order.effective(currentChildSort()); c.Chosen() {
+		return c
+	}
+	return sortpick.Choice{Field: fieldCreated}
+}
+
+func (k *childrenKind) sortLine(s *sheet) string {
+	return sortpick.Line(s.picker.Fields, k.sortCurrent(), s.picker.Cursor, s.deps.Theme.Glyphs)
+}
+
+func (k *childrenKind) startSort(s *sheet) tea.Cmd {
+	open := func(s *sheet) {
+		s.picker.Fields = k.order.fields()
+		s.picker.Start(k.sortCurrent())
+	}
+	if k.order.rankTried || k.search == nil {
+		k.order.rankTried = true
+		open(s)
+		return nil
+	}
+	search := k.search
+	return s.read(&s.looks, func(ctx context.Context, _ jira.SessionClient) func(*sheet) tea.Cmd {
+		fields, err := search.Fields(ctx)
+		return func(s *sheet) tea.Cmd {
+			if err == nil {
+				k.order.rankTried, k.order.rankID = true, lexoRankID(fields)
+			}
+			open(s)
+			return nil
+		}
+	})
+}
+
+func (k *childrenKind) sortChosen(s *sheet, c sortpick.Choice) tea.Cmd {
+	c = normalizeChoice(c)
+	if c == normalizeChoice(currentChildSort()) {
+		return nil
+	}
+	set := setChildSort(c)
+	return tea.Batch(set, k.resort(s))
+}
+
+func (k *childrenKind) resort(s *sheet) tea.Cmd {
+	raw := currentChildSort()
+	if !k.order.needs(raw, k.haveRank, k.restRead, k.page) {
+		k.applyOrder(s)
+		return nil
+	}
+	page := k.page
+	page.Items = k.issues
+	in := childRead{
+		key: s.key, search: k.search, choice: raw, order: k.order, page: page,
+		loaded: true, haveRank: k.haveRank, restRead: k.restRead, bound: k.bound,
+	}
+	cmd := s.read(&k.sorting, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
+		in.vocab = c
+		d := in.run(ctx)
+		return func(s *sheet) tea.Cmd {
+			if d.err != nil {
+				return s.failed(d.err)
+			}
+			warn := k.adopt(d)
+			k.paging.stop()
+			k.paging.gen++
+			k.loadingMore = false
+			k.issues, k.page = slices.Clone(d.page.Items), d.page
+			k.applyOrder(s)
+			return warn
+		}
+	})
+	if cmd == nil {
+		k.applyOrder(s)
+	}
+	return cmd
+}
+
+func (k *childrenKind) applyOrder(s *sheet) {
+	cur := k.cursorKey(s)
+	k.reorder()
+	k.redraw(s, cur)
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/mention"
 	"github.com/varijkapil13/saral/internal/ui/richtext"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/sortpick"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -64,14 +65,19 @@ type Model struct {
 	loadErr     error
 	trail       []string
 
-	children    []jira.Issue
-	childPage   jira.Page[jira.Issue]
-	childAsked  bool
-	childRead   bool
-	childErr    error
-	childGen    int
-	childCtx    context.Context
-	childCancel context.CancelFunc
+	children     []jira.Issue
+	childPage    jira.Page[jira.Issue]
+	childAsked   bool
+	childRead    bool
+	childErr     error
+	childGen     int
+	childCtx     context.Context
+	childCancel  context.CancelFunc
+	childOrd     childOrder
+	childRank    bool
+	childRest    bool
+	childApplied sortpick.Choice
+	childIdx     []int
 
 	// edit is the site's own answer to which fields belong on this issue's
 	// screen right now. A read that never arrives — it failed, or this build
@@ -396,7 +402,10 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		}
 
 	case childrenMsg:
-		m.childrenArrived(msg)
+		cmd = m.childrenArrived(msg)
+
+	case childSortMsg:
+		cmd = m.resortChildren()
 
 	case childPatchedMsg:
 		m.childPatched(msg)

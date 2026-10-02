@@ -17,6 +17,11 @@ such change is listed under **Changed**.
   alongside the state filter and the sort, and the command palette has it as *Find a version or a
   release*.
 
+- `s` sorts an epic's children, in the children sheet and in the pane's list: by created, updated,
+  due, key, summary, status, priority (the site's own priority order), assignee, type, or rank where
+  the site has one. The choice is kept in `ui.toml` and is a setting under *Issue*. Any order but the
+  site's own reads the rest of the children first, up to 500.
+
 ### Fixed
 
 - Two saves of the same settings file inside one Saral no longer let one starve the other until it

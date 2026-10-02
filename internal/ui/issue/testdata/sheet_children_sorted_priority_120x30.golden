@@ -1,0 +1,29 @@
+PROJ-3  Billing rewrite
+6 children · 0 done · sort: priority ^
+------------------------------------------------------------------------------------------------------------------------
+  PROJ-32  o Task   To Do  unassigned  Urgent    Drop the cron entry
+  PROJ-35  o Story  To Do  unassigned  Urgent    Announce the cut-over
+  PROJ-33  o Story  To Do  unassigned  Normal    Write the migration
+  PROJ-36  o Task   To Do  unassigned  Normal    Remove the old endpoint
+  PROJ-31  o Story  To Do  unassigned  Whenever  Split the export job                                                   
+  PROJ-34  o Task   To Do  unassigned            Backfill last year
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
