@@ -239,9 +239,9 @@ placeholder is the tell: it offers to find an issue only where there is a cache 
 
 ### Searching the site
 
-The palette finds what is already on disk; this finds what the site says. *Search issues on the
-site* in the palette opens a view whose box takes every key, so `q`, `r`, `j`, `k` and the digits are
-letters in it until `enter` or `↓` moves to the results.
+The palette finds what is already on disk; this finds what the site says. `g /`, or *Search issues
+on the site* in the palette, opens a view over whatever you were in, whose box takes every key, so
+`q`, `r`, `j`, `k` and the digits are letters in it until `enter` or `↓` moves to the results.
 
 | State | What it does |
 |---|---|

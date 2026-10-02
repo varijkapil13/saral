@@ -23,7 +23,7 @@ import (
 )
 
 // ViewID is the name this view registers itself under.
-const ViewID = "search"
+const ViewID = kernel.SearchViewID
 
 const (
 	settle     = 250 * time.Millisecond

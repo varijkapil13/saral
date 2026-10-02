@@ -9,10 +9,10 @@ such change is listed under **Changed**.
 
 ### Added
 
-- A search view finds issues by what they say: summary, description and comments, across every
-  project or just the session's (`tab` switches). It is opened from the command palette as *Search
-  issues on the site*. An exact issue key is listed first, `L` sends the same search to the issue
-  list, and the words you typed are painted in the summaries.
+- `g /` searches every project's issues by what they say: summary, description and comments, with
+  `tab` to narrow to the session's project. An exact key is listed first, `L` sends the search to
+  the issue list, and the words you typed are painted in the summaries. The command palette has it
+  too, as *Search issues on the site*.
 
 ### Fixed
 

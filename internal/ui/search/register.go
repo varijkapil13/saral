@@ -14,6 +14,7 @@ func init() {
 		Title: "Search issues on the site",
 		Group: "Search",
 		Kind:  kernel.KindSearch,
+		Keys:  []string{kernel.DefaultGlobalKeys().Search.Help().Key},
 		Run:   func(d kernel.Deps) tea.Cmd { return Open(d, "") },
 	})
 }

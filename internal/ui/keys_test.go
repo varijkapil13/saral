@@ -32,6 +32,8 @@ var keyOwners = map[string]string{
 	// ctrl+, and g s are GlobalKeys.Settings, not a footer slot: settings.open
 	// is reached the same way from every view, so no one view's footer shows it.
 	"settings.open": kernel.GlobalScope,
+	// g / is GlobalKeys.Search, reached the same way from every view.
+	"search.open": kernel.GlobalScope,
 
 	"comments.write":          comment.ViewID,
 	"comments.edit":           comment.ViewID,
