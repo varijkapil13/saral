@@ -25,6 +25,9 @@ type PushMsg struct {
 // PopMsg takes the top view off the stack.
 type PopMsg struct{}
 
+// PopToMsg collapses the stack to the topmost entry whose ID and Title both match.
+type PopToMsg struct{ ID, Title string }
+
 // OpenMsg switches to a registered root view by ID. Then, when set, is handed
 // to that view once the switch has landed, and to nothing if it did not.
 type OpenMsg struct {
@@ -204,6 +207,11 @@ func replyEach(cmds []tea.Cmd, to []Addr) []tea.Cmd {
 
 // Pop returns a command that goes back one view.
 func Pop() tea.Cmd { return func() tea.Msg { return PopMsg{} } }
+
+// PopTo collapses the stack to the topmost entry whose ID and Title both equal these, the Title being the one it was pushed under (an empty push title is the title beneath it); no match does nothing.
+func PopTo(id, title string) tea.Cmd {
+	return func() tea.Msg { return PopToMsg{ID: id, Title: title} }
+}
 
 // Open returns a command that switches to a registered root view.
 func Open(id string) tea.Cmd { return func() tea.Msg { return OpenMsg{ID: id} } }
