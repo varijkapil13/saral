@@ -2403,12 +2403,13 @@ func fakeUnbracket(s string) (string, bool) {
 // fakeBalanced reports whether every bracket and quote in s is closed inside it.
 func fakeBalanced(s string) bool {
 	quote, depth := byte(0), 0
-	for i := range len(s) {
+	for i := 0; i < len(s); i++ {
 		switch {
 		case quote != 0:
-			if s[i] == '\\' {
+			switch s[i] {
+			case '\\':
 				i++
-			} else if s[i] == quote {
+			case quote:
 				quote = 0
 			}
 		case s[i] == '"' || s[i] == '\'':
@@ -2565,9 +2566,10 @@ func fakeFindPhrase(s, phrase string) int {
 	for i := 0; i+len(phrase) <= len(s); i++ {
 		switch {
 		case quote != 0:
-			if s[i] == '\\' {
+			switch s[i] {
+			case '\\':
 				i++
-			} else if s[i] == quote {
+			case quote:
 				quote = 0
 			}
 			continue

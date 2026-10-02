@@ -48,9 +48,9 @@ func fakeSearchKeys(t *testing.T, c *jiratest.Fake, jql string) []string {
 	if err != nil {
 		t.Fatalf("Search(%s): %v", jql, err)
 	}
-	var keys []string
-	for _, iss := range page.Items {
-		keys = append(keys, iss.Key)
+	keys := make([]string, 0, len(page.Items))
+	for i := range page.Items {
+		keys = append(keys, page.Items[i].Key)
 	}
 	slices.Sort(keys)
 	return keys
@@ -115,9 +115,9 @@ func TestSearch_TextComposesWithProjectAndOrderBy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var keys []string
-	for _, iss := range page.Items {
-		keys = append(keys, iss.Key)
+	keys := make([]string, 0, len(page.Items))
+	for i := range page.Items {
+		keys = append(keys, page.Items[i].Key)
 	}
 	if want := []string{"TXT-2", "TXT-1"}; !slices.Equal(keys, want) {
 		t.Errorf("got %v, want %v", keys, want)

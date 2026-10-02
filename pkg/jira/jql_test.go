@@ -82,7 +82,7 @@ func TestParseText_CapsRunesAndTerms(t *testing.T) {
 		t.Errorf("a very long word came out %d runes, want at most %d", n, jira.MaxTextRunes+1)
 	}
 
-	var words []string
+	words := make([]string, 0, 50)
 	for i := range 50 {
 		words = append(words, "w"+strconv.Itoa(i))
 	}
@@ -91,7 +91,7 @@ func TestParseText_CapsRunesAndTerms(t *testing.T) {
 		t.Errorf("got %d terms, want %d", len(many.Terms), jira.MaxTextTerms)
 	}
 
-	var phrases []string
+	phrases := make([]string, 0, 50)
 	for range 50 {
 		phrases = append(phrases, `"ab cd"`)
 	}
