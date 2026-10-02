@@ -217,6 +217,7 @@ func TestFixtures_CoverEveryResponseTheServerReplays(t *testing.T) {
 		"mypermissions_basic.json",
 		"myself.json",
 		"not_found_board.json",
+		"plan_detail_ok.json",
 		"plans_403.json",
 		"plans_ok.json",
 		"priority_search.json",

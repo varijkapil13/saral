@@ -164,3 +164,62 @@ func planRefusal(err error) error {
 	}
 	return &jira.CapabilityError{Capability: jira.CapPlans, Reason: refused.Reason}
 }
+
+var _ jira.PlanDetailReader = (*Client)(nil)
+
+// PlanDetail reads one plan's cross-project releases and excluded releases, one
+// uncached call per plan. A non-numeric id, such as a local plan's, is refused
+// before anything is sent.
+func (c *Client) PlanDetail(ctx context.Context, planID string) (jira.PlanDetail, error) {
+	planID = strings.TrimSpace(planID)
+	if n, err := strconv.ParseUint(planID, 10, 64); err != nil || n == 0 {
+		return jira.PlanDetail{}, invalidField("planId", "a plan id is a number, and "+strconv.Quote(planID)+" is not one")
+	}
+	var out apiPlanDetail
+	r := request{
+		method: http.MethodGet,
+		path:   planPath + "/" + planID,
+		kind:   "plan",
+		id:     planID,
+	}
+	if err := c.doJSON(ctx, r, &out); err != nil {
+		return jira.PlanDetail{}, planRefusal(err)
+	}
+	return out.domain(), nil
+}
+
+type apiPlanDetail struct {
+	apiPlan
+	CrossProjectReleases []apiCrossProjectRelease `json:"crossProjectReleases"`
+	ExclusionRules       struct {
+		ReleaseIDs []flexString `json:"releaseIds"`
+	} `json:"exclusionRules"`
+}
+
+type apiCrossProjectRelease struct {
+	Name       string       `json:"name"`
+	ReleaseIDs []flexString `json:"releaseIds"`
+}
+
+func (d apiPlanDetail) domain() jira.PlanDetail {
+	out := jira.PlanDetail{
+		Plan:                 d.apiPlan.domain(),
+		CrossProjectReleases: make([]jira.CrossProjectRelease, 0, len(d.CrossProjectReleases)),
+		ExcludedVersionIDs:   flexStrings(d.ExclusionRules.ReleaseIDs),
+	}
+	for _, release := range d.CrossProjectReleases {
+		out.CrossProjectReleases = append(out.CrossProjectReleases, jira.CrossProjectRelease{
+			Name:       release.Name,
+			VersionIDs: flexStrings(release.ReleaseIDs),
+		})
+	}
+	return out
+}
+
+func flexStrings(in []flexString) []string {
+	out := make([]string, 0, len(in))
+	for _, id := range in {
+		out = append(out, string(id))
+	}
+	return out
+}

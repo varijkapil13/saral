@@ -288,6 +288,7 @@ var srvDefaultRoutes = []srvRoute{
 	// the default. A test that wants the reachable case overrides the route:
 	//   WithFixture(http.MethodGet, "/rest/api/3/plans/plan", "plans_ok.json")
 	{http.MethodGet, "/rest/api/3/plans/plan", srvFixtureHandler(http.StatusForbidden, "plans_403.json")},
+	{http.MethodGet, "/rest/api/3/plans/plan/{id}", srvFixtureHandler(http.StatusOK, "plan_detail_ok.json")},
 	{http.MethodPost, "/rest/api/3/bulk/issues/move", srvFixtureHandler(http.StatusCreated, "bulkmove_submit.json")},
 	// Two task endpoints answering two shapes that do not decode as each other:
 	// the generic one answers TaskProgressBeanObject, the bulk move is polled on

@@ -134,6 +134,7 @@ type SessionClient interface {
 	Relocator
 	PlanReader
 	BoardProjectReader
+	PlanDetailReader
 	ServerInfoReader
 	SprintIssueReader
 	IssueReader
@@ -244,6 +245,12 @@ type PlanReader interface {
 	Plans(ctx context.Context) ([]Plan, error)
 }
 
+// PlanDetailReader reads one plan's cross-project releases and excluded versions.
+// It refuses as PlanReader does, with a *CapabilityError naming CapPlans.
+type PlanDetailReader interface {
+	PlanDetail(ctx context.Context, planID string) (PlanDetail, error)
+}
+
 // IssueReader reads one issue: whole, or narrowed to the fields named. The
 // narrow read is the one to make after a write, because Search answers from an
 // index that trails it.
@@ -327,6 +334,7 @@ var (
 	_ Relocator          = Client(nil)
 	_ PlanReader         = Client(nil)
 	_ BoardProjectReader = Client(nil)
+	_ PlanDetailReader   = Client(nil)
 
 	_ IssueReader       = Client(nil)
 	_ SprintIssueReader = Client(nil)

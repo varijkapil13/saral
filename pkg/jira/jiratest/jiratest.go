@@ -65,6 +65,7 @@ var (
 	_ jira.Relocator          = (*Fake)(nil)
 	_ jira.PlanReader         = (*Fake)(nil)
 	_ jira.BoardProjectReader = (*Fake)(nil)
+	_ jira.PlanDetailReader   = (*Fake)(nil)
 
 	_ jira.IssueReader       = (*Fake)(nil)
 	_ jira.SprintIssueReader = (*Fake)(nil)
@@ -169,6 +170,7 @@ type Fake struct {
 	worklogs   map[string][]jira.Worklog
 	watchers   map[string][]string
 	serverInfo jira.ServerInfo
+	planDetail map[string]jira.PlanDetail
 
 	failures   []error
 	delay      time.Duration
@@ -223,6 +225,7 @@ func (f *Fake) fakeInit() {
 	f.worklogs = make(map[string][]jira.Worklog)
 	f.watchers = make(map[string][]string)
 	f.serverInfo = fakeDefaultServerInfo
+	f.planDetail = make(map[string]jira.PlanDetail)
 	f.failures = nil
 	f.delay = 0
 	f.cursorLoop = false
@@ -325,6 +328,11 @@ func WithPageSize(n int) Option {
 		}
 		f.pageSize = n
 	}
+}
+
+// WithPlanDetail sets what PlanDetail answers for a plan id.
+func WithPlanDetail(id string, d jira.PlanDetail) Option {
+	return func(f *Fake) { f.planDetail[id] = d }
 }
 
 // WithNow sets the clock the fake stamps writes with. Seeded data is derived

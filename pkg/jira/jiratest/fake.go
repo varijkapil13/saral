@@ -1428,6 +1428,10 @@ func (f *Fake) Plans(ctx context.Context) ([]jira.Plan, error) {
 	if err := f.caps.Require(jira.CapPlans); err != nil {
 		return nil, err
 	}
+	return f.fakePlans(), nil
+}
+
+func (f *Fake) fakePlans() []jira.Plan {
 	out := make([]jira.Plan, 0, len(f.projectKeys))
 	for i, key := range f.projectKeys {
 		out = append(out, jira.Plan{
@@ -1437,7 +1441,32 @@ func (f *Fake) Plans(ctx context.Context) ([]jira.Plan, error) {
 			Sources: []jira.PlanSource{{Type: jira.PlanSourceProject, Value: f.projects[key].ref.ID}},
 		})
 	}
-	return out, nil
+	return out
+}
+
+// PlanDetail reads one plan. A plan WithPlanDetail did not set answers as its
+// Plans entry with no cross-project releases and nothing excluded.
+func (f *Fake) PlanDetail(ctx context.Context, planID string) (jira.PlanDetail, error) {
+	if err := f.fakeBegin(ctx, "PlanDetail"); err != nil {
+		return jira.PlanDetail{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.caps.Require(jira.CapPlans); err != nil {
+		return jira.PlanDetail{}, err
+	}
+	if planID == "" {
+		return jira.PlanDetail{}, fakeInvalid("planId", "a plan id is required")
+	}
+	if d, ok := f.planDetail[planID]; ok {
+		return d, nil
+	}
+	for _, plan := range f.fakePlans() {
+		if plan.ID == planID {
+			return jira.PlanDetail{Plan: plan, CrossProjectReleases: []jira.CrossProjectRelease{}, ExcludedVersionIDs: []string{}}, nil
+		}
+	}
+	return jira.PlanDetail{}, fakeNotFound("plan", planID)
 }
 
 func (f *Fake) fakeNextKey(projectKey string) string {
