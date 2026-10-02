@@ -59,6 +59,7 @@ type panel struct {
 	statuses   []kernel.StatusMsg
 	pushes     []kernel.PushMsg
 	pops       int
+	popTos     []kernel.PopToMsg
 	broadcasts []tea.Msg
 }
 
@@ -112,6 +113,9 @@ func (p *panel) run(cmd tea.Cmd) {
 			continue
 		case kernel.PushMsg:
 			p.pushes = append(p.pushes, msg)
+			continue
+		case kernel.PopToMsg:
+			p.popTos = append(p.popTos, msg)
 			continue
 		case kernel.PopMsg, kernel.ProceedMsg:
 			p.pops++

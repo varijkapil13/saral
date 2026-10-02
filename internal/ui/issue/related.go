@@ -42,14 +42,14 @@ func openIssue(d kernel.Deps, ref jira.IssueRef, trail []string) tea.Cmd {
 }
 
 func openSeeded(d kernel.Deps, seed jira.Issue, trail []string, opts ...modelOption) tea.Cmd {
+	if seed.Key != "" && slices.Contains(trail, seed.Key) {
+		return kernel.PopTo(ViewID, seed.Key)
+	}
 	return kernel.Push(ViewID, seed.Key, New(d, seed, append([]modelOption{fromTrail(trail)}, opts...)...))
 }
 
-// openRelated pushes the issue, or pops when it is the pane directly beneath.
+// openRelated pushes the issue, or returns to its pane when one is already beneath.
 func (m *Model) openRelated(ref jira.IssueRef) tea.Cmd {
-	if n := len(m.trail); n > 0 && m.trail[n-1] == ref.Key {
-		return kernel.Pop()
-	}
 	return openIssue(m.deps, ref, m.trailBeneath())
 }
 
