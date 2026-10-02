@@ -133,9 +133,9 @@ func countRows(m *Model, _ int, kind rowKind) int {
 	return n
 }
 
-func manyVersions(n int, owners []string) ([]jira.Version, []string) {
-	versions := make([]jira.Version, 0, n)
-	owned := make([]string, 0, n)
+func manyVersions(n int, owners []string) (versions []jira.Version, owned []string) {
+	versions = make([]jira.Version, 0, n)
+	owned = make([]string, 0, n)
 	for i := range n {
 		versions = append(versions, jira.Version{ID: strconv.Itoa(1000 + i), Name: "release-" + strconv.Itoa(i)})
 		owned = append(owned, owners[i%len(owners)])
@@ -309,7 +309,7 @@ func TestPlans_AReloadReadsThePlanAgainWithAFreshContext(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("a refresh of the browser asked for nothing")
 	}
-	var msg tea.Msg = cmd()
+	msg := cmd()
 	if reply, ok := msg.(kernel.ReplyMsg); ok {
 		msg = reply.Msg
 	}

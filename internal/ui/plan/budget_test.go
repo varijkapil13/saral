@@ -94,9 +94,9 @@ func TestBudget_PlansOpeningAPlanOf2000VersionsAddsAFixedNumberOfRows(t *testing
 	}
 }
 
-func openedWith(t *testing.T, versions int) (*Model, float64) {
+func openedWith(t *testing.T, versions int) (m *Model, allocs float64) {
 	t.Helper()
-	m := stocked(t, 3, 120, 40)
+	m = stocked(t, 3, 120, 40)
 	id := m.plans[0].plan.ID
 	list := make([]jira.Version, 0, versions)
 	owners := make([]string, 0, versions)
