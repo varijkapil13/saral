@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
@@ -73,12 +74,6 @@ type keyMap struct {
 	Look   kernel.Binding
 }
 
-var shareBindings = []kernel.Binding{
-	kernel.Canon(kernel.ActCopyKey, "copy the key"),
-	kernel.Canon(kernel.ActCopyLink, "copy the link"),
-	kernel.Canon(kernel.ActBrowser, "open in browser"),
-}
-
 func defaultKeys() keyMap {
 	return keyMap{
 		Up:       kernel.Canon(kernel.ActUp),
@@ -138,7 +133,7 @@ func (k keyMap) browsing(picked, narrowed bool) kernel.KeySet {
 	find, mine := kernel.Terse(k.Find, "find"), kernel.Terse(k.Mine, "mine")
 	create, look := kernel.Terse(k.Create, "create"), kernel.Terse(k.Look, "look")
 	acts := []kernel.Binding{pick, all, move, create, find, mine, by, sort, look}
-	actions := append([]kernel.Binding{k.Pick, k.PickAll, k.Move, k.Create, k.Find, k.Mine, k.FilterBy, k.Sort, k.Look}, shareBindings...)
+	actions := append([]kernel.Binding{k.Pick, k.PickAll, k.Move, k.Create, k.Find, k.Mine, k.FilterBy, k.Sort, k.Look}, issue.ShareBindings...)
 	if picked {
 		acts = append(acts, kernel.Terse(k.Unpick, "unpick all"))
 		actions = append(actions, k.Unpick)
@@ -149,7 +144,7 @@ func (k keyMap) browsing(picked, narrowed bool) kernel.KeySet {
 	}
 	return kernel.KeySet{
 		Acts: acts,
-		Menu: shareBindings,
+		Menu: issue.ShareBindings,
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.PageDown, k.PageUp},
 			{k.HalfDown, k.HalfUp, k.Top, k.Bottom},

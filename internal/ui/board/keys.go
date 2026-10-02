@@ -1,6 +1,7 @@
 package board
 
 import (
+	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
@@ -94,12 +95,6 @@ type keyMap struct {
 	PutBack    kernel.Binding
 }
 
-var shareBindings = []kernel.Binding{
-	kernel.Canon(kernel.ActCopyKey, "copy the key"),
-	kernel.Canon(kernel.ActCopyLink, "copy the link"),
-	kernel.Canon(kernel.ActBrowser, "open in browser"),
-}
-
 var (
 	boardKeys   = []string{"b"}
 	sprintKeys  = []string{"S"}
@@ -184,7 +179,7 @@ func (k keyMap) browsing(narrowed, picked bool) kernel.KeySet {
 			kernel.Terse(k.Toggle, "pick"), kernel.Terse(k.Unpick, "unpick all"),
 		}
 	}
-	actions := append([]kernel.Binding{k.Open, k.Pick, k.Find, k.Mine, k.Board, k.Sprint, k.FilterBy, k.Filters}, shareBindings...)
+	actions := append([]kernel.Binding{k.Open, k.Pick, k.Find, k.Mine, k.Board, k.Sprint, k.FilterBy, k.Filters}, issue.ShareBindings...)
 	if narrowed {
 		acts = append(acts, kernel.Terse(k.Unfilter, "clear"))
 		actions = append(actions, k.Unfilter)
@@ -195,7 +190,7 @@ func (k keyMap) browsing(narrowed, picked bool) kernel.KeySet {
 	}
 	return kernel.KeySet{
 		Acts: acts,
-		Menu: shareBindings,
+		Menu: issue.ShareBindings,
 		Full: [][]kernel.Binding{
 			{k.Down, k.Up, k.Left, k.Right},
 			{k.PageDown, k.PageUp, k.Top, k.Bottom},

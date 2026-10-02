@@ -193,6 +193,24 @@ var unmigrated = map[string]legacy{
 		},
 	},
 
+	"backlog": {
+		why: "waits for issue.ShareBindings to move onto the vocabulary",
+		findings: []string{
+			"unminted: Y | copy the link",
+			"unminted: o | open in browser",
+			"unminted: y | copy the key",
+		},
+	},
+
+	"board": {
+		why: "waits for issue.ShareBindings to move onto the vocabulary",
+		findings: []string{
+			"unminted: Y | copy the link",
+			"unminted: o | open in browser",
+			"unminted: y | copy the key",
+		},
+	},
+
 	"comment": {
 		why: "drop the c alias and space paging",
 		findings: []string{
