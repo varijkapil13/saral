@@ -29,7 +29,7 @@ release.flow
 release.set
  Issues  enter open  e edit  A archive  b assign  s sort  v arrange  p project  +3    ? g ctrl+k esc
 releases
- Issues  enter release  n new  e edit  A archive  b assign  s sort  f filter          ? g ctrl+k esc
+ Issues  enter release  n new  e edit  A archive  b assign  s sort  f filter  / find  ? g ctrl+k esc
 search
  Issues  tab scope  esc close                                                                 ctrl+k
 settings

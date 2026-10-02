@@ -4,7 +4,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
-	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
 // ArrangeMsg moves the arrangement of a set on to the next one.
@@ -26,7 +25,6 @@ const (
 	setActArrange
 	setActPick
 	setActExcluded
-	setActFind
 )
 
 type setKeyMap struct {
@@ -34,31 +32,24 @@ type setKeyMap struct {
 	Arrange  kernel.Binding
 	Pick     kernel.Binding
 	Excluded kernel.Binding
-	Find     kernel.Binding
-
-	FindKeep  kernel.Binding
-	FindClear kernel.Binding
 }
 
 func defaultSetKeys() setKeyMap {
 	k := defaultKeys()
 	k.Release = kernel.Bind([]string{"enter"}, "enter", "release it, or fold a header")
+	k.Find = kernel.Bind([]string{"/"}, "/", "find a version or release")
 	return setKeyMap{
 		keyMap:   k,
 		Arrange:  kernel.Bind([]string{"v"}, "v", "group by cross-space release or project"),
 		Pick:     kernel.Bind([]string{"p"}, "p", "show one project, or all"),
 		Excluded: kernel.Bind([]string{"x"}, "x", "show or hide what the plan excludes"),
-		Find:     kernel.Bind([]string{"/"}, "/", "find a version or release"),
-
-		FindKeep:  kernel.Bind([]string{"enter"}, "enter", "keep the text"),
-		FindClear: kernel.Bind([]string{"esc"}, "esc", "clear it"),
 	}
 }
 
 func (k setKeyMap) table() map[string]setAct {
 	return table(
 		binding[setAct]{k.Arrange, setActArrange}, binding[setAct]{k.Pick, setActPick},
-		binding[setAct]{k.Excluded, setActExcluded}, binding[setAct]{k.Find, setActFind},
+		binding[setAct]{k.Excluded, setActExcluded},
 	)
 }
 
@@ -103,10 +94,7 @@ var setSets = func() [setKeyStates]kernel.KeySet {
 	sets[setEditing] = liveSets[keysEditing]
 	sets[setSaving] = liveSets[keysSaving]
 	sets[setSorting] = liveSets[keysSorting]
-	sets[setFinding] = kernel.KeySet{
-		Acts: []kernel.Binding{kernel.Terse(k.FindKeep, "keep"), kernel.Terse(k.FindClear, "clear")},
-		Full: [][]kernel.Binding{{k.FindKeep, k.FindClear}, {widget.KillLine}},
-	}
+	sets[setFinding] = liveSets[keysFinding]
 	return sets
 }()
 
@@ -135,8 +123,6 @@ func (m *Model) setKey(stroke string) (tea.Cmd, bool) {
 		return m.cyclePick(), true
 	case setActExcluded:
 		return m.toggleExcluded(), true
-	case setActFind:
-		return m.startFind(), true
 	case setActNone:
 	}
 	if m.acts[stroke] == actRelease && m.cursor >= 0 && m.cursor < len(m.order) && m.order[m.cursor].v < 0 {

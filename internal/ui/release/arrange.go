@@ -311,7 +311,7 @@ func (m *Model) keeps(i int) bool {
 	if s.pick != "" && s.owners[i].Ref != s.pick {
 		return false
 	}
-	return s.needle == "" || strings.Contains(s.folds[i], s.needle)
+	return m.matches(i)
 }
 
 func (m *Model) toggleExcluded() tea.Cmd {

@@ -233,6 +233,11 @@ func (m *Model) rebuildCells() {
 	}
 	if m.set != nil {
 		m.decorate()
+	} else {
+		m.find.folds = m.find.folds[:0]
+		for i := range m.cells {
+			m.find.folds = append(m.find.folds, strings.ToLower(m.cells[i].name))
+		}
 	}
 	m.reorder()
 	m.resetRows()
@@ -409,6 +414,7 @@ type summaryKey struct {
 	creating   bool
 	stale      bool
 	checked    int64
+	needle     string
 	set        setSummary
 }
 
@@ -428,6 +434,7 @@ func (m *Model) summaryKey() summaryKey {
 		editing: m.mode == editing, creating: m.mode == editing && m.form.id == "",
 		stale:   m.stale,
 		checked: m.checked.UnixNano(),
+		needle:  m.find.rawNeedle,
 	}
 	if m.set != nil {
 		key.shown = m.set.shown
@@ -453,9 +460,16 @@ func (m *Model) summaryLine() string {
 		b.WriteString(key.project)
 		b.WriteString(" ")
 	}
-	if key.filter != filterAll {
-		b.WriteString(key.filter.name())
-		b.WriteString(" · ")
+	if key.filter != filterAll || key.needle != "" {
+		if key.filter != filterAll {
+			b.WriteString(key.filter.name())
+			b.WriteString(" · ")
+		}
+		if key.needle != "" {
+			b.WriteString("matching ")
+			b.WriteString(strconv.Quote(key.needle))
+			b.WriteString(" · ")
+		}
 		b.WriteString(strconv.Itoa(key.shown))
 		b.WriteString(" of ")
 		b.WriteString(plural(key.versions, "version", "versions"))
@@ -547,6 +561,8 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 		lines = m.appendFailure(lines, room, h)
 	case !m.loaded:
 		lines = append(lines, m.styles.muted.Render("  Nothing has been asked of Jira yet."))
+	case len(m.versions) > 0 && m.find.needle != "":
+		lines = m.appendNarrowed(lines, room, nil)
 	case len(m.versions) > 0:
 		lines = append(lines,
 			m.styles.muted.Render(ansi.Truncate("  "+m.deps.Project+" has no "+m.filter.name()+" versions.", room, ell)),

@@ -131,6 +131,7 @@ releases
 │ b      put it on issues, or take it off │
 │ s      sort the versions                │
 │ f      filter by state                  │
+│ /      find a version                   │
 └─────────────────────────────────────────┘
 
 settings

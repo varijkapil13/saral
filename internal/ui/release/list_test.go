@@ -709,6 +709,7 @@ func TestReleases_RegistersItselfCleanly(t *testing.T) {
 		"releases.assign":  "b",
 		"releases.sort":    "s",
 		"releases.filter":  "f",
+		"releases.find":    "/",
 	}
 	shown := map[string]bool{}
 	for _, b := range kernel.KeysFor(ViewID).Acts {
@@ -732,7 +733,6 @@ func TestReleases_RegistersItselfCleanly(t *testing.T) {
 		"releases.arrange":  "v",
 		"releases.project":  "p",
 		"releases.excluded": "x",
-		"releases.find":     "/",
 	}
 	inSet := map[string]bool{}
 	for _, b := range kernel.KeysFor(SetViewID).Acts {

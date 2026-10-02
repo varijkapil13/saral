@@ -22,6 +22,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"typing a version", keysEditing},
 		{"a save in flight", keysSaving},
 		{"choosing an order", keysSorting},
+		{"typing a find", keysFinding},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the list has %d key states and this test names %d", keyStates, len(named))
@@ -62,6 +63,16 @@ func TestLiveKeys_FollowWhatTheListIsDoing(t *testing.T) {
 				dr.key("s")
 			},
 			state: keysSorting,
+			acts:  true,
+		},
+		{
+			name: "typing a find",
+			enter: func() {
+				m := dr.list()
+				m.saving, m.mode = false, browsing
+				dr.key("/")
+			},
+			state: keysFinding,
 			acts:  true,
 		},
 		{
@@ -167,7 +178,7 @@ func TestKeys_NoStrokeMeansTwoThingsInOneState(t *testing.T) {
 						t.Errorf("state %d binds %q to both %q and %q", state, stroke, other, b.Help().Desc)
 					}
 					owner[stroke] = b.Help().Desc
-					raw := state == keysEditing || state == keysSorting
+					raw := state == keysEditing || state == keysSorting || state == keysFinding
 					if globals[stroke] && !raw {
 						t.Errorf("state %d binds the kernel's own %q", state, stroke)
 					}

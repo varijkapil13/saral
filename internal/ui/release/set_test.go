@@ -303,8 +303,8 @@ func TestSet_TextFilterMatchesVersionAndGroupCaseFolded(t *testing.T) {
 	mustContain(t, dr.view(), `matching "OPS-2026.4"`)
 
 	dr.key("/", "esc")
-	if m.set.needle != "" || m.set.rawNeedle != "" {
-		t.Errorf("esc kept the text %q", m.set.rawNeedle)
+	if m.find.needle != "" || m.find.rawNeedle != "" {
+		t.Errorf("esc kept the text %q", m.find.rawNeedle)
 	}
 	if len(drawn(m)) != 12 {
 		t.Errorf("esc did not bring every version back: %v", drawn(m))
@@ -325,7 +325,7 @@ func TestSet_TypingTheFilterTakesEveryKeyAsText(t *testing.T) {
 		t.Fatal("the text filter does not claim raw keys, so q quits and a digit switches view")
 	}
 	dr.typeText("q1jk2g")
-	if got := m.set.find.Value(); got != "q1jk2g" {
+	if got := m.find.input.Value(); got != "q1jk2g" {
 		t.Errorf("q, 1, j, k, 2 and g typed into the filter left %q", got)
 	}
 	if dr.pops != 0 || len(dr.pushes) != 0 || len(dr.statuses) != 0 {

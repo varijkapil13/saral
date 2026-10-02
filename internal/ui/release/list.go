@@ -111,7 +111,9 @@ type Model struct {
 	zones  widget.Zoner
 	clicks *widget.Clicks
 
-	set *setView
+	find    finder
+	blurred bool
+	set     *setView
 }
 
 // New builds the versions list. It draws before anything is asked of the site,
@@ -136,6 +138,7 @@ func newModel(d kernel.Deps) *Model {
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.form = newForm()
+	m.find = newFinder("a version")
 	return m
 }
 
@@ -187,6 +190,7 @@ func (m *Model) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 		m.resize(msg.Width, msg.Height)
 
 	case kernel.FocusMsg:
+		m.blurred = !msg.Focused
 		m.focus(msg.Focused)
 
 	case kernel.ThemeMsg:
@@ -313,6 +317,7 @@ func (m *Model) reproject(project string) tea.Cmd {
 	m.versions, m.loaded, m.stale, m.failure = nil, false, false, nil
 	m.cursor, m.top = 0, 0
 	m.mode, m.saving, m.counting = browsing, false, ""
+	m.clearFind()
 	m.sum = ""
 	m.fromCache()
 	m.relayout()
@@ -687,6 +692,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.startSort()
 	case actFilter:
 		return m.cycleFilter()
+	case actFind:
+		return m.startFind()
 	case actNone, actNextField, actPrevField, actSave, actCancel,
 		actSortPrev, actSortNext, actSortChoose, actSortCancel:
 	}
