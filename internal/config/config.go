@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -56,6 +57,15 @@ var migrations = map[int]func(*fileConfig, *toml.MetaData) error{}
 // lockWait is how long a read-merge-write waits for another copy of Saral to
 // finish its own before giving up.
 const lockWait = 2 * time.Second
+
+// gateWait is how long a writer queues behind the other writers in this process
+// before giving up.
+const gateWait = 30 * time.Second
+
+// gates holds one single-slot channel per lock file. The flock poll has no
+// queue, so a releaser that re-locks before a poller wakes starves it; sending
+// on a channel queues blocked senders in arrival order.
+var gates sync.Map
 
 // Config is the whole file: the profiles and the settings shared by them.
 type Config struct {
@@ -660,23 +670,45 @@ func UpdateFile(path string, fn func(*Config) error) error {
 
 // lockFile takes the advisory lock guarding path, which is a hidden file beside
 // it rather than path itself: the file is replaced by a rename on every save,
-// and a lock on a file that has been renamed over guards nothing.
+// and a lock on a file that has been renamed over guards nothing. Writers in
+// this process are served in the order they arrive; the file lock then orders
+// them against other copies of Saral.
 func lockFile(path string) (unlock func(), err error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return nil, fmt.Errorf("creating %s: %w", dir, err)
 	}
-	lock := flock.New(filepath.Join(dir, "."+filepath.Base(path)+".lock"), flock.SetPermissions(filePerm))
+	lockPath := filepath.Join(dir, "."+filepath.Base(path)+".lock")
+
+	g, _ := gates.LoadOrStore(filepath.Clean(lockPath), make(chan struct{}, 1))
+	gate := g.(chan struct{})
+	wait := time.NewTimer(gateWait)
+	defer wait.Stop()
+	select {
+	case gate <- struct{}{}:
+	case <-wait.C:
+		return nil, fmt.Errorf("another write to %s is taking too long; try again", path)
+	}
+
+	lock := flock.New(lockPath, flock.SetPermissions(filePerm))
 	ctx, cancel := context.WithTimeout(context.Background(), lockWait)
 	defer cancel()
 	ok, err := lock.TryLockContext(ctx, 10*time.Millisecond)
 	switch {
 	case err != nil && !errors.Is(err, context.DeadlineExceeded):
+		<-gate
 		return nil, fmt.Errorf("locking %s: %w", path, err)
 	case !ok:
+		<-gate
 		return nil, fmt.Errorf("another copy of saral is writing %s; try again", path)
 	}
-	return func() { _ = lock.Unlock() }, nil
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			_ = lock.Unlock()
+			<-gate
+		})
+	}, nil
 }
 
 // writeAtomic writes a file through a temporary one beside it, so an interrupted
