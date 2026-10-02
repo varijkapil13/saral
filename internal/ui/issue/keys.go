@@ -449,6 +449,7 @@ func (m *Model) pickLiveKeyIndex() int {
 	return lkPicking
 }
 
+// KeyStates is every set the pane reports, its sheets included.
 func (m *Model) KeyStates() []kernel.KeySet {
 	out := append([]kernel.KeySet{defaultKeys().keySet()}, sideLiveSets[:]...)
 	for _, k := range sheetKeysets {
