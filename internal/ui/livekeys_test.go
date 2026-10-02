@@ -39,6 +39,13 @@ func newFlow(d kernel.Deps) kernel.View {
 	return release.NewFlow(d, jira.Version{ID: "10100", ProjectID: "10000", Name: "1.4.0"}, 3, nil)
 }
 
+func newSet(d kernel.Deps) kernel.View {
+	return release.NewSet(d, release.Set{Title: "Releases", Members: []release.Member{{
+		Version: jira.Version{ID: "10100", ProjectID: "10000", Name: "1.4.0"},
+		Project: release.Owner{Ref: "10000", Label: "PROJ"},
+	}}})
+}
+
 func newBulk(d kernel.Deps) kernel.View {
 	return release.NewBulk(d, jira.Version{ID: "10100", ProjectID: "10000", Name: "1.4.0"})
 }
@@ -66,6 +73,7 @@ var keyReporters = map[string]func(kernel.Deps) kernel.View{
 	release.FlowViewID: newFlow,
 	release.BulkViewID: newBulk,
 	search.ViewID:      search.NewView,
+	release.SetViewID:  newSet,
 	sprint.ViewID:      sprint.New,
 	timeline.ViewID:    timeline.New,
 }
@@ -241,6 +249,7 @@ var closers = map[string]func(kernel.Deps) kernel.View{
 	// The assignment screen is pushed by the versions list with the version.
 	release.BulkViewID: newBulk,
 	search.ViewID:      search.NewView,
+	release.SetViewID:  newSet,
 	// Both of these hold a footer slot, so nothing pushes them and neither Close is
 	// ever called; they are here because withdrawing the method is theirs to do.
 	board.ViewID: board.New,
@@ -362,6 +371,7 @@ var answerable = map[string]func(kernel.Deps) kernel.View{
 	// The assignment screen asks for the query's matches and sends the chunks.
 	release.BulkViewID: newBulk,
 	search.ViewID:      search.NewView,
+	release.SetViewID:  newSet,
 	sprint.ViewID:      sprint.New,
 	timeline.ViewID:    timeline.New,
 }

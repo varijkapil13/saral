@@ -17,6 +17,7 @@ import (
 func init() {
 	const slot = 5
 	keys := defaultKeys()
+	setKeys := defaultSetKeys()
 	kernel.RegisterView(kernel.ViewSpec{
 		ID:    ViewID,
 		Title: "Releases",
@@ -24,6 +25,7 @@ func init() {
 		New:   New,
 	})
 	kernel.RegisterKeys(ViewID, keys.keySet())
+	kernel.RegisterKeys(SetViewID, setKeys.keySet())
 	kernel.RegisterKeys(FlowViewID, defaultFlowKeys().keySet())
 	kernel.RegisterKeys(BulkViewID, defaultBulkKeys().keySet())
 
@@ -67,6 +69,26 @@ func init() {
 			Keys:  []string{c.key.Help().Key},
 			Run: func(kernel.Deps) tea.Cmd {
 				return kernel.OpenThen(ViewID, c.msg)
+			},
+		})
+	}
+	for _, c := range []struct {
+		id, title string
+		key       kernel.Binding
+		msg       tea.Msg
+	}{
+		{id: "releases.arrange", title: "Arrange the releases by cross-space release, project or not at all", key: setKeys.Arrange, msg: ArrangeMsg{}},
+		{id: "releases.excluded", title: "Show or hide the versions the plan leaves out", key: setKeys.Excluded, msg: ExcludedMsg{}},
+		{id: "releases.project", title: "Show one project's versions, or all", key: setKeys.Pick, msg: PickProjectMsg{}},
+		{id: "releases.find", title: "Find a version or a release", key: setKeys.Find, msg: FindMsg{}},
+	} {
+		kernel.RegisterCommand(kernel.Command{
+			ID:    c.id,
+			Title: c.title,
+			Group: "Releases",
+			Keys:  []string{c.key.Help().Key},
+			Run: func(kernel.Deps) tea.Cmd {
+				return kernel.Broadcast(c.msg)
 			},
 		})
 	}

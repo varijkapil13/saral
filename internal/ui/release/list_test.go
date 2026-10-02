@@ -728,7 +728,31 @@ func TestReleases_RegistersItselfCleanly(t *testing.T) {
 			t.Errorf("command %q teaches %q, which the resting footer does not show", id, key)
 		}
 	}
+	wantSet := map[string]string{
+		"releases.arrange":  "v",
+		"releases.project":  "p",
+		"releases.excluded": "x",
+		"releases.find":     "/",
+	}
+	inSet := map[string]bool{}
+	for _, b := range kernel.KeysFor(SetViewID).Acts {
+		inSet[b.Help().Key] = true
+	}
+	for id, key := range wantSet {
+		cmd, found := kernel.LookupCommand(id)
+		switch {
+		case !found:
+			t.Errorf("no command %q is registered", id)
+		case len(cmd.Keys) != 1 || cmd.Keys[0] != key:
+			t.Errorf("command %q teaches %v, want %q", id, cmd.Keys, key)
+		case !inSet[key]:
+			t.Errorf("command %q teaches %q, which the set's resting footer does not show", id, key)
+		}
+	}
 	for _, cmd := range kernel.Commands() {
+		if _, named := wantSet[cmd.ID]; named {
+			continue
+		}
 		if _, named := want[cmd.ID]; !named && strings.HasPrefix(cmd.ID, "releases.") {
 			t.Errorf("command %q is registered and this test does not name it, so the wiring step "+
 				"has one more keyOwners row to add than it was told about", cmd.ID)

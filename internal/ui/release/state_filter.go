@@ -64,8 +64,8 @@ func filterByName(name string) (stateFilter, bool) {
 	return filterAll, false
 }
 
-func recallFilter(d kernel.Deps) stateFilter {
-	name, ok := kernel.Recall(d, ViewID, filterMemoryKey)
+func recallFilter(d kernel.Deps, view string) stateFilter {
+	name, ok := kernel.Recall(d, view, filterMemoryKey)
 	if !ok {
 		return filterAll
 	}
@@ -78,7 +78,7 @@ func (m *Model) rememberFilter() {
 	if m.filter == filterAll {
 		value = ""
 	}
-	kernel.Keep(m.deps, ViewID, filterMemoryKey, value)
+	kernel.Keep(m.deps, m.viewID(), filterMemoryKey, value)
 }
 
 // cycleFilter moves to the next of all, unreleased, released and archived.

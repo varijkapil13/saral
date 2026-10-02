@@ -174,11 +174,14 @@ func flowOf(t *testing.T, d kernel.Deps, v jira.Version, open int, targets []jir
 
 func (d *driver) list() *Model {
 	d.t.Helper()
-	m, ok := d.m.(*Model)
-	if !ok {
-		d.t.Fatalf("the view under test is a %T, not the versions list", d.m)
+	switch v := d.m.(type) {
+	case *Model:
+		return v
+	case SetList:
+		return v.Model
 	}
-	return m
+	d.t.Fatalf("the view under test is a %T, not the versions list", d.m)
+	return nil
 }
 
 func (d *driver) flow() *Flow {
@@ -287,8 +290,8 @@ func (d *driver) moveTo(id string) {
 	d.t.Helper()
 	m := d.list()
 	d.key("home")
-	for at, i := range m.order {
-		if m.versions[i].ID == id {
+	for at, sl := range m.order {
+		if sl.v >= 0 && m.versions[sl.v].ID == id {
 			for range at {
 				d.key("j")
 			}
@@ -312,6 +315,8 @@ func pressOn(t *testing.T, d kernel.Deps, dr *driver, name string) {
 func zoner(dr *driver) interface{ ID(string) string } {
 	switch v := dr.m.(type) {
 	case *Model:
+		return v.zones
+	case SetList:
 		return v.zones
 	case *Flow:
 		return v.zones

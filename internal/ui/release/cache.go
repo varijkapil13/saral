@@ -33,6 +33,9 @@ func (m *Model) fromCache() {
 }
 
 func (m *Model) keep() tea.Cmd {
+	if m.set != nil {
+		return nil
+	}
 	held, ok := m.versionsCache()
 	if !ok || !m.loaded {
 		return nil
@@ -44,6 +47,9 @@ func (m *Model) keep() tea.Cmd {
 }
 
 func (m *Model) refresh(purge bool) tea.Cmd {
+	if m.set != nil {
+		return m.reloadSet()
+	}
 	if !purge {
 		return m.load()
 	}

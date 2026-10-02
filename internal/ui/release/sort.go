@@ -32,6 +32,7 @@ type sortField struct {
 type sortable struct {
 	v     *jira.Version
 	state string
+	owner string
 }
 
 const sortProject = "project"
@@ -74,8 +75,8 @@ func compareDates(a, b jira.Date) int {
 	}
 }
 
-func sortFieldIndex(id string) int {
-	for i, f := range sortFields {
+func fieldIndex(fields []sortField, id string) int {
+	for i, f := range fields {
 		if f.id == id {
 			return i
 		}
@@ -83,13 +84,34 @@ func sortFieldIndex(id string) int {
 	return 0
 }
 
-func sortFieldByID(id string) (sortField, bool) {
-	for _, f := range sortFields {
+func lookupField(fields []sortField, id string) (sortField, bool) {
+	for _, f := range fields {
 		if f.id == id {
 			return f, true
 		}
 	}
 	return sortField{}, false
+}
+
+func (m *Model) fields() []sortField {
+	if m.set != nil {
+		return setSortFields
+	}
+	return sortFields
+}
+
+func (m *Model) ownerLabel(i int) string {
+	if m.set == nil {
+		return ""
+	}
+	return m.set.projects[i]
+}
+
+func (m *Model) viewID() string {
+	if m.set != nil {
+		return SetViewID
+	}
+	return ViewID
 }
 
 // sortChoice is the order the rows are drawn in. The zero value is the
@@ -109,8 +131,10 @@ func (c sortChoice) fieldID() string {
 // chosen is whether anything but the site's own order is in force.
 func (c sortChoice) chosen() bool { return c.fieldID() != sortProject || c.desc }
 
-func (c sortChoice) plain(g kernel.Glyphs) string {
-	f, _ := sortFieldByID(c.fieldID())
+func (c sortChoice) plain(g kernel.Glyphs) string { return c.plainIn(sortFields, g) }
+
+func (c sortChoice) plainIn(fields []sortField, g kernel.Glyphs) string {
+	f, _ := lookupField(fields, c.fieldID())
 	return f.label + " " + sortArrow(c.desc, g)
 }
 
@@ -138,12 +162,16 @@ func (c sortChoice) toSpec() config.SortSpec {
 
 // loadSort is the order this machine last left the list in, or the project's
 // own on a first run, an unwritable cache or a field this build does not know.
-func loadSort() sortChoice {
-	spec, ok := config.LoadUIState().Sort(ViewID)
+func loadSort(view string) sortChoice {
+	spec, ok := config.LoadUIState().Sort(view)
 	if !ok {
 		return sortChoice{}
 	}
-	if _, known := sortFieldByID(spec.Field); !known {
+	fields := sortFields
+	if view == SetViewID {
+		fields = setSortFields
+	}
+	if _, known := lookupField(fields, spec.Field); !known {
 		return sortChoice{}
 	}
 	return sortChoice{field: spec.Field, desc: spec.Desc}
@@ -161,7 +189,7 @@ func (m *Model) reorder() {
 	for i := range m.versions {
 		m.sorted = append(m.sorted, i)
 	}
-	f, _ := sortFieldByID(m.sort.fieldID())
+	f, _ := lookupField(m.fields(), m.sort.fieldID())
 	desc := m.sort.desc
 	switch {
 	case f.compare == nil && f.date == nil:
@@ -172,9 +200,13 @@ func (m *Model) reorder() {
 		slices.SortStableFunc(m.sorted, func(a, b int) int { return m.compareRows(f, desc, a, b) })
 	}
 	m.order = m.order[:0]
+	if m.set != nil {
+		m.arrangeSlots()
+		return
+	}
 	for _, i := range m.sorted {
 		if m.filter.keeps(m.cells[i].state) {
-			m.order = append(m.order, i)
+			m.order = append(m.order, slot{v: int32(i), g: -1})
 		}
 	}
 }
@@ -193,7 +225,9 @@ func (m *Model) compareRows(f sortField, desc bool, a, b int) int {
 		}
 		c = compareDates(da, db)
 	} else {
-		c = f.compare(sortable{&m.versions[a], m.cells[a].state}, sortable{&m.versions[b], m.cells[b].state})
+		c = f.compare(
+			sortable{&m.versions[a], m.cells[a].state, m.ownerLabel(a)},
+			sortable{&m.versions[b], m.cells[b].state, m.ownerLabel(b)})
 	}
 	if desc {
 		return -c
@@ -208,7 +242,7 @@ func (m *Model) startSort() tea.Cmd {
 		return nil
 	}
 	m.mode = sorting
-	m.sortCursor = sortFieldIndex(m.sort.fieldID())
+	m.sortCursor = fieldIndex(m.fields(), m.sort.fieldID())
 	m.sum = ""
 	m.clampScroll()
 	return nil
@@ -224,9 +258,9 @@ func (m *Model) cancelSort() tea.Cmd {
 func (m *Model) sortKey(stroke string) tea.Cmd {
 	switch m.inSort[stroke] {
 	case actSortPrev:
-		m.sortCursor = (m.sortCursor - 1 + len(sortFields)) % len(sortFields)
+		m.sortCursor = (m.sortCursor - 1 + len(m.fields())) % len(m.fields())
 	case actSortNext:
-		m.sortCursor = (m.sortCursor + 1) % len(sortFields)
+		m.sortCursor = (m.sortCursor + 1) % len(m.fields())
 	case actSortChoose:
 		return m.chooseSort()
 	case actSortCancel:
@@ -239,7 +273,7 @@ func (m *Model) sortKey(stroke string) tea.Cmd {
 // chooseSort applies the field under the cursor. Choosing the field already in
 // force turns it round instead, so one gesture reaches both directions.
 func (m *Model) chooseSort() tea.Cmd {
-	f := sortFields[m.sortCursor]
+	f := m.fields()[m.sortCursor]
 	next := sortChoice{field: f.id}
 	if m.sort.fieldID() == f.id {
 		next.desc = !m.sort.desc
@@ -270,9 +304,9 @@ func (m *Model) keepSort() tea.Cmd {
 	if m.sortSaveFailed {
 		return nil
 	}
-	spec := m.sort.toSpec()
+	spec, view := m.sort.toSpec(), m.viewID()
 	return kernel.Reply(func() tea.Msg {
-		if err := config.SaveSort(ViewID, spec); err != nil {
+		if err := config.SaveSort(view, spec); err != nil {
 			return sortSaveFailedMsg{err: err}
 		}
 		return nil
@@ -312,7 +346,7 @@ func (m *Model) sortPrompt() string {
 
 func (m *Model) sortFieldsLine() string {
 	var b strings.Builder
-	for i, f := range sortFields {
+	for i, f := range m.fields() {
 		if i > 0 {
 			b.WriteString("  ")
 		}

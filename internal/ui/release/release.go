@@ -27,3 +27,6 @@ const FlowViewID = "release.flow"
 // BulkViewID is the name the assignment screen's keys are registered under. It
 // is pushed with a version, for the reason the flow is.
 const BulkViewID = "release.bulk"
+
+// SetViewID is the name the release list over a set of projects registers its keys under.
+const SetViewID = "release.set"

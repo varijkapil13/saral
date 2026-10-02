@@ -157,6 +157,9 @@ var liveSets = func() [keyStates]kernel.KeySet {
 
 // LiveKeys reports the keys that work in the state the list is actually in.
 func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
+	if m.set != nil {
+		return m.setLiveKeys()
+	}
 	state := keysBrowsing
 	switch {
 	case m.saving:

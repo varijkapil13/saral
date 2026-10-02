@@ -118,6 +118,18 @@ enter choose what happens to the open issues    ↓/j down    1-9          saved
                                                             r            refresh
                                                             R            refetch everything
 
+release.set
+enter release it, or fold a header               ↓/j  down             1-9          saved query        ...
+e     edit this version                          ↑/k  up               g            where to go
+A     archive or unarchive it                    pgdn page down        g 1-9        switch view
+b     put it on issues, or take it off           pgup page up          ctrl+, / g s settings
+s     sort the versions                          g g  first version    g i          jump to an issue
+v     group by cross-space release or project    G    last version     g /          search issues
+p     show one project, or all                                         esc          back
+f     filter by state                                                  r            refresh
+x     show or hide what the plan excludes                              R            refetch everything
+/     find a version or release
+
 releases
 enter release this version                ↓/j  down             1-9          saved query           ctrl+k commands
 n     new version                         ↑/k  up               g            where to go           ?      help

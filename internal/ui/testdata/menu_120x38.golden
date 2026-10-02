@@ -106,6 +106,21 @@ release.flow
 │ enter  choose what happens to the open issues │
 └───────────────────────────────────────────────┘
 
+release.set
+┌────────────────────────────────────────────────┐
+│ What can be done here                          │
+│ enter  release it, or fold a header            │
+│ e      edit this version                       │
+│ A      archive or unarchive it                 │
+│ b      put it on issues, or take it off        │
+│ s      sort the versions                       │
+│ v      group by cross-space release or project │
+│ p      show one project, or all                │
+│ f      filter by state                         │
+│ x      show or hide what the plan excludes     │
+│ /      find a version or release               │
+└────────────────────────────────────────────────┘
+
 releases
 ┌─────────────────────────────────────────┐
 │ What can be done here                   │

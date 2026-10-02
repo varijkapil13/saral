@@ -1,0 +1,25 @@
+reading the set
+  acts   enter open · e edit · A archive · b assign · s sort · v arrange · p project · f state · x excluded · / find
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G last version]
+  full   [enter release it, or fold a header, e edit this version, A archive or unarchive it, b put it on issues, or take it off]
+  full   [s sort the versions, v group by cross-space release or project, p show one project, or all, f filter by state, x show or hide what the plan excludes, / find a version or release]
+counting what is open on one
+  acts   e edit · A archive · b assign · s sort · v arrange · p project · f state · x excluded · / find
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G last version]
+  full   [e edit this version, A archive or unarchive it, b put it on issues, or take it off]
+  full   [s sort the versions, v group by cross-space release or project, p show one project, or all, f filter by state, x show or hide what the plan excludes, / find a version or release]
+typing a version
+  acts   ctrl+s save · esc leave it
+  full   [tab next field, shift+tab previous field]
+  full   [ctrl+s save this version, esc leave it alone]
+  full   [alt+k delete to end of line]
+a save in flight
+  acts   
+choosing an order
+  acts   ←/h prev · →/l next · enter choose · esc cancel
+  full   [←/h previous field, →/l next field]
+  full   [enter choose this order, esc leave the order as it is]
+typing the text filter
+  acts   enter keep · esc clear
+  full   [enter keep the text, esc clear it]
+  full   [alt+k delete to end of line]

@@ -26,6 +26,8 @@ release.bulk
  Issues  enter preview  tab on/off  esc leave                                                 ctrl+k
 release.flow
  Issues  enter choose                                                                 ? g ctrl+k esc
+release.set
+ Issues  enter open  e edit  A archive  b assign  s sort  v arrange  p project  +3    ? g ctrl+k esc
 releases
  Issues  enter release  n new  e edit  A archive  b assign  s sort  f filter          ? g ctrl+k esc
 search
