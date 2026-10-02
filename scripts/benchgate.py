@@ -10,6 +10,8 @@ shared runner disagree about them by up to eight hundred per cent.
 
 Usage:
     benchgate.py --csv cmp.csv --root . [--tolerance 10] [--summary FILE]
+    benchgate.py --root . --shard I/N          packages of shard I of N, one per line
+    benchgate.py --root . --list-guarded PKG   anchored -bench regex of PKG's guarded benchmarks
 """
 
 import argparse
@@ -26,6 +28,11 @@ REPORTED_UNITS = ("sec/op",)
 # guarded only through one is invisible here — which is what
 # TestBudget_TheRegressionGateWatchesEveryGuardedBenchmark exists to say.
 GUARD_READS = re.compile(r"testing\.Benchmark\(\s*(Benchmark\w+)\s*\)")
+BENCH_DECL = re.compile(r"(?m)^func (Benchmark\w+)\(")
+GUARDED_RUNS = 6
+UNGUARDED_RUNS = 1
+# Measured seconds a package costs beyond what its benchmark count says.
+COST_HINTS = {"internal/app": 30}
 PROCS_SUFFIX = re.compile(r"-\d+$")
 DELTA = re.compile(r"^([+-])([\d.]+)%$")
 
@@ -96,6 +103,66 @@ def guarded_benchmarks(root, module):
     return reads, packages
 
 
+def benchmark_funcs(root):
+    """Every top-level benchmark in the tree, by package directory ("." for the root)."""
+    found = {}
+    for path in sorted(root.rglob("*_test.go")):
+        rel = path.relative_to(root)
+        if any(skip_dir(part) for part in rel.parts[:-1]):
+            continue
+        names = BENCH_DECL.findall(path.read_text())
+        if names:
+            found.setdefault(rel.parent.as_posix(), set()).update(names)
+    return found
+
+
+def import_path(module, pkg):
+    return module if pkg == "." else module + "/" + pkg
+
+
+def package_arg(module, pkg):
+    pkg = pkg.strip()
+    if pkg == module or pkg.startswith(module + "/"):
+        pkg = pkg[len(module):]
+    if pkg.startswith("./"):
+        pkg = pkg[2:]
+    return pkg.strip("/") or "."
+
+
+def list_guarded(root, module, pkg):
+    """The -bench regex naming the guarded benchmarks of one package, or "" if it has none."""
+    want = package_arg(module, pkg)
+    reads, _ = guarded_benchmarks(root, module)
+    have = benchmark_funcs(root).get(want, set())
+    full = import_path(module, want)
+    names = sorted(n for n, pkgs in reads.items() if n in have and full in pkgs)
+    return "^(%s)$" % "|".join(names) if names else ""
+
+
+def shard_packages(root, module, index, count):
+    """The packages of one shard: greedy by cost, largest first, ties by name.
+
+    Every package holding a benchmark is assigned to exactly one shard, so a new
+    package lands in a shard without anyone listing it.
+    """
+    reads, _ = guarded_benchmarks(root, module)
+    cost = {}
+    for pkg, names in benchmark_funcs(root).items():
+        full = import_path(module, pkg)
+        guarded = sum(1 for n in names if full in reads.get(n, ()))
+        cost[pkg] = (
+            GUARDED_RUNS * guarded + UNGUARDED_RUNS * (len(names) - guarded)
+            + COST_HINTS.get(pkg, 0)
+        )
+    load, mine = [0] * count, []
+    for pkg in sorted(cost, key=lambda p: (-cost[p], p)):
+        target = min(range(count), key=lambda i: (load[i], i))
+        load[target] += cost[pkg]
+        if target == index:
+            mine.append(pkg)
+    return sorted(mine)
+
+
 def parse(path):
     """The comparison rows benchstat wrote, one per benchmark per unit."""
     rows, pkg, unit, head_only = [], "", None, False
@@ -141,14 +208,32 @@ def annotate(kind, message):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csv", required=True)
+    ap.add_argument("--csv")
     ap.add_argument("--root", default=".")
+    ap.add_argument("--list-guarded", metavar="PKG")
+    ap.add_argument("--shard", metavar="I/N")
     ap.add_argument("--tolerance", type=float, default=10.0)
     ap.add_argument("--summary")
     args = ap.parse_args(argv)
 
     root = pathlib.Path(args.root).resolve()
     module = module_path(root)
+
+    if args.list_guarded is not None:
+        regex = list_guarded(root, module, args.list_guarded)
+        if regex:
+            print(regex)
+        return 0
+    if args.shard is not None:
+        m = re.fullmatch(r"(\d+)/(\d+)", args.shard)
+        if not m or not 0 <= int(m.group(1)) < int(m.group(2)):
+            sys.exit("--shard wants I/N with 0 <= I < N, got %r" % args.shard)
+        for pkg in shard_packages(root, module, int(m.group(1)), int(m.group(2))):
+            print(pkg if pkg == "." else "./" + pkg)
+        return 0
+    if not args.csv:
+        ap.error("--csv is required unless --list-guarded or --shard is given")
+
     guarded, guarded_pkgs = guarded_benchmarks(root, module)
     rows = parse(args.csv)
 
@@ -167,6 +252,14 @@ def main(argv=None):
             "benchmarks did not build or did not run, so the gate passed having measured "
             "nothing there." % pkg
         )
+
+    for pkg in sorted(benchmark_funcs(root)):
+        full = import_path(module, pkg)
+        if full not in seen_pkgs:
+            failures.append(
+                "%s holds benchmarks and contributed none to the comparison, so no shard ran "
+                "it or its benchmarks did not build." % full
+            )
 
     gated_names = set()
     for row in rows:
