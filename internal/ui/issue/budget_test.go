@@ -108,3 +108,22 @@ func TestBudget_RelatedRowsKeystrokeToFrame(t *testing.T) {
 		t.Errorf("a keystroke over forty related issues took %s, want under the 16ms in docs/PERFORMANCE.md", per)
 	}
 }
+
+func TestBudget_EpicChildrenKeystrokeToFrame(t *testing.T) {
+	res := testing.Benchmark(BenchmarkDetailContent_Epic50Children)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("a keystroke over an epic's fifty children took %s, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+}
+
+func TestBudget_ChildrenSheetScrollingCostsTheSameOnAThousandRowsAsOnAHundred(t *testing.T) {
+	small := testing.Benchmark(BenchmarkChildrenSheetScroll_100Rows)
+	large := testing.Benchmark(BenchmarkChildrenSheetScroll_1kRows)
+	if large.AllocsPerOp() > small.AllocsPerOp()+2 {
+		t.Errorf("scrolling a thousand children allocates %d times against %d for a hundred, so something is drawn per row held",
+			large.AllocsPerOp(), small.AllocsPerOp())
+	}
+	if per := time.Duration(large.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("a keystroke over a thousand children took %s, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+}

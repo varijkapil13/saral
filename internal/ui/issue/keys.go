@@ -35,6 +35,7 @@ type keyMap struct {
 	Move     kernel.Binding
 	Comments kernel.Binding
 	Parent   kernel.Binding
+	Children kernel.Binding
 }
 
 // The three strokes that move the boundary between the regions. Every letter
@@ -94,6 +95,10 @@ func parentBinding() kernel.Binding {
 	return kernel.Bind([]string{"p"}, "p", "open the parent")
 }
 
+func childrenBinding() kernel.Binding {
+	return kernel.Bind([]string{"c"}, "c", "list the children")
+}
+
 func openRefBinding() kernel.Binding {
 	return kernel.Bind([]string{"enter", "e"}, "enter", "open it")
 }
@@ -130,6 +135,7 @@ func defaultKeys() keyMap {
 		Move:     moveBinding(),
 		Comments: commentsBinding(),
 		Parent:   parentBinding(),
+		Children: childrenBinding(),
 	}
 }
 
@@ -165,6 +171,7 @@ const (
 	actMove
 	actComments
 	actParent
+	actChildren
 )
 
 // steps is the motion each action means, for the actions that are one.
@@ -203,7 +210,7 @@ var strokes = func() map[string]action {
 		{k.Edit, actEdit}, {k.Act, actEdit}, {k.Editor, actEditor},
 		{k.Save, actSave}, {k.UndoRow, actUndoRow}, {k.UndoAll, actUndoAll},
 		{k.Assign, actAssign}, {k.Move, actMove}, {k.Comments, actComments},
-		{k.Parent, actParent},
+		{k.Parent, actParent}, {k.Children, actChildren},
 	} {
 		for _, stroke := range pair.binding.Keys() {
 			out[stroke] = pair.does
@@ -244,7 +251,7 @@ func (k keyMap) keySet() kernel.KeySet {
 			{k.Down, k.Up, k.PageDown, k.PageUp, k.Right, k.Left},
 			{k.HalfDown, k.HalfUp, k.Top, k.Bottom, k.PrevPane, k.Expands,
 				k.Sidebar, k.Describe, k.Reset},
-			{k.Pane, k.Edit, k.Act, k.Editor, k.Save, k.UndoRow, k.UndoAll, k.Assign, k.Move, k.Comments, k.Parent},
+			{k.Pane, k.Edit, k.Act, k.Editor, k.Save, k.UndoRow, k.UndoAll, k.Assign, k.Move, k.Comments, k.Parent, k.Children},
 			collabKeys,
 		},
 	}
@@ -289,7 +296,7 @@ var sideLiveSets = func() [lkCount]kernel.KeySet {
 	commentsDirtyActs := []kernel.Binding{kernel.Terse(k.Save, "save"), k.UndoAll}
 	commentsDirtyFull := []kernel.Binding{k.Save, k.UndoAll}
 	restActs := []kernel.Binding{kernel.Terse(k.Move, "status"), k.Comments}
-	restFull := append([]kernel.Binding{k.Assign, k.Move, k.Comments, k.Parent}, collabKeys...)
+	restFull := append([]kernel.Binding{k.Assign, k.Move, k.Comments, k.Parent, k.Children}, collabKeys...)
 
 	build := func(dirty bool, editActs, editFull []kernel.Binding) kernel.KeySet {
 		acts := append(append([]kernel.Binding{}, baseActs...), editActs...)
@@ -399,7 +406,7 @@ func (m *Model) liveKeyIndex() int {
 		}
 		return lkBrowseDesc
 	case regionDetails:
-		if cr := m.currentCursorRow(); cr != nil && cr.kind == rkRef {
+		if cr := m.currentCursorRow(); cr != nil && (cr.kind == rkRef || cr.kind == rkMore) {
 			if dirty {
 				return lkBrowseRefDirty
 			}

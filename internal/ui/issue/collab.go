@@ -69,6 +69,9 @@ const (
 	collabTime
 	collabWatchers
 	collabClone
+	collabParent
+	collabChildren
+	collabChildList
 )
 
 // CollabMsg is the palette's way to the sheets the keys open.
@@ -112,6 +115,9 @@ func init() {
 		{"issue.worklog", "Log time on this issue", &collabBindings[collabTime], CollabMsg{collabTime}},
 		{"issue.watchers", "Watch this issue, or see who does", &collabBindings[collabWatchers], CollabMsg{collabWatchers}},
 		{"issue.clone", "Clone this issue", nil, CollabMsg{collabClone}},
+		{"issue.parent", "Go to this issue's parent", &parentKey, CollabMsg{collabParent}},
+		{"issue.children", "List this issue's children", &childrenKey, CollabMsg{collabChildren}},
+		{"issue.childrenInList", "Show this issue's children in the issue list", nil, CollabMsg{collabChildList}},
 	} {
 		var keys []string
 		if c.b != nil {
@@ -123,6 +129,8 @@ func init() {
 		})
 	}
 }
+
+var parentKey, childrenKey = parentBinding(), childrenBinding()
 
 func (m *Model) collabKey(stroke string) (tea.Cmd, bool) {
 	if act := ShareStroke(stroke); act != ShareNone {
@@ -148,6 +156,7 @@ func (m *Model) collabMsg(msg tea.Msg) tea.Cmd {
 		if msg.Key == m.issue.Key {
 			return m.fetch()
 		}
+		return m.childChanged(msg.Key)
 	}
 	return nil
 }
@@ -159,6 +168,12 @@ func (m *Model) openSheet(at collabAct) tea.Cmd {
 	var kind sheetKind
 	title := m.issue.Key + " "
 	switch at {
+	case collabParent:
+		return m.openParent()
+	case collabChildren:
+		return m.openChildren()
+	case collabChildList:
+		return m.showChildrenInList()
 	case collabLinks:
 		kind, title = &linksKind{}, title+"links"
 	case collabTime:

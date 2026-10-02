@@ -286,3 +286,97 @@ func BenchmarkIssueScrollRelated(b *testing.B) {
 		_ = m.View()
 	}
 }
+
+func manyChildren(n int) []jira.Issue {
+	out := make([]jira.Issue, n)
+	for i := range out {
+		status := jira.Status{Name: "To Do", Category: jira.CategoryToDo}
+		if i%3 == 0 {
+			status = jira.Status{Name: "Done", Category: jira.CategoryDone}
+		}
+		out[i] = jira.Issue{
+			ID: strconv.Itoa(1000 + i), Key: "PROJ-" + strconv.Itoa(100+i), Summary: "A child worth a line of its own",
+			Type: jira.IssueType{ID: "10301", Name: "Story"}, Status: status,
+			Assignee: &jira.User{AccountID: "u" + strconv.Itoa(i%7), DisplayName: "Ada Lovelace"},
+			Priority: &jira.Priority{ID: "3", Name: "Medium"},
+		}
+	}
+	return out
+}
+
+func benchEpicPane(tb testing.TB, children int) *Model {
+	tb.Helper()
+
+	iss := navIssue()
+	iss.Type.HierarchyLevel = 1
+	d := kernel.Deps{
+		Jira:  jiratest.New(jiratest.WithProject("PROJ", jiratest.Scrum)),
+		Caps:  jira.Capabilities{TimeZone: time.UTC},
+		Theme: kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
+		Now:   func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
+	}
+	view, ok := New(d, iss).(*Model)
+	if !ok {
+		tb.Fatal("New did not return a *Model")
+	}
+	next, _ := view.Update(kernel.SizeMsg{Width: 120, Height: 40})
+	m, _ := next.(*Model)
+	next, _ = m.Update(loadedMsg{gen: m.gen, issue: iss})
+	m, _ = next.(*Model)
+	m.childAsked = true
+	next, _ = m.Update(childrenMsg{gen: m.childGen, page: jira.Page[jira.Issue]{Items: manyChildren(children)}})
+	m, _ = next.(*Model)
+	m.focus = regionDetails
+	_ = m.View()
+	return m
+}
+
+func BenchmarkDetailContent_Epic50Children(b *testing.B) {
+	m := benchEpicPane(b, 50)
+	down, up := keyPress("j"), keyPress("k")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		press := down
+		if i%2 == 1 {
+			press = up
+		}
+		next, _ := m.Update(press)
+		m, _ = next.(*Model)
+		_ = m.View()
+	}
+}
+
+func benchChildrenSheet(tb testing.TB, rows int) *sheet {
+	tb.Helper()
+
+	d := kernel.Deps{
+		Theme: kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
+		Now:   func() time.Time { return time.Date(2025, time.March, 5, 9, 0, 0, 0, time.UTC) },
+	}
+	kind := &childrenKind{seed: &childSeed{issues: manyChildren(rows)}}
+	s := newSheet(d, jira.Issue{Key: "PROJ-3", Summary: "Billing rewrite"}, kind)
+	s.Update(kernel.SizeMsg{Width: 120, Height: 30})
+	_ = s.Init()
+	_ = s.View()
+	return s
+}
+
+func benchChildrenSheetScroll(b *testing.B, rows int) {
+	s := benchChildrenSheet(b, rows)
+	down, up := keyPress("j"), keyPress("k")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		press := down
+		if i%2 == 1 {
+			press = up
+		}
+		_, _ = s.Update(press)
+		_ = s.View()
+	}
+}
+
+func BenchmarkChildrenSheetScroll_1kRows(b *testing.B) { benchChildrenSheetScroll(b, 1000) }
+
+func BenchmarkChildrenSheetScroll_100Rows(b *testing.B) { benchChildrenSheetScroll(b, 100) }

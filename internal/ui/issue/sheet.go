@@ -68,6 +68,9 @@ const (
 	sheetRemove
 	sheetOpen
 	sheetToggle
+	sheetAssign
+	sheetStatus
+	sheetPriority
 )
 
 type sheetKind interface {
@@ -76,6 +79,10 @@ type sheetKind interface {
 	answered(s *sheet, text string, pick *sheetRow) tea.Cmd
 	changed(s *sheet, text string) tea.Cmd
 	keys() *sheetKeys
+}
+
+type sheetPager interface {
+	more(s *sheet) tea.Cmd
 }
 
 type fetchSlot struct {
@@ -161,6 +168,7 @@ func (s *sheet) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 			s.moveBy(-widget.WheelStep)
 		case tea.MouseWheelDown:
 			s.moveBy(widget.WheelStep)
+			cmd = s.paged()
 		default:
 		}
 	default:
@@ -260,7 +268,7 @@ func (s *sheet) press(msg tea.KeyPressMsg) tea.Cmd {
 	switch sheetMotions[stroke] {
 	case 1:
 		s.moveBy(1)
-		return nil
+		return s.paged()
 	case -1:
 		s.moveBy(-1)
 		return nil
@@ -272,6 +280,13 @@ func (s *sheet) press(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 var sheetMotions = map[string]int{"j": 1, "down": 1, "k": -1, "up": -1}
+
+func (s *sheet) paged() tea.Cmd {
+	if p, ok := s.kind.(sheetPager); ok {
+		return p.more(s)
+	}
+	return nil
+}
 
 func (s *sheet) answer(stroke string) tea.Cmd {
 	var next func() tea.Cmd

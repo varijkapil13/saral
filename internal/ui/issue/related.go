@@ -36,9 +36,13 @@ func (m *Model) trailBeneath() []string {
 }
 
 func openIssue(d kernel.Deps, ref jira.IssueRef, trail []string) tea.Cmd {
-	return kernel.Push(ViewID, ref.Key, New(d, jira.Issue{
+	return openSeeded(d, jira.Issue{
 		ID: ref.ID, Key: ref.Key, Summary: ref.Summary, Status: ref.Status, Type: ref.Type,
-	}, fromTrail(trail)))
+	}, trail)
+}
+
+func openSeeded(d kernel.Deps, seed jira.Issue, trail []string, opts ...modelOption) tea.Cmd {
+	return kernel.Push(ViewID, seed.Key, New(d, seed, append([]modelOption{fromTrail(trail)}, opts...)...))
 }
 
 // openRelated pushes the issue, or pops when it is the pane directly beneath.

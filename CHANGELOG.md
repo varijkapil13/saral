@@ -18,6 +18,9 @@ such change is listed under **Changed**.
 - Open an issue's parent and linked issues from its pane: the parent, subtasks and links are rows
   on the sidebar cursor that `enter` or a click on the key opens, and `p` opens the parent.
 
+- An epic's pane lists its children with how many are done, and `c` opens them in a sheet where
+  `@`, `t` and `P` change a child's assignee, status or priority without opening it.
+
 ### Fixed
 
 - A plan read from the site that names boards instead of projects now lists the releases of the

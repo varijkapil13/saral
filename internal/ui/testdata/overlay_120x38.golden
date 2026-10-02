@@ -65,15 +65,15 @@ enter use this issue type    ↓/j  down         1-9          saved query       
                                                R            refetch everything
 
 issue
-tab next pane          @ assign             1-9          saved query           ctrl+k commands
-e   edit fields        p open the parent    g            where to go           ?      help
-E   open in $EDITOR    y copy the key       g 1-9        switch view           q      quit
-t   change status      Y copy the link      ctrl+, / g s settings
-C   comment            o open in browser    g i          jump to an issue
-                       L links              g /          search issues
-                       w log time           esc          back
-                       W watchers           r            refresh
-                                            R            refetch everything
+tab next pane          @ assign               1-9          saved query           ctrl+k commands
+e   edit fields        p open the parent      g            where to go           ?      help
+E   open in $EDITOR    c list the children    g 1-9        switch view           q      quit
+t   change status      y copy the key         ctrl+, / g s settings
+C   comment            Y copy the link        g i          jump to an issue
+                       o open in browser      g /          search issues
+                       L links                esc          back
+                       w log time             r            refresh
+                       W watchers             R            refetch everything
 
 list
 enter open                                     ↓/j  down         ctrl+d  half page down    y copy the key    ...
