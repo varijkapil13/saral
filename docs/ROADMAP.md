@@ -1916,6 +1916,25 @@ record of what was built, what was left and why.
   pane put `issue.ShareBindings` there. A right-click selects the row or card under the pointer first,
   so the entries act on the clicked issue. No footer changes: every row is byte-identical to 0.9.0.
 
+## Batch 12 — Full-text search
+
+Search the site for what an issue says, from the keyboard anywhere. A packet ticks its own box with
+its PR; the PR description is the record of what was built and what was left.
+
+- [x] **T1 — A text search clause and `~` in the fake** · [#191](https://github.com/varijkapil13/saral/pull/191) · **owns** `pkg/jira/{jql.go,jql_test.go}`, `pkg/jira/jiratest/{fake.go,fake_text_test.go}`, one row in `pkg/jira/jiratest/fake_test.go`, `docs/{API-NOTES,ROADMAP}.md`
+  `jira.QuoteJQL` and `jira.ParseText` turn what was typed into one JQL string literal that Jira reads
+  the same way every time; the fake reads `text`, `summary`, `description` and `comment` with `~`.
+
+- [x] **TK — `g /`, the search gesture** · [#189](https://github.com/varijkapil13/saral/pull/189) · **owns** `internal/ui/kernel/{kernel.go,keys.go,destinations.go}` and their tests and goldens, `internal/ui/testdata/overlay_*.golden`, `docs/{UX,PERFORMANCE,ROADMAP}.md`
+  A closed-table prefix gesture that opens the registered `search` view over whatever was on screen.
+
+- [ ] **T2 — The search view** · after T1 · **owns** `internal/ui/search/**`, one line in `internal/ui/views.go`, a row each in `internal/ui/{keys,livekeys}_test.go`; append-only `docs/{UX,PERFORMANCE,ARCHITECTURE,ROADMAP}.md`, `CHANGELOG.md`
+  Words from a summary, description or comment, across every project or just the session's, with an
+  exact key pinned first and `L` handing the search to the issue list.
+
+- [ ] **T3 — The palette offers a site search** · after T2 · **owns** `internal/ui/palette/**`, `docs/{UX,ROADMAP}.md`, `CHANGELOG.md`
+  Under whatever the palette found in the cache, one more row opens the search view with what was typed.
+
 ## Later, deliberately not now
 
 - **Confluence.** Arrives as `pkg/confluence` behind its own port. Note that Confluence storage

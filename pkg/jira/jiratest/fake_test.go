@@ -201,7 +201,8 @@ func TestSearch_RefusesJQLItCannotParseRatherThanMatchingEverything(t *testing.T
 		name string
 		jql  string
 	}{
-		{"an operator the fake does not implement", `summary ~ "login"`},
+		{"an operator the fake does not implement", `summary !~ "login"`},
+		{"a field ~ does not search", `environment ~ "x"`},
 		{"a field the fake does not index", `sprint = 4`},
 		{"a function call as a value", `created >= -7d`},
 		{"an OR", `project = PROJ OR project = OTHER`},

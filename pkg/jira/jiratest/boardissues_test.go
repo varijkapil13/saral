@@ -538,7 +538,7 @@ func TestBoardIssues_RefuseAQuickFilterThisFakeCannotEvaluate(t *testing.T) {
 	c := fakeNewWithIssues(t, 4)
 	board := fakeBoard(t, c)
 	_, err := c.BoardIssues(t.Context(), board.ID, jira.BoardQuery{
-		Fields: fakeNarrow, QuickFilters: []string{"text ~ \"urgent\""},
+		Fields: fakeNarrow, QuickFilters: []string{"environment ~ \"urgent\""},
 	})
 	var invalid *jira.ValidationError
 	if !errors.As(err, &invalid) {
