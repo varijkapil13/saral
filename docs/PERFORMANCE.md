@@ -292,8 +292,10 @@ The work is spread so the job takes minutes rather than a quarter of an hour:
 - **Four `bench` shards**, each handed a slice of the packages by `benchgate.py --shard I/N`: every
   package holding a `func Benchmark` is assigned greedily, largest cost first (six per guarded
   benchmark, one per other, plus a measured hint for `internal/app`, whose unguarded
-  `PutBoard_At5kIssues` alone takes 26 s). A new package lands in a shard with no list to edit. Each
-  shard uploads its `head.txt` and `base.txt`.
+  `PutBoard_At5kIssues` alone takes 26 s). A new package lands in a shard with no list to edit. The slice is computed once from
+  the branch and both trees run it, the base skipping a package it does not have: computed per tree, a
+  change in the costs moved a package to another shard in one tree only, and `benchstat` then found two
+  CPU models for it and compared nothing. Each shard uploads its `head.txt` and `base.txt`.
 - **Guarded benchmarks run `-count=6`, the rest `-count=1`.** `benchgate.py --list-guarded PKG`
   prints the anchored `-bench` regex of the benchmarks a guard reads; the shard runs those six times
   and everything else once with `-skip` of the same regex. A one-sample row has no significance test,
