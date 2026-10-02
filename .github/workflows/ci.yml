@@ -183,9 +183,15 @@ jobs:
 
   # Regression detection against the base commit. The ceilings in the budgets job
   # catch a step past a number; this catches a slide that stays under one.
-  regressions:
+  bench:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["0/4", "1/4", "2/4", "3/4"]
+    env:
+      SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # A dot directory, so every tree walker in the repo already skips it.
@@ -198,19 +204,23 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      # In this order: a gate that has never been seen to fail proves nothing green.
-      - name: the gate catches what it claims to
-        run: python3 scripts/benchgate_test.py
-      - name: install benchstat
-        run: go install golang.org/x/perf/cmd/benchstat@${{ env.BENCHSTAT_VERSION }}
       - name: warm the caches of both trees while the network is still there
         run: |
-          go test -count=1 -run '^$' ./...
-          (cd .base && go test -count=1 -run '^$' ./...)
-      # Both sides on one runner minutes apart, so nothing is stored to go stale.
+          root=$PWD
+          warm() {
+            pkgs=$(python3 "$root/scripts/benchgate.py" --root "$1" --shard "$SHARD")
+            [ -z "$pkgs" ] || (cd "$1" && go test -count=1 -run '^$' $pkgs)
+          }
+          warm . &
+          head=$!
+          warm .base &
+          base=$!
+          wait $head
+          wait $base
+      # Both trees at once on one runner, so nothing is stored to go stale.
       - name: benchmark both trees, without the detector and on a loopback-only network
         run: |
-          sudo env "PATH=$PATH" "HOME=$HOME" \
+          sudo env "PATH=$PATH" "HOME=$HOME" "SHARD=$SHARD" \
             "GOCACHE=$(go env GOCACHE)" "GOMODCACHE=$(go env GOMODCACHE)" \
             GOPROXY=off GOTOOLCHAIN=local \
             unshare -n -- sh -euc '
@@ -221,23 +231,71 @@ jobs:
                 echo "::error::a request left the namespace, so this check proves nothing"
                 exit 1
               fi
+              root=$PWD
               mkdir -p .bench
-              go test -run "^$" -bench . -benchmem -benchtime=100x -count=6 ./... > .bench/head.txt
-              (cd .base && go test -run "^$" -bench . -benchmem -benchtime=100x -count=6 ./...) > .bench/base.txt
+              bench() {
+                : > "$2"
+                for pkg in $(python3 "$root/scripts/benchgate.py" --root "$1" --shard "$SHARD"); do
+                  guarded=$(python3 "$root/scripts/benchgate.py" --root "$root" --list-guarded "$pkg")
+                  if [ -n "$guarded" ]; then
+                    (cd "$1" && go test -run "^$" -bench "$guarded" -benchmem -benchtime=100x -count=6 "$pkg") >> "$2"
+                    (cd "$1" && go test -run "^$" -bench . -skip "$guarded" -benchmem -benchtime=100x -count=1 "$pkg") >> "$2"
+                  else
+                    (cd "$1" && go test -run "^$" -bench . -benchmem -benchtime=100x -count=1 "$pkg") >> "$2"
+                  fi
+                done
+              }
+              bench . "$root/.bench/head.txt" &
+              head=$!
+              bench .base "$root/.bench/base.txt" &
+              base=$!
+              wait $head
+              wait $base
             '
-      # .bench too: the benchmarks ran under sudo, so the directory and both
-      # results belong to root and the comparison below cannot write beside them.
+      # .bench too: root owns the results after the sudo run.
       - name: give the caches and the results back to the runner
         if: always()
         run: sudo chown -R "$(id -u):$(id -g)" "$(go env GOCACHE)" "$(go env GOMODCACHE)" .bench
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bench-shard-${{ strategy.job-index }}
+          path: |
+            .bench/head.txt
+            .bench/base.txt
+          if-no-files-found: error
+
+  regressions:
+    if: github.event_name == 'pull_request' && !cancelled()
+    needs: bench
+    runs-on: ubuntu-latest
+    steps:
+      - name: every shard finished
+        run: |
+          [ "${{ needs.bench.result }}" = success ] || { echo "::error::a benchmark shard did not finish, so the comparison is incomplete"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      # In this order: a gate that has never been seen to fail proves nothing green.
+      - name: the gate catches what it claims to
+        run: python3 scripts/benchgate_test.py
+      - name: install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@${{ env.BENCHSTAT_VERSION }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: bench-shard-*
+          path: .bench/shards
       - name: nothing budgeted allocates more than it did on the base commit
         run: |
-          benchstat -format csv .bench/base.txt .bench/head.txt > .bench/cmp.csv
+          cat .bench/shards/*/head.txt > .bench/head.txt
+          cat .bench/shards/*/base.txt > .bench/base.txt
+          benchstat -format csv .bench/base.txt .bench/head.txt > .bench/cmp.csv 2> .bench/benchstat.err || { cat .bench/benchstat.err; exit 1; }
           {
             echo '<details><summary>benchstat, base against branch</summary>'
             echo
             echo '```'
-            benchstat .bench/base.txt .bench/head.txt || true
+            benchstat .bench/base.txt .bench/head.txt 2> /dev/null || true
             echo '```'
             echo '</details>'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -215,6 +215,77 @@ class TestAPackageOnlyOneTreeHas(Gate):
         self.assertIn("reported no allocs/op on this branch", out)
 
 
+BENCHES = "package view\n\nfunc BenchmarkScroll(b *testing.B) {}\nfunc BenchmarkScroll20(b *testing.B) {}\nfunc BenchmarkOther(b *testing.B) {}\n"
+
+
+class TestSharding(Gate):
+    def add_package(self, rel, body=BENCHES):
+        where = os.path.join(self.dir, *[p for p in rel.split("/") if p != "."])
+        os.makedirs(where, exist_ok=True)
+        with open(os.path.join(where, "x_bench_test.go"), "w") as f:
+            f.write(body)
+
+    def main(self, *argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = benchgate.main(["--root", self.dir] + list(argv))
+        return code, out.getvalue()
+
+    def test_list_guarded_is_an_anchored_regex_of_the_guarded_benchmarks_only(self):
+        self.add_package("internal/view")
+        for pkg in ("internal/view", "./internal/view", self.pkg):
+            code, out = self.main("--list-guarded", pkg)
+            self.assertEqual(code, 0)
+            self.assertEqual(out.strip(), "^(BenchmarkScroll|BenchmarkScroll20)$")
+
+    def test_list_guarded_is_empty_for_a_package_without_guards(self):
+        self.add_package("internal/plain")
+        self.assertEqual(self.main("--list-guarded", "internal/plain"), (0, ""))
+        self.assertEqual(self.main("--list-guarded", "internal/missing"), (0, ""))
+
+    def test_list_guarded_ignores_a_guard_in_another_package(self):
+        self.add_package("internal/other")
+        self.assertEqual(self.main("--list-guarded", "internal/other"), (0, ""))
+
+    def test_every_package_with_benchmarks_lands_in_exactly_one_shard(self):
+        pkgs = ["internal/view"] + ["internal/p%d" % i for i in range(9)] + ["."]
+        for rel in pkgs:
+            self.add_package(rel)
+        seen = []
+        for i in range(4):
+            seen += self.main("--shard", "%d/4" % i)[1].split()
+        self.assertEqual(sorted(seen), sorted(["./" + p if p != "." else "." for p in pkgs]))
+
+    def test_assignment_is_deterministic_and_a_new_package_is_picked_up(self):
+        self.add_package("internal/view")
+        before = self.main("--shard", "0/2")[1] + self.main("--shard", "1/2")[1]
+        self.assertEqual(before, self.main("--shard", "0/2")[1] + self.main("--shard", "1/2")[1])
+        self.add_package("internal/brandnew")
+        after = self.main("--shard", "0/2")[1] + self.main("--shard", "1/2")[1]
+        self.assertIn("./internal/brandnew", after)
+
+    def test_a_bad_shard_is_refused(self):
+        for bad in ("4/4", "x", "-1/2", "0/0"):
+            with self.assertRaises(SystemExit):
+                self.main("--shard", bad)
+
+    def test_a_package_with_benchmarks_that_no_shard_ran_fails_the_gate(self):
+        self.add_package("internal/view")
+        self.add_package("internal/orphan")
+        code, out = self.run_gate(self.both_scrolls())
+        self.assertEqual(code, 1)
+        self.assertIn(MODULE + "/internal/orphan holds benchmarks and contributed none", out)
+
+    def test_single_sample_rows_on_unguarded_benchmarks_trip_nothing(self):
+        self.add_package("internal/view")
+        n1 = steady("Other-4", "1000", "5000", "~", "n=1")
+        code, out = self.run_gate(self.both_scrolls(**{
+            "allocs/op": [steady("Scroll-4", "1", "1"), steady("Scroll20-4", "1", "1"), n1],
+            "B/op": [steady("Scroll-4", "6156", "6156"), steady("Scroll20-4", "6156", "6156"), n1],
+        }))
+        self.assertEqual(code, 0, out)
+
+
 class TestItReadsTheTree(Gate):
     def test_a_guard_reading_a_closure_leaves_the_package_watched(self):
         with open(os.path.join(self.dir, "internal", "view", "budget_test.go"), "w") as f:

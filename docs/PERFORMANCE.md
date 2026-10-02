@@ -278,9 +278,27 @@ is as visible as the list of what is:
 
 A ceiling with a tenth of headroom passes a path that got nine per cent worse, and passes it again
 next month. The `regressions` job in `ci.yml` is what notices: on every pull request it benchmarks
-the branch and the base commit on one runner, puts both through
+the branch and the base commit, puts both through
 [`benchstat`](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat), and fails the build on a budgeted
 path that allocates more than it did.
+
+The work is spread so the job takes minutes rather than a quarter of an hour:
+
+- **Both trees run at once**, inside one loopback-only namespace per shard. `allocs/op` and `B/op`
+  do not move with CPU contention, and `sec/op` is only reported.
+- **Four `bench` shards**, each handed a slice of the packages by `benchgate.py --shard I/N`: every
+  package holding a `func Benchmark` is assigned greedily, largest cost first (six per guarded
+  benchmark, one per other, plus a measured hint for `internal/app`, whose unguarded
+  `PutBoard_At5kIssues` alone takes 26 s). A new package lands in a shard with no list to edit. Each
+  shard uploads its `head.txt` and `base.txt`.
+- **Guarded benchmarks run `-count=6`, the rest `-count=1`.** `benchgate.py --list-guarded PKG`
+  prints the anchored `-bench` regex of the benchmarks a guard reads; the shard runs those six times
+  and everything else once with `-skip` of the same regex. A one-sample row has no significance test,
+  so an unguarded benchmark is reported and cannot trip anything.
+- **The `regressions` job** (it `needs` the shards, and fails if one did not finish) concatenates the
+  results and runs `benchstat` and `benchgate.py` once over the whole set, so "every guarded benchmark
+  reached the comparison" stays global. The gate also fails on any package holding benchmarks that
+  contributed no row, which is the check that the shards together covered everything.
 
 ### What it fails on
 
@@ -618,7 +636,18 @@ compared:
 ```sh
 go install golang.org/x/perf/cmd/benchstat@latest
 mkdir -p .bench
-bench() { go test -run '^$' -bench . -benchmem -benchtime=100x -count=6 ./... > ".bench/$1"; }
+bench() {
+  : > ".bench/$1"
+  for pkg in $(python3 scripts/benchgate.py --shard 0/1); do
+    g=$(python3 scripts/benchgate.py --list-guarded "$pkg")
+    if [ -n "$g" ]; then
+      go test -run '^$' -bench "$g" -benchmem -benchtime=100x -count=6 "$pkg" >> ".bench/$1"
+      go test -run '^$' -bench . -skip "$g" -benchmem -benchtime=100x -count=1 "$pkg" >> ".bench/$1"
+    else
+      go test -run '^$' -bench . -benchmem -benchtime=100x -count=1 "$pkg" >> ".bench/$1"
+    fi
+  done
+}
 git stash && bench base.txt && git stash pop && bench head.txt
 benchstat -format csv .bench/base.txt .bench/head.txt > .bench/cmp.csv
 python3 scripts/benchgate.py --csv .bench/cmp.csv --root .
