@@ -1928,7 +1928,7 @@ its PR; the PR description is the record of what was built and what was left.
 - [x] **TK — `g /`, the search gesture** · [#189](https://github.com/varijkapil13/saral/pull/189) · **owns** `internal/ui/kernel/{kernel.go,keys.go,destinations.go}` and their tests and goldens, `internal/ui/testdata/overlay_*.golden`, `docs/{UX,PERFORMANCE,ROADMAP}.md`
   A closed-table prefix gesture that opens the registered `search` view over whatever was on screen.
 
-- [ ] **T2 — The search view** · after T1 · **owns** `internal/ui/search/**`, one line in `internal/ui/views.go`, a row each in `internal/ui/{keys,livekeys}_test.go`; append-only `docs/{UX,PERFORMANCE,ARCHITECTURE,ROADMAP}.md`, `CHANGELOG.md`
+- [x] **T2 — The search view** · [#192](https://github.com/varijkapil13/saral/pull/192) · after T1 · **owns** `internal/ui/search/**`, one line in `internal/ui/views.go`, a row each in `internal/ui/{keys,livekeys}_test.go`; append-only `docs/{UX,PERFORMANCE,ARCHITECTURE,ROADMAP}.md`, `CHANGELOG.md`
   Words from a summary, description or comment, across every project or just the session's, with an
   exact key pinned first and `L` handing the search to the issue list.
 
