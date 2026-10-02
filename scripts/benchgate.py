@@ -98,7 +98,7 @@ def guarded_benchmarks(root, module):
 
 def parse(path):
     """The comparison rows benchstat wrote, one per benchmark per unit."""
-    rows, pkg, unit = [], "", None
+    rows, pkg, unit, head_only = [], "", None, False
     with open(path, newline="") as fh:
         for rec in csv.reader(fh):
             if not rec:
@@ -111,10 +111,17 @@ def parse(path):
             if len(rec) > 1 and rec[1] in GATED_UNITS + REPORTED_UNITS:
                 unit = rec[1]
                 continue
+            if unit is None and rec[0] == "" and len(rec) > 1:
+                # A package only one tree has is a section with one column, and
+                # the header says which tree: a row in it has no counterpart.
+                head_only = len(rec) < 4 and "head" in rec[1]
+                continue
             if unit is None or rec[0] in ("", "geomean"):
                 continue
             base = rec[1] if len(rec) > 1 else ""
             head = rec[3] if len(rec) > 3 else ""
+            if head_only and len(rec) < 4:
+                base, head = "", base
             delta = rec[5] if len(rec) > 5 else ""
             p = rec[6] if len(rec) > 6 else ""
             rows.append(Row(pkg, unit, rec[0], base, head, delta, p))

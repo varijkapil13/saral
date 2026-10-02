@@ -365,6 +365,11 @@ The gate can be quietly emptied in four ways, and each of them fails a build rat
 - **A budgeted benchmark stops reaching the comparison.** The gate reads the guard files itself, so
   the set it watches is derived and not written down. If a benchmark a guard names produced no row —
   its package failed to build on one side, or it was renamed — the gate fails and says which.
+- **A package only the branch has.** `benchstat` writes a package one tree lacks as a section with a
+  single column, headed by the file it came from, so a new view's guarded benchmarks have no
+  counterpart to be compared with. The gate reads that header, calls them *new on this branch* and
+  holds them from the next pull request on, once the base has them. Read as a base-only section they
+  would have failed as "reported no allocs/op on this branch".
 - **A package that holds budgets contributes nothing.** A whole package dropping out of the comparison
   is the shape that would let the job go green having measured nothing there, so it is a failure too.
 - **A guard is written against a closure.** `testing.Benchmark(func(b *testing.B){ ... })` has no name
