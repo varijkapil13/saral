@@ -446,6 +446,13 @@ lender, which does that in its own `Close`. `kernel.Push` is the ordinary case a
 built for the push, which the kernel then owns. `kernel.CloseView` is how a pane passes the news to a
 child view it holds.
 
+**`kernel.PopTo(id, title)` collapses the stack to the topmost entry with that ID and that exact
+Title** — the title it was pushed under, or the title beneath it when it was pushed with none. An entry
+that is not there changes nothing. It goes through the same checks as `Pop`, over every entry it would
+drop: a view above the target that is holding something is asked when it is on top and can ask, and
+refused otherwise, and the gesture is replayed when the ask is answered. Each dropped entry is
+discarded once, and a lent one is left to its lender.
+
 Which views owe the interface is not something the kernel can check — it may not import one — so
 `internal/ui/livekeys_test.go` holds the table: every view something pushes implements `Closer`, and
 every view nothing pushes is listed with the reason a discard never reaches it.

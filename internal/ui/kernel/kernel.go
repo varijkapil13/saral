@@ -310,6 +310,7 @@ type Option func(*Model)
 type heldGesture struct {
 	kind  gestureKind
 	open  OpenMsg
+	popTo PopToMsg
 	depth int
 }
 
@@ -318,6 +319,7 @@ type gestureKind uint8
 const (
 	gestureNone gestureKind = iota
 	gesturePop
+	gesturePopTo
 	gestureOpen
 	gestureQuit
 )
@@ -626,6 +628,9 @@ func (m Model) route(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case PopMsg:
 		return m.pop()
 
+	case PopToMsg:
+		return m.popTo(msg)
+
 	case OpenMsg:
 		return m.openThen(msg)
 
@@ -904,6 +909,8 @@ func (m Model) proceed() (tea.Model, tea.Cmd) {
 	switch g.kind {
 	case gesturePop:
 		return m.pop()
+	case gesturePopTo:
+		return m.popTo(g.popTo)
 	case gestureOpen:
 		return m.openThen(g.open)
 	case gestureQuit:
@@ -1223,6 +1230,30 @@ func (m Model) pop() (tea.Model, tea.Cmd) {
 	dropped := m.top()
 	m.stack = append([]stackEntry(nil), m.stack[:len(m.stack)-1]...)
 	discard(dropped)
+	m.status = ""
+	return m, tea.Batch(blurred, m.focus(), m.resizeAll())
+}
+
+func (m Model) popTo(msg PopToMsg) (tea.Model, tea.Cmd) {
+	at := -1
+	for i := len(m.stack) - 1; i >= 0; i-- {
+		if m.stack[i].spec.ID == msg.ID && m.stack[i].spec.Title == msg.Title {
+			at = i
+			break
+		}
+	}
+	if at < 0 || at == len(m.stack)-1 {
+		return m, nil
+	}
+	if blockAt, reason, blocked := m.blockingEntry(at + 1); blocked {
+		return m.askOrRefuse(blockAt, reason, heldGesture{kind: gesturePopTo, popTo: msg})
+	}
+	blurred := m.blur()
+	dropped := append([]stackEntry(nil), m.stack[at+1:]...)
+	m.stack = append([]stackEntry(nil), m.stack[:at+1]...)
+	for i := len(dropped) - 1; i >= 0; i-- {
+		discard(dropped[i])
+	}
 	m.status = ""
 	return m, tea.Batch(blurred, m.focus(), m.resizeAll())
 }
