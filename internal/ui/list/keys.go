@@ -7,7 +7,10 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
 )
 
-var _ kernel.KeyReporter = (*Model)(nil)
+var (
+	_ kernel.KeyReporter    = (*Model)(nil)
+	_ kernel.KeyStateLister = (*Model)(nil)
+)
 
 type keyMap struct {
 	Up       kernel.Binding
@@ -58,37 +61,39 @@ type keyMap struct {
 	SortCancel kernel.Binding
 }
 
+var allKeys = []string{"0"}
+
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:         kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:       kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		PageUp:     kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown:   kernel.Bind([]string{"pgdown", "ctrl+f", "space"}, "pgdn", "page down"),
-		HalfUp:     kernel.Bind([]string{"ctrl+u"}, "ctrl+u", "half page up"),
-		HalfDown:   kernel.Bind([]string{"ctrl+d"}, "ctrl+d", "half page down"),
-		Go:         kernel.Bind([]string{"g"}, "g", "go to"),
-		Top:        kernel.Bind([]string{"home"}, "g g", "first row"),
-		Bottom:     kernel.Bind([]string{"G", "end"}, "G / g e", "last row"),
-		Open:       kernel.Bind([]string{"enter"}, "enter", "open"),
-		Filter:     kernel.Bind([]string{"/"}, "/", "filter"),
-		FilterBy:   kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),
-		All:        kernel.Bind([]string{"a"}, "a", "all issues"),
-		Edit:       kernel.Bind([]string{"e"}, "e", "edit this search"),
-		Sort:       kernel.Bind([]string{"s"}, "s", "sort"),
-		Save:       kernel.Bind([]string{"S"}, "S", "save this query to a key"),
+		Up:         kernel.Canon(kernel.ActUp),
+		Down:       kernel.Canon(kernel.ActDown),
+		PageUp:     kernel.Canon(kernel.ActPageUp),
+		PageDown:   kernel.Canon(kernel.ActPageDown),
+		HalfUp:     kernel.Canon(kernel.ActHalfUp),
+		HalfDown:   kernel.Canon(kernel.ActHalfDown),
+		Go:         kernel.Canon(kernel.ActGo),
+		Top:        kernel.Canon(kernel.ActTop),
+		Bottom:     kernel.Canon(kernel.ActBottom),
+		Open:       kernel.Canon(kernel.ActOpen),
+		Filter:     kernel.Canon(kernel.ActFind, "filter"),
+		FilterBy:   kernel.Canon(kernel.ActFilter, "filter by a person, a status, a label"),
+		All:        kernel.Local("list", "all", allKeys, "0", "all issues"),
+		Edit:       kernel.Canon(kernel.ActEdit, "edit this search"),
+		Sort:       kernel.Canon(kernel.ActSort),
+		Save:       kernel.Canon(kernel.ActSave, "save this query to a key"),
 		Look:       card.Binding,
 		Accept:     kernel.Bind([]string{"enter"}, "enter", "keep filter"),
 		Clear:      kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "clear filter"),
-		Unfilter:   kernel.Bind([]string{"ctrl+g", "esc"}, "ctrl+g", "clear everything narrowing these rows"),
+		Unfilter:   kernel.Canon(kernel.ActClearFilters, "clear everything narrowing these rows"),
 		Run:        kernel.Bind([]string{"enter"}, "enter", "run this search"),
 		Keep:       kernel.Bind([]string{"esc", "ctrl+g"}, "esc", "keep the one on screen"),
 		Slot:       kernel.Bind(digits, "1-9", "the key to bind it to"),
 		Take:       kernel.Bind([]string{"y"}, "y", "take the key"),
 		Drop:       kernel.Bind([]string{"esc"}, "esc", "leave it alone"),
-		SortPrev:   kernel.Bind([]string{"left", "h"}, "←/h", "previous field"),
-		SortNext:   kernel.Bind([]string{"right", "l"}, "→/l", "next field"),
-		SortChoose: kernel.Bind([]string{"enter"}, "enter", "choose this order"),
-		SortCancel: kernel.Bind([]string{"esc"}, "esc", "leave the order as it is"),
+		SortPrev:   kernel.Canon(kernel.ActSortPrev),
+		SortNext:   kernel.Canon(kernel.ActSortNext),
+		SortChoose: kernel.Canon(kernel.ActSortChoose),
+		SortCancel: kernel.Canon(kernel.ActSortCancel),
 	}
 }
 
@@ -152,22 +157,27 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	// A prompt keeps its words: two answers to one question always fit, and what
 	// they are called is the whole point of asking.
 	sets[keysFiltering] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Accept, k.Clear},
 		Full: [][]kernel.Binding{{k.Accept, k.Clear}, {widget.KillLine}},
 	}
 	sets[keysPickingSlot] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Slot, k.Drop},
 		Full: [][]kernel.Binding{{k.Slot, k.Drop}},
 	}
 	sets[keysConfirmingSlot] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Take, k.Drop},
 		Full: [][]kernel.Binding{{k.Take, k.Drop}},
 	}
 	sets[keysAsking] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Run, k.Keep},
 		Full: [][]kernel.Binding{{k.Run, k.Keep}, {widget.KillLine}},
 	}
 	sets[keysSorting] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{
 			kernel.Terse(k.SortPrev, "prev"), kernel.Terse(k.SortNext, "next"), k.SortChoose, k.SortCancel,
 		},
@@ -175,6 +185,9 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	}
 	return sets
 }()
+
+// KeyStates is every set LiveKeys can report.
+func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }
 
 // LiveKeys reports the keys that work in the state the list is actually in. An
 // open filter answers enter and esc and nothing else; the prompt holding the
@@ -247,6 +260,7 @@ func (k keyMap) tables() (normal, filtering, asking, sorting map[string]action) 
 		binding{k.Sort, actSort}, binding{k.Save, actSave},
 		binding{k.Look, actLook},
 	)
+	normal["esc"] = actClear
 	filtering = table(binding{k.Accept, actAccept}, binding{k.Clear, actClear})
 	asking = table(binding{k.Run, actRun}, binding{k.Keep, actKeep})
 	sorting = table(

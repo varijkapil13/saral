@@ -28,11 +28,12 @@ func init() {
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
 	})
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "issues.filter-by",
-		Title: "Filter these issues by a person, a status or a label",
-		Group: "Search",
-		Kind:  kernel.KindSearch,
-		Keys:  []string{keys.FilterBy.Help().Key},
+		ID:     "issues.filter-by",
+		Action: kernel.ActFilter,
+		Title:  "Filter these issues by a person, a status or a label",
+		Group:  "Search",
+		Kind:   kernel.KindSearch,
+		Keys:   []string{keys.FilterBy.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
 			return kernel.OpenThen(ViewID, OpenFilterMsg{})
 		},
@@ -48,11 +49,12 @@ func init() {
 		},
 	})
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "issues.sort",
-		Title: "Sort these issues",
-		Group: "Search",
-		Kind:  kernel.KindSearch,
-		Keys:  []string{keys.Sort.Help().Key},
+		ID:     "issues.sort",
+		Action: kernel.ActSort,
+		Title:  "Sort these issues",
+		Group:  "Search",
+		Kind:   kernel.KindSearch,
+		Keys:   []string{keys.Sort.Help().Key},
 		Run: func(kernel.Deps) tea.Cmd {
 			return kernel.OpenThen(ViewID, SortMsg{})
 		},
@@ -70,10 +72,11 @@ func init() {
 	// No Keys: kernel.KeysFor holds a view's resting keys, and the stroke that
 	// clears a filter is shown only by the state that has one to clear.
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "issues.clear-filter",
-		Title: "Clear the filter on these rows",
-		Group: "Search",
-		Kind:  kernel.KindSearch,
+		ID:     "issues.clear-filter",
+		Action: kernel.ActClearFilters,
+		Title:  "Clear the filter on these rows",
+		Group:  "Search",
+		Kind:   kernel.KindSearch,
 		Run: func(kernel.Deps) tea.Cmd {
 			return kernel.OpenThen(ViewID, ClearFilterMsg{})
 		},
@@ -104,13 +107,15 @@ func init() {
 	// The searches themselves. Each is composed against the project the session
 	// is on at the moment it runs, and titled after what it is about to show.
 	bound := map[string][]string{everyIssue.id: {keys.All.Help().Key}}
+	acted := map[string]kernel.Action{myIssues.id: kernel.ActMine}
 	for _, s := range searches {
 		kernel.RegisterCommand(kernel.Command{
-			ID:    s.id,
-			Title: s.palette(),
-			Group: "Search",
-			Kind:  kernel.KindSearch,
-			Keys:  bound[s.id],
+			ID:     s.id,
+			Action: acted[s.id],
+			Title:  s.palette(),
+			Group:  "Search",
+			Kind:   kernel.KindSearch,
+			Keys:   bound[s.id],
 			Run: func(d kernel.Deps) tea.Cmd {
 				jql, title := s.at(d.Project)
 				return kernel.OpenThen(ViewID, QueryMsg{JQL: jql, Title: title})

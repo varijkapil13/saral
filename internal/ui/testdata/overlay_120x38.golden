@@ -76,14 +76,14 @@ C   comment            Y copy the link        g i          jump to an issue
                        W watchers             R            refetch everything
 
 list
-enter open                                     ↓/j  down         ctrl+d  half page down    y copy the key    ...
-f     filter by a person, a status, a label    ↑/k  up           ctrl+u  half page up      Y copy the link
-/     filter                                   pgdn page down    g g     first row         o open in browser
-a     all issues                               pgup page up      G / g e last row
-e     edit this search
-s     sort
-S     save this query to a key
-V     roomy / compact / lines
+enter  open                                     ↓/j  down         ctrl+d  half page down    y copy the key    ...
+f      filter by a person, a status, a label    ↑/k  up           ctrl+u  half page up      Y copy the link
+/      filter                                   pgdn page down    g g     first row         o open in browser
+0      all issues                               pgup page up      G / g e last row
+e      edit this search
+s      sort
+ctrl+s save this query to a key
+V      roomy / compact / lines
 
 move
 enter use the project under the cursor    ↓/j  down         1-9          saved query           ctrl+k commands

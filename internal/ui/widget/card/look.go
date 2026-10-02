@@ -85,7 +85,7 @@ func Parse(s string) Look {
 type LookMsg struct{ Look Look }
 
 // Binding is the key that cycles the look.
-var Binding = kernel.Bind([]string{"V"}, "V", "roomy / compact / lines")
+var Binding = kernel.Canon(kernel.ActLook, "roomy / compact / lines")
 
 // RoomyFields are what a roomy card draws beyond a row's own fields. A view
 // adds them to its search only while the look is Roomy.

@@ -163,7 +163,7 @@ func TestPoller_WaitsRatherThanMovingRowsUnderAHalfFinishedGesture(t *testing.T)
 		start func()
 	}{
 		{name: "a filter being typed into", start: func() { dr.key("/") }},
-		{name: "a number key being picked", start: func() { dr.key("S") }},
+		{name: "a number key being picked", start: func() { dr.key("ctrl+s") }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dr.m.pollArmed = false
