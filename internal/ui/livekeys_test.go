@@ -20,6 +20,7 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/onboarding"
 	"github.com/varijkapil13/saral/internal/ui/plan"
 	"github.com/varijkapil13/saral/internal/ui/release"
+	"github.com/varijkapil13/saral/internal/ui/search"
 	"github.com/varijkapil13/saral/internal/ui/settings"
 	"github.com/varijkapil13/saral/internal/ui/sprint"
 	"github.com/varijkapil13/saral/internal/ui/timeline"
@@ -64,6 +65,7 @@ var keyReporters = map[string]func(kernel.Deps) kernel.View{
 	release.ViewID:     release.New,
 	release.FlowViewID: newFlow,
 	release.BulkViewID: newBulk,
+	search.ViewID:      search.NewView,
 	sprint.ViewID:      sprint.New,
 	timeline.ViewID:    timeline.New,
 }
@@ -238,6 +240,7 @@ var closers = map[string]func(kernel.Deps) kernel.View{
 	release.FlowViewID: newFlow,
 	// The assignment screen is pushed by the versions list with the version.
 	release.BulkViewID: newBulk,
+	search.ViewID:      search.NewView,
 	// Both of these hold a footer slot, so nothing pushes them and neither Close is
 	// ever called; they are here because withdrawing the method is theirs to do.
 	board.ViewID: board.New,
@@ -358,6 +361,7 @@ var answerable = map[string]func(kernel.Deps) kernel.View{
 	release.FlowViewID: newFlow,
 	// The assignment screen asks for the query's matches and sends the chunks.
 	release.BulkViewID: newBulk,
+	search.ViewID:      search.NewView,
 	sprint.ViewID:      sprint.New,
 	timeline.ViewID:    timeline.New,
 }

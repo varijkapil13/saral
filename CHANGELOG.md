@@ -7,6 +7,13 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+### Added
+
+- `g /` searches every project's issues by what they say: summary, description and comments, with
+  `tab` to narrow to the session's project. An exact key is listed first, `L` sends the search to
+  the issue list, and the words you typed are painted in the summaries. The command palette has it
+  too, as *Search issues on the site*.
+
 ### Fixed
 
 - A plan read from the site that names boards instead of projects now lists the releases of the

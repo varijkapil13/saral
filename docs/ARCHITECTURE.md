@@ -19,7 +19,7 @@ Three constraints drive every decision below:
 ├─────────────────────────────────────────────────────────────┤
 │  internal/ui          Bubble Tea models — one per view      │
 │    kernel/            root model, view stack, registries    │
-│    board/ issue/ ...  self-contained views, fifteen of them │
+│    board/ issue/ ...  self-contained views, sixteen of them │
 │    widget/            zones, click timing, drag, scrolling  │
 │    richtext/          ADF to styled lines, memoized         │
 ├─────────────────────────────────────────────────────────────┤
@@ -672,6 +672,11 @@ the release.
 have gone stale from a write made in the detail pane itself, for skipping the fetch to be worth the
 next keystroke landing on data nobody re-checked — so it always asks again once it is on screen, and
 what the cache buys it is the frame before that answer, not a skipped round trip.
+`internal/ui/search` follows none of it, on purpose. A text search is asked of the site at the pace
+someone types, the answer is a ranking the site computed and not a window onto a query that will be
+asked again, and a stored copy of "what the site said when you typed `login`" is a result nobody can
+tell is stale. Its results are never `PutRows`'d, and the one thing it remembers between runs is the
+words and the scope, through `kernel.Memory`.
 
 The board is read a page at a time (100 cards), so step 3 needs more than a patch there. A walk that
 starts from nothing on screen (a first visit or a board switch with no snapshot, a sprint switch)

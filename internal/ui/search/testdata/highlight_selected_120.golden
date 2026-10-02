@@ -1,0 +1,4 @@
+row 0, selected:
+<ESC>[38;2;240;246;252;48;2;31;111;235m▸ ○  PROJ-1   <ESC>[m<ESC>[1;4;38;2;240;246;252;48;2;31;111;235;4mLogin<ESC>[m<ESC>[38;2;240;246;252;48;2;31;111;235m timeout after a minute                                          ○ To Do         Ada Lovelace      2h<ESC>[m
+row 1, not selected:
+  ○  <ESC>[38;2;121;192;255mOTHER-7<ESC>[m  <ESC>[1;38;2;121;192;255mLogin<ESC>[m redirect loop                                                   <ESC>[38;2;63;185;80m● Shipped     <ESC>[m  unassigned      <ESC>[38;2;139;148;158m  3h<ESC>[m

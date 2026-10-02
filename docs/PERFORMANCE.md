@@ -20,13 +20,13 @@ getting thirty per cent worse with room to spare.
 |---|---|---|
 | Cold start → first paint (no cache) | **< 250 ms** | `ci.yml`, best of five `saral --bench-first-paint` runs against an empty cache directory |
 | Cold start → first paint (warm cache) | < 60 ms | *measured, not guarded.* `hyperfine` on `saral --bench-first-paint`. Warming the cache needs a site, so CI cannot; the in-process half is `TestBudget_FirstPaintFromCache` |
-| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the timeline, the palette, the form, settings and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, and the regression gate reads the same means, so p99 is still unmeasured here and stays on the list below |
+| Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the timeline, the palette, the form, settings, the site search and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, and the regression gate reads the same means, so p99 is still unmeasured here and stays on the list below |
 | Scroll a 10k-row list | 1 allocation a frame | the frame string `View` returns, and nothing behind it. Asserted with the mouse on, under a kept filter and under terms in force |
-| Scroll any other list | the frame and the lines the keystroke changed | every view that scrolls asserts `allocs/op` against a ceiling and against the same view at twenty rows: the backlog, the board, the comment thread, the attachment pane, the filter picker, the form, the move confirm screen, the palette, plans, releases, the fix-version assignment preview, sprints and the timeline |
+| Scroll any other list | the frame and the lines the keystroke changed | every view that scrolls asserts `allocs/op` against a ceiling and against the same view at twenty rows: the backlog, the board, the comment thread, the attachment pane, the filter picker, the form, the move confirm screen, the palette, plans, releases, the fix-version assignment preview, sprints, the timeline and the site search (two hundred results against twenty) |
 | Pan a chart across a thousand years of calendar | the allocations and the bytes that ten years costs, and **< 16 ms** a frame over either span | the timeline is the one view that scrolls in two dimensions. `TestBudget_TimelinePanningCostsTheSameOverAThousandYearsAsOverTen` compares the two runs on the counts and the bytes, holds the count to a ceiling of 1700 besides, and holds each frame's time against the budget rather than against the other run |
 | Frame allocations at 200×60 | ceilings in `internal/ui/kernel/budget_test.go` | 297 for a frame, 310 for a keystroke and its frame, 324 with the mouse on, each held to a ceiling about a tenth above |
 | An overlay over the same frame | ceilings in the same table | 629 for the `?` overlay, 800 for the right-click menu, 1628 for the destinations behind a latched `g`. None is a steady state — nothing repaints one until the next key — and each has a benchmark of its own, so a number here is one the table checks. The destinations box measured 1120 while it listed only the view slots; the gestures the prefix completes on its own — `g i`, `g /` and `g s` — are three more rows and a wider title column, and every row of the box pays that width |
-| Full redraw at 200×60 | < 4 ms | asserted in list, issue, comment, filter, the timeline, the form and the kernel chrome |
+| Full redraw at 200×60 | < 4 ms | asserted in list, issue, comment, filter, the timeline, the form, the site search and the kernel chrome |
 | RSS with 10k issues cached | < 60 MB | *measured, not guarded.* Nothing reads the number. The regression gate compares `B/op`, which is allocation and not residency, so it is not this |
 | Stripped binary | **< 16 MiB** | `ci.yml`'s size step |
 | Cache read for a view's first paint | < 5 ms | `BenchmarkCacheReadFirstPaint` |
@@ -224,6 +224,11 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/richtext` | `TestBudget_Render` |
 | `internal/ui/richtext` | `TestBudget_ScalesWithTheDocument` |
 | `internal/ui/richtext` | `TestBudget_Summary` |
+| `internal/ui/search` | `TestBudget_SearchAMemoMissCostsOneRowAndNotAWindow` |
+| `internal/ui/search` | `TestBudget_SearchFullRedrawAt200x60` |
+| `internal/ui/search` | `TestBudget_SearchKeystrokeToFrame` |
+| `internal/ui/search` | `TestBudget_SearchRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
+| `internal/ui/search` | `TestBudget_SearchScrollingCostsTheSameOnTwoHundredRowsAsOnTwenty` |
 | `internal/ui/settings` | `TestBudget_SettingsKeystrokeToFrame` |
 | `internal/ui/settings` | `TestBudget_SettingsRowRenderCostsWhatAMemoMissPays` |
 | `internal/ui/settings` | `TestBudget_SettingsRowsAreMemoizedSoAFrameCostsNothingToRedraw` |
@@ -360,6 +365,11 @@ The gate can be quietly emptied in four ways, and each of them fails a build rat
 - **A budgeted benchmark stops reaching the comparison.** The gate reads the guard files itself, so
   the set it watches is derived and not written down. If a benchmark a guard names produced no row —
   its package failed to build on one side, or it was renamed — the gate fails and says which.
+- **A package only the branch has.** `benchstat` writes a package one tree lacks as a section with a
+  single column, headed by the file it came from, so a new view's guarded benchmarks have no
+  counterpart to be compared with. The gate reads that header, calls them *new on this branch* and
+  holds them from the next pull request on, once the base has them. Read as a base-only section they
+  would have failed as "reported no allocs/op on this branch".
 - **A package that holds budgets contributes nothing.** A whole package dropping out of the comparison
   is the shape that would let the job go green having measured nothing there, so it is a failure too.
 - **A guard is written against a closure.** `testing.Benchmark(func(b *testing.B){ ... })` has no name

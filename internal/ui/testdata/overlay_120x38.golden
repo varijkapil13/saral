@@ -4,6 +4,7 @@ g            where to go           ?      help
 g 1-9        switch view           q      quit
 ctrl+, / g s settings
 g i          jump to an issue
+g /          search issues
 esc          back
 r            refresh
 R            refetch everything
@@ -36,7 +37,8 @@ e edit this one      ↑/k  up           ctrl+u  half page up      g            
 d delete this one    pgdn page down    g g     oldest            g 1-9        switch view           q      quit
                      pgup page up      G / g e newest            ctrl+, / g s settings
                                        ←/h     pan left          g i          jump to an issue
-                                       →/l     pan right         esc          back
+                                       →/l     pan right         g /          search issues
+                                                                 esc          back
                                                                  r            refresh
                                                                  R            refetch everything
 
@@ -46,7 +48,8 @@ enter choose what to filter by    ↓/j  down         1-9          saved query  
                                   pgdn page down    g 1-9        switch view           q      quit
                                   pgup page up      ctrl+, / g s settings
                                   home first row    g i          jump to an issue
-                                  end  last row     esc          back
+                                  end  last row     g /          search issues
+                                                    esc          back
                                                     r            refresh
                                                     R            refetch everything
 
@@ -56,6 +59,7 @@ enter use this issue type    ↓/j  down         1-9          saved query       
                              home first row    g 1-9        switch view           q      quit
                              end  last row     ctrl+, / g s settings
                                                g i          jump to an issue
+                                               g /          search issues
                                                esc          back
                                                r            refresh
                                                R            refetch everything
@@ -66,8 +70,9 @@ e   edit fields        y copy the key       g            where to go           ?
 E   open in $EDITOR    Y copy the link      g 1-9        switch view           q      quit
 t   change status      o open in browser    ctrl+, / g s settings
 C   comment            L links              g i          jump to an issue
-                       w log time           esc          back
-                       W watchers           r            refresh
+                       w log time           g /          search issues
+                       W watchers           esc          back
+                                            r            refresh
                                             R            refetch everything
 
 list
@@ -86,7 +91,8 @@ i     type a project key                  ↑/k  up           g            where
                                           pgdn page down    g 1-9        switch view           q      quit
                                           pgup page up      ctrl+, / g s settings
                                           home first row    g i          jump to an issue
-                                          end  last row     esc          back
+                                          end  last row     g /          search issues
+                                                            esc          back
                                                             r            refresh
                                                             R            refetch everything
 
@@ -96,7 +102,8 @@ enter show what this plan is made of    ↓/j  down          1-9          saved 
                                         pgdn page down     g 1-9        switch view           q      quit
                                         pgup page up       ctrl+, / g s settings
                                         home first plan    g i          jump to an issue
-                                        end  last plan     esc          back
+                                        end  last plan     g /          search issues
+                                                           esc          back
                                                            r            refresh
                                                            R            refetch everything
 
@@ -106,6 +113,7 @@ enter choose what happens to the open issues    ↓/j down    1-9          saved
                                                             g 1-9        switch view           q      quit
                                                             ctrl+, / g s settings
                                                             g i          jump to an issue
+                                                            g /          search issues
                                                             esc          back
                                                             r            refresh
                                                             R            refetch everything
@@ -116,8 +124,9 @@ n     new version                         ↑/k  up               g            w
 e     edit this version                   pgdn page down        g 1-9        switch view           q      quit
 A     archive or unarchive it             pgup page up          ctrl+, / g s settings
 b     put it on issues, or take it off    g g  first version    g i          jump to an issue
-s     sort the versions                   G    last version     esc          back
-f     filter by state                                           r            refresh
+s     sort the versions                   G    last version     g /          search issues
+f     filter by state                                           esc          back
+                                                                r            refresh
                                                                 R            refetch everything
 
 settings
@@ -126,6 +135,7 @@ enter apply, open or run    ↓ move      1-9          saved query           ctr
                             ← change    g 1-9        switch view           q      quit
                             → change    ctrl+, / g s settings
                                         g i          jump to an issue
+                                        g /          search issues
                                         esc          back
                                         r            refresh
                                         R            refetch everything
@@ -136,6 +146,7 @@ o show or hide closed sprints    1-9          saved query           ctrl+k comma
                                  g 1-9        switch view           q      quit
                                  ctrl+, / g s settings
                                  g i          jump to an issue
+                                 g /          search issues
                                  esc          back
                                  r            refresh
                                  R            refetch everything
@@ -146,6 +157,7 @@ n where these dates came from    1-9          saved query           ctrl+k comma
                                  g 1-9        switch view           q      quit
                                  ctrl+, / g s settings
                                  g i          jump to an issue
+                                 g /          search issues
                                  esc          back
                                  r            refresh
                                  R            refetch everything

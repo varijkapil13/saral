@@ -191,6 +191,30 @@ class TestItStaysQuiet(Gate):
         self.assertIn("new on this branch", out)
 
 
+class TestAPackageOnlyOneTreeHas(Gate):
+    def one_sided(self, label, rows):
+        out = ["goos: linux", "goarch: amd64", "pkg: %s" % self.pkg, "cpu: fake"]
+        for unit in ("allocs/op", "B/op"):
+            out.extend([",%s,", ",%s,CI" % unit])
+            out[-2] = ",%s," % label
+            out.extend(rows)
+            out.extend(["geomean,1,", ""])
+        return "\n".join(out) + "\n"
+
+    def test_a_package_the_branch_introduced(self):
+        # benchstat writes a package present on one side only as one column, so a
+        # new view's guarded benchmarks arrive with no counterpart to compare to.
+        code, out = self.run_gate(self.one_sided("head.txt", ["Scroll-4,1,0%", "Scroll20-4,1,0%"]))
+        self.assertEqual(code, 0, out)
+        self.assertIn("new on this branch", out)
+        self.assertNotIn("::error::", out)
+
+    def test_a_package_the_branch_removed_is_still_a_package_that_stopped_being_watched(self):
+        code, out = self.run_gate(self.one_sided("base.txt", ["Scroll-4,1,0%", "Scroll20-4,1,0%"]))
+        self.assertEqual(code, 1, out)
+        self.assertIn("reported no allocs/op on this branch", out)
+
+
 class TestItReadsTheTree(Gate):
     def test_a_guard_reading_a_closure_leaves_the_package_watched(self):
         with open(os.path.join(self.dir, "internal", "view", "budget_test.go"), "w") as f:
