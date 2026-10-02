@@ -42,6 +42,9 @@ const SetupViewID = "onboarding"
 // anything answers to it.
 const SettingsViewID = "settings"
 
+// SearchViewID is the view the issue search registers itself as.
+const SearchViewID = "search"
+
 // KeyCapturer is the optional interface a view implements while it is taking
 // typing — a filter, a form field, the command palette. While it says yes, every
 // key except ctrl+c goes to it untouched, because a view that cannot receive the
@@ -1126,13 +1129,17 @@ func (m Model) openPalette() (tea.Model, tea.Cmd) {
 //
 // It is built through the registry for the reason openPalette is: the kernel
 // may not import a view package.
-func (m Model) openSettings() (tea.Model, tea.Cmd) {
-	if len(m.stack) > 0 && m.top().spec.ID == SettingsViewID {
+func (m Model) openSettings() (tea.Model, tea.Cmd) { return m.openOver(SettingsViewID) }
+
+func (m Model) openSearch() (tea.Model, tea.Cmd) { return m.openOver(SearchViewID) }
+
+func (m Model) openOver(id string) (tea.Model, tea.Cmd) {
+	if len(m.stack) > 0 && m.top().spec.ID == id {
 		return m, nil
 	}
-	spec, ok := LookupView(SettingsViewID)
+	spec, ok := LookupView(id)
 	if !ok {
-		m.status, m.statusLevel = fmt.Sprintf("%s is not available in this build", SettingsViewID), LevelWarn
+		m.status, m.statusLevel = fmt.Sprintf("%s is not available in this build", id), LevelWarn
 		return m, nil
 	}
 	if !m.available(spec) {
@@ -2055,7 +2062,11 @@ func (m Model) liveGlobals() KeySet {
 	if _, ok := LookupView(SettingsViewID); ok {
 		col = append(col, g.Settings)
 	}
-	col = append(col, g.Jump, g.Back, g.Refresh, g.Purge)
+	col = append(col, g.Jump)
+	if _, ok := LookupView(SearchViewID); ok {
+		col = append(col, g.Search)
+	}
+	col = append(col, g.Back, g.Refresh, g.Purge)
 	set.Full = [][]Binding{col, {g.Palette, g.Help, g.Quit}}
 	if len(bound) > 0 {
 		set.Full = append([][]Binding{bound}, set.Full...)

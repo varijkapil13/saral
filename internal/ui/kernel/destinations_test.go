@@ -718,6 +718,12 @@ func TestDestinations_Golden(t *testing.T) {
 	}
 }
 
+func TestDestinations_ListGSlash(t *testing.T) {
+	m := prefixModel(t)
+	m, _ = press(m, "g")
+	golden(t, "destinations_g_slash_120x38.golden", ansi.Strip(m.Frame()))
+}
+
 // BenchmarkFrameWithTheDestinationsUp is the frame drawn while the gesture is
 // waiting. It is not a steady state — nothing repaints it until the next key —
 // but it is a frame, and a ceiling on it is what says so out loud.
@@ -738,6 +744,9 @@ func BenchmarkFrameWithTheDestinationsUp(b *testing.B) {
 	}})
 	RegisterView(ViewSpec{ID: SettingsViewID, Title: "Settings", New: func(Deps) View {
 		return &stubView{id: SettingsViewID}
+	}})
+	RegisterView(ViewSpec{ID: SearchViewID, Title: "Search", New: func(Deps) View {
+		return &stubView{id: SearchViewID}
 	}})
 
 	m, err := New(testDeps(), WithSize(200, 60), WithMouse(false))
