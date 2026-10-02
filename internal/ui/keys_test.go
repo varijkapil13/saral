@@ -108,7 +108,7 @@ var keyOwners = map[string]string{
 	"releases.edit":     release.ViewID,
 	"releases.excluded": release.SetViewID,
 	"releases.filter":   release.ViewID,
-	"releases.find":     release.SetViewID,
+	"releases.find":     release.ViewID,
 	"releases.new":      release.ViewID,
 	"releases.open":     release.ViewID,
 	"releases.project":  release.SetViewID,
@@ -135,7 +135,8 @@ var keyOwners = map[string]string{
 // alsoShownBy names the views beside a command's owner whose footers teach
 // the same key, each held to it as the owner is.
 var alsoShownBy = map[string][]string{
-	card.CommandID: {backlog.ViewID, board.ViewID},
+	card.CommandID:  {backlog.ViewID, board.ViewID},
+	"releases.find": {release.SetViewID},
 }
 
 func TestCommands_TeachTheKeyTheirViewActuallyShows(t *testing.T) {

@@ -26,7 +26,6 @@ var (
 type setSummary struct {
 	arrange      arrangement
 	pick         string
-	needle       string
 	showExcluded bool
 	excludedN    int
 }
@@ -52,7 +51,7 @@ func (m *Model) notesHeight() int {
 func (m *Model) setSummaryKey() setSummary {
 	s := m.set
 	return setSummary{
-		arrange: s.arrange, pick: s.pick, needle: s.rawNeedle,
+		arrange: s.arrange, pick: s.pick,
 		showExcluded: s.showExcluded, excludedN: s.excludedN,
 	}
 }
@@ -87,9 +86,9 @@ func (m *Model) setSummaryLine(key summaryKey) string {
 		b.WriteString(" · project ")
 		b.WriteString(s.pickLabel())
 	}
-	if key.set.needle != "" {
+	if key.needle != "" {
 		b.WriteString(" · matching ")
-		b.WriteString(strconv.Quote(key.set.needle))
+		b.WriteString(strconv.Quote(key.needle))
 	}
 	b.WriteString(" · ")
 	if key.shown != key.versions {
@@ -198,13 +197,28 @@ func (m *Model) appendNotes(lines []string) []string {
 }
 
 func (m *Model) findPrompt() string {
-	return ansi.Truncate(m.set.find.View(), max(m.width, 1), m.deps.Theme.Glyphs.Ellipsis)
+	return ansi.Truncate(m.find.input.View(), max(m.width, 1), m.deps.Theme.Glyphs.Ellipsis)
+}
+
+// appendNarrowed says that the filters in force leave nothing, and names each one with the key that undoes it.
+func (m *Model) appendNarrowed(lines []string, room int, more []string) []string {
+	var parts []string
+	if m.filter != filterAll {
+		parts = append(parts, "state "+m.filter.name()+" ("+filterHint+")")
+	}
+	if m.find.rawNeedle != "" {
+		parts = append(parts, "text "+strconv.Quote(m.find.rawNeedle)+" ("+findHint+")")
+	}
+	parts = append(parts, more...)
+	ell := m.deps.Theme.Glyphs.Ellipsis
+	return append(lines,
+		m.styles.muted.Render("  No version matches what is narrowing the list."),
+		m.styles.muted.Render(ansi.Truncate("  Narrowed by "+strings.Join(parts, ", ")+".", room, ell)))
 }
 
 func (m *Model) appendSetEmpty(lines []string, h int) []string {
 	at := len(lines)
 	room := max(m.width-marker, 8)
-	ell := m.deps.Theme.Glyphs.Ellipsis
 	s := m.set
 	switch {
 	case m.failure != nil:
@@ -212,21 +226,14 @@ func (m *Model) appendSetEmpty(lines []string, h int) []string {
 	case len(m.versions) == 0:
 		lines = append(lines, m.styles.muted.Render("  This set holds no versions."))
 	default:
-		lines = append(lines, m.styles.muted.Render("  No version matches what is narrowing the list."))
 		var parts []string
-		if m.filter != filterAll {
-			parts = append(parts, "state "+m.filter.name()+" ("+filterHint+")")
-		}
 		if s.pick != "" {
 			parts = append(parts, "project "+s.pickLabel()+" ("+pickHint+")")
-		}
-		if s.rawNeedle != "" {
-			parts = append(parts, "text "+strconv.Quote(s.rawNeedle)+" ("+findHint+")")
 		}
 		if n := s.excludedN; n > 0 && !s.showExcluded {
 			parts = append(parts, strconv.Itoa(n)+" excluded by the plan ("+excludedHint+")")
 		}
-		lines = append(lines, m.styles.muted.Render(ansi.Truncate("  Narrowed by "+strings.Join(parts, ", ")+".", room, ell)))
+		lines = m.appendNarrowed(lines, room, parts)
 	}
 	for len(lines)-at < h {
 		lines = append(lines, "")

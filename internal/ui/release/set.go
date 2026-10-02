@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -59,17 +58,13 @@ type setView struct {
 
 	arrange      arrangement
 	pick         string
-	needle       string
-	rawNeedle    string
 	showExcluded bool
 	folded       map[string]bool
 
-	find textinput.Model
 	acts map[string]setAct
 
 	// memberGroup is -1 for a version in no group, and heads has one more entry than there are groups, for them.
 	projects    []string
-	folds       []string
 	rows        *widget.RowCache[setKey, string]
 	memberGroup []int32
 	heads       []head
@@ -106,11 +101,9 @@ func newSetModel(d kernel.Deps, s Set) *Model {
 	m.set = &setView{
 		folded: map[string]bool{},
 		rows:   widget.NewRowCache[setKey, string](rowCacheLimit),
-		find:   widget.NewInput(),
 		acts:   defaultSetKeys().table(),
 	}
-	m.set.find.Prompt = "/ "
-	m.set.find.Placeholder = "a version or a release"
+	m.find.input.Placeholder = "a version or a release"
 	m.sort = loadSort(SetViewID)
 	m.filter = recallFilter(d, SetViewID)
 	m.set.arrange = recallArrange(d)
@@ -179,10 +172,10 @@ func (s *setView) hasOwner(ref string) bool {
 func (m *Model) decorate() {
 	s := m.set
 	named := s.groupNames(m.versions)
-	s.projects, s.folds = s.projects[:0], s.folds[:0]
+	s.projects, m.find.folds = s.projects[:0], m.find.folds[:0]
 	for i := range m.cells {
 		s.projects = append(s.projects, widget.Sanitize(s.owners[i].Label))
-		s.folds = append(s.folds, strings.ToLower(m.cells[i].name+"\x00"+named[i]))
+		m.find.folds = append(m.find.folds, strings.ToLower(m.cells[i].name+"\x00"+named[i]))
 	}
 	m.regroup()
 }

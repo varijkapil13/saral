@@ -205,7 +205,7 @@ func (m *Model) reorder() {
 		return
 	}
 	for _, i := range m.sorted {
-		if m.filter.keeps(m.cells[i].state) {
+		if m.filter.keeps(m.cells[i].state) && m.matches(i) {
 			m.order = append(m.order, slot{v: int32(i), g: -1})
 		}
 	}

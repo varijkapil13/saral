@@ -88,6 +88,18 @@ func TestReleases_Golden(t *testing.T) {
 			width: 80, height: 16, golden: "filtered_empty_80x16.golden",
 			after: func(dr *driver) { dr.key("f", "f", "f") },
 		},
+		"typing a find": {
+			width: 120, height: 16, golden: "finding_120x16.golden",
+			after: func(dr *driver) { dr.key("/"); dr.typeText("2") },
+		},
+		"typing a find on a narrow terminal": {
+			width: 80, height: 16, golden: "finding_80x16.golden",
+			after: func(dr *driver) { dr.key("/"); dr.typeText("2") },
+		},
+		"a find nothing matches": {
+			width: 120, height: 16, golden: "finding_empty_120x16.golden",
+			after: func(dr *driver) { dr.key("/"); dr.typeText("zzz") },
+		},
 		"a project with no versions": {
 			width: 100, height: 14, golden: "empty_100x14.golden",
 			after: func(dr *driver) {

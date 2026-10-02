@@ -13,6 +13,9 @@ such change is listed under **Changed**.
   project source needs to be shown by key.
 - `kernel.PopTo` collapses the view stack to a named entry in one step, asking or refusing on the
   way exactly as `esc` does. Nothing calls it yet.
+- `/` finds in a project's release list: it keeps the versions whose name holds what you type,
+  alongside the state filter and the sort, and the command palette has it as *Find a version or a
+  release*.
 
 ### Fixed
 

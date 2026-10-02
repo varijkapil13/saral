@@ -946,6 +946,11 @@ for a narrower one (`docs/API-NOTES.md`). Order and state are both laid over it 
   (archived never), archived, and round again. The summary line says what is in force and how much
   it keeps (`unreleased · 4 of 12 versions`); a filter that keeps nothing says so and names what `f`
   shows next. The filter is remembered per profile.
+- **`/` finds** by name: it keeps the versions whose name holds what is typed, case-folded. While it is
+  open every key is text (so `q`, `j`, `k` and digits are typed), `enter` keeps it and `esc` clears it.
+  It narrows together with the state filter and the sort, and the summary line says `matching "x"`
+  beside how much it keeps. A find nothing matches says so and names the filters in force. It is not
+  kept: it is gone when the project changes or the list is opened again.
 - **The cursor stays on its version** across a sort, a filter and a refetch. When the filter hides
   it, as archiving under *unreleased* or releasing does, the cursor goes to the row that took its
   place and the status line says which filter hid it. **A version just created is never hidden**:
@@ -955,7 +960,7 @@ for a narrower one (`docs/API-NOTES.md`). Order and state are both laid over it 
 
 The release list also browses a set of projects at once, which is what a plan's releases are. It is
 the same list with a project column, and everything the project list does with a version it does here:
-`enter` opens the release flow, `e` edits, `A` archives, `b` assigns, `s` sorts, `f` filters by state.
+`enter` opens the release flow, `e` edits, `A` archives, `b` assigns, `s` sorts, `f` filters by state, `/` finds by text.
 
 **An open plan summarises its releases and does not list them.** A site plan can draw on hundreds of
 versions across several projects, so the plans view (`g 7`) says `releases  476 across EX, OPS, WEB -
@@ -984,9 +989,8 @@ The browser says so once on its title line, and `v` says so in help. The word el
   first version lands. The picker's first field is *plan order* here, and *project* is added. The order
   is kept apart from the project list's.
 - **`p` moves the project filter** from every project to each project of the set in turn. **`/`
-  filters by text**: it matches a version's name or the name of a release it is in, case-folded, takes
-  every key as text while it is open (so `q`, `j`, `k` and digits are typed), `enter` keeps it and `esc`
-  clears it. The state filter, the project filter and the text filter narrow together, and the summary
+  filters by text**: the project list's find, matching a version's name or the name of a release it is in,
+  case-folded. The state filter, the project filter and the text filter narrow together, and the summary
   line names each one in force.
 - **`x` shows what the plan leaves out.** Excluded versions are hidden by default; the summary says
   `21 excluded by the plan, x shows`. Shown, they are muted and their description reads *excluded by

@@ -42,6 +42,11 @@ type keyMap struct {
 	// Filter moves the rows on to the next state: all, unreleased, released,
 	// archived and round again.
 	Filter kernel.Binding
+	// Find opens the text filter, which narrows the rows to those whose name holds what is typed.
+	Find kernel.Binding
+
+	FindKeep  kernel.Binding
+	FindClear kernel.Binding
 
 	SortPrev   kernel.Binding
 	SortNext   kernel.Binding
@@ -74,6 +79,10 @@ func defaultKeys() keyMap {
 		Assign:  kernel.Bind([]string{"b"}, "b", "put it on issues, or take it off"),
 		Sort:    kernel.Bind([]string{"s"}, "s", "sort the versions"),
 		Filter:  kernel.Bind([]string{"f"}, "f", "filter by state"),
+		Find:    kernel.Bind([]string{"/"}, "/", "find a version"),
+
+		FindKeep:  kernel.Bind([]string{"enter"}, "enter", "keep the text"),
+		FindClear: kernel.Bind([]string{"esc"}, "esc", "clear it"),
 
 		SortPrev:   kernel.Bind([]string{"left", "h"}, "←/h", "previous field"),
 		SortNext:   kernel.Bind([]string{"right", "l"}, "→/l", "next field"),
@@ -101,6 +110,7 @@ const (
 	keysEditing
 	keysSaving
 	keysSorting
+	keysFinding
 	keyStates
 )
 
@@ -112,26 +122,27 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	archive := kernel.Terse(k.Archive, "archive")
 	assign := kernel.Terse(k.Assign, "assign")
 	sort, filter := kernel.Terse(k.Sort, "sort"), kernel.Terse(k.Filter, "filter")
+	find := kernel.Terse(k.Find, "find")
 	motions := [][]kernel.Binding{
 		{k.Down, k.Up, k.PageDown, k.PageUp, k.Top, k.Bottom},
 	}
 
 	var sets [keyStates]kernel.KeySet
 	sets[keysBrowsing] = kernel.KeySet{
-		Acts: []kernel.Binding{kernel.Terse(k.Release, "release"), create, edit, archive, assign, sort, filter},
+		Acts: []kernel.Binding{kernel.Terse(k.Release, "release"), create, edit, archive, assign, sort, filter, find},
 		Full: append(append([][]kernel.Binding(nil), motions...),
 			[]kernel.Binding{k.Release, k.New, k.Edit, k.Archive, k.Assign},
-			[]kernel.Binding{k.Sort, k.Filter}),
+			[]kernel.Binding{k.Sort, k.Filter, k.Find}),
 	}
 	// While the site is being asked what is open on a version, releasing is the
 	// one thing that cannot be done: the count is what the decision is made
 	// against. Everything else still works, so the row says so rather than
 	// falling back to the globals.
 	sets[keysCounting] = kernel.KeySet{
-		Acts: []kernel.Binding{create, edit, archive, assign, sort, filter},
+		Acts: []kernel.Binding{create, edit, archive, assign, sort, filter, find},
 		Full: append(append([][]kernel.Binding(nil), motions...),
 			[]kernel.Binding{k.New, k.Edit, k.Archive, k.Assign},
-			[]kernel.Binding{k.Sort, k.Filter}),
+			[]kernel.Binding{k.Sort, k.Filter, k.Find}),
 	}
 	sets[keysEditing] = kernel.KeySet{
 		Acts: []kernel.Binding{kernel.Terse(k.Save, "save"), kernel.Terse(k.Cancel, "leave it")},
@@ -152,6 +163,10 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		},
 		Full: [][]kernel.Binding{{k.SortPrev, k.SortNext}, {k.SortChoose, k.SortCancel}},
 	}
+	sets[keysFinding] = kernel.KeySet{
+		Acts: []kernel.Binding{kernel.Terse(k.FindKeep, "keep"), kernel.Terse(k.FindClear, "clear")},
+		Full: [][]kernel.Binding{{k.FindKeep, k.FindClear}, {widget.KillLine}},
+	}
 	return sets
 }()
 
@@ -168,6 +183,8 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 		state = keysEditing
 	case m.mode == sorting:
 		state = keysSorting
+	case m.mode == finding:
+		state = keysFinding
 	case m.counting != "":
 		state = keysCounting
 	}
@@ -192,6 +209,7 @@ const (
 	actAssign
 	actSort
 	actFilter
+	actFind
 	actSortPrev
 	actSortNext
 	actSortChoose
@@ -214,6 +232,7 @@ func (k keyMap) tables() (browsing, editor, sorter map[string]action) {
 		binding[action]{k.Edit, actEdit}, binding[action]{k.Archive, actArchive},
 		binding[action]{k.Assign, actAssign},
 		binding[action]{k.Sort, actSort}, binding[action]{k.Filter, actFilter},
+		binding[action]{k.Find, actFind},
 	)
 	editor = table(
 		binding[action]{k.NextField, actNextField}, binding[action]{k.PrevField, actPrevField},

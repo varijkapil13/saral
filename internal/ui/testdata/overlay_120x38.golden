@@ -138,7 +138,7 @@ A     archive or unarchive it             pgup page up          ctrl+, / g s set
 b     put it on issues, or take it off    g g  first version    g i          jump to an issue
 s     sort the versions                   G    last version     g /          search issues
 f     filter by state                                           esc          back
-                                                                r            refresh
+/     find a version                                            r            refresh
                                                                 R            refetch everything
 
 settings
