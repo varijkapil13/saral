@@ -1921,7 +1921,7 @@ record of what was built, what was left and why.
 Search the site for what an issue says, from the keyboard anywhere. A packet ticks its own box with
 its PR; the PR description is the record of what was built and what was left.
 
-- [ ] **T1 — A text search clause and `~` in the fake** · **owns** `pkg/jira/{jql.go,jql_test.go}`, `pkg/jira/jiratest/{fake.go,fake_text_test.go}`, one row in `pkg/jira/jiratest/fake_test.go`, `docs/{API-NOTES,ROADMAP}.md`
+- [x] **T1 — A text search clause and `~` in the fake** · [#191](https://github.com/varijkapil13/saral/pull/191) · **owns** `pkg/jira/{jql.go,jql_test.go}`, `pkg/jira/jiratest/{fake.go,fake_text_test.go}`, one row in `pkg/jira/jiratest/fake_test.go`, `docs/{API-NOTES,ROADMAP}.md`
   `jira.QuoteJQL` and `jira.ParseText` turn what was typed into one JQL string literal that Jira reads
   the same way every time; the fake reads `text`, `summary`, `description` and `comment` with `~`.
 
