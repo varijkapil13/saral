@@ -412,7 +412,7 @@ func (k *childrenKind) move(s *sheet, target *jira.Issue, id string) tea.Cmd {
 	}
 	tr, child := k.moves[at], *target
 	if len(requiredFields(tr)) > 0 {
-		return openSeeded(s.deps, child, append(slices.Clone(s.trail), ""), WithTransition(tr.ID))
+		return pushSeeded(s.deps, child, append(slices.Clone(s.trail), ""), WithTransition(tr.ID))
 	}
 	s.confirm("Move "+child.Key+" to "+tr.To.Name+"?", func() tea.Cmd {
 		return k.edit(s, &child, func(ctx context.Context, c jira.SessionClient) (string, error) {

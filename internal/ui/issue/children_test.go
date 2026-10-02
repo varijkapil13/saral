@@ -633,3 +633,24 @@ func TestChildren_EpicFrame(t *testing.T) {
 	p.cursorOnRef("PROJ-32")
 	golden(t, "related_epic_120x38.golden", p.frame())
 }
+
+func TestChildrenSheet_TransitionOnAChildAlreadyBeneathOpensItsScreen(t *testing.T) {
+	t.Parallel()
+	f, epic, _ := epicFake(t, 2)
+	d := openChildrenSheet(t, f, epic)
+	child := d.first()
+	d.s.trail = []string{"X", child.Key, epic}
+	d.keys("t")
+	id := firstMove(d, true)
+	if id == "" {
+		t.Fatalf("no move with a screen among %+v", d.s.cands)
+	}
+	pickCand(d, id)
+	d.keys("enter")
+	if len(d.pushed) != 1 {
+		t.Fatalf("pushed %d views; the move was dropped", len(d.pushed))
+	}
+	if opened := pushedPane(t, d.pushed[0]); opened.issue.Key != child.Key || opened.openMove != id {
+		t.Errorf("opened %s for move %q, want %s for %q", opened.issue.Key, opened.openMove, child.Key, id)
+	}
+}

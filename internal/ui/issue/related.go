@@ -45,6 +45,10 @@ func openSeeded(d kernel.Deps, seed jira.Issue, trail []string, opts ...modelOpt
 	if seed.Key != "" && slices.Contains(trail, seed.Key) {
 		return kernel.PopTo(ViewID, seed.Key)
 	}
+	return pushSeeded(d, seed, trail, opts...)
+}
+
+func pushSeeded(d kernel.Deps, seed jira.Issue, trail []string, opts ...modelOption) tea.Cmd {
 	return kernel.Push(ViewID, seed.Key, New(d, seed, append([]modelOption{fromTrail(trail)}, opts...)...))
 }
 
