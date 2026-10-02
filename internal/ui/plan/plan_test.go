@@ -199,8 +199,7 @@ func TestPlans_ASitePlanReadsTheReleasesOfItsProjectsByID(t *testing.T) {
 	mustNotContain(t, frame, "not readable", "cannot resolve")
 }
 
-// A board source cannot be searched or read either, and it must not be dropped:
-// a source left out turns a plan into a narrower plan that nothing explains.
+// A source left out turns a plan into a narrower plan that nothing explains.
 func TestPlans_ASourceThisViewCannotUseIsStillDrawn(t *testing.T) {
 	t.Parallel()
 
@@ -214,7 +213,55 @@ func TestPlans_ASourceThisViewCannotUseIsStillDrawn(t *testing.T) {
 	}}})
 	dr.key("enter")
 
-	mustContain(t, dr.view(), "board 17", "custom 9")
+	frame := dr.view()
+	mustContain(t, frame, "board 17", "custom 9", "board 17 left out")
+	mustNotContain(t, frame, "names no project")
+}
+
+func TestPlans_ABoardOnlyPlanListsItsProjectsReleases(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(5)
+	boards, err := f.Boards(context.Background(), "PROJ")
+	if err != nil || len(boards) == 0 {
+		t.Fatalf("the fake answered %d boards and %v; the test needs one", len(boards), err)
+	}
+	id := strconv.FormatInt(boards[0].ID, 10)
+	dr := newDriver(t, testDeps(f), 120, 30)
+	dr.send(plansMsg{gen: dr.m.gen, plans: []jira.Plan{{
+		ID: "42", Name: "Delivery", Status: "Active",
+		Sources: []jira.PlanSource{{Type: jira.PlanSourceBoard, Value: id}},
+	}}})
+	dr.key("enter")
+
+	if n := countCalls(f, "BoardProjects"); n != 1 {
+		t.Errorf("opening the plan read the board's projects %d times, want once", n)
+	}
+	if n := countCalls(f, "Versions"); n != 1 {
+		t.Errorf("opening the plan read versions %d times, want once", n)
+	}
+	frame := dr.view()
+	mustContain(t, frame, "board "+id+", projects PROJ", "releases", "1.0", "released")
+	mustNotContain(t, frame, "none to read releases from", "left out")
+}
+
+func TestPlans_ABoardRateLimitSaysSoOnTheReleasesRow(t *testing.T) {
+	t.Parallel()
+
+	f := newFake(5)
+	dr := newDriver(t, testDeps(f), 120, 30)
+	dr.send(plansMsg{gen: dr.m.gen, plans: []jira.Plan{{
+		ID: "42", Name: "Delivery", Status: "Active",
+		Sources: []jira.PlanSource{{Type: jira.PlanSourceBoard, Value: "17"}},
+	}}})
+	f.FailNext(&jira.RateLimitError{RetryAfter: 30 * time.Second})
+	dr.key("enter")
+
+	reason, _ := jira.Reason(dr.m.rel["42"].err)
+	if reason == "" {
+		t.Fatal("the rate limit carried no words of its own")
+	}
+	mustContain(t, dr.view(), "releases", reason)
 }
 
 func TestPlans_AnAnswerToAQuestionAlreadyChangedIsDropped(t *testing.T) {

@@ -48,6 +48,46 @@ func TestPlans_Golden(t *testing.T) {
 	}
 }
 
+func TestPlans_BoardSourcesGolden(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		width  int
+		golden string
+	}{
+		"wide":   {width: 120, golden: "site_boards_120x20.golden"},
+		"narrow": {width: 80, golden: "site_boards_80x20.golden"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			dr := newDriver(t, testDeps(newFake(5)), tc.width, 20)
+			dr.send(plansMsg{gen: dr.m.gen, plans: []jira.Plan{{
+				ID: "42", Name: "Delivery", Status: "Active",
+				Sources: []jira.PlanSource{
+					{Type: jira.PlanSourceBoard, Value: "17"},
+					{Type: jira.PlanSourceBoard, Value: "18"},
+					{Type: jira.PlanSourceBoard, Value: "19"},
+				},
+			}}})
+			dr.key("enter")
+			dr.send(releasesMsg{
+				gen: dr.m.gen, plan: "42",
+				versions: []jira.Version{{ID: "1", Name: "1.0", Released: true}, {ID: "2", Name: "2.0"}},
+				owners:   []string{"10000", "10001"},
+				refused: []refusal{
+					{kind: "board", ref: "18", reason: "the site named no project behind it, which is also what it answers for a board you cannot view"},
+					{kind: "board", ref: "19", reason: "The requested board cannot be viewed because it either does not exist or you do not have permission to view it."},
+				},
+				names:  map[string]string{"10000": "EX", "10001": "OPS"},
+				boards: map[string][]string{"17": {"EX", "OPS"}},
+				read:   []string{"10000", "10001"},
+			})
+			golden(t, tc.golden, dr.view())
+		})
+	}
+}
+
 func TestPlans_FailureGolden(t *testing.T) {
 	t.Parallel()
 

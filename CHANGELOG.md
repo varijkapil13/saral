@@ -7,6 +7,12 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+### Fixed
+
+- A plan read from the site that names boards instead of projects now lists the releases of the
+  projects behind those boards, and names a board you cannot see with the site's reason. It used to
+  say the plan named no project.
+
 ## [0.9.3] - 2026-10-02
 
 ### Fixed
