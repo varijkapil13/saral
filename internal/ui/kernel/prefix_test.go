@@ -21,6 +21,9 @@ func prefixModel(t *testing.T) Model {
 	RegisterView(ViewSpec{ID: SettingsViewID, Title: "Settings", New: func(Deps) View {
 		return &stubView{id: SettingsViewID}
 	}})
+	RegisterView(ViewSpec{ID: SearchViewID, Title: "Search", New: func(Deps) View {
+		return &stubView{id: SearchViewID}
+	}})
 	return newAt(t, testDeps(), 120, 38)
 }
 
@@ -124,6 +127,7 @@ func TestPrefixGestures_EachOneOpensWhatItNames(t *testing.T) {
 	for _, tc := range []struct{ stroke, view string }{
 		{"i", PaletteViewID},
 		{"s", SettingsViewID},
+		{"/", SearchViewID},
 	} {
 		t.Run(tc.stroke, func(t *testing.T) {
 			m := prefixModel(t)
@@ -162,5 +166,45 @@ func TestPrefixGestures_AreReachableWithTheArrowsAndEnter(t *testing.T) {
 	m, _ = press(m, "enter")
 	if got := ansi.Strip(m.Frame()); strings.Contains(got, "Where g goes") {
 		t.Errorf("enter on %q left the overlay up:\n%s", dests[at].key, got)
+	}
+}
+
+func TestPrefix_GSlashPushesTheSearchOverWhatWasOnScreen(t *testing.T) {
+	m := prefixModel(t)
+	before, root := len(m.stack), m.stack[0].spec.ID
+
+	next, _ := press(m, "g", "/")
+	if len(next.stack) != before+1 {
+		t.Fatalf("g / left %d views on the stack, want %d", len(next.stack), before+1)
+	}
+	if next.stack[0].spec.ID != root {
+		t.Errorf("g / replaced the root %q with %q", root, next.stack[0].spec.ID)
+	}
+	if got := next.top().spec.ID; got != SearchViewID {
+		t.Errorf("g / put %q on top, want %q", got, SearchViewID)
+	}
+
+	again, _ := press(next, "g", "/")
+	if len(again.stack) != len(next.stack) {
+		t.Errorf("g / over the search pushed a second one: %d views", len(again.stack))
+	}
+}
+
+func TestPrefix_GSlashWithoutASearchViewSaysSo(t *testing.T) {
+	resetRegistry()
+	t.Cleanup(resetRegistry)
+	RegisterView(spec("board", 1, "", &stubView{id: "board"}))
+	m := newAt(t, testDeps(), 120, 38)
+	before := len(m.stack)
+
+	next, _ := press(m, "g", "/")
+	if len(next.stack) != before {
+		t.Errorf("g / pushed %d views with nothing registered", len(next.stack)-before)
+	}
+	if want := SearchViewID + " is not available in this build"; next.status != want {
+		t.Errorf("status = %q, want %q", next.status, want)
+	}
+	if next.statusLevel != LevelWarn {
+		t.Errorf("status level = %v, want a warning", next.statusLevel)
 	}
 }

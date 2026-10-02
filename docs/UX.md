@@ -123,7 +123,7 @@ While the prefix is latched the row says what that overlay answers to and nothin
 it already does under `?` and under the right-click menu:
 
 ```
- Issues  1-9 switch view  i jump to an issue  s settings  up/down choose  enter go there  esc cancel
+ Issues  1-9 switch view  i jump to an issue  / search issues  s settings  up/down choose  enter go there  esc cancel
 ```
 
 The theme is a setting rather than a command, reached with `ctrl+,` or `g s`, and the choice is
@@ -149,6 +149,7 @@ palette                ctrl+k         everything, fuzzy; opens over what you wer
 settings               ctrl+, / g s   opens over what you were in, esc returns — the state the palette
                                       used to carry as nine rows, now one. docs/SETTINGS.md.
                                       g s reaches it the way g i reaches the palette
+search the site        g /            every project, or tab for this one; opens over what you were in
 search in view         /              filter rows live
 clear everything       ctrl+g / esc   a term the picker set and a typed filter both, from the browsing
                                       state; esc clears the typed one while still typing
@@ -282,7 +283,8 @@ that completes the gesture and saying nothing about it, so this costs no width a
 gesture, and `g2` typed fast behaves exactly as it always did. The palette's *switch view* opens the
 same overlay for somebody who has not learnt the prefix — except over a view that is taking typing,
 where the keys the box advertises are that view's: it says so on the status line instead. A gesture
-already waiting is thrown away the moment a view takes the keyboard, for the same reason.
+already waiting is thrown away the moment a view takes the keyboard, for the same reason. `g` then `/`
+is the search's, so it no longer reaches a view's own `/` filter; press `/` on its own for that.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -292,6 +294,7 @@ already waiting is thrown away the moment a view takes the keyboard, for the sam
 │   g3   Backlog                 Boards need a Jira Software project, and t... │
 │   g5   Releases                                                              │
 │   g i  An issue by key or URL                                                │
+│   g /  Issues by what they say                                               │
 │   g s  Settings                                                              │
 │                                                                              │
 │ In this view                                                                 │
@@ -304,8 +307,8 @@ What it holds, and why each half is there:
 
 - **Every slot a view claimed, in slot order, from the registry.** Not a list written down: a view
   moved to another digit cannot leave this teaching the old one.
-- **Every gesture the prefix completes on its own** — `g i` to an issue by key or URL, `g s` to
-  settings. These are globals rather than slots, and they come from `Model.prefixGestures`, which is
+- **Every gesture the prefix completes on its own** — `g i` to an issue by key or URL, `g /` to
+  the issue search, `g s` to settings. These are globals rather than slots, and they come from `Model.prefixGestures`, which is
   the same table `resolvePrefix` dispatches from and the footer advertises. One table, three readers:
   a gesture cannot be added to the dispatcher and missed by the two surfaces that teach it, which is
   what happened to `g s` — it worked from the day it was bound and appeared nowhere. A row whose view

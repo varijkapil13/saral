@@ -92,6 +92,7 @@ type prefixGesture struct {
 func (m Model) prefixGestures() []prefixGesture {
 	return []prefixGesture{
 		{key: m.keys.Jump, name: "An issue by key or URL", view: PaletteViewID, open: Model.openPalette},
+		{key: m.keys.Search, name: "Issues by what they say", view: SearchViewID, open: Model.openSearch},
 		{key: m.keys.Settings, name: "Settings", view: SettingsViewID, open: Model.openSettings},
 	}
 }

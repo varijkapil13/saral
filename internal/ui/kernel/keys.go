@@ -67,6 +67,8 @@ type GlobalKeys struct {
 	// and Keys() carries both for the same reason Slot's carries bare digits:
 	// what a second stroke completes is never what the first one alone means.
 	Settings Binding
+	// Search spends the slash after g, so g then / no longer reaches a view's own filter.
+	Search Binding
 }
 
 // DefaultGlobalKeys is the keymap from docs/UX.md. Vim keys and arrows are both
@@ -84,6 +86,7 @@ func DefaultGlobalKeys() GlobalKeys {
 		Saved:    Bind(digits, "1-9", "saved query"),
 		Jump:     Bind([]string{"i"}, "g i", "jump to an issue"),
 		Settings: Bind([]string{"ctrl+,", "s"}, "ctrl+, / g s", "settings"),
+		Search:   Bind([]string{"/"}, "g /", "search issues"),
 	}
 }
 
@@ -94,7 +97,7 @@ func (g GlobalKeys) KeySet() KeySet {
 	return KeySet{
 		Short: []Binding{g.Help, g.Palette, g.Quit},
 		Full: [][]Binding{
-			{g.Saved, g.Go, g.Slot, g.Settings, g.Jump, g.Back, g.Refresh, g.Purge},
+			{g.Saved, g.Go, g.Slot, g.Settings, g.Jump, g.Search, g.Back, g.Refresh, g.Purge},
 			{g.Palette, g.Help, g.Quit},
 		},
 	}
