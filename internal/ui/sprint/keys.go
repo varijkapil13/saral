@@ -183,6 +183,7 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	return liveSets[state], int(state)
 }
 
+// KeyStates is every set LiveKeys can return.
 func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }
 
 func (m *Model) keyState() keyState {

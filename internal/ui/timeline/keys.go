@@ -131,6 +131,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	return sets
 }()
 
+// KeyStates is every set LiveKeys can return.
 func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }
 
 // LiveKeys reports the keys that work in the state the chart is actually in.

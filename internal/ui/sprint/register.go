@@ -34,7 +34,7 @@ func init() {
 		Keys:     []string{kernel.SlotGesture(slot)},
 		Run:      func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
 	})
-	for _, c := range []struct {
+	for _, c := range []*struct {
 		id, title string
 		action    kernel.Action
 		key       kernel.Binding
