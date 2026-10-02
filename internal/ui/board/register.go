@@ -134,15 +134,15 @@ func init() {
 	}
 	for _, c := range []struct {
 		id, title string
-		key       kernel.Binding
+		key       string
 		msg       tea.Msg
 		action    kernel.Action
 	}{
-		{"board.lanes", "Change the swimlanes on the board", keys.Lanes, LanesMsg{}, ""},
-		{"board.fold-lane", "Fold or unfold this swimlane", keys.Fold, FoldMsg{}, ""},
-		{"board.create", "Create an issue in this column", keys.Create, CreateMsg{}, kernel.ActCreate},
-		{"board.assign", "Assign the picked cards", keys.Assign, AssignMsg{}, kernel.ActAssign},
-		{"board.label", "Add a label to the picked cards", keys.Label, LabelMsg{}, ""},
+		{"board.lanes", "Change the swimlanes on the board", keys.Lanes.Help().Key, LanesMsg{}, ""},
+		{"board.fold-lane", "Fold or unfold this swimlane", keys.Fold.Help().Key, FoldMsg{}, ""},
+		{"board.create", "Create an issue in this column", keys.Create.Help().Key, CreateMsg{}, kernel.ActCreate},
+		{"board.assign", "Assign the picked cards", keys.Assign.Help().Key, AssignMsg{}, kernel.ActAssign},
+		{"board.label", "Add a label to the picked cards", keys.Label.Help().Key, LabelMsg{}, ""},
 	} {
 		kernel.RegisterCommand(kernel.Command{
 			ID:       c.id,
@@ -150,7 +150,7 @@ func init() {
 			Title:    c.title,
 			Group:    "Board",
 			Requires: jira.CapBoards,
-			Keys:     []string{c.key.Help().Key},
+			Keys:     []string{c.key},
 			Run:      func(kernel.Deps) tea.Cmd { return kernel.OpenThen(ViewID, c.msg) },
 		})
 	}

@@ -219,6 +219,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	return sets
 }()
 
+// KeyStates lists every set the view reports.
 func (*Model) KeyStates() []kernel.KeySet { return liveSets[:] }
 
 // LiveKeys reports the keys that work in the state the backlog is actually in.
