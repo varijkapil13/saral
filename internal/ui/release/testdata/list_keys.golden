@@ -1,12 +1,12 @@
 reading the versions
-  acts   enter release · n new · e edit · A archive · b assign · s sort · f filter · / find
-  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G last version]
-  full   [enter release this version, n new version, e edit this version, A archive or unarchive it, b put it on issues, or take it off]
+  acts   ! release · c new · e edit · A archive · B assign · s sort · f filter · / find
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G / g e last version]
+  full   [! release this version, c new version, e edit this version, A archive or unarchive it, B put it on issues, or take it off]
   full   [s sort the versions, f filter by state, / find a version]
 counting what is open on one
-  acts   n new · e edit · A archive · b assign · s sort · f filter · / find
-  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G last version]
-  full   [n new version, e edit this version, A archive or unarchive it, b put it on issues, or take it off]
+  acts   c new · e edit · A archive · B assign · s sort · f filter · / find
+  full   [↓/j down, ↑/k up, pgdn page down, pgup page up, g g first version, G / g e last version]
+  full   [c new version, e edit this version, A archive or unarchive it, B put it on issues, or take it off]
   full   [s sort the versions, f filter by state, / find a version]
 typing a version
   acts   ctrl+s save · esc leave it

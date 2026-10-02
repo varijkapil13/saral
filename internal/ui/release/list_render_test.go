@@ -36,7 +36,7 @@ func TestReleases_Golden(t *testing.T) {
 		"typing a new version": {
 			width: 120, height: 20, golden: "editing_120x20.golden",
 			after: func(dr *driver) {
-				dr.key("n")
+				dr.key("c")
 				dr.typeText("4.0")
 				dr.key("tab")
 				dr.typeText("the one after next")
@@ -45,7 +45,7 @@ func TestReleases_Golden(t *testing.T) {
 		"a date it will not accept": {
 			width: 120, height: 20, golden: "refused_date_120x20.golden",
 			after: func(dr *driver) {
-				dr.key("n")
+				dr.key("c")
 				dr.typeText("4.0")
 				dr.key("tab", "tab")
 				dr.typeText("soon")

@@ -27,9 +27,9 @@ release.bulk
 release.flow
  Issues  enter choose                                             ? g ctrl+k esc
 release.set
- Issues  enter open  e edit  A archive  b assign  s sort  +5      ? g ctrl+k esc
+ Issues  ! release  e edit  A archive  B assign  s sort  +4       ? g ctrl+k esc
 releases
- Issues  enter release  n new  e edit  A archive  b assign  +3    ? g ctrl+k esc
+ Issues  ! release  c new  e edit  A archive  B assign  +3        ? g ctrl+k esc
 search
  Issues  tab scope  esc close                                             ctrl+k
 settings

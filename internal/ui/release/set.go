@@ -61,7 +61,9 @@ type setView struct {
 	showExcluded bool
 	folded       map[string]bool
 
-	acts map[string]setAct
+	acts    map[string]setAct
+	inFacet map[string]setAct
+	facet   int
 
 	// memberGroup is -1 for a version in no group, and heads has one more entry than there are groups, for them.
 	projects    []string
@@ -99,9 +101,10 @@ func (s SetList) Close() { s.stop() }
 func newSetModel(d kernel.Deps, s Set) *Model {
 	m := newModel(d)
 	m.set = &setView{
-		folded: map[string]bool{},
-		rows:   widget.NewRowCache[setKey, string](rowCacheLimit),
-		acts:   defaultSetKeys().table(),
+		folded:  map[string]bool{},
+		rows:    widget.NewRowCache[setKey, string](rowCacheLimit),
+		acts:    defaultSetKeys().table(),
+		inFacet: defaultSetKeys().facetTable(),
 	}
 	m.find.input.Placeholder = "a version or a release"
 	m.sort = loadSort(SetViewID)

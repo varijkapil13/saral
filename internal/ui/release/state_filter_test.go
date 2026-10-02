@@ -126,7 +126,7 @@ func TestFilter_AnEmptyResultSaysSoAndNamesTheWayOut(t *testing.T) {
 	if _, ok := dr.list().selected(); ok {
 		t.Error("an empty result still has a version under the cursor")
 	}
-	dr.key("enter", "e", "A", "b")
+	dr.key("!", "e", "A", "B")
 	if len(dr.pushes) != 0 || dr.list().mode != browsing {
 		t.Error("an action on an empty result did something")
 	}
@@ -167,7 +167,7 @@ func TestFilter_ACreatedVersionIsNeverHidden(t *testing.T) {
 
 	dr := listOf(t, testDeps(newFake(4)), 120, 20)
 	dr.key("f", "f")
-	dr.key("n")
+	dr.key("c")
 	dr.typeText("4.0")
 	dr.key("ctrl+s")
 

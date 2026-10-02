@@ -177,7 +177,7 @@ func TestReleases_ClaimsTheKeysOnlyWhileAVersionIsBeingTyped(t *testing.T) {
 	if dr.list().WantsRawKeys() {
 		t.Error("the list claims raw keys while it is only being read")
 	}
-	dr.key("n")
+	dr.key("c")
 	if !dr.list().WantsRawKeys() {
 		t.Error("the editor does not claim raw keys, so a name loses its digits and q quits")
 	}
@@ -194,7 +194,7 @@ func TestReleases_RefusesToThrowAwayAVersionBeingTyped(t *testing.T) {
 	if _, blocked := dr.list().BlocksClose(); blocked {
 		t.Error("a list nobody is typing into refuses to be closed")
 	}
-	dr.key("n")
+	dr.key("c")
 	if _, blocked := dr.list().BlocksClose(); blocked {
 		t.Error("an editor with nothing typed into it refuses to be closed")
 	}
@@ -213,7 +213,7 @@ func TestReleases_CreatingAVersionSendsTheProjectAndTheTypedValues(t *testing.T)
 	watch := watching(fake)
 	dr := listOf(t, testDeps(watch), 100, 24)
 
-	dr.key("n")
+	dr.key("c")
 	dr.typeText("4.0")
 	dr.key("tab")
 	dr.typeText("the next one")
@@ -256,7 +256,7 @@ func TestReleases_TheEditorWalksBothWaysAndWrapsRound(t *testing.T) {
 	t.Parallel()
 
 	dr := listOf(t, testDeps(newFake(4)), 100, 24)
-	dr.key("n")
+	dr.key("c")
 	if got := dr.list().form.at; got != fieldName {
 		t.Fatalf("the editor opened on field %d", got)
 	}
@@ -284,7 +284,7 @@ func TestReleases_ADateItCannotReadIsRefusedWithoutAskingTheSite(t *testing.T) {
 	dr := listOf(t, testDeps(fake), 100, 24)
 	before := countCalls(fake, "SaveVersion")
 
-	dr.key("n")
+	dr.key("c")
 	dr.typeText("4.0")
 	dr.key("tab", "tab")
 	dr.typeText("next tuesday")
@@ -369,7 +369,7 @@ func TestReleases_ReleasingReadsWhatIsOpenAndPushesTheDecision(t *testing.T) {
 	fake := newFake(0, jiratest.WithIssues(openOn(twoOh, 3)))
 	dr := listOf(t, testDeps(fake), 100, 20)
 	dr.moveTo(twoOh)
-	dr.key("enter")
+	dr.key("!")
 
 	if got := countCalls(fake, "UnresolvedCount"); got != 1 {
 		t.Errorf("releasing cost %d counts, want exactly one", got)
@@ -404,7 +404,7 @@ func TestReleases_TheFlowIsOnlyOfferedVersionsWorthMovingWorkTo(t *testing.T) {
 	fake := newFake(0, jiratest.WithIssues(openOn(twoOh, 2)))
 	dr := listOf(t, testDeps(fake), 100, 20)
 	dr.moveTo(twoOh)
-	dr.key("enter")
+	dr.key("!")
 
 	push, _ := dr.pushed()
 	flow, ok := push.View.(*Flow)
@@ -445,7 +445,7 @@ func TestReleases_WillNotOfferToReleaseSomethingItCannot(t *testing.T) {
 				tc.prep(dr)
 			}
 			dr.moveTo(tc.id)
-			dr.key("enter")
+			dr.key("!")
 
 			if got := countCalls(fake, "UnresolvedCount"); got != 0 {
 				t.Errorf("it counted what is open on a version it cannot release (%d times)", got)
@@ -550,7 +550,7 @@ func TestReleases_FitsTheBoxItIsGiven(t *testing.T) {
 			do   func()
 		}{
 			{"browsing", func() {}},
-			{"editing", func() { dr.key("n") }},
+			{"editing", func() { dr.key("c") }},
 			{"typing a long name", func() { dr.typeText(strings.Repeat("long-", 40)) }},
 		} {
 			state.do()
@@ -701,15 +701,15 @@ func TestReleases_RegistersItselfCleanly(t *testing.T) {
 	}
 
 	want := map[string]string{
-		"releases.open":    kernel.SlotGesture(spec.Slot),
-		"releases.new":     "n",
-		"releases.edit":    "e",
-		"releases.archive": "A",
-		"releases.release": "enter",
-		"releases.assign":  "b",
-		"releases.sort":    "s",
-		"releases.filter":  "f",
-		"releases.find":    "/",
+		"releases.open":        kernel.SlotGesture(spec.Slot),
+		"releases.new":         "c",
+		"releases.edit":        "e",
+		"releases.archive":     "A",
+		"releases.release":     "!",
+		"releases.fix-version": "B",
+		"releases.sort":        "s",
+		"releases.filter":      "f",
+		"releases.find":        "/",
 	}
 	shown := map[string]bool{}
 	for _, b := range kernel.KeysFor(ViewID).Acts {
@@ -731,8 +731,8 @@ func TestReleases_RegistersItselfCleanly(t *testing.T) {
 	}
 	wantSet := map[string]string{
 		"releases.arrange":  "v",
-		"releases.project":  "p",
-		"releases.excluded": "x",
+		"releases.project":  "f",
+		"releases.excluded": ".",
 	}
 	inSet := map[string]bool{}
 	for _, b := range kernel.KeysFor(SetViewID).Acts {

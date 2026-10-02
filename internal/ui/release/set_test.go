@@ -207,17 +207,17 @@ func TestSet_GroupsFollowTheSortAndMembersSortWithinThem(t *testing.T) {
 	}
 }
 
-func TestSet_ExcludedAreHiddenUntilXThenMarked(t *testing.T) {
+func TestSet_ExcludedAreHiddenUntilDotThenMarked(t *testing.T) {
 	t.Parallel()
 
 	dr := setOf(t, testDeps(nil), planSet(), 120, 30)
 	m := dr.list()
 	mustNotContain(t, dr.view(), "ops-2026.1", "web-hotfix")
-	mustContain(t, dr.view(), "2 excluded by the plan, x shows", "9 of 11 versions")
+	mustContain(t, dr.view(), "2 excluded by the plan, . shows", "9 of 11 versions")
 
-	dr.key("x")
+	dr.key(".")
 	frame := dr.view()
-	mustContain(t, frame, "ops-2026.1", "web-hotfix", "excluded by the plan, shown, x hides", "11 versions")
+	mustContain(t, frame, "ops-2026.1", "web-hotfix", "excluded by the plan, shown, . hides", "11 versions")
 	marked := 0
 	for _, line := range strings.Split(frame, "\n") {
 		if strings.HasSuffix(strings.TrimRight(line, " "), excludedCell) {
@@ -229,13 +229,13 @@ func TestSet_ExcludedAreHiddenUntilXThenMarked(t *testing.T) {
 	}
 	mustContain(t, frame, ungroupedName+"   4 of 4")
 
-	dr.key("x")
+	dr.key(".")
 	if got := drawn(m); slices.Contains(got, "web-hotfix") {
-		t.Errorf("a second x did not hide the excluded versions again: %v", got)
+		t.Errorf("a second . did not hide the excluded versions again: %v", got)
 	}
 }
 
-func TestSet_ProjectFilterCyclesTheSetsProjects(t *testing.T) {
+func TestSet_ProjectFacetStepsThroughTheSetsProjects(t *testing.T) {
 	t.Parallel()
 
 	dr := setOf(t, testDeps(nil), planSet(), 120, 30)
@@ -250,13 +250,13 @@ func TestSet_ProjectFilterCyclesTheSetsProjects(t *testing.T) {
 		{"10400", []string{"1.9.x-hotfix"}},
 		{"", nil},
 	} {
-		dr.key("p")
+		dr.key("f", "tab", "l", "enter")
 		if m.set.pick != want.pick {
-			t.Fatalf("p moved the project filter to %q, want %q", m.set.pick, want.pick)
+			t.Fatalf("the project facet moved the project filter to %q, want %q", m.set.pick, want.pick)
 		}
 		if want.pick == "" {
 			if m.set.shown != 9 {
-				t.Errorf("the last p did not bring every project back: %d versions are drawn", m.set.shown)
+				t.Errorf("the last step did not bring every project back: %d versions are drawn", m.set.shown)
 			}
 			continue
 		}
@@ -402,7 +402,7 @@ func TestSet_FlowIsOfferedOnlyThatProjectsVersions(t *testing.T) {
 	if v.Name != "2.0" || v.ProjectID != jiratest.VersionsFor("EX")[1].ProjectID {
 		t.Fatalf("the cursor is on %+v, want EX's 2.0", v)
 	}
-	dr.key("enter")
+	dr.key("!")
 
 	push, ok := dr.pushed()
 	if !ok || push.ID != FlowViewID {
@@ -418,7 +418,7 @@ func TestSet_NewIsRefusedWithASentenceAndNotAdvertised(t *testing.T) {
 	t.Parallel()
 
 	dr := setOf(t, testDeps(nil), planSet(), 120, 30)
-	dr.key("n")
+	dr.key("c")
 	if dr.list().mode != browsing {
 		t.Error("n opened an editor over a set, which has no project to create a version in")
 	}
@@ -427,13 +427,13 @@ func TestSet_NewIsRefusedWithASentenceAndNotAdvertised(t *testing.T) {
 	}
 	for state, set := range setSets {
 		for _, b := range set.Acts {
-			if slices.Contains(b.Keys(), "n") {
+			if slices.Contains(b.Keys(), "c") {
 				t.Errorf("state %d advertises n in its footer", state)
 			}
 		}
 		for _, column := range set.Full {
 			for _, b := range column {
-				if slices.Contains(b.Keys(), "n") {
+				if slices.Contains(b.Keys(), "c") {
 					t.Errorf("state %d advertises n in its help", state)
 				}
 			}
@@ -452,11 +452,11 @@ func TestSet_AssignStartsFromTheVersionsProject(t *testing.T) {
 	for m.selectedID() != "4001" {
 		dr.key("j")
 	}
-	dr.key("b")
+	dr.key("B")
 
 	push, ok := dr.pushed()
 	if !ok || push.ID != BulkViewID {
-		t.Fatalf("b pushed %q, want the assignment screen", push.ID)
+		t.Fatalf("B pushed %q, want the assignment screen", push.ID)
 	}
 	bulk, _ := push.View.(*Bulk)
 	if bulk == nil || bulk.deps.Project != "10400" {
@@ -575,7 +575,7 @@ func TestSet_SortAndArrangementAreKeptApartFromTheProjectList(t *testing.T) {
 	d.Memory = mem
 	dr := setOf(t, d, planSet(), 120, 30)
 	m := dr.list()
-	dr.key("v", "f")
+	dr.key("v", "f", "l", "enter")
 	dr.key("s", "l", "l", "enter")
 
 	if got := loadSort(SetViewID); got.fieldID() != "name" {
@@ -655,14 +655,14 @@ func TestSet_Golden(t *testing.T) {
 		},
 		"the excluded shown": {
 			width: 120, height: 30, golden: "set_excluded_shown_120x30.golden",
-			after: func(dr *driver) { dr.key("x") },
+			after: func(dr *driver) { dr.key(".") },
 		},
 		"a filter nothing matches": {
 			width: 120, height: 20, golden: "set_filtered_empty_120x20.golden",
 			after: func(dr *driver) {
 				dr.key("/")
 				dr.typeText("nothing like this")
-				dr.key("enter", "f", "f", "f")
+				dr.key("enter", "f", "l", "l", "l", "enter")
 			},
 		},
 		"typing a filter": {
@@ -710,6 +710,7 @@ func TestSet_KeysAreHeldAgainstTheStateTheyBelongTo(t *testing.T) {
 	for name, enter := range map[string]func(){
 		"reading":  func() {},
 		"finding":  func() { m.mode = finding },
+		"faceting": func() { m.mode = faceting },
 		"sorting":  func() { m.mode = sorting },
 		"editing":  func() { m.mode = editing },
 		"counting": func() { m.mode, m.counting = browsing, "1001" },
@@ -740,6 +741,7 @@ func TestSetKeys_EveryStateGolden(t *testing.T) {
 		{"a save in flight", setSaving},
 		{"choosing an order", setSorting},
 		{"typing the text filter", setFinding},
+		{"choosing the filters", setFaceting},
 	}
 	if len(named) != int(setKeyStates) {
 		t.Fatalf("a set has %d key states and this test names %d", setKeyStates, len(named))
@@ -750,4 +752,31 @@ func TestSetKeys_EveryStateGolden(t *testing.T) {
 		writeKeySet(&b, setSets[s.state])
 	}
 	golden(t, "set_keys.golden", b.String())
+}
+
+func TestSet_FOpensStateAndProjectTogetherAndEscKeepsThem(t *testing.T) {
+	t.Parallel()
+
+	dr := setOf(t, testDeps(nil), planSet(), 120, 30)
+	m := dr.list()
+	dr.key("f")
+	if m.mode != faceting || !m.WantsRawKeys() {
+		t.Fatalf("f left the list in mode %v, want the filters open and claiming keys", m.mode)
+	}
+	mustContain(t, dr.view(), "filter by:", "[state all]", "project all")
+
+	dr.key("l")
+	if m.filter != filterUnreleased {
+		t.Errorf("l moved the state to %q, want unreleased", m.filter.name())
+	}
+	dr.key("tab", "h")
+	if m.set.pick != "10400" {
+		t.Errorf("h on project moved it to %q, want the last project", m.set.pick)
+	}
+	mustContain(t, dr.view(), "[project")
+
+	dr.key("esc")
+	if m.mode != browsing || m.filter != filterUnreleased || m.set.pick != "10400" {
+		t.Errorf("esc left mode %v, state %q, project %q, want both kept", m.mode, m.filter.name(), m.set.pick)
+	}
 }

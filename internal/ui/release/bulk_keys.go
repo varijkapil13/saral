@@ -2,7 +2,10 @@ package release
 
 import "github.com/varijkapil13/saral/internal/ui/kernel"
 
-var _ kernel.KeyReporter = (*Bulk)(nil)
+var (
+	_ kernel.KeyReporter    = (*Bulk)(nil)
+	_ kernel.KeyStateLister = (*Bulk)(nil)
+)
 
 // bulkKeyMap is what the assignment screen answers to. While the query is
 // being typed every letter is text, so the switch is tab and leaving is esc;
@@ -40,18 +43,21 @@ var bulkSets = func() [bulkStates]kernel.KeySet {
 	motions := []kernel.Binding{k.Down, k.Up, k.PageDown, k.PageUp}
 	var sets [bulkStates]kernel.KeySet
 	sets[bulkQuery] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Run, "preview"), kernel.Terse(k.Toggle, "on/off"), k.Leave},
 		Full: [][]kernel.Binding{{k.Run, k.Toggle, k.Leave}},
 	}
-	sets[bulkReading] = kernel.KeySet{}
+	sets[bulkReading] = kernel.KeySet{Mode: kernel.Modal}
 	sets[bulkPreview] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{k.Apply, kernel.Terse(k.Edit, "query")},
 		Full: [][]kernel.Binding{motions, {k.Apply, k.Edit}},
 	}
 	// Chunks in flight answer nothing: the ones sent have changed, and a key
 	// that looked like it stopped the rest would be a claim about a race.
-	sets[bulkWorking] = kernel.KeySet{}
+	sets[bulkWorking] = kernel.KeySet{Mode: kernel.Modal}
 	sets[bulkDone] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Edit, "another query")},
 		Full: [][]kernel.Binding{motions, {k.Edit}},
 	}
@@ -60,6 +66,9 @@ var bulkSets = func() [bulkStates]kernel.KeySet {
 
 // LiveKeys reports the keys that work on the step that is up.
 func (b *Bulk) LiveKeys() (set kernel.KeySet, gen int) { return bulkSets[b.state], int(b.state) }
+
+// KeyStates is every step the screen can be on.
+func (b *Bulk) KeyStates() []kernel.KeySet { return bulkSets[:] }
 
 type bulkAction uint8
 

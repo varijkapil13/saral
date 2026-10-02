@@ -196,17 +196,17 @@ func TestPlans_EnterOnTheSummaryPushesTheBrowserWithEveryVersionAndItsProject(t 
 	}
 }
 
-func TestPlans_BBrowsesFromAnyLineOfAnOpenPlan(t *testing.T) {
+func TestPlans_IBrowsesFromAnyLineOfAnOpenPlan(t *testing.T) {
 	t.Parallel()
 
 	dr := newDriver(t, refusedDeps(newFake(5)), 120, 30, WithDefined(defined()))
 
-	dr.key("b")
+	dr.key("I")
 	if len(dr.pushed) != 0 {
-		t.Fatal("b browsed a plan that was not open")
+		t.Fatal("I browsed a plan that was not open")
 	}
 	if !strings.Contains(dr.lastStatus().Text, "open the plan first") {
-		t.Errorf("b over a closed plan said %q", dr.lastStatus().Text)
+		t.Errorf("I over a closed plan said %q", dr.lastStatus().Text)
 	}
 
 	dr.key("enter")
@@ -216,13 +216,13 @@ func TestPlans_BBrowsesFromAnyLineOfAnOpenPlan(t *testing.T) {
 		}
 		dr.pushed = nil
 		dr.m.moveTo(line)
-		dr.key("b")
+		dr.key("I")
 		if len(dr.pushed) != 1 {
-			t.Errorf("b on line %d (%q) pushed %d views, want one", line, dr.m.rows[line].text, len(dr.pushed))
+			t.Errorf("I on line %d (%q) pushed %d views, want one", line, dr.m.rows[line].text, len(dr.pushed))
 		}
 	}
-	if set, _ := dr.m.LiveKeys(); !strings.Contains(actsOf(set), "b releases") {
-		t.Errorf("an open plan advertises %q, want b", actsOf(set))
+	if set, _ := dr.m.LiveKeys(); !strings.Contains(actsOf(set), "I releases") {
+		t.Errorf("an open plan advertises %q, want I", actsOf(set))
 	}
 }
 

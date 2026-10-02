@@ -49,7 +49,7 @@ func TestLiveKeys_FollowWhatTheListIsDoing(t *testing.T) {
 		acts  bool
 	}{
 		{name: "reading the versions", enter: func() {}, state: keysBrowsing, acts: true},
-		{name: "typing a version", enter: func() { dr.key("n") }, state: keysEditing, acts: true},
+		{name: "typing a version", enter: func() { dr.key("c") }, state: keysEditing, acts: true},
 		{
 			name:  "a save in flight",
 			enter: func() { dr.list().saving = true },
@@ -110,13 +110,13 @@ func TestLiveKeys_CountingDropsTheReleaseAndKeepsTheRest(t *testing.T) {
 
 	browsing := actsOf(liveSets[keysBrowsing])
 	counting := actsOf(liveSets[keysCounting])
-	if !strings.Contains(browsing, "enter") {
+	if !strings.Contains(browsing, "!") {
 		t.Fatalf("the resting row does not offer a release at all: %s", browsing)
 	}
-	if strings.Contains(counting, "enter") {
+	if strings.Contains(counting, "!") {
 		t.Errorf("the row offers a release while the count is still being read: %s", counting)
 	}
-	for _, want := range []string{"n", "e", "A"} {
+	for _, want := range []string{"c", "e", "A"} {
 		if !strings.Contains(counting, want) {
 			t.Errorf("the row gave up %q while counting, which still works: %s", want, counting)
 		}
@@ -128,7 +128,7 @@ func TestLiveKeys_OpeningTheEditorChangesWhatIsAdvertised(t *testing.T) {
 
 	dr := listOf(t, testDeps(newFake(8)), 120, 24)
 	before, _ := dr.list().LiveKeys()
-	dr.key("n")
+	dr.key("c")
 	after, gen := dr.list().LiveKeys()
 
 	if gen != int(keysEditing) {

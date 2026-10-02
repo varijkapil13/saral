@@ -2,7 +2,10 @@ package release
 
 import "github.com/varijkapil13/saral/internal/ui/kernel"
 
-var _ kernel.KeyReporter = (*Flow)(nil)
+var (
+	_ kernel.KeyReporter    = (*Flow)(nil)
+	_ kernel.KeyStateLister = (*Flow)(nil)
+)
 
 // flowKeyMap is what the release screen answers to. It binds no esc: the flow is
 // pushed, so the kernel's own esc pops it, and that is what leaving a version
@@ -45,22 +48,26 @@ var flowSets = func() [flowKeyStates]kernel.KeySet {
 	k := defaultFlowKeys()
 	var sets [flowKeyStates]kernel.KeySet
 	sets[flowChoosing] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Choose, "choose")},
 		Full: [][]kernel.Binding{{k.Down, k.Up}, {k.Choose}},
 	}
 	sets[flowPicking] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Use, "move them here")},
 		Full: [][]kernel.Binding{{k.Down, k.Up}, {k.Use}},
 	}
 	sets[flowConfirming] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Confirm, "go ahead")},
 		Full: [][]kernel.Binding{{k.Confirm}},
 	}
 	// A release in flight answers nothing. It is one write, it cannot be taken
 	// back half way, and a key that appeared to stop it would be a claim about
 	// which of the two won.
-	sets[flowWorking] = kernel.KeySet{}
+	sets[flowWorking] = kernel.KeySet{Mode: kernel.Modal}
 	sets[flowStuck] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Again, "start again")},
 		Full: [][]kernel.Binding{{k.Again}},
 	}
@@ -72,6 +79,9 @@ var flowSets = func() [flowKeyStates]kernel.KeySet {
 func (f *Flow) LiveKeys() (set kernel.KeySet, gen int) {
 	return flowSets[f.state], int(f.state)
 }
+
+// KeyStates is every screen the flow can be on.
+func (f *Flow) KeyStates() []kernel.KeySet { return flowSets[:] }
 
 type flowAction uint8
 

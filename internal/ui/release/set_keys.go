@@ -9,7 +9,7 @@ import (
 // ArrangeMsg moves the arrangement of a set on to the next one.
 type ArrangeMsg struct{}
 
-// PickProjectMsg moves the project filter of a set on to the next project.
+// PickProjectMsg opens the filters of a set on its project.
 type PickProjectMsg struct{}
 
 // ExcludedMsg shows the versions a plan leaves out, or hides them again.
@@ -23,33 +23,60 @@ type setAct uint8
 const (
 	setActNone setAct = iota
 	setActArrange
-	setActPick
 	setActExcluded
+	setActFold
+	setActNextFacet
+	setActPrevFacet
+	setActLess
+	setActMore
+	setActDone
 )
 
 type setKeyMap struct {
 	keyMap
 	Arrange  kernel.Binding
-	Pick     kernel.Binding
 	Excluded kernel.Binding
+	Fold     kernel.Binding
+
+	NextFacet kernel.Binding
+	PrevFacet kernel.Binding
+	Less      kernel.Binding
+	More      kernel.Binding
+	Done      kernel.Binding
+	Dismiss   kernel.Binding
 }
 
 func defaultSetKeys() setKeyMap {
 	k := defaultKeys()
-	k.Release = kernel.Bind([]string{"enter"}, "enter", "release it, or fold a header")
-	k.Find = kernel.Bind([]string{"/"}, "/", "find a version or release")
+	k.Filter = kernel.Canon(kernel.ActFilter, "filter by state or project")
+	k.Find = kernel.Canon(kernel.ActFind, "find a version or release")
 	return setKeyMap{
 		keyMap:   k,
-		Arrange:  kernel.Bind([]string{"v"}, "v", "group by cross-space release or project"),
-		Pick:     kernel.Bind([]string{"p"}, "p", "show one project, or all"),
-		Excluded: kernel.Bind([]string{"x"}, "x", "show or hide what the plan excludes"),
+		Arrange:  kernel.Canon(kernel.ActGroup, "group by cross-space release or project"),
+		Excluded: kernel.Canon(kernel.ActHidden, "show or hide what the plan excludes"),
+		Fold:     kernel.Canon(kernel.ActOpen, "fold a header"),
+
+		NextFacet: kernel.Canon(kernel.ActNextPane, "next filter"),
+		PrevFacet: kernel.Canon(kernel.ActPrevPane, "previous filter"),
+		Less:      kernel.Canon(kernel.ActLeft, "previous value"),
+		More:      kernel.Canon(kernel.ActRight, "next value"),
+		Done:      kernel.Bind([]string{"enter"}, "enter", "keep them"),
+		Dismiss:   kernel.Bind([]string{"esc"}, "esc", "keep them"),
 	}
 }
 
 func (k setKeyMap) table() map[string]setAct {
 	return table(
-		binding[setAct]{k.Arrange, setActArrange}, binding[setAct]{k.Pick, setActPick},
-		binding[setAct]{k.Excluded, setActExcluded},
+		binding[setAct]{k.Arrange, setActArrange}, binding[setAct]{k.Excluded, setActExcluded},
+		binding[setAct]{k.Fold, setActFold},
+	)
+}
+
+func (k setKeyMap) facetTable() map[string]setAct {
+	return table(
+		binding[setAct]{k.NextFacet, setActNextFacet}, binding[setAct]{k.PrevFacet, setActPrevFacet},
+		binding[setAct]{k.Less, setActLess}, binding[setAct]{k.More, setActMore},
+		binding[setAct]{k.Done, setActDone}, binding[setAct]{k.Dismiss, setActDone},
 	)
 }
 
@@ -64,6 +91,7 @@ const (
 	setSaving
 	setSorting
 	setFinding
+	setFaceting
 	setKeyStates
 )
 
@@ -71,30 +99,38 @@ var setSets = func() [setKeyStates]kernel.KeySet {
 	k := defaultSetKeys()
 	edit, archive := kernel.Terse(k.Edit, "edit"), kernel.Terse(k.Archive, "archive")
 	assign := kernel.Terse(k.Assign, "assign")
-	sort, filter := kernel.Terse(k.Sort, "sort"), kernel.Terse(k.Filter, "state")
-	arrange, pick := kernel.Terse(k.Arrange, "arrange"), kernel.Terse(k.Pick, "project")
+	sort, filter := kernel.Terse(k.Sort, "sort"), kernel.Terse(k.Filter, "filter")
+	arrange := kernel.Terse(k.Arrange, "arrange")
 	excluded, find := kernel.Terse(k.Excluded, "excluded"), kernel.Terse(k.Find, "find")
 	motions := [][]kernel.Binding{{k.Down, k.Up, k.PageDown, k.PageUp, k.Top, k.Bottom}}
 
 	var sets [setKeyStates]kernel.KeySet
 	sets[setBrowsing] = kernel.KeySet{
 		Acts: []kernel.Binding{
-			kernel.Terse(k.Release, "open"), edit, archive, assign, sort, arrange, pick, filter, excluded, find,
+			kernel.Terse(k.Release, "release"), edit, archive, assign, sort, arrange, filter, excluded, find,
 		},
 		Full: append(append([][]kernel.Binding(nil), motions...),
-			[]kernel.Binding{k.Release, k.Edit, k.Archive, k.Assign},
-			[]kernel.Binding{k.Sort, k.Arrange, k.Pick, k.Filter, k.Excluded, k.Find}),
+			[]kernel.Binding{k.Release, k.Fold, k.Edit, k.Archive, k.Assign},
+			[]kernel.Binding{k.Sort, k.Arrange, k.Filter, k.Excluded, k.Find}),
 	}
 	sets[setCounting] = kernel.KeySet{
-		Acts: []kernel.Binding{edit, archive, assign, sort, arrange, pick, filter, excluded, find},
+		Acts: []kernel.Binding{edit, archive, assign, sort, arrange, filter, excluded, find},
 		Full: append(append([][]kernel.Binding(nil), motions...),
-			[]kernel.Binding{k.Edit, k.Archive, k.Assign},
-			[]kernel.Binding{k.Sort, k.Arrange, k.Pick, k.Filter, k.Excluded, k.Find}),
+			[]kernel.Binding{k.Fold, k.Edit, k.Archive, k.Assign},
+			[]kernel.Binding{k.Sort, k.Arrange, k.Filter, k.Excluded, k.Find}),
 	}
 	sets[setEditing] = liveSets[keysEditing]
 	sets[setSaving] = liveSets[keysSaving]
 	sets[setSorting] = liveSets[keysSorting]
 	sets[setFinding] = liveSets[keysFinding]
+	sets[setFaceting] = kernel.KeySet{
+		Mode: kernel.Modal,
+		Acts: []kernel.Binding{
+			kernel.Terse(k.NextFacet, "next"), kernel.Terse(k.Less, "prev value"),
+			kernel.Terse(k.More, "next value"), kernel.Terse(k.Done, "keep"),
+		},
+		Full: [][]kernel.Binding{{k.NextFacet, k.PrevFacet}, {k.Less, k.More}, {k.Done, k.Dismiss}},
+	}
 	return sets
 }()
 
@@ -109,6 +145,8 @@ func (m *Model) setLiveKeys() (set kernel.KeySet, gen int) {
 		state = setSorting
 	case m.mode == finding:
 		state = setFinding
+	case m.mode == faceting:
+		state = setFaceting
 	case m.counting != "":
 		state = setCounting
 	}
@@ -119,14 +157,32 @@ func (m *Model) setKey(stroke string) (tea.Cmd, bool) {
 	switch m.set.acts[stroke] {
 	case setActArrange:
 		return m.cycleArrange(), true
-	case setActPick:
-		return m.cyclePick(), true
 	case setActExcluded:
 		return m.toggleExcluded(), true
-	case setActNone:
-	}
-	if m.acts[stroke] == actRelease && m.cursor >= 0 && m.cursor < len(m.order) && m.order[m.cursor].v < 0 {
-		return m.foldHeader(m.cursor), true
+	case setActFold:
+		if m.cursor >= 0 && m.cursor < len(m.order) && m.order[m.cursor].v < 0 {
+			return m.foldHeader(m.cursor), true
+		}
+		return nil, true
+	case setActNone, setActNextFacet, setActPrevFacet, setActLess, setActMore, setActDone:
 	}
 	return nil, false
+}
+
+func (m *Model) facetKey(stroke string) tea.Cmd {
+	s := m.set
+	switch s.inFacet[stroke] {
+	case setActNextFacet, setActPrevFacet:
+		s.facet = (s.facet + 1) % facetCount
+	case setActLess:
+		m.stepFacet(-1)
+	case setActMore:
+		m.stepFacet(1)
+	case setActDone:
+		m.mode = browsing
+		m.sum = ""
+		m.scrollToCursor()
+	case setActNone, setActArrange, setActExcluded, setActFold:
+	}
+	return nil
 }

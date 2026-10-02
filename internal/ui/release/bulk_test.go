@@ -342,7 +342,7 @@ func TestList_AssignOpensTheScreenOverTheVersionUnderTheCursor(t *testing.T) {
 
 	dr := listOf(t, testDeps(newFake(4)), 100, 20)
 	dr.moveTo(twoOh)
-	dr.key("b")
+	dr.key("B")
 	push, ok := dr.pushed()
 	if !ok || push.ID != BulkViewID {
 		t.Fatalf("b pushed %+v, want the assignment screen", push)
@@ -353,7 +353,7 @@ func TestList_AssignOpensTheScreenOverTheVersionUnderTheCursor(t *testing.T) {
 	}
 
 	dr.list().versions[dr.list().cursor].Archived = true
-	dr.key("b")
+	dr.key("B")
 	if st := dr.lastStatus(); st.Level != kernel.LevelWarn {
 		t.Errorf("an archived version opened the screen; status %q", st.Text)
 	}

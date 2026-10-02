@@ -2,7 +2,10 @@ package plan
 
 import "github.com/varijkapil13/saral/internal/ui/kernel"
 
-var _ kernel.KeyReporter = (*Model)(nil)
+var (
+	_ kernel.KeyReporter    = (*Model)(nil)
+	_ kernel.KeyStateLister = (*Model)(nil)
+)
 
 // keyMap is what the view answers to. Open and Close are one stroke and two
 // sentences, because what enter does to the plan under the cursor depends on
@@ -25,15 +28,15 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
-		Top:      kernel.Bind([]string{"home"}, "home", "first plan"),
-		Bottom:   kernel.Bind([]string{"end"}, "end", "last plan"),
-		Open:     kernel.Bind([]string{"enter"}, "enter", "show what this plan is made of"),
-		Close:    kernel.Bind([]string{"enter"}, "enter", "hide what this plan is made of"),
-		Browse:   kernel.Bind([]string{"b"}, "b", "browse this plan's releases"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
+		Top:      kernel.Canon(kernel.ActTop, "first plan"),
+		Bottom:   kernel.Canon(kernel.ActBottom, "last plan"),
+		Open:     kernel.Canon(kernel.ActOpen, "show what this plan is made of"),
+		Close:    kernel.Canon(kernel.ActOpen, "hide what this plan is made of"),
+		Browse:   kernel.Canon(kernel.ActFull, "browse this plan's releases"),
 	}
 }
 
@@ -97,6 +100,9 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	}
 	return liveSets[state], int(state)
 }
+
+// KeyStates is every set the view reports.
+func (m *Model) KeyStates() []kernel.KeySet { return liveSets[:] }
 
 type action uint8
 

@@ -37,12 +37,13 @@ func init() {
 		Keys:  []string{kernel.SlotGesture(slot)},
 		Run:   func(kernel.Deps) tea.Cmd { return kernel.Open(ViewID) },
 	})
-	for _, c := range []struct {
+	for _, c := range []*struct {
 		id, title string
 		key       kernel.Binding
 		msg       tea.Msg
+		action    kernel.Action
 	}{
-		{id: "releases.new", title: "Create a version", key: keys.New, msg: NewVersionMsg{}},
+		{id: "releases.new", title: "Create a version", key: keys.New, msg: NewVersionMsg{}, action: kernel.ActCreate},
 		{id: "releases.edit", title: "Edit the version you are on", key: keys.Edit, msg: EditVersionMsg{}},
 		{
 			id: "releases.archive", title: "Archive or unarchive the version you are on",
@@ -53,40 +54,43 @@ func init() {
 			key: keys.Release, msg: ShipMsg{},
 		},
 		{
-			id: "releases.assign", title: "Put the version you are on on issues, or take it off them",
+			id: "releases.fix-version", title: "Put the version you are on on issues, or take it off them",
 			key: keys.Assign, msg: AssignMsg{},
 		},
-		{id: "releases.sort", title: "Sort the versions", key: keys.Sort, msg: SortMsg{}},
+		{id: "releases.sort", title: "Sort the versions", key: keys.Sort, msg: SortMsg{}, action: kernel.ActSort},
 		{
 			id: "releases.filter", title: "Show the unreleased, released, archived or all versions",
 			key: keys.Filter, msg: FilterMsg{},
 		},
 	} {
 		kernel.RegisterCommand(kernel.Command{
-			ID:    c.id,
-			Title: c.title,
-			Group: "Releases",
-			Keys:  []string{c.key.Help().Key},
+			ID:     c.id,
+			Title:  c.title,
+			Group:  "Releases",
+			Action: c.action,
+			Keys:   []string{c.key.Help().Key},
 			Run: func(kernel.Deps) tea.Cmd {
 				return kernel.OpenThen(ViewID, c.msg)
 			},
 		})
 	}
-	for _, c := range []struct {
+	for _, c := range []*struct {
 		id, title string
 		key       kernel.Binding
 		msg       tea.Msg
+		action    kernel.Action
 	}{
 		{id: "releases.arrange", title: "Arrange the releases by cross-space release, project or not at all", key: setKeys.Arrange, msg: ArrangeMsg{}},
 		{id: "releases.excluded", title: "Show or hide the versions the plan leaves out", key: setKeys.Excluded, msg: ExcludedMsg{}},
-		{id: "releases.project", title: "Show one project's versions, or all", key: setKeys.Pick, msg: PickProjectMsg{}},
-		{id: "releases.find", title: "Find a version or a release", key: setKeys.Find, msg: FindMsg{}},
+		{id: "releases.project", title: "Show one project's versions, or all", key: setKeys.Filter, msg: PickProjectMsg{}},
+		{id: "releases.find", title: "Find a version or a release", key: setKeys.Find, msg: FindMsg{}, action: kernel.ActFind},
 	} {
 		kernel.RegisterCommand(kernel.Command{
-			ID:    c.id,
-			Title: c.title,
-			Group: "Releases",
-			Keys:  []string{c.key.Help().Key},
+			ID:     c.id,
+			Title:  c.title,
+			Group:  "Releases",
+			Action: c.action,
+			Keys:   []string{c.key.Help().Key},
 			Run: func(kernel.Deps) tea.Cmd {
 				return kernel.Broadcast(c.msg)
 			},

@@ -97,15 +97,15 @@ i     type a project key                  ↑/k  up           g            where
                                                             R            refetch everything
 
 plans
-enter show what this plan is made of    ↓/j  down          1-9          saved query           ctrl+k commands
-                                        ↑/k  up            g            where to go           ?      help
-                                        pgdn page down     g 1-9        switch view           q      quit
-                                        pgup page up       ctrl+, / g s settings
-                                        home first plan    g i          jump to an issue
-                                        end  last plan     g /          search issues
-                                                           esc          back
-                                                           r            refresh
-                                                           R            refetch everything
+enter show what this plan is made of    ↓/j     down          1-9          saved query           ctrl+k commands
+                                        ↑/k     up            g            where to go           ?      help
+                                        pgdn    page down     g 1-9        switch view           q      quit
+                                        pgup    page up       ctrl+, / g s settings
+                                        g g     first plan    g i          jump to an issue
+                                        G / g e last plan     g /          search issues
+                                                              esc          back
+                                                              r            refresh
+                                                              R            refetch everything
 
 release.flow
 enter choose what happens to the open issues    ↓/j down    1-9          saved query           ctrl+k commands
@@ -119,27 +119,26 @@ enter choose what happens to the open issues    ↓/j down    1-9          saved
                                                             R            refetch everything
 
 release.set
-enter release it, or fold a header               ↓/j  down             1-9          saved query        ...
-e     edit this version                          ↑/k  up               g            where to go
-A     archive or unarchive it                    pgdn page down        g 1-9        switch view
-b     put it on issues, or take it off           pgup page up          ctrl+, / g s settings
-s     sort the versions                          g g  first version    g i          jump to an issue
-v     group by cross-space release or project    G    last version     g /          search issues
-p     show one project, or all                                         esc          back
-f     filter by state                                                  r            refresh
-x     show or hide what the plan excludes                              R            refetch everything
-/     find a version or release
+! release this version                       ↓/j     down             enter fold a header ...
+e edit this version                          ↑/k     up
+A archive or unarchive it                    pgdn    page down
+B put it on issues, or take it off           pgup    page up
+s sort the versions                          g g     first version
+v group by cross-space release or project    G / g e last version
+f filter by state or project
+. show or hide what the plan excludes
+/ find a version or release
 
 releases
-enter release this version                ↓/j  down             1-9          saved query           ctrl+k commands
-n     new version                         ↑/k  up               g            where to go           ?      help
-e     edit this version                   pgdn page down        g 1-9        switch view           q      quit
-A     archive or unarchive it             pgup page up          ctrl+, / g s settings
-b     put it on issues, or take it off    g g  first version    g i          jump to an issue
-s     sort the versions                   G    last version     g /          search issues
-f     filter by state                                           esc          back
-/     find a version                                            r            refresh
-                                                                R            refetch everything
+! release this version                ↓/j     down             1-9          saved query           ctrl+k commands
+c new version                         ↑/k     up               g            where to go           ?      help
+e edit this version                   pgdn    page down        g 1-9        switch view           q      quit
+A archive or unarchive it             pgup    page up          ctrl+, / g s settings
+B put it on issues, or take it off    g g     first version    g i          jump to an issue
+s sort the versions                   G / g e last version     g /          search issues
+f filter by state                                              esc          back
+/ find a version                                               r            refresh
+                                                               R            refetch everything
 
 settings
 enter apply, open or run    ↓ move      1-9          saved query           ctrl+k commands
