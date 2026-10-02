@@ -7,7 +7,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -20,9 +19,13 @@ const (
 )
 
 type childrenMsg struct {
-	gen  int
-	page jira.Page[jira.Issue]
-	err  error
+	gen      int
+	page     jira.Page[jira.Issue]
+	err      error
+	order    childOrder
+	haveRank bool
+	restRead bool
+	warn     string
 }
 
 type childPatchedMsg struct {
@@ -56,12 +59,20 @@ func (m *Model) wantsChildren() bool {
 		m.search != nil && m.deps.Jira != nil
 }
 
-func loadChildren(ctx context.Context, search *app.Search, key string, gen int) tea.Cmd {
+func loadChildren(ctx context.Context, in childRead, gen int) tea.Cmd {
 	return func() tea.Msg {
-		res, err := search.Run(ctx, app.Request{
-			JQL: childrenJQL(key), Projection: app.ListProjection(), MaxResults: childrenPage,
-		})
-		return childrenMsg{gen: gen, page: res.Page, err: err}
+		d := in.run(ctx)
+		return childrenMsg{
+			gen: gen, page: d.page, err: d.err, order: d.order,
+			haveRank: d.haveRank, restRead: d.restRead, warn: d.warn,
+		}
+	}
+}
+
+func (m *Model) childRequest() childRead {
+	return childRead{
+		key: m.issue.Key, search: m.search, vocab: m.deps.Jira, choice: currentChildSort(),
+		order: m.childOrd, bound: childrenSortBound,
 	}
 }
 
@@ -71,7 +82,38 @@ func (m *Model) fetchChildren() tea.Cmd {
 	}
 	m.childGen++
 	m.childAsked = true
-	return kernel.Reply(loadChildren(m.childContext(), m.search, m.issue.Key, m.childGen), m.addr)
+	return kernel.Reply(loadChildren(m.childContext(), m.childRequest(), m.childGen), m.addr)
+}
+
+func (m *Model) resortChildren() tea.Cmd {
+	if !m.wantsChildren() || !m.childAsked {
+		return nil
+	}
+	if !m.childRead || m.childErr != nil {
+		return m.fetchChildren()
+	}
+	if !m.childOrd.needs(currentChildSort(), m.childRank, m.childRest, m.childPage) {
+		m.reorderChildren()
+		m.dataGen++
+		return nil
+	}
+	m.childGen++
+	in := m.childRequest()
+	in.page, in.loaded, in.haveRank, in.restRead = m.childPage, true, m.childRank, m.childRest
+	in.page.Items = m.children
+	return kernel.Reply(loadChildren(m.childContext(), in, m.childGen), m.addr)
+}
+
+func (m *Model) reorderChildren() {
+	m.childApplied = m.childOrd.effective(currentChildSort())
+	m.childIdx = orderIndex(m.children, m.childApplied, &m.childOrd, m.childIdx)
+}
+
+func (m *Model) rankID() string {
+	if m.childRank {
+		return m.childOrd.rankID
+	}
+	return ""
 }
 
 func (m *Model) childContext() context.Context {
@@ -81,15 +123,25 @@ func (m *Model) childContext() context.Context {
 	return m.childCtx
 }
 
-func (m *Model) childrenArrived(msg childrenMsg) {
+func (m *Model) childrenArrived(msg childrenMsg) tea.Cmd {
 	if msg.gen != m.childGen {
-		return
+		return nil
 	}
 	m.childRead, m.childErr = true, msg.err
+	var cmd tea.Cmd
 	if msg.err == nil {
 		m.children, m.childPage = msg.page.Items, msg.page
+		warned := m.childOrd.prioWarned
+		m.childOrd, m.childRank, m.childRest = msg.order, msg.haveRank, msg.restRead
+		m.childOrd.prioWarned = m.childOrd.prioWarned || warned
+		if msg.warn != "" && !warned {
+			m.childOrd.prioWarned = true
+			cmd = kernel.Warn(msg.warn)
+		}
+		m.reorderChildren()
 	}
 	m.dataGen++
+	return cmd
 }
 
 func (m *Model) hasChild(key string) bool {
@@ -101,9 +153,9 @@ func (m *Model) childChanged(key string) tea.Cmd {
 	if m.deps.Jira == nil || !m.hasChild(key) {
 		return nil
 	}
-	ctx, gen, reader := m.childContext(), m.childGen, m.deps.Jira
+	ctx, gen, reader, ids := m.childContext(), m.childGen, m.deps.Jira, childProjection(m.rankID()).IDs
 	return kernel.Reply(func() tea.Msg {
-		iss, err := reader.IssueFields(ctx, key, app.ListProjection().IDs)
+		iss, err := reader.IssueFields(ctx, key, ids)
 		return childPatchedMsg{gen: gen, issue: iss, err: err}
 	}, m.addr)
 }
@@ -121,6 +173,7 @@ func (m *Model) childPatched(msg childPatchedMsg) {
 		m.issue.Subtasks = slices.Clone(m.issue.Subtasks)
 		m.issue.Subtasks[at].Summary, m.issue.Subtasks[at].Status = msg.issue.Summary, msg.issue.Status
 	}
+	m.reorderChildren()
 	m.dataGen++
 }
 
@@ -142,10 +195,17 @@ func (m *Model) childGroup() (refGroup, bool) {
 	if more {
 		title = childrenGroup + " · " + strconv.Itoa(n) + "+ · " + strconv.Itoa(done) + " done so far"
 	}
+	if m.childApplied.Chosen() {
+		title += " · sort: " + sortLabel(m.childApplied, m.deps.Theme.Glyphs)
+	}
 	shown := min(n, childrenInline)
 	refs := make([]jira.IssueRef, shown)
 	for i := range shown {
-		refs[i] = refOf(&m.children[i])
+		at := i
+		if len(m.childIdx) == n {
+			at = m.childIdx[i]
+		}
+		refs[i] = refOf(&m.children[at])
 	}
 	g := refGroup{label: childrenGroup, title: title, refs: refs}
 	if rest := n - shown; rest > 0 || more {
@@ -173,9 +233,9 @@ func (m *Model) openChildren() tea.Cmd {
 	case m.childRead && m.childErr == nil && len(m.children) == 0 && len(m.issue.Subtasks) == 0:
 		return kernel.Warn(m.issue.Key + " has no children")
 	}
-	kind := &childrenKind{search: m.search}
+	kind := &childrenKind{search: m.search, order: m.childOrd}
 	if m.childRead && m.childErr == nil {
-		kind.seed = &childSeed{issues: m.children, page: m.childPage}
+		kind.seed = &childSeed{issues: m.children, page: m.childPage, haveRank: m.childRank, restRead: m.childRest}
 	}
 	sh := newSheet(m.deps, m.issue, kind)
 	sh.trail = m.trailBeneath()

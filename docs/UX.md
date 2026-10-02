@@ -234,7 +234,7 @@ filter by a value      f              pick a facet, then one of the values this 
 every issue here       0              widen the search to the whole of the session's project;
                                       also the state with no filter values in force
 edit this search       e              show the JQL on screen and run an edited one
-sort                   s              in issues, the backlog and releases; pick a field and a direction
+sort                   s              in issues, the backlog, releases and an epic's children; pick a field and a direction
 save this search       ctrl+s         bind the query on screen to a number key
 refresh                r / R          current view / purge and refetch. both say what came back
 kill to end of line    alt+k          in any text field. ctrl+k is the palette and never reaches one,
@@ -1126,8 +1126,15 @@ above it, without reading the epic. A move that asks for fields opens the child'
 status picker rather than guessing a value; a field the child's edit screen does not carry says so
 (`Priority is not on PROJ-31's edit screen`); a child someone else changed first is read again and not
 overwritten (`assignee changed on the site; read again`). *Show this issue's children in the issue
-list* in the palette runs the same search in the list, replacing the stack as `g 1` does. Labels,
-sprint and bulk changes are not here.
+list* in the palette runs the same search in the list, replacing the stack as `g 1` does. `s` sorts the children: `←`/`→` choose between created, updated, due, key, summary, status,
+priority, assignee and type (and rank, where the site has exactly one rank field), `enter` chooses, the same
+field again flips its direction, `esc` leaves things as they were. The site's own order, created ascending, is
+the default and costs nothing; any other order reads the rest of the children first, up to 500 (`sorted over
+the first 500 of 500+` when there are more), and puts the order in force once. Priority follows the site's own
+priority order, never the names; an undated or unassigned child is last in both directions; ties fall to
+created, then key. The pane's first eight follow the same order (`Children · 12 · 7 done · sort: key ↓`), the
+choice is kept per machine in `ui.toml` and is also a setting (*Settings → Issue → Order of an epic's
+children*). Labels, sprint and bulk changes are not here.
 
 **Links, time and watchers are sheets pushed over the pane**, one list with one prompt under it, so
 `esc` comes back to the fields exactly as they were. Each change is written at once and the pane

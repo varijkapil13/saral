@@ -208,7 +208,10 @@ jobs:
         run: |
           root=$PWD
           warm() {
-            pkgs=$(python3 "$root/scripts/benchgate.py" --root "$1" --shard "$SHARD")
+            pkgs=
+            for pkg in $(python3 "$root/scripts/benchgate.py" --root "$root" --shard "$SHARD"); do
+              [ -d "$1/$pkg" ] && pkgs="$pkgs $pkg"
+            done
             [ -z "$pkgs" ] || (cd "$1" && go test -count=1 -run '^$' $pkgs)
           }
           warm . &
@@ -235,7 +238,8 @@ jobs:
               mkdir -p .bench
               bench() {
                 : > "$2"
-                for pkg in $(python3 "$root/scripts/benchgate.py" --root "$1" --shard "$SHARD"); do
+                for pkg in $(python3 "$root/scripts/benchgate.py" --root "$root" --shard "$SHARD"); do
+                  [ -d "$1/$pkg" ] || continue
                   guarded=$(python3 "$root/scripts/benchgate.py" --root "$root" --list-guarded "$pkg")
                   if [ -n "$guarded" ]; then
                     (cd "$1" && go test -run "^$" -bench "$guarded" -benchmem -benchtime=100x -count=6 "$pkg") >> "$2"

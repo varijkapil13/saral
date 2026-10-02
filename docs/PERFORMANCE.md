@@ -23,7 +23,8 @@ getting thirty per cent worse with room to spare.
 | Keystroke → frame, steady state | **mean < 16 ms** at 10k rows | asserted in every view that takes a keystroke — list, issue, comment, filter, the timeline, the palette, the form, settings, the site search and the kernel chrome. The budget used to read *p99*; a benchmark reports a mean and keeps no distribution, and the regression gate reads the same means, so p99 is still unmeasured here and stays on the list below |
 | Scroll a 10k-row list | 1 allocation a frame | the frame string `View` returns, and nothing behind it. Asserted with the mouse on, under a kept filter and under terms in force |
 | Scroll any other list | the frame and the lines the keystroke changed | every view that scrolls asserts `allocs/op` against a ceiling and against the same view at twenty rows: the backlog, the board, the comment thread, the attachment pane, the filter picker, the form, the move confirm screen, the palette, plans, releases, the fix-version assignment preview, releases over a set of projects, sprints, the timeline and the site search (two hundred results against twenty) |
-| Walk an issue's related issues and an epic's children | **< 16 ms** a keystroke over forty related issues and over fifty children, and the children sheet allocates no more over a thousand rows than over a hundred | `TestBudget_RelatedRowsKeystrokeToFrame`, `TestBudget_EpicChildrenKeystrokeToFrame` and `TestBudget_ChildrenSheetScrollingCostsTheSameOnAThousandRowsAsOnAHundred`. An epic's children are one search of fifty rows with the list's narrow field set, read once after the issue, and a child that changes is one narrow read of that child |
+| Walk an issue's related issues and an epic's children | **< 16 ms** a keystroke over forty related issues and over fifty children, and the children sheet allocates no more over a thousand rows than over a hundred | `TestBudget_RelatedRowsKeystrokeToFrame`, `TestBudget_EpicChildrenKeystrokeToFrame` and `TestBudget_ChildrenSheetScrollingCostsTheSameOnAThousandRowsAsOnAHundred`. An epic's children are one search of fifty rows with the list's narrow field set plus `created` and `duedate`, read once after the issue, and a child that changes is one narrow read of that child |
+| Order an epic's children | **< 16 ms** to order five hundred of them (0 allocations beyond a reused index) and to choose an order over five hundred rows and draw the frame, and a keystroke in the sort picker allocates no more than a scroll plus thirty | `TestBudget_ChildSort500` over `BenchmarkChildSort500`, and `TestBudget_ChildSortKeystrokeToFrame` over `BenchmarkChildSortChoose500` and `BenchmarkChildSortPickerKey`. The default order (the site's `ORDER BY created ASC`) reads nothing extra and sorts nothing; any other order reads the rest of the children up to 500 once, then orders them in memory. About 0.12 ms and 0 allocations for the sort, 1.1 ms and about 1,100 allocations to choose and redraw, on an M2 Pro |
 | Pan a chart across a thousand years of calendar | the allocations and the bytes that ten years costs, and **< 16 ms** a frame over either span | the timeline is the one view that scrolls in two dimensions. `TestBudget_TimelinePanningCostsTheSameOverAThousandYearsAsOverTen` compares the two runs on the counts and the bytes, holds the count to a ceiling of 1700 besides, and holds each frame's time against the budget rather than against the other run |
 | Frame allocations at 200×60 | ceilings in `internal/ui/kernel/budget_test.go` | 297 for a frame, 310 for a keystroke and its frame, 324 with the mouse on, each held to a ceiling about a tenth above |
 | An overlay over the same frame | ceilings in the same table | 629 for the `?` overlay, 800 for the right-click menu, 1628 for the destinations behind a latched `g`. None is a steady state — nothing repaints one until the next key — and each has a benchmark of its own, so a number here is one the table checks. The destinations box measured 1120 while it listed only the view slots; the gestures the prefix completes on its own — `g i`, `g /` and `g s` — are three more rows and a wider title column, and every row of the box pays that width |
@@ -168,6 +169,8 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/ui/form` | `TestBudget_FormFullRedrawAt200x60` |
 | `internal/ui/form` | `TestBudget_FormKeystrokeToFrameOnALongScreen` |
 | `internal/ui/form` | `TestBudget_FormScrollingCostsTheSameOnTwoHundredFieldsAsOnEight` |
+| `internal/ui/issue` | `TestBudget_ChildSort500` |
+| `internal/ui/issue` | `TestBudget_ChildSortKeystrokeToFrame` |
 | `internal/ui/issue` | `TestBudget_ChildrenSheetScrollingCostsTheSameOnAThousandRowsAsOnAHundred` |
 | `internal/ui/issue` | `TestBudget_DragCostsAFrameWhileHeldAndAResizeWhileMoving` |
 | `internal/ui/issue` | `TestBudget_EpicChildrenKeystrokeToFrame` |
@@ -289,8 +292,10 @@ The work is spread so the job takes minutes rather than a quarter of an hour:
 - **Four `bench` shards**, each handed a slice of the packages by `benchgate.py --shard I/N`: every
   package holding a `func Benchmark` is assigned greedily, largest cost first (six per guarded
   benchmark, one per other, plus a measured hint for `internal/app`, whose unguarded
-  `PutBoard_At5kIssues` alone takes 26 s). A new package lands in a shard with no list to edit. Each
-  shard uploads its `head.txt` and `base.txt`.
+  `PutBoard_At5kIssues` alone takes 26 s). A new package lands in a shard with no list to edit. The slice is computed once from
+  the branch and both trees run it, the base skipping a package it does not have: computed per tree, a
+  change in the costs moved a package to another shard in one tree only, and `benchstat` then found two
+  CPU models for it and compared nothing. Each shard uploads its `head.txt` and `base.txt`.
 - **Guarded benchmarks run `-count=6`, the rest `-count=1`.** `benchgate.py --list-guarded PKG`
   prints the anchored `-bench` regex of the benchmarks a guard reads; the shard runs those six times
   and everything else once with `-skip` of the same regex. A one-sample row has no significance test,

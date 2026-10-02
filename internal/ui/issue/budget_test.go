@@ -127,3 +127,32 @@ func TestBudget_ChildrenSheetScrollingCostsTheSameOnAThousandRowsAsOnAHundred(t 
 		t.Errorf("a keystroke over a thousand children took %s, want under the 16ms in docs/PERFORMANCE.md", per)
 	}
 }
+
+func TestBudget_ChildSort500(t *testing.T) {
+	res := testing.Benchmark(BenchmarkChildSort500)
+	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("ordering five hundred children took %s, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+	if got := res.AllocsPerOp(); got > 1 {
+		t.Errorf("ordering five hundred children allocates %d times, want the index it reuses and nothing else", got)
+	}
+}
+
+func TestBudget_ChildSortKeystrokeToFrame(t *testing.T) {
+	choose := testing.Benchmark(BenchmarkChildSortChoose500)
+	if per := time.Duration(choose.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("choosing an order over five hundred children took %s, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+	if got := choose.AllocsPerOp(); got > 1300 {
+		t.Errorf("choosing an order over five hundred children allocates %d times, want at most 1300", got)
+	}
+	pick := testing.Benchmark(BenchmarkChildSortPickerKey)
+	if per := time.Duration(pick.NsPerOp()); per > 16*time.Millisecond {
+		t.Errorf("a keystroke in the sort picker took %s, want under the 16ms in docs/PERFORMANCE.md", per)
+	}
+	scroll := testing.Benchmark(BenchmarkChildrenSheetScroll_1kRows)
+	if got := pick.AllocsPerOp(); got > scroll.AllocsPerOp()+30 {
+		t.Errorf("a picker keystroke allocates %d times against %d for a scroll, so the picker is costing rows",
+			got, scroll.AllocsPerOp())
+	}
+}

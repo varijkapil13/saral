@@ -320,6 +320,15 @@ in the order things were pinned.
 
 | State | Setting | Where it is kept |
 |---|---|---|
+| the order an epic's children are read in | `issue.children.sort`, a `KindChoice` in the Issue section: every field the children sheet's `s` offers, in both directions (`created ↑`, `priority ↓`, …); `rank` carries the note *only where the site has a rank field* | the cache directory's `ui.toml`, `[sorts."issue.children"]` (`field`, `desc`), `ScopeMachine` |
+
+Choosing here and choosing with `s` in the children sheet are the same act: both store the order, write
+`[sorts."issue.children"]` off the event loop, and broadcast so the sheet and the pane's inline list
+re-read in it. `created ↑`, the site's own order, is saved as no entry. A saved `rank` on a site with no
+rank field draws the default and leaves the file as it is.
+
+| State | Setting | Where it is kept |
+|---|---|---|
 | `kernel.Deps.Memory`: the root view a session last opened, and the filters `list`, `board`, `backlog` and `timeline` keep for themselves | `session.memory`, a `KindAction` beside `Set up a profile again`: forgets everything at once | the cache directory's `ui.toml`, scoped by site and account — see `docs/FILTERS.md` |
 
 `session.memory` is registered in `internal/ui/kernel` rather than in this package, because
@@ -350,7 +359,7 @@ Two directories, both named for the build (`saral`, or `saral-dev` for a build f
 | `drafts/` | beside `config.toml` | text not yet sent, per site: an issue's unsaved edits (`<site>/<key>.json`), unsent comments (`comments/<site>/`), unsubmitted create forms (`create/<site>/`) | until it is sent or discarded; comment drafts an earlier build left under the cache directory move here the first time a thread opens |
 | `cache.db` | `$SARAL_CACHE_DIR`, else `$XDG_CACHE_HOME/saral`, else `~/.cache/saral` | per profile (site and account): issues, searches, boards, backlogs, each project's sprint list and versions (never an open count), capability probe answers, the last board each project drew | see below |
 | `cache.db.corrupt-<timestamp>` | beside `cache.db` | a cache file Saral could not read, moved aside when it started afresh | until you delete it |
-| `ui.toml`, `.ui.toml.lock` | the cache directory | split widths, sort orders, the row look (`[look] look = "roomy"`, `"compact"` or `"lines"`), each profile's remembered view and filters | until `session.memory` or you delete it |
+| `ui.toml`, `.ui.toml.lock` | the cache directory | split widths, sort orders (including the order of an epic's children), the row look (`[look] look = "roomy"`, `"compact"` or `"lines"`), each profile's remembered view and filters | until `session.memory` or you delete it |
 | `palette/usage.json`, `palette/projects.json` | the cache directory | how often and how recently each palette command and each project was picked, to rank them | at most 200 entries each, the lowest-ranked dropped first; until you delete them |
 
 What `cache.db` keeps, per profile (`app.Kind.Retention`):

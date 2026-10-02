@@ -108,7 +108,7 @@ func TestChildren_EpicReadsParentJQLNarrowFields(t *testing.T) {
 		t.Errorf("asked for %d rows, want %d", q.MaxResults, childrenPage)
 	}
 	for _, id := range q.Fields {
-		if !slices.Contains(app.ListProjection().IDs, id) {
+		if !slices.Contains(childProjection("").IDs, id) {
 			t.Errorf("the read asked for %q, which a list row does not carry", id)
 		}
 	}
@@ -603,7 +603,7 @@ func TestChildrenSheet_KeysAreTheFooter(t *testing.T) {
 	t.Parallel()
 	d := syntheticSheet(t, 120, 30)
 	set, _ := d.s.LiveKeys()
-	if got := actsOf(set); got != "enter open it · @ assign · t status · P priority" {
+	if got := actsOf(set); got != "enter open it · @ assign · t status · P priority · s sort" {
 		t.Errorf("the footer says %q", got)
 	}
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
+	"github.com/varijkapil13/saral/internal/ui/widget/sortpick"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -42,6 +43,8 @@ type sheet struct {
 	onYes    func() tea.Cmd
 	onNo     func() tea.Cmd
 
+	picker sortpick.Picker
+
 	loads, looks fetchSlot
 	wait         time.Duration
 
@@ -71,6 +74,7 @@ const (
 	sheetAssign
 	sheetStatus
 	sheetPriority
+	sheetSort
 )
 
 type sheetKind interface {
@@ -83,6 +87,13 @@ type sheetKind interface {
 
 type sheetPager interface {
 	more(s *sheet) tea.Cmd
+}
+
+type sheetSorter interface {
+	sortCurrent() sortpick.Choice
+	sortChosen(s *sheet, c sortpick.Choice) tea.Cmd
+	sortLine(s *sheet) string
+	resort(s *sheet) tea.Cmd
 }
 
 type fetchSlot struct {
@@ -142,7 +153,7 @@ func (s *sheet) Close() {
 	s.looks.stop()
 }
 
-func (s *sheet) WantsRawKeys() bool { return s.asking || s.question != "" }
+func (s *sheet) WantsRawKeys() bool { return s.asking || s.question != "" || s.picker.Open }
 
 func (s *sheet) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	var cmd tea.Cmd
@@ -157,6 +168,10 @@ func (s *sheet) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	case sheetMsg:
 		if msg.slot == nil || msg.gen == msg.slot.gen {
 			cmd = msg.apply(s)
+		}
+	case childSortMsg:
+		if so, ok := s.kind.(sheetSorter); ok {
+			cmd = so.resort(s)
 		}
 	case tea.KeyPressMsg:
 		cmd = s.press(msg)
@@ -262,6 +277,8 @@ func (s *sheet) press(msg tea.KeyPressMsg) tea.Cmd {
 		return s.answer(stroke)
 	case s.asking:
 		return s.promptKey(msg, stroke)
+	case s.picker.Open:
+		return s.sortKey(stroke)
 	case s.busy:
 		return nil
 	}
@@ -275,6 +292,18 @@ func (s *sheet) press(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	if a := s.kind.keys().acts[stroke]; a != sheetNoAct {
 		return s.kind.act(s, a)
+	}
+	return nil
+}
+
+func (s *sheet) sortKey(stroke string) tea.Cmd {
+	so, ok := s.kind.(sheetSorter)
+	if !ok {
+		s.picker.Open = false
+		return nil
+	}
+	if next, chose, _ := s.picker.Key(stroke, so.sortCurrent()); chose {
+		return so.sortChosen(s, next)
 	}
 	return nil
 }
@@ -373,7 +402,7 @@ func (s *sheet) current() *sheetRow {
 }
 
 func (s *sheet) click(msg tea.MouseClickMsg) tea.Cmd {
-	if msg.Button != tea.MouseLeft || s.busy {
+	if msg.Button != tea.MouseLeft || s.busy || s.picker.Open {
 		return nil
 	}
 	if s.asking {
@@ -428,6 +457,10 @@ func (s *sheet) View() string {
 	switch {
 	case s.question != "":
 		tail = append(tail, t.Warning.Render(fit(s.question)))
+	case s.picker.Open:
+		if so, ok := s.kind.(sheetSorter); ok {
+			tail = append(tail, t.Accent.Render(fit(so.sortLine(s))))
+		}
 	case s.asking:
 		label := s.label
 		if s.problem != "" {
@@ -484,6 +517,7 @@ const (
 	sheetBusy
 	sheetAsking
 	sheetConfirm
+	sheetSorting
 	sheetStates
 )
 
@@ -510,8 +544,10 @@ func newSheetKeys(acts ...sheetBind) *sheetKeys {
 	sheetKindSeq++
 	sheetKeysets = append(sheetKeysets, k)
 	own := make([]kernel.Binding, 0, len(acts))
+	sortable := false
 	for _, a := range acts {
 		own = append(own, a.b)
+		sortable = sortable || a.do == sheetSort
 		for _, stroke := range a.b.Keys() {
 			k.acts[stroke] = a.do
 		}
@@ -523,6 +559,10 @@ func newSheetKeys(acts ...sheetBind) *sheetKeys {
 		Full: [][]kernel.Binding{{sheetChoose, sheetCancel}, {sheetCandDn, sheetCandUp}, {widget.KillLine}},
 	}
 	k.sets[sheetConfirm] = kernel.KeySet{Mode: kernel.Modal, Acts: []kernel.Binding{sheetYes, sheetNo}, Full: [][]kernel.Binding{{sheetYes, sheetNo}}}
+	if sortable {
+		pick := kernel.SortPickerKeys()
+		k.sets[sheetSorting] = kernel.KeySet{Mode: kernel.Modal, Acts: pick, Full: [][]kernel.Binding{pick}}
+	}
 	return k
 }
 
@@ -533,6 +573,8 @@ func (s *sheet) LiveKeys() (set kernel.KeySet, gen int) {
 		state = sheetConfirm
 	case s.asking:
 		state = sheetAsking
+	case s.picker.Open:
+		state = sheetSorting
 	case s.busy:
 		state = sheetBusy
 	}
