@@ -12,6 +12,7 @@ package plan
 import (
 	"context"
 	"errors"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -98,6 +99,7 @@ type Model struct {
 
 	open  map[string]bool
 	rel   map[string]releases
+	known map[string]string
 	relOf string
 
 	cursor, top   int
@@ -132,6 +134,7 @@ func New(d kernel.Deps, opts ...Option) kernel.View {
 		derived: true,
 		open:    make(map[string]bool, 4),
 		rel:     make(map[string]releases, 4),
+		known:   map[string]string{},
 		addr:    kernel.NewAddr(),
 	}
 	for _, opt := range opts {
@@ -469,6 +472,7 @@ func (m *Model) tookReleases(msg releasesMsg) {
 		return
 	}
 	m.rel[msg.plan] = releasesOf(m.localPlan(msg.plan), &msg)
+	maps.Copy(m.known, msg.names)
 	m.relOf = ""
 	m.reflow()
 	m.head = ""
@@ -487,7 +491,7 @@ func (m *Model) releasesFor(at int) tea.Cmd {
 	m.rel[row.plan.ID] = releases{loading: true}
 	m.relOf = row.plan.ID
 	m.head = ""
-	return m.reply(readReleases(ctx, m.deps.Jira, row.plan, gen))
+	return m.reply(readReleases(ctx, m.deps.Jira, row.plan, maps.Clone(m.known), gen))
 }
 
 // projectRefs are the projects a plan draws from, as a version read takes them:

@@ -22,6 +22,13 @@ such change is listed under **Changed**.
 - Two saves of the same settings file inside one Saral no longer let one starve the other until it
   gave up: writers are now served in the order they arrived.
 
+### Changed
+
+- A site plan names its projects by key, not by id. Opening a plan looks up the key of each project
+  the site gave only an id for, at most four at a time, and remembers it for the rest of the
+  session. A project whose key cannot be read keeps showing as `id N` and does not stop the
+  releases from loading.
+
 ## [0.10.0] - 2026-10-02
 
 ### Added
