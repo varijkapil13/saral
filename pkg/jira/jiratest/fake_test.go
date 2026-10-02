@@ -2869,3 +2869,55 @@ func TestDownload_ResumesFromAnOffset(t *testing.T) {
 		t.Error("resuming past the end should be an error, not an empty success")
 	}
 }
+
+func fakeKeys(issues []jira.Issue) []string {
+	out := make([]string, 0, len(issues))
+	for i := range issues {
+		out = append(out, issues[i].Key)
+	}
+	return out
+}
+
+func TestFake_SearchByParent(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 3)
+	ctx := t.Context()
+	epic, err := c.CreateIssue(ctx, jira.IssueInput{ProjectKey: "PROJ", IssueTypeID: "10304", Summary: "An epic"})
+	if err != nil {
+		t.Fatalf("CreateIssue epic: %v", err)
+	}
+	want := make([]string, 0, 2)
+	for _, name := range []string{"first", "second"} {
+		child, cerr := c.CreateIssue(ctx, jira.IssueInput{ProjectKey: "PROJ", IssueTypeID: "10301", Summary: name, ParentKey: epic.Key})
+		if cerr != nil {
+			t.Fatalf("CreateIssue child: %v", cerr)
+		}
+		want = append(want, child.Key)
+	}
+	for _, jql := range []string{
+		"parent = " + epic.Key + " ORDER BY created ASC",
+		"parent = " + epic.ID,
+	} {
+		page, serr := c.Search(ctx, jira.Query{JQL: jql, Fields: fakeNarrow})
+		if serr != nil {
+			t.Fatalf("Search %q: %v", jql, serr)
+		}
+		got := fakeKeys(page.Items)
+		slices.Sort(got)
+		if !slices.Equal(got, want) {
+			t.Errorf("%q: want %v, got %v", jql, want, got)
+		}
+	}
+}
+
+func TestFake_SearchByParentNoChildren(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 3)
+	page, err := c.Search(t.Context(), jira.Query{JQL: "parent = PROJ-1", Fields: fakeNarrow})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(page.Items) != 0 {
+		t.Fatalf("want no children, got %v", fakeKeys(page.Items))
+	}
+}
