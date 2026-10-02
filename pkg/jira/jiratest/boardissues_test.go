@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -412,6 +413,42 @@ func TestQuickFilters_AScrumBoardHasThemAndAKanbanBoardHasNone(t *testing.T) {
 	}
 	if len(none) != 0 {
 		t.Errorf("a Kanban board reports %+v, want none", none)
+	}
+}
+
+func TestBoardProjects_NamesTheProjectBehindTheBoard(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 4)
+	board := fakeBoard(t, c)
+	got, err := c.BoardProjects(t.Context(), board.ID)
+	if err != nil {
+		t.Fatalf("BoardProjects: %v", err)
+	}
+	if len(got) != 1 || got[0].Key != board.ProjectKey || got[0].ID == "" {
+		t.Errorf("got %+v, want the one project %s with an id", got, board.ProjectKey)
+	}
+}
+
+func TestBoardProjects_ReturnsAFailureQueuedForIt(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 4)
+	board := fakeBoard(t, c)
+	c.FailNext(&jira.RateLimitError{RetryAfter: 5 * time.Second})
+	_, err := c.BoardProjects(t.Context(), board.ID)
+	var limited *jira.RateLimitError
+	if !errors.As(err, &limited) {
+		t.Fatalf("got %T (%v), want a *jira.RateLimitError", err, err)
+	}
+}
+
+func TestBoardProjects_ABoardNobodyHasIsA404(t *testing.T) {
+	t.Parallel()
+	c := fakeNewWithIssues(t, 4)
+	board := fakeBoard(t, c)
+	_, err := c.BoardProjects(t.Context(), board.ID+9000)
+	var missing *jira.NotFoundError
+	if !errors.As(err, &missing) {
+		t.Fatalf("got %T (%v), want a *jira.NotFoundError", err, err)
 	}
 }
 

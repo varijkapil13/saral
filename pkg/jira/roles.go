@@ -133,6 +133,7 @@ type SessionClient interface {
 	SprintManager
 	Relocator
 	PlanReader
+	BoardProjectReader
 	ServerInfoReader
 	SprintIssueReader
 	IssueReader
@@ -190,6 +191,11 @@ type BoardReader interface {
 	BoardIssues(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
 	BoardBacklog(ctx context.Context, boardID int64, q BoardQuery) (Page[Issue], error)
 	QuickFilters(ctx context.Context, boardID int64) ([]QuickFilter, error)
+}
+
+// BoardProjectReader reads the projects behind a board.
+type BoardProjectReader interface {
+	BoardProjects(ctx context.Context, boardID int64) ([]ProjectRef, error)
 }
 
 // SprintReader lists a board's sprints. A backlog view holds only this: it
@@ -310,16 +316,17 @@ var (
 	_ FilterVocabulary = Client(nil)
 	_ SessionClient    = Client(nil)
 
-	_ AttachmentReader = Client(nil)
-	_ Attacher         = Client(nil)
-	_ VersionReader    = Client(nil)
-	_ Releaser         = Client(nil)
-	_ BoardReader      = Client(nil)
-	_ SprintReader     = Client(nil)
-	_ SprintManager    = Client(nil)
-	_ TaskWatcher      = Client(nil)
-	_ Relocator        = Client(nil)
-	_ PlanReader       = Client(nil)
+	_ AttachmentReader   = Client(nil)
+	_ Attacher           = Client(nil)
+	_ VersionReader      = Client(nil)
+	_ Releaser           = Client(nil)
+	_ BoardReader        = Client(nil)
+	_ SprintReader       = Client(nil)
+	_ SprintManager      = Client(nil)
+	_ TaskWatcher        = Client(nil)
+	_ Relocator          = Client(nil)
+	_ PlanReader         = Client(nil)
+	_ BoardProjectReader = Client(nil)
 
 	_ IssueReader       = Client(nil)
 	_ SprintIssueReader = Client(nil)
