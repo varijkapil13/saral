@@ -648,7 +648,7 @@ of use."*
 puts a value in force or takes it off again without closing the picker, so a second assignee costs
 another `enter` rather than a fresh trip through the facet menu; `esc` goes value → facet → closed.
 The facets are assignee, reporter, status, type, priority and label. `ctrl+k` reaches it from
-anywhere, including the issue pane, where `f` belongs to the viewport and is not taken away from it.
+anywhere, including the issue pane.
 
 **Every list-shaped view answers `f`**: the issue list, the board, the backlog and the timeline. The
 issue list sends a chosen value to the site as JQL, which is the next paragraph; the other three
@@ -725,7 +725,7 @@ field editor is gone.
 
 **The sidebar has a row cursor.** `j`/`k`, the wheel and a click all move it, and every row the
 sidebar draws — a platform fact, a related issue, a custom field, editable or not — is one of its
-stops. `enter` or `e` acts on the row under it: an editable row opens in place, and a read-only one
+stops. `enter` (or `e`, except on a related-issue row, where only `enter` opens it) acts on the row under it: an editable row opens in place, and a read-only one
 answers with the one word that is true of it, `read-only`, rather than doing nothing. A row is
 editable when the issue was read with its field (`Issue.Requested`, the same mask P2.3's fetch-edit-PUT
 cycle already answers to) *and* editmeta lists it *and* its kind is one this build can edit — see
@@ -740,7 +740,7 @@ transition is a workflow action and never a field a screen lists.
 closes the field, `esc` leaves it alone. The description opens the same `bubbles/textarea` the comment
 composer uses, inline in the description region below the header, closed with `ctrl+s` to keep it or
 `esc` to put it aside: the text stays on the row and in the draft (written a moment after typing
-pauses), `e` reopens the editor on it, and `x` throws it away. Its first line names what editing this
+pauses), `e` reopens the editor on it, and `u` throws it away. Its first line names what editing this
 document as markdown costs (`adf.LossyConstructs`) before a key is typed. `E` still hands the same
 document to `$EDITOR`, whose value is split the way a shell would, so a quoted path with a space in it
 works; the file opens with an HTML comment naming the same costs, taken off again on the way back.
@@ -749,16 +749,17 @@ None of this writes to Jira — it marks the row **dirty**, on the pane, and now
 **Dirty rows accumulate into one set**, not one request per field. A dirty row carries a bullet in the
 theme's accent colour and, where the line has room, the value the site still holds beside it as
 `(was …)`. The identity line under the issue's title — the one place on this pane that survives a
-keypress the way `docs/UX.md`'s own status-line rule asks for — names the set: `N unsaved · s save ·
-x revert this · X revert all`, each word a click target as well as a key. `s` (and `ctrl+s`, and
+keypress the way `docs/UX.md`'s own status-line rule asks for — names the set: `N unsaved · ctrl+s save ·
+u revert this · U revert all`, each word a click target as well as a key. `ctrl+s` (and
 the palette's *Save changes*) sends every dirty row as **one** `IssuePatch`; a field this pane cannot
 express — an empty summary, an unparsable date — is refused before anything is sent, and a rejection
 Jira does send back is shown in that field's own words rather than as a status line nobody can act on
-after the next keypress. `x` (not `u`: this pane already spends `u` and `ctrl+u` on half a page up)
+after the next keypress. `u`
 reverts what the keyboard is on — the description while its region has focus, the row under the
-cursor in the details region, and nothing in the comments, which say so. `X` (and the palette's
-*Revert all changes*) reverts every row at once. `backspace` and `U`, the keys these used to be, still
-work for one release and are named nowhere.
+cursor in the details region, and nothing in the comments, which say so. `U` (and the palette's
+*Revert all changes*) reverts every row at once. Half a page is `ctrl+u` and `ctrl+d` here as everywhere,
+and the page keys are `pgup`, `pgdn`, `ctrl+b` and `ctrl+f`; `b`, `f`, `d`, `space`, `x`, `X` and
+`backspace` are no longer bound.
 
 **Leaving with dirty rows asks, everywhere the kernel would otherwise refuse.** `kernel.CloseAsker` is
 the additive interface that makes this possible: a `Blocker` that also answers to it is asked instead
@@ -774,7 +775,7 @@ is not on screen to ask, so the switch is refused with its reason instead.
 **The dirty set survives a crash.** Every commit to a row writes the whole set through the same
 `draftStore` P2.3 built — one file per issue per site, replaced atomically — and it is picked back up
 the next time this issue is opened, with the identity line saying so: `unsaved changes from earlier
-restored · s save · X discard`.
+restored · ctrl+s save · U discard`.
 
 **A save never overwrites what it did not see.** Jira Cloud answers a plain `PUT` with 204 whatever
 changed in between, so the pane checks for itself. Each edit keeps the base it was made against — the
@@ -782,7 +783,7 @@ issue's `updated` stamp and a fingerprint of each field it writes (`app.EditBase
 draft — and the save re-reads exactly those fields through the issue endpoint first (`app.SaveIssue`).
 A field that moved is a `*jira.ConflictError` before anything is written, answered by reading the issue
 again and rebasing the dirty set on top; every row the site changed underneath is marked in its own
-words and takes the fresh read as its new base, so the next `s` is a reviewed save. Any full read does
+words and takes the fresh read as its new base, so the next `ctrl+s` is a reviewed save. Any full read does
 the same — a draft restored days later, `r`, a transition carrying the dirty set. Labels are the
 exception: they go out as add and remove operations diffed against the list the edit began from, so a
 label somebody else added survives and cannot conflict. The read after a save goes through the issue
@@ -829,7 +830,7 @@ palette's *Assign to…*, *Assign to me* and *Unassign* reach the same three ges
 list at all for the latter two. A token without *Browse users and groups* is told why in the
 capability's own words rather than shown an empty list.
 
-**Status is a workflow action, not a value waiting on `s`.** Choosing a transition off its list asks
+**Status is a workflow action, not a value waiting on `ctrl+s`.** Choosing a transition off its list asks
 for any field the transition's own screen requires, and then a named confirmation — *"Move PROJ-12 to In Progress and save 2 changes?"* — naming the move and
 however many other rows are dirty at the same time, because `Transition` takes fields exactly as
 `UpdateIssue` does and a status change carries the rest of the dirty set in the one request rather than
@@ -1104,7 +1105,7 @@ A copy names what it copied, because OSC 52 cannot confirm one landed.
 
 **Related issues are on the sidebar cursor.** The parent, the subtasks and every linked issue each
 have a row of their own under the phrase that relates them, so `j` and `k` stop on them and `enter`
-(or `e`) opens the issue over this one, seeded from the row so the key, summary and status are on
+opens the issue over this one, seeded from the row so the key, summary and status are on
 screen before the read lands. `p` opens the parent from anywhere in the pane, and says `PROJ-12 has no
 parent` when there is none; it is in `?` and not in the footer. A link with no phrasing is listed under
 its type, and the two directions of one type stay apart. Following a link back to the pane just
@@ -1117,9 +1118,9 @@ and says `PROJ-99 could not be opened: it does not exist, or this account cannot
 **An epic's children are listed in the pane and changed from a sheet.** An issue whose type sits above
 standard on the site's hierarchy reads its children once after the issue, as one search of fifty
 rows. They are drawn under `Children · 12 · 7 done` (`50+ · 7 done so far` when there are more),
-the first eight as rows of their own and then `+42 more · c lists them all`, which `enter` opens.
+the first eight as rows of their own and then `+42 more · ] lists them all`, which `enter` opens.
 An issue of a standard type has no such search: its subtasks are its children and are already on
-screen. `c` opens the children sheet for either, and says `PROJ-3 has no children` when there are
+screen. `]` opens the children sheet for either, and says `PROJ-3 has no children` when there are
 none. The sheet shows each child's key, type, status, assignee, priority and summary, pages in as the
 cursor nears the end, and takes `enter` to open the child, `@` to assign it (me, unassigned, or a
 name searched in the child's own project), `t` to move it and `P` to set its priority. Each is
@@ -1135,16 +1136,16 @@ sprint and bulk changes are not here.
 `esc` comes back to the fields exactly as they were. Each change is written at once and the pane
 underneath rereads the issue.
 
-- `L` lists the links under the phrase that relates them. `a` asks for a phrase — either direction of
+- `&` lists the links under the phrase that relates them. `a` asks for a phrase — either direction of
   every link type the site has, filtered as it is typed — and then the issue at the other end: a key,
   a pasted URL, or words from an issue already cached on this machine. `d` removes the link under the
   cursor after a *y*, and `enter` opens the issue it points at.
 - `w` lists the time logged, newest first, under the issue's logged, remaining and estimated time —
-  the same wording the sidebar's Time row uses. `a` (or `w` again) asks how long (`1h 30m`, `90m`,
+  the same wording the sidebar's Time row uses. `a` asks how long (`1h 30m`, `90m`,
   `1.5h`), when it started (a date, a date and time, or nothing for now, in the account's timezone)
   and what it was. Days and weeks are refused: their length is the site's working day, which the
   client does not read.
-- `W` shows who watches, and says so when the token may see fewer people than the count. `w` watches
+- `W` shows who watches, and says so when the token may see fewer people than the count. `W` again watches
   or stops watching as yourself, `a` searches the site's people to add someone, `d` removes the person
   under the cursor; both of those are the Manage Watchers permission, and a refusal says so.
 

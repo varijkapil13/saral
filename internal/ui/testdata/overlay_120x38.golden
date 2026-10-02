@@ -67,11 +67,11 @@ enter use this issue type    ↓/j  down         1-9          saved query       
 issue
 tab next pane          @ assign               1-9          saved query           ctrl+k commands
 e   edit fields        p open the parent      g            where to go           ?      help
-E   open in $EDITOR    c list the children    g 1-9        switch view           q      quit
+E   open in $EDITOR    ] list the children    g 1-9        switch view           q      quit
 t   change status      y copy the key         ctrl+, / g s settings
 C   comment            Y copy the link        g i          jump to an issue
                        o open in browser      g /          search issues
-                       L links                esc          back
+                       & links                esc          back
                        w log time             r            refresh
                        W watchers             R            refetch everything
 

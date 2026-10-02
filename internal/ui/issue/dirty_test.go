@@ -67,7 +67,7 @@ func TestDirty_EditingTheSummaryAndSavingSendsExactlyThatField(t *testing.T) {
 		t.Fatal("the summary row is not dirty after being edited")
 	}
 
-	p.keys("s")
+	p.keys("ctrl+s")
 	patch := rec.lastPatch(t)
 	if names := patchFieldNames(patch); len(names) != 1 || names[0] != "summary" {
 		t.Fatalf("patch named %v, want exactly [summary]", names)
@@ -108,7 +108,7 @@ func TestDirty_ThreeEditsOneSave(t *testing.T) {
 		t.Fatalf("dirty count = %d, want 3", got)
 	}
 
-	p.keys("s")
+	p.keys("ctrl+s")
 	if writes := rec.writes(); writes != 1 {
 		t.Fatalf("the site saw %d writes, want exactly 1", writes)
 	}
@@ -153,7 +153,7 @@ func TestDirty_UndoRowAndUndoAll(t *testing.T) {
 	}
 
 	rowAt(t, p, "summary")
-	p.keys("backspace")
+	p.keys("u")
 	if p.editor().rowByID("summary").dirty() {
 		t.Error("undo this did not clear the summary row")
 	}
@@ -289,7 +289,7 @@ func TestDirty_AConflictRereadsAndKeepsTheEdit(t *testing.T) {
 	p.keys("enter")
 
 	f.FailNext(&jira.ConflictError{Resource: "PROJ-1", Detail: "updated by somebody else"})
-	p.keys("s")
+	p.keys("ctrl+s")
 
 	if !p.editor().rowByID("summary").dirty() {
 		t.Error("the conflict dropped the edit instead of keeping it")
@@ -319,7 +319,7 @@ func TestDirty_APerFieldRefusalShowsOnItsRowAndKeepsTheText(t *testing.T) {
 	f.FailNext(&jira.ValidationError{Fields: []jira.FieldError{
 		{Field: "labels", Message: "a label may not contain punctuation"},
 	}})
-	p.keys("s")
+	p.keys("ctrl+s")
 
 	row := p.editor().rowByID("labels")
 	if row == nil || row.problem == "" {

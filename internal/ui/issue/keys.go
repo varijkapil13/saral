@@ -38,21 +38,27 @@ type keyMap struct {
 	Children kernel.Binding
 }
 
+var (
+	sidebarKeys     = []string{"<"}
+	descriptionKeys = []string{">"}
+	resetKeys       = []string{"="}
+)
+
 // The three strokes that move the boundary between the regions. Every letter
 // this pane has is spent on the document or on the issue, so punctuation is what
 // was left; < and > point the way the divider goes rather than naming a region,
 // which is the half that reads the same to a reader who came for the prose and
 // one who came for the fields.
 func sidebarBinding() kernel.Binding {
-	return kernel.Bind([]string{"<"}, "<", "wider sidebar")
+	return kernel.Local("issue", "sidebar", sidebarKeys, "<", "wider sidebar")
 }
 
 func descriptionBinding() kernel.Binding {
-	return kernel.Bind([]string{">"}, ">", "wider description")
+	return kernel.Local("issue", "description", descriptionKeys, ">", "wider description")
 }
 
 func resetBinding() kernel.Binding {
-	return kernel.Bind([]string{"="}, "=", "reset the split")
+	return kernel.Local("issue", "reset", resetKeys, "=", "reset the split")
 }
 
 // editBinding is e, which edits the row under the sidebar cursor in place, or
@@ -60,68 +66,66 @@ func resetBinding() kernel.Binding {
 // keyboard. Act is the same gesture from enter, named for the row rather than
 // for the key so the two never drift.
 func editBinding() kernel.Binding {
-	return kernel.Bind([]string{"e"}, "e", "edit fields")
+	return kernel.Canon(kernel.ActEdit, "edit fields")
 }
 
 func actBinding() kernel.Binding {
-	return kernel.Bind([]string{"enter"}, "enter", "edit this row")
+	return kernel.Canon(kernel.ActOpen, "edit this row")
 }
 
 func editorBinding() kernel.Binding {
-	return kernel.Bind([]string{"E"}, "E", "open in $EDITOR")
+	return kernel.Canon(kernel.ActEditExternal, "open in $EDITOR")
 }
 
 func saveBinding() kernel.Binding {
-	return kernel.Bind([]string{"s", "ctrl+s"}, "s", "save changes")
+	return kernel.Canon(kernel.ActSave, "save changes")
 }
 
-// undoRowBinding and undoAllBinding still answer to backspace and U, the keys
-// they used to be, without naming them anywhere.
 func undoRowBinding() kernel.Binding {
-	return kernel.Bind([]string{"x", "backspace"}, "x", "revert this")
+	return kernel.Canon(kernel.ActRevert, "revert this")
 }
 
 func undoAllBinding() kernel.Binding {
-	return kernel.Bind([]string{"X", "U"}, "X", "revert all")
+	return kernel.Canon(kernel.ActRevertAll, "revert all")
 }
 
 // assignBinding opens the assignee picker from wherever the cursor already
 // is, rather than only from the Assignee row itself.
 func assignBinding() kernel.Binding {
-	return kernel.Bind([]string{"@"}, "@", "assign")
+	return kernel.Canon(kernel.ActAssign)
 }
 
 func parentBinding() kernel.Binding {
-	return kernel.Bind([]string{"p"}, "p", "open the parent")
+	return kernel.Canon(kernel.ActParent, "open the parent")
 }
 
 func childrenBinding() kernel.Binding {
-	return kernel.Bind([]string{"c"}, "c", "list the children")
+	return kernel.Canon(kernel.ActChildren, "list the children")
 }
 
 func openRefBinding() kernel.Binding {
-	return kernel.Bind([]string{"enter", "e"}, "enter", "open it")
+	return kernel.Canon(kernel.ActOpen, "open it")
 }
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
-		PageUp:   kernel.Bind([]string{"pgup", "b"}, "b/pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "space", "f"}, "f/pgdn", "page down"),
-		HalfUp:   kernel.Bind([]string{"u", "ctrl+u"}, "u/ctrl+u", "half page up"),
-		HalfDown: kernel.Bind([]string{"d", "ctrl+d"}, "d/ctrl+d", "half page down"),
-		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
-		Top:      kernel.Bind([]string{"home"}, "g g", "top"),
-		Bottom:   kernel.Bind([]string{"G", "end"}, "G / g e", "bottom"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
+		HalfUp:   kernel.Canon(kernel.ActHalfUp),
+		HalfDown: kernel.Canon(kernel.ActHalfDown),
+		Go:       kernel.Canon(kernel.ActGo, "go to"),
+		Top:      kernel.Canon(kernel.ActTop, "top"),
+		Bottom:   kernel.Canon(kernel.ActBottom, "bottom"),
 		// The renderer never wraps code and never cuts a table, so a description
 		// really does reach past its box: a Go signature is around eighty cells
 		// and the widest box the wide mode gives it is seventy-eight.
-		Left:     kernel.Bind([]string{"h", "left"}, "←/h", "pan left"),
-		Right:    kernel.Bind([]string{"l", "right"}, "→/l", "pan right"),
-		Pane:     kernel.Bind([]string{"tab"}, "tab", "next pane"),
-		PrevPane: kernel.Bind([]string{"shift+tab"}, "shift+tab", "previous pane"),
-		Expands:  kernel.Bind([]string{"z"}, "z", "expand or collapse"),
+		Left:     kernel.Canon(kernel.ActLeft, "pan left"),
+		Right:    kernel.Canon(kernel.ActRight, "pan right"),
+		Pane:     kernel.Canon(kernel.ActNextPane, "next pane"),
+		PrevPane: kernel.Canon(kernel.ActPrevPane, "previous pane"),
+		Expands:  kernel.Canon(kernel.ActFold, "expand or collapse"),
 		Sidebar:  sidebarBinding(),
 		Describe: descriptionBinding(),
 		Reset:    resetBinding(),
@@ -338,10 +342,12 @@ var sideLiveSets = func() [lkCount]kernel.KeySet {
 	out[lkBrowseComments] = build(false, nil, nil)
 	out[lkBrowseCommentsDirty] = build(true, nil, nil)
 	out[lkTyping] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{accept, cancelTyping},
 		Full: [][]kernel.Binding{{accept, cancelTyping}, {widget.KillLine}},
 	}
 	out[lkDocEdit] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{commit, cancelDoc},
 		Full: [][]kernel.Binding{{commit, cancelDoc}, {widget.KillLine}},
 	}
@@ -349,6 +355,7 @@ var sideLiveSets = func() [lkCount]kernel.KeySet {
 	cancelPick := kernel.Bind([]string{"esc"}, "esc", "cancel")
 	up, down := kernel.Bind([]string{"up"}, "↑", "up"), kernel.Bind([]string{"down"}, "↓", "down")
 	out[lkPicking] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{choose, cancelPick},
 		Full: [][]kernel.Binding{{down, up, choose, cancelPick}},
 	}
@@ -357,18 +364,21 @@ var sideLiveSets = func() [lkCount]kernel.KeySet {
 	continueField := kernel.Bind([]string{"enter"}, "enter", "continue")
 	backToList := kernel.Bind([]string{"esc"}, "esc", "back")
 	out[lkPickFields] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(prev, "previous"), kernel.Terse(next, "next"), continueField},
 		Full: [][]kernel.Binding{{down, up, prev, next}, {continueField, backToList}},
 	}
 	moveYes := kernel.Bind([]string{"y"}, "y", "move it")
 	out[lkPickConfirm] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{moveYes, backToList},
 		Full: [][]kernel.Binding{{moveYes, backToList}},
 	}
 	// A save in flight answers nothing of its own, and the footer then shows the
 	// globals alone, which is the truth.
-	out[lkSaving] = kernel.KeySet{}
+	out[lkSaving] = kernel.KeySet{Mode: kernel.Modal}
 	out[lkLeaving] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{saveNow, discardNow, stay},
 		Full: [][]kernel.Binding{{saveNow, discardNow, stay}},
 	}
@@ -439,7 +449,19 @@ func (m *Model) pickLiveKeyIndex() int {
 	return lkPicking
 }
 
-var _ kernel.KeyReporter = (*Model)(nil)
+// KeyStates is every set the pane reports, its sheets included.
+func (m *Model) KeyStates() []kernel.KeySet {
+	out := append([]kernel.KeySet{defaultKeys().keySet()}, sideLiveSets[:]...)
+	for _, k := range sheetKeysets {
+		out = append(out, k.sets[:]...)
+	}
+	return out
+}
+
+var (
+	_ kernel.KeyReporter    = (*Model)(nil)
+	_ kernel.KeyStateLister = (*Model)(nil)
+)
 
 // threadStrokes is the stroke each motion is spelt as in the thread's own
 // keymap. The thread is a view rather than a list of lines, so a motion aimed at

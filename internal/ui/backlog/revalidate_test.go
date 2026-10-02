@@ -210,7 +210,8 @@ func TestBacklog_ARowRevalidatesAfterAFieldSaveLandsInThePushedPane(t *testing.T
 		t.Fatal("the push did not put the issue pane on top of the backlog")
 	}
 	m = sendK(t, m, kernel.BroadcastMsg{Msg: issue.UnassignMsg{}})
-	m = keysK(t, m, "s", "esc")
+	m = sendK(t, m, tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	m = keysK(t, m, "esc")
 
 	bm, ok := m.Top().(*Model)
 	if !ok {

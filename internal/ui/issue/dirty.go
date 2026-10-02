@@ -57,33 +57,36 @@ var (
 // broadcast because the palette never knows which issue is on screen.
 type EditFieldMsg struct{}
 
-// SaveChangesMsg is the palette's way to s: send the whole dirty set.
+// SaveChangesMsg is the palette's way to ctrl+s: send the whole dirty set.
 type SaveChangesMsg struct{}
 
-// UndoAllMsg is the palette's way to X: throw every edit away.
+// UndoAllMsg is the palette's way to U: throw every edit away.
 type UndoAllMsg struct{}
 
 func init() {
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "issue.editField",
-		Title: "Edit this field",
-		Group: "Issue",
-		Keys:  []string{editBinding().Help().Key},
-		Run:   func(kernel.Deps) tea.Cmd { return kernel.Broadcast(EditFieldMsg{}) },
+		ID:     "issue.editField",
+		Title:  "Edit this field",
+		Group:  "Issue",
+		Action: kernel.ActEdit,
+		Keys:   []string{editBinding().Help().Key},
+		Run:    func(kernel.Deps) tea.Cmd { return kernel.Broadcast(EditFieldMsg{}) },
 	})
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "issue.save",
-		Title: "Save changes",
-		Group: "Issue",
-		Keys:  []string{saveBinding().Help().Key},
-		Run:   func(kernel.Deps) tea.Cmd { return kernel.Broadcast(SaveChangesMsg{}) },
+		ID:     "issue.save",
+		Title:  "Save changes",
+		Group:  "Issue",
+		Action: kernel.ActSave,
+		Keys:   []string{saveBinding().Help().Key},
+		Run:    func(kernel.Deps) tea.Cmd { return kernel.Broadcast(SaveChangesMsg{}) },
 	})
 	kernel.RegisterCommand(kernel.Command{
-		ID:    "issue.undoAll",
-		Title: "Revert all changes",
-		Group: "Issue",
-		Keys:  []string{undoAllBinding().Help().Key},
-		Run:   func(kernel.Deps) tea.Cmd { return kernel.Broadcast(UndoAllMsg{}) },
+		ID:     "issue.undoAll",
+		Title:  "Revert all changes",
+		Group:  "Issue",
+		Action: kernel.ActRevertAll,
+		Keys:   []string{undoAllBinding().Help().Key},
+		Run:    func(kernel.Deps) tea.Cmd { return kernel.Broadcast(UndoAllMsg{}) },
 	})
 }
 

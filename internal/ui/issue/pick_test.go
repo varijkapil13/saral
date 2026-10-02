@@ -123,7 +123,7 @@ func TestPick_PriorityChoosesFromEditmetasAllowedValues(t *testing.T) {
 		t.Error("choosing a value did not close the inline list")
 	}
 
-	p.keys("s")
+	p.keys("ctrl+s")
 	patch := rec.lastPatch(t)
 	if names := patchFieldNames(patch); len(names) != 1 || names[0] != "priority" {
 		t.Fatalf("patch named %v, want exactly [priority]", names)
@@ -186,7 +186,7 @@ func TestPick_AssigneeSearchesTypedTextAndSendsTheAccountID(t *testing.T) {
 		t.Errorf("row.value = %q, want the display name", row.value)
 	}
 
-	p.keys("s")
+	p.keys("ctrl+s")
 	patch := rec.lastPatch(t)
 	if patch.Assignee == nil || *patch.Assignee != "acct-ada" {
 		t.Fatalf("patch.Assignee = %v, want acct-ada", patch.Assignee)
@@ -211,7 +211,7 @@ func TestPick_UnassignSetsAnEmptyAccountID(t *testing.T) {
 		t.Errorf("row.value = %q, want unassigned", row.value)
 	}
 
-	p.keys("s")
+	p.keys("ctrl+s")
 	patch := rec.lastPatch(t)
 	if patch.Assignee == nil || *patch.Assignee != "" {
 		t.Fatalf("patch.Assignee = %v, want an empty string", patch.Assignee)
@@ -238,7 +238,7 @@ func TestPick_AssignToMeUsesMe(t *testing.T) {
 		t.Error("Me() was not kept on the pane")
 	}
 
-	p.keys("s")
+	p.keys("ctrl+s")
 	patch := rec.lastPatch(t)
 	if patch.Assignee == nil || *patch.Assignee != "acct-me" {
 		t.Fatalf("patch.Assignee = %v, want acct-me", patch.Assignee)

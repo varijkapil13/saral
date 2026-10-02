@@ -18,9 +18,9 @@ type watchKind struct {
 }
 
 var watchKeys = newSheetKeys(
-	sheetBind{kernel.Bind([]string{"w"}, "w", "watch or stop"), sheetToggle},
-	sheetBind{kernel.Bind([]string{"a"}, "a", "add someone"), sheetAdd},
-	sheetBind{kernel.Bind([]string{"d", "x"}, "d", "remove them"), sheetRemove},
+	sheetBind{kernel.Canon(kernel.ActWatchers, "watch or stop"), sheetToggle},
+	sheetBind{kernel.Canon(kernel.ActAdd, "add someone"), sheetAdd},
+	sheetBind{kernel.Canon(kernel.ActDelete, "remove them"), sheetRemove},
 )
 
 func (k *watchKind) keys() *sheetKeys { return watchKeys }

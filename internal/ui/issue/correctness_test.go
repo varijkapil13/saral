@@ -112,10 +112,10 @@ func TestDescriptionEditor_RevertThrowsTheHeldTextAway(t *testing.T) {
 	p.editor().focus = regionDesc
 	p.keys("e")
 	p.typed("gone soon")
-	p.keys("esc", "x")
+	p.keys("esc", "u")
 
 	if row := p.editor().rowByID("description"); row.pending != nil {
-		t.Fatalf("x kept the held text: %q", *row.pending)
+		t.Fatalf("u kept the held text: %q", *row.pending)
 	}
 	if _, ok, _ := drafts.load(testSite, "PROJ-1"); ok {
 		t.Error("the draft still holds text x threw away")
@@ -133,7 +133,7 @@ func TestSave_RefusesToOverwriteAFieldChangedOnTheSite(t *testing.T) {
 	if err := f.UpdateIssue(t.Context(), "PROJ-1", jira.IssuePatch{Summary: &theirs}); err != nil {
 		t.Fatal(err)
 	}
-	p.keys("s")
+	p.keys("ctrl+s")
 
 	if rec.writes() != 0 {
 		t.Fatalf("the save overwrote a summary changed on the site (%d writes)", rec.writes())
@@ -149,7 +149,7 @@ func TestSave_RefusesToOverwriteAFieldChangedOnTheSite(t *testing.T) {
 		t.Errorf("nothing said the site moved: %q", p.statusText())
 	}
 
-	p.keys("s")
+	p.keys("ctrl+s")
 	if rec.writes() != 1 {
 		t.Fatalf("saving again after the review wrote %d times, want 1", rec.writes())
 	}
@@ -172,7 +172,7 @@ func TestSave_ALabelAddedOnTheSiteSurvivesALabelEdit(t *testing.T) {
 	if err := f.UpdateIssue(t.Context(), "PROJ-1", jira.IssuePatch{AddLabels: []string{"theirs"}}); err != nil {
 		t.Fatal(err)
 	}
-	p.keys("s")
+	p.keys("ctrl+s")
 
 	if rec.writes() != 1 {
 		t.Fatalf("a labels edit beside somebody else's label wrote %d times, want 1", rec.writes())
@@ -200,7 +200,7 @@ func TestSave_TheBaseCheckFailingWritesNothing(t *testing.T) {
 			p, rec := openEditable(t, f, "PROJ-1", withDrafts(tempDrafts(t)))
 			editSummary(t, p, "Mine")
 			f.FailNext(tc.err)
-			p.keys("s")
+			p.keys("ctrl+s")
 			if rec.writes() != 0 {
 				t.Fatalf("a failed base check still wrote %d times", rec.writes())
 			}
@@ -221,7 +221,7 @@ func TestSave_TheReadAfterASaveUsesTheIssueEndpoint(t *testing.T) {
 	p, _ := openEditable(t, f, "PROJ-1", withDrafts(tempDrafts(t)))
 	editSummary(t, p, "Read straight back")
 	before := len(f.Calls())
-	p.keys("s")
+	p.keys("ctrl+s")
 
 	calls := f.Calls()[before:]
 	if slices.Contains(calls, "Search") {
@@ -308,37 +308,37 @@ func TestRevert_FollowsTheRegionWithTheKeyboard(t *testing.T) {
 	}
 
 	m.focus = regionComments
-	p.keys("x")
+	p.keys("u")
 	if !m.rowByID("summary").dirty() || !m.rowByID("description").dirty() {
-		t.Fatal("x in the comments reverted a field")
+		t.Fatal("u in the comments reverted a field")
 	}
 	if got := p.lastStatus().Text; got != "nothing to revert here" {
-		t.Errorf("x in the comments said %q", got)
+		t.Errorf("u in the comments said %q", got)
 	}
 
 	m.focus = regionDesc
 	rowAt(t, p, "summary")
 	m.focus = regionDesc
-	p.keys("x")
+	p.keys("u")
 	if m.rowByID("description").dirty() {
-		t.Error("x in the description did not revert it")
+		t.Error("u in the description did not revert it")
 	}
 	if !m.rowByID("summary").dirty() {
-		t.Error("x in the description reverted the sidebar row under the cursor")
+		t.Error("u in the description reverted the sidebar row under the cursor")
 	}
 
 	m.focus = regionDetails
 	rowAt(t, p, "summary")
-	p.keys("backspace")
+	p.keys("u")
 	if m.rowByID("summary").dirty() {
-		t.Error("backspace no longer reverts the row under the cursor")
+		t.Error("u no longer reverts the row under the cursor")
 	}
 }
 
-func TestRevert_XAndUBothRevertAll(t *testing.T) {
+func TestRevert_CapitalURevertsAll(t *testing.T) {
 	t.Parallel()
 
-	for _, key := range []string{"X", "U"} {
+	for _, key := range []string{"U"} {
 		t.Run(key, func(t *testing.T) {
 			t.Parallel()
 			f := newFake(3)
