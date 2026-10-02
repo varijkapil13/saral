@@ -18,10 +18,10 @@ const menuZone = "menu:"
 // else: j and k are a view's own motions, and enter is whatever the view under
 // this says it is.
 var (
-	menuUp     = Bind([]string{"up", "k"}, "up", "up")
-	menuDown   = Bind([]string{"down", "j"}, "up/down", "choose")
-	menuChoose = Bind([]string{"enter"}, "enter", "do")
-	menuClose  = Bind([]string{"esc", "q"}, "esc", "close")
+	menuUp     = Local("kernel", "overlay.up", []string{"up", "k"}, "up", "up")
+	menuDown   = Local("kernel", "overlay.down", []string{"down", "j"}, "up/down", "choose")
+	menuChoose = Canon(ActOpen, "do")
+	menuClose  = Local("kernel", "menu.close", []string{"esc", "q"}, "esc", "close")
 )
 
 // menuState is the right-click menu: what could be done when it opened, and

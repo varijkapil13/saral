@@ -1,0 +1,923 @@
+package ui
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/palette"
+)
+
+type namedSet struct {
+	name string
+	set  kernel.KeySet
+}
+
+func (n namedSet) bindings() []kernel.Binding {
+	out := append([]kernel.Binding(nil), n.set.Acts...)
+	out = append(out, n.set.Short...)
+	for _, column := range n.set.Full {
+		out = append(out, column...)
+	}
+	return append(out, n.set.Menu...)
+}
+
+var canonByAction = func() map[kernel.Action]kernel.Canonical {
+	m := make(map[kernel.Action]kernel.Canonical)
+	for _, c := range kernel.Vocabulary() {
+		m[c.Action] = c
+	}
+	return m
+}()
+
+var bareOwner = func() map[string]kernel.Action {
+	m := make(map[string]kernel.Action)
+	for _, c := range kernel.Vocabulary() {
+		if c.Modal {
+			continue
+		}
+		for _, k := range c.Keys {
+			if !slices.Contains(c.Prefixed, k) {
+				m[k] = c.Action
+			}
+		}
+	}
+	return m
+}()
+
+func label(b kernel.Binding) string { return b.Help().Key + " | " + b.Help().Desc }
+
+func vocabularyFindings(sets []namedSet) []string {
+	seen := make(map[string]bool)
+	var out []string
+	add := func(s string) {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	for _, ns := range sets {
+		if ns.set.Mode == kernel.Modal {
+			continue
+		}
+		for _, b := range ns.bindings() {
+			m, minted := kernel.MintOf(b)
+			switch {
+			case !minted:
+				add("unminted: " + label(b))
+			case m.Local:
+				for _, k := range b.Keys() {
+					if owner, taken := bareOwner[k]; taken {
+						add(fmt.Sprintf("local %s.%s uses %q, which is %s: %s", m.Owner, m.ID, k, owner, label(b)))
+					}
+				}
+				for _, c := range kernel.Vocabulary() {
+					for _, alias := range c.Aliases {
+						if strings.HasSuffix(m.Owner+"."+m.ID, alias) {
+							add(fmt.Sprintf("local %s.%s is named for %s: %s", m.Owner, m.ID, c.Action, label(b)))
+						}
+					}
+				}
+			case b.Help().Key != canonByAction[m.Action].Label:
+				add(fmt.Sprintf("canon %s is labelled %q, not %q", m.Action, b.Help().Key, canonByAction[m.Action].Label))
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+type viewScope struct {
+	name  string
+	build func(kernel.Deps) kernel.View
+}
+
+func scopeBuilders(t *testing.T) []viewScope {
+	t.Helper()
+	byName := map[string]func(kernel.Deps) kernel.View{}
+	for scope, build := range keyReporters {
+		byName[scope] = build
+	}
+	for scope, static := range staticKeys {
+		byName[scope] = static.build
+	}
+	byName["palette"] = palette.New
+	byName["palette.project"] = func(d kernel.Deps) kernel.View {
+		cmd, ok := kernel.LookupCommand("project.switch")
+		if !ok {
+			t.Fatal("the project picker's command is not registered, so the picker cannot be built")
+		}
+		push, ok := cmd.Run(d)().(kernel.PushMsg)
+		if !ok {
+			t.Fatal("project.switch does not push a view")
+		}
+		return push.View
+	}
+
+	for _, scope := range kernel.KeyScopes() {
+		if _, ok := byName[scope]; !ok && scope != kernel.GlobalScope {
+			t.Errorf("%s registers keys and the vocabulary sweep has no way to build it", scope)
+		}
+	}
+	out := make([]viewScope, 0, len(byName))
+	for name, build := range byName {
+		out = append(out, viewScope{name, build})
+	}
+	slices.SortFunc(out, func(a, b viewScope) int { return strings.Compare(a.name, b.name) })
+	return out
+}
+
+func scopeSets(t *testing.T, s viewScope) (sets []namedSet, structural []string) {
+	t.Helper()
+	if resting := kernel.KeysFor(s.name); !resting.IsZero() {
+		sets = append(sets, namedSet{s.name + " resting", resting})
+	}
+	view := s.build(depsFor(t))
+	lister, lists := view.(kernel.KeyStateLister)
+	if lists {
+		for i, set := range lister.KeyStates() {
+			sets = append(sets, namedSet{fmt.Sprintf("%s state %d", s.name, i), set})
+		}
+	}
+	if reporter, ok := view.(kernel.KeyReporter); ok {
+		live, _ := reporter.LiveKeys()
+		sets = append(sets, namedSet{s.name + " live", live})
+		if !lists {
+			structural = append(structural, "does not implement kernel.KeyStateLister")
+		}
+	}
+	return sets, structural
+}
+
+type legacy struct {
+	why      string
+	findings []string
+}
+
+// unmigrated is the closed list of scopes still to move onto the vocabulary,
+// each with exactly the violations it has today. A scope's migration deletes its
+// own stanza, and nothing new may be added.
+var unmigrated = map[string]legacy{
+	"attach": {
+		why: "u to a, add g g and G",
+		findings: []string{
+			"command attachments.delete ends in \".delete\" and does not set Action delete",
+			"does not implement kernel.KeyStateLister",
+			"unminted: d | delete",
+			"unminted: d | delete this file",
+			"unminted: end | last file",
+			"unminted: enter | show",
+			"unminted: enter | show this file",
+			"unminted: home | first file",
+			"unminted: o | open",
+			"unminted: o | open it outside the terminal",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: u | attach",
+			"unminted: u | attach a file",
+			"unminted: z | bigger",
+			"unminted: z | give the preview the whole pane",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"backlog": {
+		why: "v to *, drop the aliases that belong to other actions",
+		findings: []string{
+			"command backlog.clear-filter ends in \".clear-filter\" and does not set Action clear-filters",
+			"command backlog.create ends in \".create\" and does not set Action create",
+			"command backlog.filter-by ends in \".filter-by\" and does not set Action filter",
+			"command backlog.find ends in \".find\" and does not set Action find",
+			"command backlog.mine ends in \".mine\" and does not set Action mine",
+			"command backlog.move ends in \".move\" and does not set Action move",
+			"command backlog.sort ends in \".sort\" and does not set Action sort",
+			"does not implement kernel.KeyStateLister",
+			"unminted: / | find",
+			"unminted: / | find an issue",
+			"unminted: G | last row",
+			"unminted: J | rank this issue down",
+			"unminted: K | rank this issue up",
+			"unminted: M | mine",
+			"unminted: M | only my issues",
+			"unminted: N | previous issue found",
+			"unminted: V | look",
+			"unminted: V | roomy / compact / lines",
+			"unminted: Y | copy the link",
+			"unminted: c | create",
+			"unminted: c | create an issue in this section",
+			"unminted: ctrl+d | half page down",
+			"unminted: ctrl+u | half page up",
+			"unminted: f | filter by",
+			"unminted: f | filter by a person, a status, a label",
+			"unminted: g g | first row",
+			"unminted: m | move",
+			"unminted: m | move these issues to a sprint or the backlog",
+			"unminted: n | next issue found",
+			"unminted: o | open in browser",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: s | sort",
+			"unminted: space | pick",
+			"unminted: space | pick or unpick this issue",
+			"unminted: v | pick all",
+			"unminted: v | pick every issue in this section",
+			"unminted: y | copy the key",
+			"unminted: { | rank this issue first in its section",
+			"unminted: } | rank this issue last in its section",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"board": {
+		why: "m to t, s to S, w to v, v to *, + to #",
+		findings: []string{
+			"command board.assign ends in \".assign\" and does not set Action assign",
+			"command board.clear-filter ends in \".clear-filter\" and does not set Action clear-filters",
+			"command board.create ends in \".create\" and does not set Action create",
+			"command board.find ends in \".find\" and does not set Action find",
+			"command board.mine ends in \".mine\" and does not set Action mine",
+			"does not implement kernel.KeyStateLister",
+			"unminted: + | add a label to the picked cards",
+			"unminted: / | find",
+			"unminted: / | find a card",
+			"unminted: @ | assign the picked cards",
+			"unminted: F 1-9 | quick filters",
+			"unminted: G / g e | last card in this column",
+			"unminted: H | move this card to the previous column",
+			"unminted: J | rank this card down",
+			"unminted: K | rank this card up",
+			"unminted: L | move this card to the next column",
+			"unminted: M | mine",
+			"unminted: M | only my issues",
+			"unminted: N | previous card found",
+			"unminted: V | look",
+			"unminted: V | roomy / compact / lines",
+			"unminted: Y | copy the link",
+			"unminted: Z | fold or unfold every lane",
+			"unminted: b | another board of this project",
+			"unminted: b | board",
+			"unminted: c | create",
+			"unminted: c | create an issue in this column",
+			"unminted: enter | open",
+			"unminted: f | filter by",
+			"unminted: f | filter by a person, a status, a label",
+			"unminted: g g | first card in this column",
+			"unminted: m | move",
+			"unminted: m | move this issue to another column",
+			"unminted: n | next card found",
+			"unminted: o | open in browser",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: s | another sprint running on this board",
+			"unminted: space | pick or unpick this card",
+			"unminted: v | pick every card in this column",
+			"unminted: w | swimlanes: none, by assignee, by parent",
+			"unminted: y | copy the key",
+			"unminted: z | fold or unfold this lane",
+			"unminted: { | rank this card first in its column",
+			"unminted: } | rank this card last in its column",
+			"unminted: ←/h | previous column",
+			"unminted: ↑/k | up",
+			"unminted: →/l | next column",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"comment": {
+		why: "drop the c alias and space paging",
+		findings: []string{
+			"command comments.delete ends in \".delete\" and does not set Action delete",
+			"does not implement kernel.KeyStateLister",
+			"unminted: G / g e | newest",
+			"unminted: a | write",
+			"unminted: a | write a comment",
+			"unminted: ctrl+d | half page down",
+			"unminted: ctrl+u | half page up",
+			"unminted: d | delete",
+			"unminted: d | delete this one",
+			"unminted: e | edit",
+			"unminted: e | edit this one",
+			"unminted: g g | oldest",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: ←/h | pan left",
+			"unminted: ↑/k | up",
+			"unminted: →/l | pan right",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"filter": {
+		why: "declare Modal",
+		findings: []string{
+			"does not implement kernel.KeyStateLister",
+			"unminted: end | last row",
+			"unminted: enter | choose",
+			"unminted: enter | choose what to filter by",
+			"unminted: home | first row",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"form": {
+		why: "declare Modal",
+		findings: []string{
+			"does not implement kernel.KeyStateLister",
+			"unminted: ctrl+d | empty",
+			"unminted: ctrl+d | empty this field",
+			"unminted: ctrl+s | create",
+			"unminted: ctrl+s | create the issue",
+			"unminted: ctrl+t | change the issue type",
+			"unminted: ctrl+t | type",
+			"unminted: end | last row",
+			"unminted: enter | edit",
+			"unminted: enter | edit this field",
+			"unminted: enter | use this issue type",
+			"unminted: home | first row",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"issue": {
+		why: "s save to ctrl+s, x/X to u/U, c to ], L to &, w to W, drop the b/f/u/d/space/x/e aliases",
+		findings: []string{
+			"command issue.assign ends in \".assign\" and does not set Action assign",
+			"command issue.create ends in \".create\" and does not set Action create",
+			"does not implement kernel.KeyStateLister",
+			"unminted: < | wider sidebar",
+			"unminted: = | reset the split",
+			"unminted: > | wider description",
+			"unminted: @ | assign",
+			"unminted: C | comment",
+			"unminted: E | open in $EDITOR",
+			"unminted: G / g e | bottom",
+			"unminted: L | links",
+			"unminted: W | watchers",
+			"unminted: X | revert all",
+			"unminted: Y | copy the link",
+			"unminted: b/pgup | page up",
+			"unminted: c | list the children",
+			"unminted: d/ctrl+d | half page down",
+			"unminted: e | edit",
+			"unminted: e | edit fields",
+			"unminted: enter | edit this row",
+			"unminted: f/pgdn | page down",
+			"unminted: g g | top",
+			"unminted: o | open in browser",
+			"unminted: p | open the parent",
+			"unminted: s | save",
+			"unminted: s | save changes",
+			"unminted: shift+tab | previous pane",
+			"unminted: t | change status",
+			"unminted: t | status",
+			"unminted: tab | next pane",
+			"unminted: tab | pane",
+			"unminted: u/ctrl+u | half page up",
+			"unminted: w | log time",
+			"unminted: x | revert this",
+			"unminted: y | copy the key",
+			"unminted: z | expand or collapse",
+			"unminted: ←/h | pan left",
+			"unminted: ↑/k | up",
+			"unminted: →/l | pan right",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"list": {
+		why: "a to 0, S to ctrl+s, drop space paging",
+		findings: []string{
+			"command issues.clear-filter ends in \".clear-filter\" and does not set Action clear-filters",
+			"command issues.filter-by ends in \".filter-by\" and does not set Action filter",
+			"command issues.mine ends in \".mine\" and does not set Action mine",
+			"command issues.sort ends in \".sort\" and does not set Action sort",
+			"does not implement kernel.KeyStateLister",
+			"unminted: / | filter",
+			"unminted: G / g e | last row",
+			"unminted: S | save",
+			"unminted: S | save this query to a key",
+			"unminted: V | look",
+			"unminted: V | roomy / compact / lines",
+			"unminted: Y | copy the link",
+			"unminted: a | all",
+			"unminted: a | all issues",
+			"unminted: ctrl+d | half page down",
+			"unminted: ctrl+u | half page up",
+			"unminted: e | edit this search",
+			"unminted: e | search",
+			"unminted: enter | open",
+			"unminted: f | filter by",
+			"unminted: f | filter by a person, a status, a label",
+			"unminted: g g | first row",
+			"unminted: o | open in browser",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: s | sort",
+			"unminted: y | copy the key",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"move": {
+		why: "declare Modal",
+		findings: []string{
+			"does not implement kernel.KeyStateLister",
+			"unminted: end | last row",
+			"unminted: enter | use it",
+			"unminted: enter | use the project under the cursor",
+			"unminted: home | first row",
+			"unminted: i | type a key",
+			"unminted: i | type a project key",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"onboarding": {
+		why: "declare Modal",
+		findings: []string{
+			"does not implement kernel.KeyStateLister",
+			"unminted: alt+k | delete to end of line",
+			"unminted: ctrl+r | try that again",
+			"unminted: enter | continue",
+			"unminted: shift+tab | back a step",
+		},
+	},
+
+	"palette": {
+		why: "declare Modal",
+		findings: []string{
+			"does not implement kernel.KeyStateLister",
+			"unminted: alt+k | delete to end of line",
+			"unminted: enter | run it",
+			"unminted: esc | close",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: ↑ | up",
+			"unminted: ↓ | down",
+		},
+	},
+
+	"palette.project": {
+		why: "declare Modal",
+		findings: []string{
+			"does not implement kernel.KeyStateLister",
+			"unminted: enter | switch to it",
+			"unminted: esc | cancel",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: ↑ | up",
+			"unminted: ↓ | down",
+		},
+	},
+
+	"plans": {
+		why: "b to I, add g g and G",
+		findings: []string{
+			"does not implement kernel.KeyStateLister",
+			"unminted: end | last plan",
+			"unminted: enter | show what this plan is made of",
+			"unminted: enter | sources",
+			"unminted: home | first plan",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"release.bulk": {
+		why: "declare Modal",
+		findings: []string{
+			"does not implement kernel.KeyStateLister",
+			"unminted: enter | preview",
+			"unminted: enter | show what would change",
+			"unminted: esc | leave",
+			"unminted: tab | on/off",
+			"unminted: tab | switch between putting it on and taking it off",
+		},
+	},
+
+	"release.flow": {
+		why: "declare Modal",
+		findings: []string{
+			"does not implement kernel.KeyStateLister",
+			"unminted: enter | choose",
+			"unminted: enter | choose what happens to the open issues",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"release.set": {
+		why: "declare Modal or move onto the vocabulary",
+		findings: []string{
+			"does not implement kernel.KeyStateLister",
+			"unminted: / | find",
+			"unminted: / | find a version or release",
+			"unminted: A | archive",
+			"unminted: A | archive or unarchive it",
+			"unminted: G | last version",
+			"unminted: b | assign",
+			"unminted: b | put it on issues, or take it off",
+			"unminted: e | edit",
+			"unminted: e | edit this version",
+			"unminted: enter | open",
+			"unminted: enter | release it, or fold a header",
+			"unminted: f | filter by state",
+			"unminted: f | state",
+			"unminted: g g | first version",
+			"unminted: p | project",
+			"unminted: p | show one project, or all",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: s | sort",
+			"unminted: s | sort the versions",
+			"unminted: v | arrange",
+			"unminted: v | group by cross-space release or project",
+			"unminted: x | excluded",
+			"unminted: x | show or hide what the plan excludes",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"releases": {
+		why: "n to c, enter to !, b to B, x to .",
+		findings: []string{
+			"command releases.assign ends in \".assign\" and does not set Action assign",
+			"command releases.find ends in \".find\" and does not set Action find",
+			"command releases.new ends in \".new\" and does not set Action create",
+			"command releases.sort ends in \".sort\" and does not set Action sort",
+			"does not implement kernel.KeyStateLister",
+			"unminted: A | archive",
+			"unminted: A | archive or unarchive it",
+			"unminted: G | last version",
+			"unminted: b | assign",
+			"unminted: b | put it on issues, or take it off",
+			"unminted: e | edit",
+			"unminted: e | edit this version",
+			"unminted: enter | release",
+			"unminted: enter | release this version",
+			"unminted: f | filter",
+			"unminted: f | filter by state",
+			"unminted: g g | first version",
+			"unminted: n | new",
+			"unminted: n | new version",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: s | sort",
+			"unminted: s | sort the versions",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"search": {
+		why: "L to I, drop space paging",
+		findings: []string{
+			"does not implement kernel.KeyStateLister",
+			"unminted: / | search",
+			"unminted: G / g e | last row",
+			"unminted: L | in list",
+			"unminted: Y | copy the link",
+			"unminted: alt+k | delete to end of line",
+			"unminted: ctrl+d | half page down",
+			"unminted: ctrl+u | half page up",
+			"unminted: enter | open",
+			"unminted: esc | close",
+			"unminted: g g | first row",
+			"unminted: o | open in browser",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: tab | scope",
+			"unminted: tab | search this project or every project",
+			"unminted: y | copy the key",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"settings": {
+		why: "declare Modal",
+		findings: []string{
+			"unminted: enter | apply, open or run",
+			"unminted: ← | change",
+			"unminted: ↑ | move",
+			"unminted: → | change",
+			"unminted: ↓ | move",
+		},
+	},
+
+	"sprints": {
+		why: "n to c, s and c to !, o to .",
+		findings: []string{
+			"command sprints.new ends in \".new\" and does not set Action create",
+			"does not implement kernel.KeyStateLister",
+			"unminted: c | complete this sprint",
+			"unminted: e | edit",
+			"unminted: e | edit name, goal and dates",
+			"unminted: end | last sprint",
+			"unminted: home | first sprint",
+			"unminted: n | new",
+			"unminted: n | plan a new sprint",
+			"unminted: o | closed",
+			"unminted: o | show or hide closed sprints",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: s | start this sprint",
+			"unminted: ↑/k | up",
+			"unminted: ↓/j | down",
+		},
+	},
+
+	"timeline": {
+		why: "n to .",
+		findings: []string{
+			"command timeline.clear-filter ends in \".clear-filter\" and does not set Action clear-filters",
+			"command timeline.filter-by ends in \".filter-by\" and does not set Action filter",
+			"does not implement kernel.KeyStateLister",
+			"unminted: + | zoom in",
+			"unminted: + | zoom in to a shorter period",
+			"unminted: - | zoom out",
+			"unminted: - | zoom out to a longer period",
+			"unminted: G | last row",
+			"unminted: T | centre the chart on today",
+			"unminted: T | today",
+			"unminted: enter | open",
+			"unminted: enter | open this issue",
+			"unminted: f | filter by",
+			"unminted: f | filter by a person, a status, a label",
+			"unminted: home | first row",
+			"unminted: n | notes",
+			"unminted: n | where these dates came from",
+			"unminted: pgdn | page down",
+			"unminted: pgup | page up",
+			"unminted: ←/h | earlier",
+			"unminted: ↑/k | up",
+			"unminted: →/l | later",
+			"unminted: ↓/j | down",
+		},
+	},
+}
+
+func TestVocabulary_EveryScopeIsHeldToIt(t *testing.T) {
+	sweepEnv(t)
+	scopes := scopeBuilders(t)
+	if len(scopes) == 0 {
+		t.Fatal("no scope was built, so this sweep is checking nothing")
+	}
+
+	commands := commandFindings(kernel.Commands())
+	bindings := 0
+	checked := make(map[string]bool)
+	for _, s := range scopes {
+		sets, structural := scopeSets(t, s)
+		for _, ns := range sets {
+			bindings += len(ns.bindings())
+		}
+		got := append(structural, vocabularyFindings(sets)...)
+		got = append(got, commands[s.name]...)
+		delete(commands, s.name)
+		slices.Sort(got)
+		checked[s.name] = true
+
+		want, exempt := unmigrated[s.name]
+		switch {
+		case !exempt:
+			for _, f := range got {
+				t.Errorf("%s: %s", s.name, f)
+			}
+		case len(got) == 0:
+			t.Errorf("%s is listed as unmigrated and has no violations; delete its stanza", s.name)
+		case want.why == "":
+			t.Errorf("%s is listed as unmigrated with no reason", s.name)
+		default:
+			for _, f := range got {
+				if !slices.Contains(want.findings, f) {
+					t.Errorf("%s: new violation not in the unmigrated list: %s", s.name, f)
+				}
+			}
+			for _, f := range want.findings {
+				if !slices.Contains(got, f) {
+					t.Errorf("%s: no longer a violation, remove it from unmigrated: %s", s.name, f)
+				}
+			}
+		}
+	}
+	for scope, found := range commands {
+		t.Errorf("%s owns palette entries but is not a scope this sweep builds: %v", scope, found)
+	}
+	for scope := range unmigrated {
+		if !checked[scope] {
+			t.Errorf("unmigrated names %q, which is not a scope this sweep builds", scope)
+		}
+	}
+	if bindings == 0 {
+		t.Fatal("no scope offered a binding, so this sweep is checking nothing")
+	}
+}
+
+func TestVocabulary_TheKernelsOwnKeysAreOnIt(t *testing.T) {
+	global := namedSet{kernel.GlobalScope, kernel.DefaultGlobalKeys().KeySet()}
+	if len(global.bindings()) == 0 {
+		t.Fatal("the global keys offer no binding, so this is checking nothing")
+	}
+	for _, f := range vocabularyFindings([]namedSet{global}) {
+		t.Errorf("kernel: %s", f)
+	}
+}
+
+func TestVocabulary_LocalKeysAreUniqueAcrossViews(t *testing.T) {
+	sweepEnv(t)
+	owners := make(map[string]map[string]bool)
+	for _, s := range scopeBuilders(t) {
+		sets, _ := scopeSets(t, s)
+		for _, ns := range sets {
+			for _, b := range ns.bindings() {
+				m, ok := kernel.MintOf(b)
+				if !ok || !m.Local {
+					continue
+				}
+				for _, k := range b.Keys() {
+					if owners[k] == nil {
+						owners[k] = map[string]bool{}
+					}
+					owners[k][m.Owner] = true
+				}
+			}
+		}
+	}
+	for k, who := range owners {
+		if len(who) > 1 {
+			t.Errorf("%q is local to more than one view: %v", k, who)
+		}
+	}
+}
+
+func TestVocabulary_TheCheckSeesWhatItIsMeantTo(t *testing.T) {
+	stray := kernel.Bind([]string{"q"}, "q", "stray")
+	local := kernel.Local("probe", "sort", []string{"s"}, "s", "sort differently")
+	fine := kernel.Local("probe", "unique", []string{"F"}, "F", "quick filters")
+	canon := kernel.Canon(kernel.ActSort)
+	relabelled := kernel.Bind(canon.Keys(), "S", "sort")
+	terse := kernel.Terse(canon, "sort it")
+	got := vocabularyFindings([]namedSet{
+		{"probe", kernel.KeySet{Acts: []kernel.Binding{stray, local, fine, canon, relabelled, terse}}},
+		{"modal", kernel.KeySet{Mode: kernel.Modal, Acts: []kernel.Binding{kernel.Bind([]string{"y"}, "y", "yes")}}},
+	})
+	want := []string{
+		`canon sort is labelled "S", not "s"`,
+		"local probe.sort is named for sort: s | sort differently",
+		`local probe.sort uses "s", which is sort: s | sort differently`,
+		"unminted: q | stray",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("findings = %q, want %q", got, want)
+	}
+}
+
+func TestVocabulary_TheTableIsConsistent(t *testing.T) {
+	all := kernel.Vocabulary()
+	if len(all) == 0 {
+		t.Fatal("the vocabulary is empty")
+	}
+	actions := make(map[kernel.Action]bool)
+	aliases := make(map[string]kernel.Action)
+	for _, c := range all {
+		if actions[c.Action] {
+			t.Errorf("%s is in the table twice", c.Action)
+		}
+		actions[c.Action] = true
+		if len(c.Keys) == 0 || c.Label == "" || c.Desc == "" {
+			t.Errorf("%s is missing keys, a label or a description", c.Action)
+		}
+		for _, alias := range c.Aliases {
+			if other, dup := aliases[alias]; dup {
+				t.Errorf("alias %q names both %s and %s", alias, other, c.Action)
+			}
+			aliases[alias] = c.Action
+		}
+		if c.Variant != "" {
+			base, ok := canonByAction[c.Variant]
+			if !ok {
+				t.Errorf("%s is a variant of %q, which is not in the table", c.Action, c.Variant)
+			} else if !slices.Contains(base.Keys, strings.ToLower(c.Keys[0])) && c.Action != kernel.ActBottom {
+				t.Errorf("%s (%s) is not the capital of %s (%v)", c.Action, c.Keys[0], c.Variant, base.Keys)
+			}
+		}
+		b := kernel.Canon(c.Action)
+		if _, ok := kernel.Stroke(b); !ok {
+			t.Errorf("%s: the kernel cannot spell %v back into a keypress", c.Action, c.Keys)
+		}
+		for _, k := range c.Keys {
+			if _, ok := kernel.Stroke(kernel.Bind([]string{k}, k, "")); !ok {
+				t.Errorf("%s: the kernel cannot spell %q back into a keypress", c.Action, k)
+			}
+		}
+	}
+
+	owned := make(map[string]kernel.Action)
+	for _, c := range all {
+		if c.Modal {
+			continue
+		}
+		for _, k := range c.Keys {
+			if slices.Contains(c.Prefixed, k) {
+				continue
+			}
+			if other, taken := owned[k]; taken {
+				t.Errorf("%q belongs to both %s and %s", k, other, c.Action)
+			}
+			owned[k] = c.Action
+		}
+	}
+	if len(kernel.SortPickerKeys()) != 4 {
+		t.Errorf("the sort picker has %d keys, want 4", len(kernel.SortPickerKeys()))
+	}
+}
+
+func TestVocabulary_SymbolStrokesRoundTrip(t *testing.T) {
+	for _, stroke := range []string{"!", "&", "#", "*", ".", "]"} {
+		b := kernel.Bind([]string{stroke}, stroke, "")
+		press, ok := kernel.Stroke(b)
+		if !ok {
+			t.Errorf("%q cannot be spelt as a keypress", stroke)
+			continue
+		}
+		if press.String() != stroke {
+			t.Errorf("%q arrives as %q", stroke, press.String())
+		}
+		if !kernel.Matches(press, b) {
+			t.Errorf("a keypress built for %q does not match the binding it came from", stroke)
+		}
+	}
+}
+
+var commandScope = map[string]string{
+	"issues":      "list",
+	"attachments": "attach",
+	"comments":    "comment",
+}
+
+func commandFindings(cmds []kernel.Command) map[string][]string {
+	slots := make(map[string]bool)
+	for slot := 1; slot <= 9; slot++ {
+		slots[kernel.SlotGesture(slot)] = true
+	}
+	out := make(map[string][]string)
+	for _, cmd := range cmds {
+		scope, _, _ := strings.Cut(cmd.ID, ".")
+		if renamed, ok := commandScope[scope]; ok {
+			scope = renamed
+		}
+		for _, c := range kernel.Vocabulary() {
+			for _, alias := range c.Aliases {
+				if strings.HasSuffix(cmd.ID, alias) && cmd.Action != c.Action {
+					out[scope] = append(out[scope], fmt.Sprintf("command %s ends in %q and does not set Action %s", cmd.ID, alias, c.Action))
+				}
+			}
+		}
+		if cmd.Action == "" {
+			continue
+		}
+		for _, k := range cmd.Keys {
+			if k != canonByAction[cmd.Action].Label && !slots[k] {
+				out[scope] = append(out[scope], fmt.Sprintf("command %s shows %q, not the canonical %q", cmd.ID, k, canonByAction[cmd.Action].Label))
+			}
+		}
+	}
+	return out
+}
+
+func TestVocabulary_CommandsNameTheirAction(t *testing.T) {
+	if len(kernel.Commands()) == 0 {
+		t.Fatal("no command is registered, so this sweep is checking nothing")
+	}
+	got := commandFindings([]kernel.Command{
+		{ID: "probe.assign"},
+		{ID: "probe.sort", Action: kernel.ActSort, Keys: []string{"S"}},
+		{ID: "probe.new", Action: kernel.ActCreate, Keys: []string{"c"}},
+		{ID: "probe.open", Action: kernel.ActSlot, Keys: []string{kernel.SlotGesture(3)}},
+	})
+	want := []string{
+		`command probe.assign ends in ".assign" and does not set Action assign`,
+		`command probe.sort shows "S", not the canonical "s"`,
+	}
+	if !slices.Equal(got["probe"], want) {
+		t.Errorf("findings = %q, want %q", got["probe"], want)
+	}
+}

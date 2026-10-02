@@ -26,9 +26,9 @@ func (m Model) destTitle() string { return "Where " + m.keys.Go.Help().Key + " g
 // The keys the overlay adds to a latched prefix. They are not in GlobalKeys
 // because they answer in one place only.
 var (
-	destUp     = Bind([]string{"up", "k"}, "up", "up")
-	destDown   = Bind([]string{"down", "j"}, "up/down", "choose")
-	destChoose = Bind([]string{"enter"}, "enter", "go there")
+	destUp     = Local("kernel", "overlay.up", []string{"up", "k"}, "up", "up")
+	destDown   = Local("kernel", "overlay.down", []string{"down", "j"}, "up/down", "choose")
+	destChoose = Canon(ActOpen, "go there")
 )
 
 func init() { registerDestinationCommand() }
@@ -245,7 +245,7 @@ func (m Model) destFooterActs() []Binding {
 		}
 		out = append(out, Bind(g.key.Keys(), g.key.Keys()[len(g.key.Keys())-1], g.key.Help().Desc))
 	}
-	return append(out, destDown, destChoose, Bind(m.keys.Back.Keys(), "esc", "cancel"))
+	return append(out, destDown, destChoose, Canon(ActBack, "cancel"))
 }
 
 // viewGestures is what the focused view spends this same prefix on, taken from
