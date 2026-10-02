@@ -160,16 +160,6 @@ func scopeSets(t *testing.T, s viewScope) (sets []namedSet, structural []string)
 	return sets, structural
 }
 
-type legacy struct {
-	why      string
-	findings []string
-}
-
-// unmigrated is the closed list of scopes still to move onto the vocabulary,
-// each with exactly the violations it has today. A scope's migration deletes its
-// own stanza, and nothing new may be added.
-var unmigrated = map[string]legacy{}
-
 func TestVocabulary_EveryScopeIsHeldToIt(t *testing.T) {
 	sweepEnv(t)
 	scopes := scopeBuilders(t)
@@ -179,7 +169,6 @@ func TestVocabulary_EveryScopeIsHeldToIt(t *testing.T) {
 
 	commands := commandFindings(kernel.Commands())
 	bindings := 0
-	checked := make(map[string]bool)
 	for _, s := range scopes {
 		sets, structural := scopeSets(t, s)
 		for _, ns := range sets {
@@ -189,38 +178,13 @@ func TestVocabulary_EveryScopeIsHeldToIt(t *testing.T) {
 		got = append(got, commands[s.name]...)
 		delete(commands, s.name)
 		slices.Sort(got)
-		checked[s.name] = true
 
-		want, exempt := unmigrated[s.name]
-		switch {
-		case !exempt:
-			for _, f := range got {
-				t.Errorf("%s: %s", s.name, f)
-			}
-		case len(got) == 0:
-			t.Errorf("%s is listed as unmigrated and has no violations; delete its stanza", s.name)
-		case want.why == "":
-			t.Errorf("%s is listed as unmigrated with no reason", s.name)
-		default:
-			for _, f := range got {
-				if !slices.Contains(want.findings, f) {
-					t.Errorf("%s: new violation not in the unmigrated list: %s", s.name, f)
-				}
-			}
-			for _, f := range want.findings {
-				if !slices.Contains(got, f) {
-					t.Errorf("%s: no longer a violation, remove it from unmigrated: %s", s.name, f)
-				}
-			}
+		for _, f := range got {
+			t.Errorf("%s: %s", s.name, f)
 		}
 	}
 	for scope, found := range commands {
 		t.Errorf("%s owns palette entries but is not a scope this sweep builds: %v", scope, found)
-	}
-	for scope := range unmigrated {
-		if !checked[scope] {
-			t.Errorf("unmigrated names %q, which is not a scope this sweep builds", scope)
-		}
 	}
 	if bindings == 0 {
 		t.Fatal("no scope offered a binding, so this sweep is checking nothing")
