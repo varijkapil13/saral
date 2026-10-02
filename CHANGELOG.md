@@ -14,6 +14,11 @@ such change is listed under **Changed**.
 - `kernel.PopTo` collapses the view stack to a named entry in one step, asking or refusing on the
   way exactly as `esc` does. Nothing calls it yet.
 
+### Fixed
+
+- Two saves of the same settings file inside one Saral no longer let one starve the other until it
+  gave up: writers are now served in the order they arrived.
+
 ## [0.10.0] - 2026-10-02
 
 ### Added

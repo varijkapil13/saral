@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/gofrs/flock"
@@ -248,6 +249,90 @@ func TestLockFile_ExcludesASecondHandleOnTheSameFile(t *testing.T) {
 	if err := other.Unlock(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestLockFile_AWaiterIsServedBeforeTheHolderRetakesIt(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "config.toml")
+	first, err := lockFile(path)
+	if err != nil {
+		t.Fatalf("lockFile: %v", err)
+	}
+
+	order := make(chan string, 2)
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	queue := func(name string) {
+		wg.Go(func() {
+			unlock, err := lockFile(path)
+			if err != nil {
+				order <- name + ": " + err.Error()
+				return
+			}
+			order <- name
+			<-release
+			unlock()
+		})
+		time.Sleep(50 * time.Millisecond)
+	}
+	queue("second")
+	queue("third")
+
+	first()
+	if got := <-order; got != "second" {
+		t.Errorf("the first to take the lock after the release was %q, want the longest waiter, second", got)
+	}
+	release <- struct{}{}
+	if got := <-order; got != "third" {
+		t.Errorf("the next to take the lock was %q, want third", got)
+	}
+	release <- struct{}{}
+	wg.Wait()
+}
+
+func TestLockFile_ParallelPathsDoNotSerialise(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	one, err := lockFile(filepath.Join(dir, "one.toml"))
+	if err != nil {
+		t.Fatalf("lockFile: %v", err)
+	}
+	defer one()
+
+	two, err := lockFile(filepath.Join(dir, "two.toml"))
+	if err != nil {
+		t.Fatalf("lockFile on another path while the first was held: %v", err)
+	}
+	two()
+}
+
+func TestLockFile_AnotherProcessHoldingItStillTimesOut(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "config.toml")
+	other := flock.New(filepath.Join(filepath.Dir(path), ".config.toml.lock"))
+	if ok, err := other.TryLock(); err != nil || !ok {
+		t.Fatalf("taking the lock (ok=%t, err=%v)", ok, err)
+	}
+	defer func() { _ = other.Unlock() }()
+
+	unlock, err := lockFile(path)
+	if err == nil {
+		unlock()
+		t.Fatal("lockFile succeeded while another handle held the file")
+	}
+	if !strings.Contains(err.Error(), "another copy of saral") {
+		t.Errorf("error = %v, want it to name another copy of saral", err)
+	}
+
+	other2 := flock.New(filepath.Join(filepath.Dir(path), ".config.toml.lock"))
+	_ = other.Unlock()
+	if ok, err := other2.TryLock(); err != nil || !ok {
+		t.Errorf("a failed attempt left the lock taken (ok=%t, err=%v)", ok, err)
+	}
+	_ = other2.Unlock()
 }
 
 // Each goroutine opens its own lock handle, which is what two copies of Saral
