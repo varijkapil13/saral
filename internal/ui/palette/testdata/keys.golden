@@ -12,3 +12,8 @@ nothing matches
   acts   esc close
   full   [esc close]
   full   [alt+k delete to end of line]
+the site search under the cursor
+  acts   enter search the site · esc close
+  full   [↓ down, ↑ up, pgdn page down, pgup page up]
+  full   [enter search the site, esc close]
+  full   [alt+k delete to end of line]

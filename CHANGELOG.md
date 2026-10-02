@@ -13,6 +13,8 @@ such change is listed under **Changed**.
   `tab` to narrow to the session's project. An exact key is listed first, `L` sends the search to
   the issue list, and the words you typed are painted in the summaries. The command palette has it
   too, as *Search issues on the site*.
+- The command palette ends its list with *Search issues for "…"*, which opens that search with
+  your words already in it. When nothing cached matched, it is the only row.
 
 ### Fixed
 

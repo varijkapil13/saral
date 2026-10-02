@@ -20,6 +20,7 @@ type keyMap struct {
 	// depends on which half of the list the cursor is in, and the footer names
 	// the one on screen.
 	Open  kernel.Binding
+	Find  kernel.Binding
 	Close kernel.Binding
 }
 
@@ -31,6 +32,7 @@ func defaultKeys() keyMap {
 		PageDown: kernel.Bind([]string{"pgdown"}, "pgdn", "page down"),
 		Run:      kernel.Bind([]string{"enter"}, "enter", "run it"),
 		Open:     kernel.Bind([]string{"enter"}, "enter", "open it"),
+		Find:     kernel.Bind([]string{"enter"}, "enter", "search the site"),
 		Close:    kernel.Bind([]string{"esc"}, "esc", "close"),
 	}
 }
@@ -44,6 +46,7 @@ const (
 	keysOffering keyState = iota
 	keysIssue
 	keysNothing
+	keysFind
 	keyStates
 )
 
@@ -68,6 +71,14 @@ var liveSets = func() [keyStates]kernel.KeySet {
 			{widget.KillLine},
 		},
 	}
+	sets[keysFind] = kernel.KeySet{
+		Acts: []kernel.Binding{k.Find, k.Close},
+		Full: [][]kernel.Binding{
+			{k.Down, k.Up, k.PageDown, k.PageUp},
+			{k.Find, k.Close},
+			{widget.KillLine},
+		},
+	}
 	sets[keysNothing] = kernel.KeySet{
 		Acts: []kernel.Binding{k.Close},
 		Full: [][]kernel.Binding{{k.Close}, {widget.KillLine}},
@@ -84,6 +95,8 @@ func (m *Model) LiveKeys() (set kernel.KeySet, gen int) {
 	switch {
 	case len(m.shown) == 0:
 		state = keysNothing
+	case m.onFind():
+		state = keysFind
 	case m.onIssue():
 		state = keysIssue
 	}
@@ -112,7 +125,7 @@ func (k keyMap) table() map[string]action {
 	}{
 		{k.Up, actUp}, {k.Down, actDown},
 		{k.PageUp, actPageUp}, {k.PageDown, actPageDown},
-		{k.Run, actRun}, {k.Open, actRun}, {k.Close, actClose},
+		{k.Run, actRun}, {k.Open, actRun}, {k.Find, actRun}, {k.Close, actClose},
 	}
 	out := make(map[string]action, len(entries)*2)
 	for _, e := range entries {

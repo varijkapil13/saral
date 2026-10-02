@@ -36,7 +36,7 @@ func TestGate_UnfilteredFirstScreenHoldsADestination(t *testing.T) {
 	seenVerb := ""
 	first := ""
 	for _, at := range m.shown {
-		if !at.selectable() || at.issue {
+		if !at.selectable() || at.issue || at.find {
 			continue
 		}
 		cmd := m.rows[at.at].cmd

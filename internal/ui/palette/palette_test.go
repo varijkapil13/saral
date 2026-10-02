@@ -163,7 +163,7 @@ func TestPalette_AWholeWordInAnIDOutranksATitleTheLettersAreOnlyScatteredThrough
 	}
 }
 
-func TestPalette_NothingMatchingSaysSoAndOffersNoKeysThatWouldDoAnything(t *testing.T) {
+func TestPalette_NothingMatchingSaysSoAndOffersOnlyTheSiteSearch(t *testing.T) {
 	t.Parallel()
 
 	p := fly(t, paletteDeps(), sample(), memoryTable(), 120, 24)
@@ -171,11 +171,15 @@ func TestPalette_NothingMatchingSaysSoAndOffersNoKeysThatWouldDoAnything(t *test
 
 	mustContain(t, p.frame(), `Nothing matches "zzzz"`)
 	set, gen := p.m.LiveKeys()
-	if gen != int(keysNothing) {
-		t.Errorf("the keys are in state %d with nothing on offer", gen)
+	if gen != int(keysFind) {
+		t.Errorf("the keys are in state %d with only the site search on offer", gen)
 	}
-	if labels := actsOf(set); strings.Contains(labels, "run it") {
-		t.Errorf("the footer offers enter with nothing to run: %s", labels)
+	labels := actsOf(set)
+	if strings.Contains(labels, "run it") {
+		t.Errorf("the footer offers enter with no command to run: %s", labels)
+	}
+	if !strings.Contains(labels, "search the site") {
+		t.Errorf("the footer does not name what enter does: %s", labels)
 	}
 }
 
