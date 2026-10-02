@@ -169,29 +169,6 @@ type legacy struct {
 // each with exactly the violations it has today. A scope's migration deletes its
 // own stanza, and nothing new may be added.
 var unmigrated = map[string]legacy{
-	"attach": {
-		why: "u to a, add g g and G",
-		findings: []string{
-			"command attachments.delete ends in \".delete\" and does not set Action delete",
-			"does not implement kernel.KeyStateLister",
-			"unminted: d | delete",
-			"unminted: d | delete this file",
-			"unminted: end | last file",
-			"unminted: enter | show",
-			"unminted: enter | show this file",
-			"unminted: home | first file",
-			"unminted: o | open",
-			"unminted: o | open it outside the terminal",
-			"unminted: pgdn | page down",
-			"unminted: pgup | page up",
-			"unminted: u | attach",
-			"unminted: u | attach a file",
-			"unminted: z | bigger",
-			"unminted: z | give the preview the whole pane",
-			"unminted: ↑/k | up",
-			"unminted: ↓/j | down",
-		},
-	},
 
 	"backlog": {
 		why: "waits for issue.ShareBindings to move onto the vocabulary",
@@ -208,30 +185,6 @@ var unmigrated = map[string]legacy{
 			"unminted: Y | copy the link",
 			"unminted: o | open in browser",
 			"unminted: y | copy the key",
-		},
-	},
-
-	"comment": {
-		why: "drop the c alias and space paging",
-		findings: []string{
-			"command comments.delete ends in \".delete\" and does not set Action delete",
-			"does not implement kernel.KeyStateLister",
-			"unminted: G / g e | newest",
-			"unminted: a | write",
-			"unminted: a | write a comment",
-			"unminted: ctrl+d | half page down",
-			"unminted: ctrl+u | half page up",
-			"unminted: d | delete",
-			"unminted: d | delete this one",
-			"unminted: e | edit",
-			"unminted: e | edit this one",
-			"unminted: g g | oldest",
-			"unminted: pgdn | page down",
-			"unminted: pgup | page up",
-			"unminted: ←/h | pan left",
-			"unminted: ↑/k | up",
-			"unminted: →/l | pan right",
-			"unminted: ↓/j | down",
 		},
 	},
 
