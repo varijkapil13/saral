@@ -270,8 +270,9 @@ func projectWords(row *planRow, held *releases) string {
 }
 
 // sourceWords is one issue source in words. A local plan names a project by its
-// key; the site names it by an id, and the row says so instead of printing the
-// number as though it were a key.
+// key; the site names it by an id, which is shown as the key once it has been
+// looked up and otherwise as an id rather than printing the number as though it
+// were a key.
 func sourceWords(s jira.PlanSource, local bool, held *releases) string {
 	value := strings.TrimSpace(s.Value)
 	if value == "" {
@@ -280,6 +281,8 @@ func sourceWords(s jira.PlanSource, local bool, held *releases) string {
 	switch {
 	case s.Type == jira.PlanSourceProject && local:
 		return "project " + value
+	case s.Type == jira.PlanSourceProject && held.names[value] != "":
+		return "project " + held.names[value]
 	case s.Type == jira.PlanSourceProject:
 		return "project id " + value
 	case s.Type == jira.PlanSourceFilter:

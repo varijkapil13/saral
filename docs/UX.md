@@ -968,7 +968,7 @@ enter browses` and, on a second row, how many cross-space releases the plan name
 versions it excludes. A plan the profile defines reads *defined in this profile, so no cross-space
 releases*, and a project the token cannot browse is still named on a row of its own. `enter` on the
 summary row, a click on it, or `b` anywhere in an open plan pushes this browser over the plan, with
-each version's project (a key where one is known, `id N` otherwise), the plan's cross-space releases as
+each version's project (a key, looked up from the id the site gives; `id N` where that read failed), the plan's cross-space releases as
 groups and its exclusions; `esc` comes back to the plan. `enter` on the plan row itself still opens and
 closes it. The command palette has it as *Browse a plan's releases*. The cross-space releases and the
 exclusions come from a second read, made only for a site plan; when the site refuses it (403, 404, a

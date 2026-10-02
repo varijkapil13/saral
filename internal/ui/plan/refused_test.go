@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -18,6 +19,11 @@ type versionStub struct {
 	details   map[string]jira.PlanDetail
 	detailErr error
 
+	keys       map[string]string
+	projectErr map[string]error
+
+	mu           sync.Mutex
+	projectCalls []string
 	versionCalls []string
 	boardCalls   []int64
 	detailCalls  []string
@@ -37,6 +43,19 @@ func (s *versionStub) Versions(_ context.Context, ref string) ([]jira.Version, e
 		return nil, err
 	}
 	return s.versions[ref], nil
+}
+
+func (s *versionStub) Project(_ context.Context, ref string) (jira.ProjectRef, error) {
+	s.mu.Lock()
+	s.projectCalls = append(s.projectCalls, ref)
+	s.mu.Unlock()
+	if err := s.projectErr[ref]; err != nil {
+		return jira.ProjectRef{}, err
+	}
+	if key := s.keys[ref]; key != "" {
+		return jira.ProjectRef{ID: ref, Key: key}, nil
+	}
+	return jira.ProjectRef{}, &jira.NotFoundError{Kind: "project", ID: ref}
 }
 
 func (*versionStub) UnresolvedCount(context.Context, string) (int, error) { return 0, nil }
@@ -74,7 +93,7 @@ func readOf(t *testing.T, stub *versionStub, sources []jira.PlanSource) releases
 
 func readPlanOf(t *testing.T, stub *versionStub, plan jira.Plan) releasesMsg {
 	t.Helper()
-	msg := readReleases(context.Background(), stub, plan, 3)()
+	msg := readReleases(context.Background(), stub, plan, nil, 3)()
 	got, ok := msg.(releasesMsg)
 	if !ok {
 		t.Fatalf("the read failed: %#v", msg)
@@ -172,7 +191,7 @@ func TestReadReleases_ARateLimitStillFailsTheRead(t *testing.T) {
 		versions: map[string][]jira.Version{"10021": {{ID: "1", Name: "1.0"}}},
 		errs:     map[string]error{"10011": &jira.RateLimitError{}},
 	}
-	msg := readReleases(context.Background(), stub, jira.Plan{ID: "42", Sources: projectSources("10021", "10011")}, 3)()
+	msg := readReleases(context.Background(), stub, jira.Plan{ID: "42", Sources: projectSources("10021", "10011")}, nil, 3)()
 	if _, ok := msg.(failedMsg); !ok {
 		t.Fatalf("a rate limit was taken as a refusal of one project: %#v", msg)
 	}
@@ -268,7 +287,7 @@ func TestReadReleases_AFailureOnABoardFailsTheRead(t *testing.T) {
 			t.Parallel()
 
 			stub := &versionStub{boardErr: map[int64]error{17: err}}
-			msg := readReleases(context.Background(), stub, jira.Plan{ID: "42", Sources: boardSources("17")}, 3)()
+			msg := readReleases(context.Background(), stub, jira.Plan{ID: "42", Sources: boardSources("17")}, nil, 3)()
 			if _, ok := msg.(failedMsg); !ok {
 				t.Fatalf("%s on a board was taken as a refusal of it: %#v", name, msg)
 			}
@@ -303,10 +322,11 @@ func TestPlans_ARefusedProjectIsNamedBesideTheReleasesThatWereRead(t *testing.T)
 	dr.send(releasesMsg{
 		gen: dr.m.gen, plan: "42",
 		versions: []jira.Version{{ID: "1", Name: "Spring drop"}},
+		names:    map[string]string{"10021": "EX", "10011": "OPS"},
 		refused:  []refusal{{kind: "project", ref: "10011", reason: browseRefusal}},
 		read:     []string{"10021"},
 	})
 
 	frame := dr.view()
-	mustContain(t, frame, "1 in id 10021 - enter browses", "project id 10011 left out", "browse project rights")
+	mustContain(t, frame, "1 in EX - enter browses", "project OPS left out", "browse project rights")
 }

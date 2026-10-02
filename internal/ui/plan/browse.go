@@ -3,6 +3,7 @@ package plan
 import (
 	"context"
 	"errors"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -149,6 +150,20 @@ func setOf(plan *jira.Plan, held *releases, reload func(context.Context) (releas
 	return set
 }
 
+func reloadOf(reader releaseReader, plan jira.Plan, known map[string]string) func(context.Context) (release.Set, error) {
+	return func(ctx context.Context) (release.Set, error) {
+		msg, err := collectReleases(ctx, reader, plan, known)
+		if err != nil {
+			return release.Set{}, err
+		}
+		fresh := releasesOf(plan.Local, &msg)
+		if len(fresh.versions) == 0 {
+			return release.Set{}, errors.New("the site answered no releases for this plan")
+		}
+		return setOf(&plan, &fresh, reloadOf(reader, plan, maps.Clone(fresh.names))), nil
+	}
+}
+
 // browse pushes the release browser over the plan, which is the only place its
 // versions are sortable, filterable and grouped.
 func (m *Model) browse(at int) tea.Cmd {
@@ -167,18 +182,7 @@ func (m *Model) browse(at int) tea.Cmd {
 		return kernel.Status("this plan has no releases to browse")
 	}
 	reader := releaseReader(m.deps.Jira)
-	var reload func(context.Context) (release.Set, error)
-	reload = func(ctx context.Context) (release.Set, error) {
-		msg, err := collectReleases(ctx, reader, plan)
-		if err != nil {
-			return release.Set{}, err
-		}
-		fresh := releasesOf(plan.Local, &msg)
-		if len(fresh.versions) == 0 {
-			return release.Set{}, errors.New("the site answered no releases for this plan")
-		}
-		return setOf(&plan, &fresh, reload), nil
-	}
+	reload := reloadOf(reader, plan, maps.Clone(held.names))
 	set := setOf(&plan, &held, reload)
 	return kernel.Push(release.SetViewID, "Releases in "+plan.Name, release.NewSet(m.deps, set))
 }

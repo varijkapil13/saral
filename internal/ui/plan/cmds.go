@@ -5,11 +5,15 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"sync"
 
 	tea "charm.land/bubbletea/v2"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/varijkapil13/saral/pkg/jira"
 )
+
+const nameReads = 4
 
 // plansMsg carries what the site answered with.
 type plansMsg struct {
@@ -32,6 +36,7 @@ type releasesMsg struct {
 	detail   *jira.PlanDetail
 	// detailErr is why the cross-space releases were not read; the versions still arrived.
 	detailErr error
+	nameErr   error
 }
 
 type refusal struct {
@@ -43,6 +48,7 @@ type refusal struct {
 type releaseReader interface {
 	jira.VersionReader
 	jira.BoardProjectReader
+	jira.ProjectReader
 	jira.PlanDetailReader
 }
 
@@ -65,9 +71,9 @@ func readPlans(ctx context.Context, reader jira.PlanReader, gen int) tea.Cmd {
 	}
 }
 
-func readReleases(ctx context.Context, reader releaseReader, plan jira.Plan, gen int) tea.Cmd {
+func readReleases(ctx context.Context, reader releaseReader, plan jira.Plan, known map[string]string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		msg, err := collectReleases(ctx, reader, plan)
+		msg, err := collectReleases(ctx, reader, plan, known)
 		if err != nil {
 			return failedMsg{gen: gen, plan: plan.ID, err: err}
 		}
@@ -85,7 +91,7 @@ func readReleases(ctx context.Context, reader releaseReader, plan jira.Plan, gen
 // what the web UI does with a plan spanning projects the reader cannot see. A
 // failure that says nothing about it — a rate limit, a dead host, a lapsed
 // token — fails the whole read, since every other project would hit it too.
-func collectReleases(ctx context.Context, reader releaseReader, plan jira.Plan) (releasesMsg, error) {
+func collectReleases(ctx context.Context, reader releaseReader, plan jira.Plan, known map[string]string) (releasesMsg, error) {
 	sources := plan.Sources
 	var detail *jira.PlanDetail
 	var detailErr error
@@ -154,6 +160,7 @@ func collectReleases(ctx context.Context, reader releaseReader, plan jira.Plan) 
 			boards[value] = append(boards[value], label)
 		}
 	}
+	nameErr := nameProjects(ctx, reader, plan.Local, refs, known, names)
 	out := make([]jira.Version, 0, len(refs)*4)
 	var owners, read []string
 	for _, ref := range refs {
@@ -172,7 +179,50 @@ func collectReleases(ctx context.Context, reader releaseReader, plan jira.Plan) 
 		out = append(out, versions...)
 	}
 	return releasesMsg{plan: plan.ID, versions: out, owners: owners, refused: refused,
-		names: names, boards: boards, read: read, detail: detail, detailErr: detailErr}, nil
+		names: names, boards: boards, read: read, detail: detail, detailErr: detailErr, nameErr: nameErr}, nil
+}
+
+func nameProjects(ctx context.Context, reader jira.ProjectReader, local bool, refs []string, known, names map[string]string) error {
+	if local {
+		return nil
+	}
+	var todo []string
+	for _, ref := range refs {
+		switch {
+		case names[ref] != "":
+		case known[ref] != "":
+			names[ref] = known[ref]
+		default:
+			todo = append(todo, ref)
+		}
+	}
+	var (
+		mu     sync.Mutex
+		g      errgroup.Group
+		failed = make([]error, len(todo))
+	)
+	g.SetLimit(nameReads)
+	for i, ref := range todo {
+		g.Go(func() error {
+			p, err := reader.Project(ctx, ref)
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case err != nil:
+				failed[i] = err
+			case p.Key != "":
+				names[ref] = p.Key
+			}
+			return nil
+		})
+	}
+	_ = g.Wait()
+	for _, err := range failed {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // refusedReason is the site's words without the project, which the row names.

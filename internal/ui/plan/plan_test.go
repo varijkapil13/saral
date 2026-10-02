@@ -186,7 +186,6 @@ func TestPlans_ASitePlanReadsTheReleasesOfItsProjectsByID(t *testing.T) {
 	if err != nil || len(plans) == 0 {
 		t.Fatalf("the fake answered %d plans and %v; the test needs one", len(plans), err)
 	}
-	id := plans[0].Sources[0].Value
 	dr := newDriver(t, testDeps(f), 120, 30)
 	dr.send(plansMsg{gen: dr.m.gen, plans: plans[:1]})
 	before := countCalls(f, "Versions")
@@ -196,7 +195,8 @@ func TestPlans_ASitePlanReadsTheReleasesOfItsProjectsByID(t *testing.T) {
 		t.Fatalf("opening a site plan read the versions %d times, want once", got)
 	}
 	frame := dr.view()
-	mustContain(t, frame, "project id "+id, "releases", "3 in id "+id+" - enter browses", "no cross-space releases")
+	mustContain(t, frame, "project PROJ", "releases", "3 in PROJ - enter browses", "no cross-space releases")
+	mustNotContain(t, frame, "project id")
 	mustNotContain(t, frame, "not readable", "cannot resolve", "cross-space releases not read")
 }
 
@@ -569,8 +569,8 @@ func TestPlans_TheFakeAnswersAProjectSourceTheWayTheSiteDoes(t *testing.T) {
 			sources++
 			if !digits(source.Value) {
 				t.Errorf("jiratest answers a project source with %q, which is a project key; "+
-					"pkg/jira/cloud maps this field from a numeric project id, and no port method "+
-					"turns an id into a key, so a view tested only against this meets a shape no "+
+					"pkg/jira/cloud maps this field from a numeric project id, which only "+
+					"Project turns into a key, so a view tested only against this meets a shape no "+
 					"site sends", source.Value)
 			}
 		}
