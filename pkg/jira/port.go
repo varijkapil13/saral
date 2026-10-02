@@ -117,6 +117,9 @@ type Client interface {
 	// draws them. Each is JQL meant for BoardQuery.QuickFilters and nothing
 	// else — see that field's doc for why a caller may not compose its own.
 	QuickFilters(ctx context.Context, boardID int64) ([]QuickFilter, error)
+	// BoardProjects lists the projects behind a board. An empty answer can mean
+	// the board is not visible to this token.
+	BoardProjects(ctx context.Context, boardID int64) ([]ProjectRef, error)
 	// Sprints lists a board's sprints, narrowed to the states named. Passing no
 	// state lists them all, which on a board with years of history is a walk
 	// nothing on a first-paint path should be doing.

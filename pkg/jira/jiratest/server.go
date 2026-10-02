@@ -268,6 +268,7 @@ var srvDefaultRoutes = []srvRoute{
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/backlog", srvFixtureHandler(http.StatusOK, "board_issues.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/epic", srvFixtureHandler(http.StatusOK, "board_epics.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/quickfilter", srvFixtureHandler(http.StatusOK, "board_quickfilters.json")},
+	{http.MethodGet, "/rest/agile/1.0/board/{id}/project", srvFixtureHandler(http.StatusOK, "board_projects.json")},
 	{http.MethodGet, "/rest/agile/1.0/board/{id}/sprint/{sprintId}/issue", srvFixtureHandler(http.StatusOK, "board_issues.json")},
 	// 204 is every issue moving; a 207 names each issue's own status, and a test
 	// asks for one the way it asks for any other fixture:

@@ -765,6 +765,30 @@ func (f *Fake) QuickFilters(ctx context.Context, boardID int64) ([]jira.QuickFil
 	return fakeQuickFiltersOf(boardID), nil
 }
 
+// BoardProjects names the one project a board here belongs to.
+func (f *Fake) BoardProjects(ctx context.Context, boardID int64) ([]jira.ProjectRef, error) {
+	if err := f.fakeBegin(ctx, "BoardProjects"); err != nil {
+		return nil, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if boardID <= 0 {
+		return nil, fakeInvalid("boardId", "a board id is a positive number")
+	}
+	if err := f.caps.Require(jira.CapBoards); err != nil {
+		return nil, err
+	}
+	board, ok := f.boards[boardID]
+	if !ok {
+		return nil, fakeNotFound("board", strconv.FormatInt(boardID, 10))
+	}
+	proj, ok := f.projects[board.ProjectKey]
+	if !ok {
+		return nil, nil
+	}
+	return []jira.ProjectRef{proj.ref}, nil
+}
+
 // fakeQuickFiltersOf is the fixed pair of quick filters a Scrum board here
 // reports, with ids derived from the board's own so that two boards never
 // collide on one.

@@ -645,6 +645,14 @@ func boardCalls() []boardCall {
 				return err
 			},
 		},
+		{
+			name:  "reading the projects behind a board",
+			route: boardProjectRoute,
+			run: func(ctx context.Context, c *Client) error {
+				_, err := c.BoardProjects(ctx, boardTestID)
+				return err
+			},
+		},
 	}
 }
 

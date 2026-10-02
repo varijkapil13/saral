@@ -1,0 +1,24 @@
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 2,
+  "isLast": true,
+  "values": [
+    {
+      "self": "https://example.atlassian.net/rest/agile/1.0/project/10000",
+      "id": "10000",
+      "key": "EX",
+      "name": "Example",
+      "projectTypeKey": "software",
+      "simplified": false
+    },
+    {
+      "self": "https://example.atlassian.net/rest/agile/1.0/project/10001",
+      "id": "10001",
+      "key": "OPS",
+      "name": "Operations",
+      "projectTypeKey": "software",
+      "simplified": true
+    }
+  ]
+}

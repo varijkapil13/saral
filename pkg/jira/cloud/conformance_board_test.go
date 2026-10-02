@@ -306,6 +306,71 @@ func TestBoards_BothAdaptersAnswerTheSameWay(t *testing.T) {
 	}
 }
 
+type boardProjectSource interface {
+	jira.BoardReader
+	jira.BoardProjectReader
+}
+
+func TestBoardProjects_BothAdaptersAnswerTheSameWay(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		cloud []jiratest.ServerOption
+		run   func(*testing.T, boardProjectSource)
+	}{
+		{
+			name: "a board names at least one project, each with an id",
+			run: func(t *testing.T, r boardProjectSource) {
+				t.Helper()
+				board := firstBoard(t, r)
+				got, err := r.BoardProjects(t.Context(), board.ID)
+				if err != nil {
+					t.Fatalf("reading the projects behind board %d: %v", board.ID, err)
+				}
+				if len(got) == 0 {
+					t.Fatal("the board answered no project")
+				}
+				for i, p := range got {
+					if p.ID == "" {
+						t.Errorf("project %d has no id: %+v", i, p)
+					}
+				}
+			},
+		},
+		{
+			name:  "a board nobody has is a 404 naming the board",
+			cloud: []jiratest.ServerOption{jiratest.WithStatus(http.MethodGet, boardProjectRoute, http.StatusNotFound, "")},
+			run: func(t *testing.T, r boardProjectSource) {
+				t.Helper()
+				_, err := r.BoardProjects(t.Context(), 987654)
+				var missing *jira.NotFoundError
+				if !errors.As(err, &missing) {
+					t.Fatalf("got %T (%v), want a *jira.NotFoundError", err, err)
+				}
+				if missing.Kind != "board" || missing.ID != "987654" {
+					t.Errorf("the 404 names %s %s, want board 987654", missing.Kind, missing.ID)
+				}
+			},
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name+"/cloud", func(t *testing.T) {
+			t.Parallel()
+
+			s := jiratest.NewServer(tt.cloud...)
+			t.Cleanup(s.Close)
+			c, _ := testClient(t, s.URL())
+			tt.run(t, c)
+		})
+		t.Run(tt.name+"/fake", func(t *testing.T) {
+			t.Parallel()
+
+			tt.run(t, conformFake(t))
+		})
+	}
+}
+
 func configOfFirstBoard(t *testing.T, r jira.BoardReader) jira.BoardConfig {
 	t.Helper()
 
