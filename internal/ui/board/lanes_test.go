@@ -78,13 +78,13 @@ func TestLanes_Golden(t *testing.T) {
 		keys          []string
 		golden        string
 	}{
-		"by assignee at 80":           {width: 80, height: 24, keys: []string{"w"}, golden: "lanes_assignee_80x24.golden"},
-		"by assignee at 120":          {width: 120, height: 24, keys: []string{"w"}, golden: "lanes_assignee_120x24.golden"},
-		"by assignee at 160":          {width: 160, height: 30, keys: []string{"w"}, golden: "lanes_assignee_160x30.golden"},
-		"by parent at 120":            {width: 120, height: 24, keys: []string{"w", "w"}, golden: "lanes_parent_120x24.golden"},
-		"a folded lane at 120":        {width: 120, height: 24, keys: []string{"w", "z"}, golden: "lanes_folded_120x24.golden"},
-		"every lane folded at 120":    {width: 120, height: 24, keys: []string{"w", "Z"}, golden: "lanes_all_folded_120x24.golden"},
-		"lanes in a short box at 120": {width: 120, height: 10, keys: []string{"w"}, golden: "lanes_short_120x10.golden"},
+		"by assignee at 80":           {width: 80, height: 24, keys: []string{"v"}, golden: "lanes_assignee_80x24.golden"},
+		"by assignee at 120":          {width: 120, height: 24, keys: []string{"v"}, golden: "lanes_assignee_120x24.golden"},
+		"by assignee at 160":          {width: 160, height: 30, keys: []string{"v"}, golden: "lanes_assignee_160x30.golden"},
+		"by parent at 120":            {width: 120, height: 24, keys: []string{"v", "v"}, golden: "lanes_parent_120x24.golden"},
+		"a folded lane at 120":        {width: 120, height: 24, keys: []string{"v", "z"}, golden: "lanes_folded_120x24.golden"},
+		"every lane folded at 120":    {width: 120, height: 24, keys: []string{"v", "Z"}, golden: "lanes_all_folded_120x24.golden"},
+		"lanes in a short box at 120": {width: 120, height: 10, keys: []string{"v"}, golden: "lanes_short_120x10.golden"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -98,7 +98,7 @@ func TestLanes_WCyclesNoneAssigneeParentAndBack(t *testing.T) {
 	t.Parallel()
 	_, dr := laned(t, 120, 24)
 	for _, want := range []laneMode{lanesByAssignee, lanesByParent, lanesOff} {
-		dr.key("w")
+		dr.key("v")
 		if dr.m.laneMode != want {
 			t.Fatalf("w left the board in mode %v, want %v", dr.m.laneMode, want)
 		}
@@ -112,7 +112,7 @@ func TestLanes_WCyclesNoneAssigneeParentAndBack(t *testing.T) {
 // are ordered by name and nobody's cards come last.
 func TestLanes_ByAssigneeGroupsEveryCardOnce(t *testing.T) {
 	t.Parallel()
-	_, dr := laned(t, 120, 24, "w")
+	_, dr := laned(t, 120, 24, "v")
 	labels := make([]string, 0, len(dr.m.lanes))
 	total := 0
 	for _, l := range dr.m.lanes {
@@ -139,7 +139,7 @@ func TestLanes_ByAssigneeGroupsEveryCardOnce(t *testing.T) {
 
 func TestLanes_ByParentReadsTheParentFieldAndPutsOrphansLast(t *testing.T) {
 	t.Parallel()
-	_, dr := laned(t, 120, 24, "w", "w")
+	_, dr := laned(t, 120, 24, "v", "v")
 	keys := make([]string, 0, len(dr.m.lanes))
 	for _, l := range dr.m.lanes {
 		keys = append(keys, l.key)
@@ -160,7 +160,7 @@ func TestLanes_TheChoiceIsRememberedPerBoard(t *testing.T) {
 	dr.send(boardsMsg{gen: dr.m.gen, boards: []jira.Board{{ID: 42, Name: "Delivery"}}})
 	dr.send(configMsg{gen: dr.m.gen, cfg: laneConfig()})
 	dr.send(firstPage(dr.m.gen, laneCards()))
-	dr.key("w", "w")
+	dr.key("v", "v")
 	if got := mem.state[ViewID+"."+laneMemoryKey(42)]; got != "parent" {
 		t.Fatalf("the memory holds %q for board 42, want parent", got)
 	}
@@ -188,7 +188,7 @@ func TestLanes_TheChoiceIsRememberedPerBoard(t *testing.T) {
 // every count.
 func TestLanes_FoldingKeepsTheCountsAndSkipsTheCards(t *testing.T) {
 	t.Parallel()
-	_, dr := laned(t, 120, 24, "w")
+	_, dr := laned(t, 120, 24, "v")
 	before := dr.m.counts()
 	L := dr.m.laneAt(dr.m.curCol, dr.m.curRow)
 	first := dr.m.lanes[L].key
@@ -222,7 +222,7 @@ func TestLanes_FoldingKeepsTheCountsAndSkipsTheCards(t *testing.T) {
 // with nothing under it.
 func TestLanes_ALaneTheFilterEmptiesIsNotDrawn(t *testing.T) {
 	t.Parallel()
-	_, dr := laned(t, 120, 24, "w")
+	_, dr := laned(t, 120, 24, "v")
 	dr.send(filter.ChosenMsg{Term: filter.Term{Facet: filter.FacetAssignee, ID: ada.AccountID, Label: ada.DisplayName}})
 	if len(dr.m.lanes) != 1 || dr.m.lanes[0].key != ada.AccountID {
 		t.Fatalf("the lanes under a term naming Ada are %+v, want hers alone", dr.m.lanes)
@@ -232,7 +232,7 @@ func TestLanes_ALaneTheFilterEmptiesIsNotDrawn(t *testing.T) {
 
 func TestLanes_TheCursorWalksFromOneLaneIntoTheNext(t *testing.T) {
 	t.Parallel()
-	_, dr := laned(t, 120, 24, "w")
+	_, dr := laned(t, 120, 24, "v")
 	start := dr.m.laneAt(0, 0)
 	for range dr.m.columnLen(0) {
 		if dr.m.laneAt(dr.m.curCol, dr.m.curRow) != start {
@@ -247,7 +247,7 @@ func TestLanes_TheCursorWalksFromOneLaneIntoTheNext(t *testing.T) {
 // with a card of another lane above it in the column.
 func TestLanes_ARankStaysWithinTheLane(t *testing.T) {
 	t.Parallel()
-	_, dr := laned(t, 120, 24, "w")
+	_, dr := laned(t, 120, 24, "v")
 	L := 1
 	row := dr.m.lanes[L].at[0]
 	dr.moveTo(0, row)
@@ -257,7 +257,7 @@ func TestLanes_ARankStaysWithinTheLane(t *testing.T) {
 
 func TestLanes_ClickingAHeaderFoldsItsLane(t *testing.T) {
 	t.Parallel()
-	d, dr := laned(t, 120, 24, "w")
+	d, dr := laned(t, 120, 24, "v")
 	key := dr.m.lanes[1].key
 	pressOn(t, d, dr, laneZone(lanesByAssignee, key))
 	if !dr.m.lanes[1].folded {
@@ -273,7 +273,7 @@ func TestLanes_ClickingAHeaderFoldsItsLane(t *testing.T) {
 // own zone, so a click on a card in a lane selects that card.
 func TestLanes_ACardInALaneIsClickable(t *testing.T) {
 	t.Parallel()
-	d, dr := laned(t, 120, 24, "w")
+	d, dr := laned(t, 120, 24, "v")
 	L := len(dr.m.lanes) - 1
 	want := dr.m.issueAt(0, dr.m.lanes[L].at[0]).Key
 	at := uitest.Zone(t, d.Zones, dr.m.View, dr.m.zones.ID(cardZone(want)))
@@ -287,7 +287,7 @@ func TestLanes_ACardInALaneIsClickable(t *testing.T) {
 // and all.
 func TestLanes_TheWindowFollowsTheCursorDownTheLanes(t *testing.T) {
 	t.Parallel()
-	_, dr := laned(t, 120, 10, "w")
+	_, dr := laned(t, 120, 10, "v")
 	for range 8 {
 		dr.key("j")
 	}

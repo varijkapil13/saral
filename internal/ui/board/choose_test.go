@@ -156,11 +156,11 @@ func TestChoose_ASetIsAskedByStatusAlone(t *testing.T) {
 func TestChoose_EveryWayOfLandingACardAsksWhichStatus(t *testing.T) {
 	t.Parallel()
 	for name, gesture := range map[string]func(kernel.Deps, *driver){
-		"m, aim and enter": func(_ kernel.Deps, dr *driver) { dr.key("m", "l", "l", "enter") },
+		"m, aim and enter": func(_ kernel.Deps, dr *driver) { dr.key("t", "l", "l", "enter") },
 		"the palette":      func(_ kernel.Deps, dr *driver) { dr.send(MoveIssueMsg{}); dr.key("l", "l", "enter") },
 		"L":                func(_ kernel.Deps, dr *driver) { dr.moveTo(1, 0); dr.key("L") },
 		"a click on the column": func(d kernel.Deps, dr *driver) {
-			dr.key("m")
+			dr.key("t")
 			pressOn(dr.t, d, dr, colZone(2))
 		},
 	} {
@@ -201,7 +201,7 @@ func TestChoose_EveryWayOfLandingACardAsksWhichStatus(t *testing.T) {
 func TestChoose_TheQuestionGolden(t *testing.T) {
 	t.Parallel()
 	dr := newDriver(t, testDeps(newTwoInDone(9)), 120, 20)
-	dr.key("m", "l", "l", "enter", "right")
+	dr.key("t", "l", "l", "enter", "right")
 	golden(t, "choosing_120x20.golden", dr.view())
 }
 
@@ -211,7 +211,7 @@ func TestChoose_AStatusWithNoScreenIsMovedTo(t *testing.T) {
 	dr := newDriver(t, testDeps(w), 120, 20)
 	key := dr.m.selectedKey()
 
-	dr.key("m", "l", "l", "enter", "down", "up", "j", "enter")
+	dr.key("t", "l", "l", "enter", "down", "up", "j", "enter")
 
 	if got := w.shelved(); !slices.Equal(got, []string{key}) {
 		t.Fatalf("shelved %v, want %s", got, key)
@@ -236,7 +236,7 @@ func TestChoose_AStatusNeedingAScreenIsHandedToTheIssuePane(t *testing.T) {
 	w := newTwoInDone(9)
 	dr := newDriver(t, testDeps(w), 120, 20)
 
-	dr.key("m", "l", "l", "enter", "enter")
+	dr.key("t", "l", "l", "enter", "enter")
 
 	if n := countCalls(w.Fake, "Transition") + len(w.shelved()); n != 0 {
 		t.Errorf("%d moves were sent blind", n)
@@ -255,7 +255,7 @@ func TestChoose_AClickOnAnOptionTakesIt(t *testing.T) {
 	d := testDeps(w)
 	dr := newDriver(t, d, 120, 20)
 	key := dr.m.selectedKey()
-	dr.key("m", "l", "l", "enter")
+	dr.key("t", "l", "l", "enter")
 
 	pressOn(t, d, dr, choiceZone(1))
 
@@ -272,7 +272,7 @@ func TestChoose_CancellingPutsTheCardBackAndSendsNothing(t *testing.T) {
 			w := newTwoInDone(9)
 			dr := newDriver(t, testDeps(w), 120, 20)
 			key := dr.m.selectedKey()
-			dr.key("m", "l", "l", "enter")
+			dr.key("t", "l", "l", "enter")
 			if stroke == "esc" && !dr.m.WantsBack() {
 				t.Fatal("the question does not claim esc, so the kernel keeps it")
 			}
@@ -309,7 +309,7 @@ func TestChoose_ARefusedMoveAfterTheChoicePutsTheCardBack(t *testing.T) {
 			dr := newDriver(t, testDeps(w), 120, 20)
 			key := dr.m.selectedKey()
 
-			dr.key("m", "l", "l", "enter", "right", "enter")
+			dr.key("t", "l", "l", "enter", "right", "enter")
 
 			if dr.m.card != nil || dr.m.moving {
 				t.Error("the card is still in hand after the site refused the move")
@@ -332,7 +332,7 @@ func TestChoose_ACardWithOneMoveIntoTheColumnIsNotAsked(t *testing.T) {
 	dr := newDriver(t, testDeps(w), 120, 20)
 	w.without[dr.m.selectedKey()] = true
 
-	dr.key("m", "l", "l", "enter")
+	dr.key("t", "l", "l", "enter")
 
 	if dr.m.choosing() {
 		t.Error("a card with one move into the column was asked which")
@@ -350,7 +350,7 @@ func TestChooseSet_ThePickedCardsAllLandInTheStatusChosen(t *testing.T) {
 	dr := newDriver(t, testDeps(w), 120, 20)
 	keys := dr.pickFirst(0, 2)
 
-	dr.key("m", "l", "l", "enter")
+	dr.key("t", "l", "l", "enter")
 
 	b := dr.m.bulk
 	if b == nil || b.stage != stageAskStatus || len(b.choices) != 2 {
@@ -384,7 +384,7 @@ func TestChooseSet_ACardWithNoMoveToTheStatusIsReported(t *testing.T) {
 	keys := dr.pickFirst(0, 2)
 	w.without[keys[1]] = true
 
-	dr.key("m", "l", "l", "enter", "right", "enter", "enter")
+	dr.key("t", "l", "l", "enter", "right", "enter", "enter")
 
 	if got := w.shelved(); !slices.Equal(got, keys[:1]) {
 		t.Errorf("shelved %v, want %v", got, keys[:1])
@@ -403,7 +403,7 @@ func TestChooseSet_ACancelSendsNothing(t *testing.T) {
 			w := newTwoInDone(9)
 			dr := newDriver(t, testDeps(w), 120, 20)
 			keys := dr.pickFirst(0, 2)
-			dr.key("m", "l", "l", "enter", stroke)
+			dr.key("t", "l", "l", "enter", stroke)
 			if dr.m.bulk != nil {
 				t.Fatal("the question is still up")
 			}
@@ -423,7 +423,7 @@ func TestChooseSet_AClickOnAnOptionTakesIt(t *testing.T) {
 	d := testDeps(w)
 	dr := newDriver(t, d, 120, 20)
 	dr.pickFirst(0, 2)
-	dr.key("m", "l", "l", "enter")
+	dr.key("t", "l", "l", "enter")
 
 	pressOn(t, d, dr, choiceZone(1))
 
@@ -444,7 +444,7 @@ func TestChooseSet_ARefusedReadOfTheMovesAsksNothing(t *testing.T) {
 			w := newTwoInDone(9)
 			dr := newDriver(t, testDeps(w), 120, 20)
 			dr.pickFirst(0, 2)
-			dr.key("m", "l", "l")
+			dr.key("t", "l", "l")
 			w.FailNext(err)
 			dr.key("enter")
 
@@ -470,7 +470,7 @@ func TestChooseSet_AColumnOfOneStatusGoesStraightToTheGoAhead(t *testing.T) {
 	dr.pickFirst(0, 2)
 	before := countCalls(fake, "Transitions")
 
-	dr.key("m", "l", "enter")
+	dr.key("t", "l", "enter")
 
 	if b := dr.m.bulk; b == nil || b.stage != stageConfirm {
 		t.Fatalf("the set is at %+v, want the go-ahead", b)

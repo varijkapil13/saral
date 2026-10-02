@@ -59,11 +59,11 @@ func TestPick_SpaceVAndXPickAndLetGo(t *testing.T) {
 	if len(dr.m.picked) != 0 {
 		t.Errorf("x left %d picked", len(dr.m.picked))
 	}
-	dr.key("v")
+	dr.key("*")
 	if len(dr.m.picked) != dr.m.columnLen(dr.m.curCol) {
 		t.Errorf("v picked %d of a column of %d", len(dr.m.picked), dr.m.columnLen(dr.m.curCol))
 	}
-	dr.key("v")
+	dr.key("*")
 	if len(dr.m.picked) != 0 {
 		t.Errorf("v on a column already picked left %d picked, want it let go", len(dr.m.picked))
 	}
@@ -85,8 +85,8 @@ func TestPick_Golden(t *testing.T) {
 	}{
 		"two cards picked":            {golden: "picked_120x20.golden"},
 		"asking who they go to":       {keys: []string{"@"}, golden: "picked_assign_120x20.golden"},
-		"waiting for the go-ahead":    {keys: []string{"+", "u", "r", "g", "e", "n", "t", "enter"}, golden: "picked_confirm_120x20.golden"},
-		"the picked set aimed onward": {keys: []string{"m", "l"}, golden: "picked_held_120x20.golden"},
+		"waiting for the go-ahead":    {keys: []string{"#", "u", "r", "g", "e", "n", "t", "enter"}, golden: "picked_confirm_120x20.golden"},
+		"the picked set aimed onward": {keys: []string{"t", "l"}, golden: "picked_held_120x20.golden"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -147,9 +147,9 @@ func TestBulk_AssignToNobodyUnassigns(t *testing.T) {
 func TestBulk_TheGoAheadCannotBeSkipped(t *testing.T) {
 	t.Parallel()
 	for name, keys := range map[string][]string{
-		"esc at the question":             {"+", "a", "esc"},
-		"esc at the confirmation":         {"+", "a", "enter", "esc"},
-		"another key at the confirmation": {"+", "a", "enter", "j", "l", "m"},
+		"esc at the question":             {"#", "a", "esc"},
+		"esc at the confirmation":         {"#", "a", "enter", "esc"},
+		"another key at the confirmation": {"#", "a", "enter", "j", "l", "t"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -169,7 +169,7 @@ func TestBulk_MoveTakesEachCardThroughItsOwnTransition(t *testing.T) {
 	fake := newFake(9)
 	dr := newDriver(t, testDeps(fake), 120, 20)
 	keys := dr.pickFirst(0, 3)
-	dr.key("m", "l", "enter")
+	dr.key("t", "l", "enter")
 	if countCalls(fake, "Transition") != 0 {
 		t.Fatal("landing the set moved cards before the go-ahead")
 	}
@@ -196,7 +196,7 @@ func TestBulk_AMoveThatNeedsAScreenIsReportedPerCard(t *testing.T) {
 	fake := newFake(9)
 	dr := newDriver(t, testDeps(fake), 120, 20)
 	keys := dr.pickFirst(0, 2)
-	dr.key("m", "l", "l", "enter", "enter")
+	dr.key("t", "l", "l", "enter", "enter")
 	got := dr.lastStatus()
 	if got.Level != kernel.LevelError {
 		t.Errorf("the report is at level %v: %q", got.Level, got.Text)
@@ -215,7 +215,7 @@ func TestBulk_APartialFailureSaysWhichChangedAndKeepsTheRestPicked(t *testing.T)
 			fake := newFake(9)
 			dr := newDriver(t, testDeps(fake), 120, 20)
 			keys := dr.pickFirst(0, 3)
-			dr.key("+")
+			dr.key("#")
 			dr.typeText("urgent")
 			dr.key("enter")
 			fake.FailNext(nil)
@@ -246,7 +246,7 @@ func TestBulk_ALabelWithASpaceIsRefusedBeforeAnythingIsAsked(t *testing.T) {
 	fake := newFake(9)
 	dr := newDriver(t, testDeps(fake), 120, 20)
 	dr.pickFirst(0, 1)
-	dr.key("+")
+	dr.key("#")
 	dr.typeText("two words")
 	dr.key("enter")
 	mustContain(t, dr.lastStatus().Text, "cannot contain a space")
@@ -299,7 +299,7 @@ func TestBulk_ARunShowsProgressAndStopsWhenAsked(t *testing.T) {
 	dr := newDriver(t, testDeps(fake), 120, 20)
 	keys := dr.pickFirst(0, 3)
 	dr.park = parkSteps
-	dr.key("+")
+	dr.key("#")
 	dr.typeText("urgent")
 	dr.key("enter", "enter")
 	if len(dr.parked) != 1 {
@@ -335,7 +335,7 @@ func TestBulk_LeavingWhileARunIsGoingWaitsForTheCardInFlight(t *testing.T) {
 	dr := newDriver(t, testDeps(fake), 120, 20)
 	dr.pickFirst(0, 3)
 	dr.park = parkSteps
-	dr.key("+")
+	dr.key("#")
 	dr.typeText("urgent")
 	dr.key("enter", "enter")
 

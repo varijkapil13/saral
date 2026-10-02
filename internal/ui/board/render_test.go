@@ -33,7 +33,7 @@ func TestBoardRender_Golden(t *testing.T) {
 			width: 160, height: 30, golden: "board_160x30.golden",
 		},
 		"a card in hand, aimed at the next column": {
-			width: 120, height: 20, keys: []string{"m", "l"}, golden: "held_120x20.golden",
+			width: 120, height: 20, keys: []string{"t", "l"}, golden: "held_120x20.golden",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -181,7 +181,7 @@ func TestBoardRender_FitsTheBoxItIsGiven(t *testing.T) {
 	for _, size := range [][2]int{{40, 10}, {80, 20}, {120, 30}, {200, 60}} {
 		for name, keys := range map[string][]string{
 			"looking at it":  nil,
-			"a card in hand": {"m", "l"},
+			"a card in hand": {"t", "l"},
 		} {
 			t.Run(name, func(t *testing.T) {
 				t.Parallel()

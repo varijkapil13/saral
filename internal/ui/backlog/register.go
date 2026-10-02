@@ -37,6 +37,7 @@ func init() {
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:       "backlog.move",
+		Action:   kernel.ActMove,
 		Title:    "Move the picked issues to a sprint or the backlog",
 		Group:    "Backlog",
 		Requires: jira.CapBoards,
@@ -47,6 +48,7 @@ func init() {
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:       "backlog.create",
+		Action:   kernel.ActCreate,
 		Title:    "Create an issue in this backlog section",
 		Group:    "Backlog",
 		Requires: jira.CapBoards,
@@ -66,6 +68,7 @@ func init() {
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:       "backlog.filter-by",
+		Action:   kernel.ActFilter,
 		Title:    "Filter this backlog by a person, a status or a label",
 		Group:    "Search",
 		Kind:     kernel.KindSearch,
@@ -77,6 +80,7 @@ func init() {
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:       "backlog.sort",
+		Action:   kernel.ActSort,
 		Title:    "Sort this backlog",
 		Group:    "Search",
 		Kind:     kernel.KindSearch,
@@ -107,6 +111,7 @@ func init() {
 	}
 	kernel.RegisterCommand(kernel.Command{
 		ID:       "backlog.mine",
+		Action:   kernel.ActMine,
 		Title:    "Show only my issues in the backlog",
 		Group:    "Search",
 		Kind:     kernel.KindSearch,
@@ -118,6 +123,7 @@ func init() {
 	})
 	kernel.RegisterCommand(kernel.Command{
 		ID:       "backlog.find",
+		Action:   kernel.ActFind,
 		Title:    "Find an issue in the backlog",
 		Group:    "Search",
 		Kind:     kernel.KindSearch,
@@ -131,6 +137,7 @@ func init() {
 	// clears a filter is shown only by the state that has one to clear.
 	kernel.RegisterCommand(kernel.Command{
 		ID:       "backlog.clear-filter",
+		Action:   kernel.ActClearFilters,
 		Title:    "Clear the filter on this backlog",
 		Group:    "Search",
 		Kind:     kernel.KindSearch,

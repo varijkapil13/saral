@@ -4,10 +4,12 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
-	"github.com/varijkapil13/saral/internal/ui/widget/card"
 )
 
-var _ kernel.KeyReporter = (*Model)(nil)
+var (
+	_ kernel.KeyReporter    = (*Model)(nil)
+	_ kernel.KeyStateLister = (*Model)(nil)
+)
 
 type keyMap struct {
 	Up   kernel.Binding
@@ -74,45 +76,45 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:       kernel.Bind([]string{"k", "up"}, "↑/k", "up"),
-		Down:     kernel.Bind([]string{"j", "down"}, "↓/j", "down"),
+		Up:       kernel.Canon(kernel.ActUp),
+		Down:     kernel.Canon(kernel.ActDown),
 		Prev:     kernel.Bind([]string{"left", "h", "up", "k"}, "←/h", "previous"),
 		Next:     kernel.Bind([]string{"right", "l", "down", "j"}, "→/l", "next"),
-		PageUp:   kernel.Bind([]string{"pgup", "ctrl+b"}, "pgup", "page up"),
-		PageDown: kernel.Bind([]string{"pgdown", "ctrl+f"}, "pgdn", "page down"),
-		HalfUp:   kernel.Bind([]string{"ctrl+u"}, "ctrl+u", "half page up"),
-		HalfDown: kernel.Bind([]string{"ctrl+d"}, "ctrl+d", "half page down"),
-		Go:       kernel.Bind([]string{"g"}, "g", "go to"),
-		Top:      kernel.Bind([]string{"home"}, "g g", "first row"),
-		Bottom:   kernel.Bind([]string{"G", "end"}, "G", "last row"),
-		Pick:     kernel.Bind([]string{"space"}, "space", "pick or unpick this issue"),
-		PickAll:  kernel.Bind([]string{"v"}, "v", "pick every issue in this section"),
-		Unpick:   kernel.Bind([]string{"x"}, "x", "unpick everything"),
-		Move:     kernel.Bind([]string{"m"}, "m", "move these issues to a sprint or the backlog"),
+		PageUp:   kernel.Canon(kernel.ActPageUp),
+		PageDown: kernel.Canon(kernel.ActPageDown),
+		HalfUp:   kernel.Canon(kernel.ActHalfUp),
+		HalfDown: kernel.Canon(kernel.ActHalfDown),
+		Go:       kernel.Canon(kernel.ActGo),
+		Top:      kernel.Canon(kernel.ActTop),
+		Bottom:   kernel.Canon(kernel.ActBottom),
+		Pick:     kernel.Canon(kernel.ActToggle, "pick or unpick this issue"),
+		PickAll:  kernel.Canon(kernel.ActSelectGroup, "pick every issue in this section"),
+		Unpick:   kernel.Canon(kernel.ActSelectNone, "unpick everything"),
+		Move:     kernel.Canon(kernel.ActMove, "move these issues to a sprint or the backlog"),
 		Choose:   kernel.Bind([]string{"enter"}, "enter", "move them here"),
 		Back:     kernel.Bind([]string{"esc"}, "esc", "leave them where they are"),
 		Confirm:  kernel.Bind([]string{"y"}, "y", "go ahead"),
-		FilterBy: kernel.Bind([]string{"f"}, "f", "filter by a person, a status, a label"),
-		Unfilter: kernel.Bind([]string{"ctrl+g"}, "ctrl+g", "clear filter"),
-		Sort:     kernel.Bind([]string{"s"}, "s", "sort"),
+		FilterBy: kernel.Canon(kernel.ActFilter, "filter by a person, a status, a label"),
+		Unfilter: kernel.Canon(kernel.ActClearFilters, "clear filter"),
+		Sort:     kernel.Canon(kernel.ActSort),
 
-		SortPrev:   kernel.Bind([]string{"left", "h"}, "←/h", "previous field"),
-		SortNext:   kernel.Bind([]string{"right", "l"}, "→/l", "next field"),
-		SortChoose: kernel.Bind([]string{"enter"}, "enter", "choose this order"),
-		SortCancel: kernel.Bind([]string{"esc"}, "esc", "leave the order as it is"),
+		SortPrev:   kernel.Canon(kernel.ActSortPrev),
+		SortNext:   kernel.Canon(kernel.ActSortNext),
+		SortChoose: kernel.Canon(kernel.ActSortChoose),
+		SortCancel: kernel.Canon(kernel.ActSortCancel),
 
-		RankUp:     kernel.Bind([]string{"K", "shift+up"}, "K", "rank this issue up"),
-		RankDown:   kernel.Bind([]string{"J", "shift+down"}, "J", "rank this issue down"),
-		RankTop:    kernel.Bind([]string{"{"}, "{", "rank this issue first in its section"),
-		RankBottom: kernel.Bind([]string{"}"}, "}", "rank this issue last in its section"),
-		Mine:       kernel.Bind([]string{"M"}, "M", "only my issues"),
-		Find:       kernel.Bind([]string{"/"}, "/", "find an issue"),
-		FindNext:   kernel.Bind([]string{"n"}, "n", "next issue found"),
-		FindPrev:   kernel.Bind([]string{"N"}, "N", "previous issue found"),
+		RankUp:     kernel.Canon(kernel.ActRankUp, "rank this issue up"),
+		RankDown:   kernel.Canon(kernel.ActRankDown, "rank this issue down"),
+		RankTop:    kernel.Canon(kernel.ActRankFirst, "rank this issue first in its section"),
+		RankBottom: kernel.Canon(kernel.ActRankLast, "rank this issue last in its section"),
+		Mine:       kernel.Canon(kernel.ActMine, "only my issues"),
+		Find:       kernel.Canon(kernel.ActFind, "find an issue"),
+		FindNext:   kernel.Canon(kernel.ActFindNext, "next issue found"),
+		FindPrev:   kernel.Canon(kernel.ActFindPrev, "previous issue found"),
 		FindKeep:   kernel.Bind([]string{"enter"}, "enter", "keep this search"),
 		FindCancel: kernel.Bind([]string{"esc"}, "esc", "go back to where the search began"),
-		Create:     kernel.Bind([]string{"c"}, "c", "create an issue in this section"),
-		Look:       card.Binding,
+		Create:     kernel.Canon(kernel.ActCreate, "create an issue in this section"),
+		Look:       kernel.Canon(kernel.ActLook, "roomy / compact / lines"),
 	}
 }
 
@@ -181,6 +183,7 @@ var liveSets = func() [keyStates]kernel.KeySet {
 	sets[keysNarrowed] = k.browsing(false, true)
 	sets[keysPickedNarrowed] = k.browsing(true, true)
 	sets[keysChoosing] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{
 			kernel.Terse(k.Next, "choose"), kernel.Terse(k.Choose, "move here"),
 			kernel.Terse(k.Back, "cancel"),
@@ -188,25 +191,31 @@ var liveSets = func() [keyStates]kernel.KeySet {
 		Full: [][]kernel.Binding{{k.Next, k.Prev}, {k.Choose, k.Back}},
 	}
 	sets[keysConfirming] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.Confirm, "go ahead"), kernel.Terse(k.Back, "cancel")},
 		Full: [][]kernel.Binding{{k.Confirm, k.Back}},
 	}
 	// A move in flight has nothing of its own to offer: the chunks the site has
 	// left are the only thing that ends it, and naming a key here would name one
 	// that is refused.
-	sets[keysMoving] = kernel.KeySet{}
+	sets[keysMoving] = kernel.KeySet{Mode: kernel.Modal}
 	sets[keysSorting] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{
 			kernel.Terse(k.SortPrev, "prev"), kernel.Terse(k.SortNext, "next"), k.SortChoose, k.SortCancel,
 		},
 		Full: [][]kernel.Binding{{k.SortPrev, k.SortNext}, {k.SortChoose, k.SortCancel}},
 	}
 	sets[keysFinding] = kernel.KeySet{
+		Mode: kernel.Modal,
 		Acts: []kernel.Binding{kernel.Terse(k.FindKeep, "keep"), kernel.Terse(k.FindCancel, "cancel")},
 		Full: [][]kernel.Binding{{k.FindKeep, k.FindCancel}, {widget.KillLine}},
 	}
 	return sets
 }()
+
+// KeyStates lists every set the view reports.
+func (*Model) KeyStates() []kernel.KeySet { return liveSets[:] }
 
 // LiveKeys reports the keys that work in the state the backlog is actually in.
 // A selection offers the key that schedules it, a term in force offers the key
@@ -298,6 +307,7 @@ func (k keyMap) entries() (browse, chooser, confirm, sorting, finding []binding)
 		{k.FilterBy, actFilterBy}, {k.Unfilter, actClearFilter},
 		{k.Sort, actSort},
 		{k.RankUp, actRankUp}, {k.RankDown, actRankDown},
+		{shiftUp, actRankUp}, {shiftDown, actRankDown},
 		{k.RankTop, actRankTop}, {k.RankBottom, actRankBottom},
 		{k.Mine, actMine}, {k.Find, actFind},
 		{k.FindNext, actFindNext}, {k.FindPrev, actFindPrev},
@@ -316,6 +326,11 @@ func (k keyMap) entries() (browse, chooser, confirm, sorting, finding []binding)
 	finding = []binding{{k.FindKeep, actFindKeep}, {k.FindCancel, actFindCancel}}
 	return browse, chooser, confirm, sorting, finding
 }
+
+var (
+	shiftUp   = kernel.Bind([]string{"shift+up"}, "shift+up", "rank this issue up")
+	shiftDown = kernel.Bind([]string{"shift+down"}, "shift+down", "rank this issue down")
+)
 
 type binding struct {
 	b kernel.Binding
