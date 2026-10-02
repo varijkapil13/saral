@@ -21,6 +21,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 		{"something to run", keysOffering},
 		{"a cached issue under the cursor", keysIssue},
 		{"nothing matches", keysNothing},
+		{"the site search under the cursor", keysFind},
 	}
 	if len(named) != int(keyStates) {
 		t.Fatalf("the palette has %d key states and this test names %d", keyStates, len(named))

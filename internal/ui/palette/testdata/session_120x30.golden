@@ -1,6 +1,6 @@
  saral | Commands                                                                          PROJ | example.atlassian.net 
 > what do you want to do?                                                                                               
------------------------------------------------------------------------------------------------------------- 38 commands
+------------------------------------------------------------------------------------------------------------ 39 commands
   Go to                                                                                                                 
 > Issues                                        Go to                                                                 g1
   Switch view                                   Go to                                                              g 1-9
@@ -16,6 +16,7 @@
   Issues I reported                             Search                                                                  
   My issues                                     Search                                                                  
   Save this query to a number key               Search                                                                 S
+  Search issues on the site                     Search                                                               g /
   Sort these issues                             Search                                                                 s
   Unassigned issues                             Search                                                                  
   Session                                                                                                               
@@ -26,5 +27,4 @@
   Delete the comment you are on                 Comments                                                               d
   Edit the comment you are on                   Comments                                                               e
   Write a comment                               Comments                                                               a
-  Issue                                                                                                                 
  Issues  enter run it  esc close                                                                                  ctrl+k

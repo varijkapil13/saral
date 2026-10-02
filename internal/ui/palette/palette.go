@@ -14,6 +14,7 @@ import (
 	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/internal/ui/search"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -38,9 +39,12 @@ const fieldPenalty = 9 * scoreTier
 // zoneRow and zoneHit prefix the click target on a row. A command ID and an
 // issue key are both strings and are kept apart.
 const (
-	zoneRow = "row:"
-	zoneHit = "hit:"
+	zoneRow  = "row:"
+	zoneHit  = "hit:"
+	zoneFind = "find:"
 )
+
+var findKey = kernel.DefaultGlobalKeys().Search.Help().Key
 
 var (
 	_ kernel.View        = (*Model)(nil)
@@ -87,6 +91,7 @@ type ranked struct {
 // is meaningless on a heading.
 type entry struct {
 	issue   bool
+	find    bool
 	heading string
 	at      int
 }
@@ -97,6 +102,7 @@ func (e entry) selectable() bool { return e.heading == "" }
 // other than typing can land on it again.
 type mark struct {
 	issue bool
+	find  bool
 	id    string
 }
 
@@ -368,6 +374,8 @@ func (m *Model) activate() tea.Cmd {
 	switch {
 	case !at.selectable():
 		return nil
+	case at.find:
+		return tea.Sequence(kernel.Pop(), search.Open(m.deps, strings.TrimSpace(m.query)))
 	case at.issue:
 		return m.open(&m.hits[at.at])
 	default:
@@ -405,6 +413,9 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 
 // zone is the click target a row is marked with.
 func (m *Model) zone(at entry) string {
+	if at.find {
+		return zoneFind
+	}
 	if at.issue {
 		return zoneHit + m.hits[at.at].key
 	}
@@ -462,6 +473,9 @@ func (m *Model) refilter(keep mark) tea.Cmd {
 		m.shown = append(m.shown, entry{at: rk.at})
 	}
 	cmd := m.search(text, now)
+	if text != "" {
+		m.shown = append(m.shown, entry{find: true})
+	}
 	m.cursor = m.firstSelectable()
 	if keep.id != "" {
 		if at := slices.IndexFunc(m.shown, func(e entry) bool { return e.selectable() && m.markOf(e) == keep }); at >= 0 {
@@ -506,6 +520,8 @@ func (m *Model) markOf(at entry) mark {
 	switch {
 	case !at.selectable():
 		return mark{}
+	case at.find:
+		return mark{find: true, id: zoneFind}
 	case at.issue:
 		return mark{issue: true, id: m.hits[at.at].key}
 	default:
@@ -523,7 +539,7 @@ func (m *Model) selection() mark {
 // selectedID is the command under the cursor, and "" when the cursor is on an
 // issue or on nothing.
 func (m *Model) selectedID() string {
-	if at := m.selection(); !at.issue {
+	if at := m.selection(); !at.issue && !at.find {
 		return at.id
 	}
 	return ""
@@ -534,6 +550,12 @@ func (m *Model) selectedID() string {
 func (m *Model) onIssue() bool {
 	return m.cursor < len(m.shown) && m.shown[m.cursor].issue
 }
+
+func (m *Model) onFind() bool {
+	return m.cursor < len(m.shown) && m.shown[m.cursor].find
+}
+
+func (m *Model) onlyFind() bool { return len(m.shown) == 1 && m.shown[0].find }
 
 // moveTo steps over a heading rather than resting on it.
 func (m *Model) moveTo(at int) {

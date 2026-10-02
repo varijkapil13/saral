@@ -108,7 +108,7 @@ func optionalWidth(lay layout) int {
 // widestKey is how much room the key column needs. Zero means no command in
 // this build has a key, and the column is not drawn at all.
 func widestKey(rows []row) int {
-	widest := 0
+	widest := ansi.StringWidth(findKey)
 	for i := range rows {
 		widest = max(widest, ansi.StringWidth(rows[i].keys))
 	}
@@ -209,6 +209,51 @@ func renderHit(h *hit, lay layout, sel bool, st *styles, t *kernel.Theme) string
 	return b.String()
 }
 
+func renderFind(query string, lay layout, sel bool, st *styles, t *kernel.Theme) string {
+	ell := t.Glyphs.Ellipsis
+	var b strings.Builder
+	b.Grow(lay.width + 32)
+
+	writeMarker(&b, sel, t)
+	const lead = "Search issues for "
+	left, right := "“", "”"
+	if t.Glyphs.IsASCII() {
+		left, right = `"`, `"`
+	}
+	room := max(lay.title-ansi.StringWidth(lead)-2, 1)
+	text := widget.PadTruncate(lead+left+ansi.Truncate(widget.Sanitize(query), room, ell)+right, lay.title, ell)
+	if sel {
+		b.WriteString(text)
+	} else {
+		b.WriteString(st.title.Render(text))
+	}
+	if lay.group > 0 {
+		b.WriteString(strings.Repeat(" ", gap))
+		cell := widget.PadTruncate("Search", lay.group, ell)
+		if sel {
+			b.WriteString(cell)
+		} else {
+			b.WriteString(st.group.Render(cell))
+		}
+	}
+	if lay.slack > 0 {
+		b.WriteString(strings.Repeat(" ", lay.slack))
+	}
+	if lay.keys > 0 {
+		b.WriteString(strings.Repeat(" ", gap))
+		cell := widget.PadLeft(findKey, lay.keys, ell)
+		if sel {
+			b.WriteString(cell)
+		} else {
+			b.WriteString(st.keys.Render(cell))
+		}
+	}
+	if sel {
+		return st.selected.Render(b.String())
+	}
+	return b.String()
+}
+
 // renderHeading draws a group name on its own line. No marker, no click zone.
 func renderHeading(group string, lay layout, st *styles, t *kernel.Theme) string {
 	ell := t.Glyphs.Ellipsis
@@ -235,6 +280,16 @@ func (m *Model) row(at int) string {
 		return s
 	}
 	sel := at == m.cursor
+	if m.shown[at].find {
+		query := strings.TrimSpace(m.query)
+		k := rowKey{id: zoneFind, text: query, lay: m.lay, selected: sel, gen: m.styles.gen}
+		if s, ok := m.memo.Get(k); ok {
+			return s
+		}
+		s := m.zones.Mark(zoneFind, renderFind(query, m.lay, sel, m.styles, m.deps.Theme))
+		m.memo.Put(k, s)
+		return s
+	}
 	if row := m.shown[at]; row.issue {
 		h := &m.hits[row.at]
 		k := rowKey{id: h.key, text: h.text, age: h.age, lay: m.lay, selected: sel, gen: m.styles.gen}
@@ -344,9 +399,13 @@ func (m *Model) View() string {
 	lines := m.lines[:0]
 	lines = append(lines, m.input.View(), m.rule())
 	h := m.rowsHeight()
-	if len(m.shown) == 0 {
+	switch {
+	case len(m.shown) == 0:
 		lines = m.appendEmpty(lines, h)
-	} else {
+	case m.onlyFind():
+		lines = append(lines, m.row(0))
+		lines = m.appendEmpty(lines, h-1)
+	default:
 		end := min(m.top+h, len(m.shown))
 		for i := m.top; i < end; i++ {
 			lines = append(lines, m.row(i))

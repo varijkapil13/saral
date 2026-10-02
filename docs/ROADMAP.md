@@ -1932,7 +1932,7 @@ its PR; the PR description is the record of what was built and what was left.
   Words from a summary, description or comment, across every project or just the session's, with an
   exact key pinned first and `L` handing the search to the issue list.
 
-- [ ] **T3 — The palette offers a site search** · after T2 · **owns** `internal/ui/palette/**`, `docs/{UX,ROADMAP}.md`, `CHANGELOG.md`
+- [x] **T3 — The palette offers a site search** · [#193](https://github.com/varijkapil13/saral/pull/193) · after T2 · **owns** `internal/ui/palette/**`, `docs/{UX,ROADMAP}.md`, `CHANGELOG.md`
   Under whatever the palette found in the cache, one more row opens the search view with what was typed.
 
 ## Later, deliberately not now

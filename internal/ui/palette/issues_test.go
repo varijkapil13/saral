@@ -154,6 +154,9 @@ func TestPalette_OffersCommandsAndIssuesTogetherWithTheCommandsFirst(t *testing.
 			issues = true
 			continue
 		}
+		if at.find {
+			continue
+		}
 		if issues {
 			t.Fatalf("row %d is a command drawn below an issue", i)
 		}
@@ -167,9 +170,8 @@ func TestPalette_OpeningACachedIssuePutsTheDetailPaneOverWhatThePaletteCovered(t
 	d, _ := cachedDeps()
 	p := fly(t, d, sample(), memoryTable(), 120, 24)
 	p.typeText("login")
-	p.press("down")
-	for !p.m.onIssue() {
-		p.press("down")
+	if !p.m.onIssue() {
+		t.Fatal("the cursor did not land on the issue the filter found")
 	}
 	p.press("enter")
 
