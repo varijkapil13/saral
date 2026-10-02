@@ -7,12 +7,10 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-02
+
 ### Added
 
-- The Jira port can resolve a project by its id or its key (`Project`), which is what a plan's
-  project source needs to be shown by key.
-- `kernel.PopTo` collapses the view stack to a named entry in one step, asking or refusing on the
-  way exactly as `esc` does.
 - Opening an issue that already has a pane beneath the current one, from a related row, `p`, the
   links sheet or the children sheet, returns to that pane instead of stacking a second copy of it,
   through any panes and sheets in between. A pane with unsaved edits in the way is asked about, as
@@ -20,23 +18,13 @@ such change is listed under **Changed**.
 - `/` finds in a project's release list: it keeps the versions whose name holds what you type,
   alongside the state filter and the sort, and the command palette has it as *Find a version or a
   release*.
-
 - `s` sorts an epic's children, in the children sheet and in the pane's list: by created, updated,
   due, key, summary, status, priority (the site's own priority order), assignee, type, or rank where
   the site has one. The choice is kept in `ui.toml` and is a setting under *Issue*. Any order but the
   site's own reads the rest of the children first, up to 500.
 
-### Fixed
-
-- Two saves of the same settings file inside one Saral no longer let one starve the other until it
-  gave up: writers are now served in the order they arrived.
-
 ### Changed
 
-- A site plan names its projects by key, not by id. Opening a plan looks up the key of each project
-  the site gave only an id for, at most four at a time, and remembers it for the rest of the
-  session. A project whose key cannot be read keeps showing as `id N` and does not stop the
-  releases from loading.
 - A key now means the same thing in every view, and `?` and `docs/UX.md` list them. This is a clean
   break: the old keys below no longer work, with no alias left behind.
   - Board: `m` → `t` (carry a card, or the picked cards, to another column); `s` → `S` (next
@@ -63,6 +51,15 @@ such change is listed under **Changed**.
     (`f` opens the state and project filters, `tab` switches between them); `enter` in a set only
     folds a group header.
   - Plans: `b` → `I` (browse the plan's releases).
+- A site plan names its projects by key, not by id. Opening a plan looks up the key of each project
+  the site gave only an id for, at most four at a time, and remembers it for the rest of the
+  session. A project whose key cannot be read keeps showing as `id N` and does not stop the
+  releases from loading.
+
+### Fixed
+
+- Two saves of the same settings file inside one Saral no longer let one starve the other until it
+  gave up: writers are now served in the order they arrived.
 
 ## [0.10.0] - 2026-10-02
 
@@ -388,7 +385,8 @@ transitions, comments with markdown ⇄ ADF, attachments with inline image previ
 backlog, sprints, releases with the unresolved-issue decision, the cross-project move wizard, the
 timeline, plans, the command palette, full mouse support and cache-first paint.
 
-[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/varijkapil13/saral/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/varijkapil13/saral/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/varijkapil13/saral/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/varijkapil13/saral/compare/v0.9.1...v0.9.2
