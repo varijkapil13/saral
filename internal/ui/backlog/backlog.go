@@ -250,9 +250,7 @@ type Model struct {
 	// which half finished.
 	said string
 
-	inFlight *ranking
-	rankGen  int
-	rankStop context.CancelFunc
+	ranking app.Ranking[rankValue]
 
 	me       *jira.User
 	askingMe bool
@@ -747,7 +745,7 @@ func (m *Model) forget() {
 	m.page, m.missing = jira.Page[jira.Issue]{}, nil
 	m.config, m.field, m.done, m.estimate = jira.BoardConfig{}, jira.FieldRef{}, nil, jira.FieldRef{}
 	m.fieldIDs, m.made = nil, nil
-	m.dropRank()
+	m.ranking.Drop()
 	m.needle, m.findMiss = "", false
 	m.cursor, m.top = 0, 0
 	m.loaded, m.stale, m.failure, m.absent, m.said = false, false, nil, "", ""

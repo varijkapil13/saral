@@ -47,7 +47,7 @@ func TestRank_KMovesTheCardAboveTheOneBeforeItAndTellsTheSite(t *testing.T) {
 		t.Errorf("K made %d rank calls, want 1", got)
 	}
 	mustContain(t, dr.lastStatus().Text, before[2]+" now sits above "+before[1])
-	if dr.m.rank != nil {
+	if dr.m.rank.Key() != "" {
 		t.Error("a rank the site accepted is still marked as in flight")
 	}
 }
@@ -126,7 +126,7 @@ func TestRank_ARefusalPutsTheCardBack(t *testing.T) {
 			if got := dr.lastStatus().Level; got != kernel.LevelError {
 				t.Errorf("the refusal was reported at level %v", got)
 			}
-			if dr.m.rank != nil || dr.m.stale {
+			if dr.m.rank.Key() != "" || dr.m.stale {
 				t.Error("a refused rank left the board ranking or badged stale")
 			}
 		})
