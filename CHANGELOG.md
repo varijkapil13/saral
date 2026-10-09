@@ -7,6 +7,16 @@ such change is listed under **Changed**.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-09
+
+### Changed
+
+- Nothing you can see or press has changed. Behind the views, the work they do against Jira — loading,
+  saving, paging, moving, polling and the caches — now lives in one package per area of the app,
+  with the views only drawing and taking keys. Board and backlog share one ranking routine instead of
+  two copies.
+- `github.com/mattn/go-shellwords` is 1.0.16.
+
 ## [0.11.0] - 2026-10-02
 
 ### Added
@@ -385,7 +395,8 @@ transitions, comments with markdown ⇄ ADF, attachments with inline image previ
 backlog, sprints, releases with the unresolved-issue decision, the cross-project move wizard, the
 timeline, plans, the command palette, full mouse support and cache-first paint.
 
-[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/varijkapil13/saral/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/varijkapil13/saral/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/varijkapil13/saral/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/varijkapil13/saral/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/varijkapil13/saral/compare/v0.9.2...v0.9.3
