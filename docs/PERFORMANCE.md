@@ -115,8 +115,6 @@ table, which is the same thing as writing down that the budget is no longer held
 |---|---|
 | `internal/app` | `TestBudget_CIComparesTheBenchmarksAgainstTheBaseBranch` |
 | `internal/app` | `TestBudget_CIRunsTheGuardsWithoutTheDetector` |
-| `internal/app` | `TestBudget_DateCascadeCostsNoMoreThanTheIssuesItIsGiven` |
-| `internal/app` | `TestBudget_DateCascadeOverATimelineOfIssues` |
 | `internal/app` | `TestBudget_EveryWallClockAssertionSitsInAGuard` |
 | `internal/app` | `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` |
 | `internal/app` | `TestBudget_NoTestOutsideAGuardRunsABenchmark` |
@@ -125,6 +123,8 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/app/search` | `TestBudget_IndexRebuildAtTenThousandIssues` |
 | `internal/app/search` | `TestBudget_IndexSearchAllocatesOnlyTheAnswerItHandsBack` |
 | `internal/app/search` | `TestBudget_IndexSearchAtTenThousandIssues` |
+| `internal/app/timeline` | `TestBudget_DateCascadeCostsNoMoreThanTheIssuesItIsGiven` |
+| `internal/app/timeline` | `TestBudget_DateCascadeOverATimelineOfIssues` |
 | `internal/ui/attach` | `TestBudget_AttachAMemoLookupCostsNothing` |
 | `internal/ui/attach` | `TestBudget_AttachFullRedrawAt200x60` |
 | `internal/ui/attach` | `TestBudget_AttachKeystrokeToFrame` |

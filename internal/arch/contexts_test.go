@@ -17,9 +17,7 @@ const appDir = "internal/app"
 
 var sharedKernel = []string{"cache", "issueref", "match", "query", "term"}
 
-var legacyRootFiles = []string{
-	"dates.go",
-}
+var legacyRootFiles = []string{}
 
 type appPart uint8
 

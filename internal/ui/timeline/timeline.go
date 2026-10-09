@@ -12,10 +12,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
-	appcache "github.com/varijkapil13/saral/internal/app/cache"
-	appquery "github.com/varijkapil13/saral/internal/app/query"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
+	apptimeline "github.com/varijkapil13/saral/internal/app/timeline"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -51,7 +49,7 @@ type NotesMsg struct{}
 type barRow struct {
 	key     string
 	summary string
-	rng     app.Range
+	rng     apptimeline.Range
 	at      int
 }
 
@@ -68,21 +66,10 @@ type sprintMark struct {
 	to   jira.Date
 }
 
-// cascadeConfig is what the cascade is built with on a background goroutine: the
-// field names this profile chose, the zone days are bucketed in, and the clock.
-type cascadeConfig struct {
-	start      []string
-	end        []string
-	zone       *time.Location
-	zoneReason string
-	now        func() time.Time
-}
-
 // Model is the timeline.
 type Model struct {
 	deps      kernel.Deps
-	search    *appquery.Search
-	cache     appcache.Cache
+	loader    *apptimeline.Loader
 	inChart   map[string]action
 	pendingGo bool
 	inNotes   map[string]action
@@ -92,8 +79,8 @@ type Model struct {
 	jql   string
 	title string
 
-	fields app.DateFields
-	res    app.Resolution
+	fields apptimeline.DateFields
+	res    apptimeline.Resolution
 	issues []jira.Issue
 	rows   []barRow
 
@@ -193,15 +180,12 @@ func New(d kernel.Deps) kernel.View {
 	m := &Model{
 		deps:   d,
 		addr:   kernel.NewAddr(),
-		cache:  d.Cache,
+		loader: apptimeline.NewLoader(d.Jira, d.Cache),
 		styles: newStyles(themeOf(d)),
 		memo:   widget.NewRowCache[rowKey, string](rowCacheLimit),
 		zoom:   ZoomWeek,
 	}
 	m.deps.Theme = themeOf(d)
-	if d.Jira != nil {
-		m.search = appquery.NewSearch(d.Jira)
-	}
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.bar = filterbar.New(m.zones)
@@ -234,35 +218,20 @@ func defaultQuery(project string) (jql, title string) {
 }
 
 // fromCache draws the rows the last session left on disk before anything is
-// asked of the site (docs/UX.md principle 1).
-//
-// The cascade it runs has no field catalogue behind it, so it reaches only the
-// platform fields — a due date, a created stamp, a release date — and a bar it
-// produces can move a rule when the real read lands. That is what the badge
-// says, and it is why the field problems this pass would report are dropped: a
-// name that did not resolve against a catalogue nobody read is not news.
+// asked of the site (docs/UX.md principle 1). A bar it draws can move a rule
+// when the real read lands, which is what the badge says.
 func (m *Model) fromCache() {
-	if m.cache == nil {
+	snap, ok := m.loader.Stored(m.jql, m.cascade())
+	if !ok {
 		return
 	}
-	snap, ok := m.cache.Rows(m.jql)
-	if !ok || len(snap.Issues) == 0 {
-		return
-	}
-	zone, reason := m.deps.Caps.Zone()
-	dates := app.NewDates(app.ResolveDateFields(nil, nil, nil),
-		app.WithZone(zone, reason), app.WithNow(m.now))
-	res, err := dates.Resolve(context.Background(), snap.Issues)
-	if err != nil {
-		return
-	}
-	m.take(res, snap.Issues, true)
+	m.take(snap.Resolution, snap.Issues, true)
 	m.loaded, m.badge, m.checked = true, "stored", snap.StoredAt
 }
 
 // take replaces the chart with a resolved pass. recentre is for a chart the user
 // has not looked at yet: a refresh must leave the window where it was.
-func (m *Model) take(res app.Resolution, issues []jira.Issue, recentre bool) {
+func (m *Model) take(res apptimeline.Resolution, issues []jira.Issue, recentre bool) {
 	under := m.selectedKey()
 	m.res, m.issues = res, issues
 	m.rows, m.filteredOut, m.resolvedShown = m.rows[:0], 0, 0
@@ -273,7 +242,7 @@ func (m *Model) take(res app.Resolution, issues []jira.Issue, recentre bool) {
 			continue
 		}
 		seen[key] = true
-		if !matchesTerms(&issues[i], m.terms) {
+		if !apptimeline.MatchesTerms(&issues[i], m.terms) {
 			m.filteredOut++
 			continue
 		}
@@ -294,19 +263,10 @@ func (m *Model) take(res app.Resolution, issues []jira.Issue, recentre bool) {
 // byStartThenKey puts the chart in the order a reader scans it: earliest first,
 // and everything with no date at the bottom rather than at the top.
 func byStartThenKey(a, b barRow) int {
-	switch {
-	case a.rng.OK() != b.rng.OK():
-		if a.rng.OK() {
-			return -1
-		}
-		return 1
-	case a.rng.Start.Before(b.rng.Start):
-		return -1
-	case b.rng.Start.Before(a.rng.Start):
-		return 1
-	default:
-		return strings.Compare(a.key, b.key)
+	if c := apptimeline.CompareRanges(a.rng, b.rng); c != 0 {
+		return c
 	}
+	return strings.Compare(a.key, b.key)
 }
 
 func (m *Model) buildNotes() {
@@ -321,8 +281,8 @@ func (m *Model) buildNotes() {
 	m.noteLines = append(m.noteLines, m.res.Warnings()...)
 	if m.truncated {
 		m.noteLines = append(m.noteLines,
-			"this search has more than "+strconv.Itoa(maxIssues)+" issues in it and the chart holds the first "+
-				strconv.Itoa(maxIssues)+" by creation date")
+			"this search has more than "+strconv.Itoa(apptimeline.MaxIssues)+" issues in it and the chart holds the first "+
+				strconv.Itoa(apptimeline.MaxIssues)+" by creation date")
 	}
 	m.noteTop = 0
 	m.noteCountSet = false
@@ -480,51 +440,29 @@ func (m *Model) stop() {
 
 func (m *Model) current(gen int) bool { return gen == m.gen }
 
-func (m *Model) cascade() cascadeConfig {
-	zone, reason := m.deps.Caps.Zone()
-	return cascadeConfig{start: m.cfgStart, end: m.cfgEnd, zone: zone, zoneReason: reason, now: m.now}
+func (m *Model) cascade() apptimeline.Config {
+	return apptimeline.Config{Start: m.cfgStart, End: m.cfgEnd, Caps: m.deps.Caps, Now: m.now}
 }
 
 func (m *Model) load() tea.Cmd {
-	if m.search == nil {
+	if !m.loader.Live() {
 		return nil
 	}
 	ctx, marks, gen := m.begin()
 	return tea.Batch(
-		m.reply(m.cancel, load(ctx, m.search, m.sprintReader(), m.cache, m.cascade(), m.jql, gen)),
-		m.reply(m.cancelMarks, m.markerRead(marks, gen)),
+		m.reply(m.cancel, load(ctx, m.loader, m.cascade(), m.jql, gen)),
+		m.reply(m.cancelMarks, markers(marks, m.loader, m.deps.Project, m.deps.Caps, gen)),
 	)
 }
 
-// sprintReader is what rule 4 of the cascade reads a sprint's own dates with. A
-// session with no boards has none, and the cascade says so rather than dating an
-// issue off a sprint it could not read.
-func (m *Model) sprintReader() app.SprintDates {
-	if m.deps.Jira == nil || !m.deps.Caps.Allows(jira.CapBoards) {
-		return nil
-	}
-	return m.deps.Jira
-}
-
-func (m *Model) markerRead(ctx context.Context, gen int) tea.Cmd {
-	if m.deps.Jira == nil {
-		return nil
-	}
-	boards := m.deps.Caps.Allows(jira.CapBoards)
-	return markers(ctx, m.deps.Jira, m.deps.Project, boards, m.deps.Caps.Capability(jira.CapBoards).Reason, gen)
-}
-
 func (m *Model) refresh(purge bool) tea.Cmd {
-	if m.search == nil {
+	if !m.loader.Live() {
 		return nil
 	}
 	var said tea.Cmd
 	if purge {
-		m.search.Invalidate()
-		if m.cache != nil {
-			if err := m.cache.Forget(m.jql); err != nil {
-				said = kernel.Warn("the stored copy of this timeline could not be dropped: " + err.Error())
-			}
+		if err := m.loader.Purge(m.jql); err != nil {
+			said = kernel.Warn("the stored copy of this timeline could not be dropped: " + err.Error())
 		}
 	}
 	return tea.Batch(said, m.load())
@@ -541,7 +479,7 @@ func (m *Model) reproject(project string) tea.Cmd {
 	m.termsGen++
 	m.jql, m.title = defaultQuery(project)
 	m.issues, m.rows, m.loaded, m.badge = nil, m.rows[:0], false, ""
-	m.res, m.fields = app.Resolution{}, app.DateFields{}
+	m.res, m.fields = apptimeline.Resolution{}, apptimeline.DateFields{}
 	m.versionMarks, m.sprintMarks, m.markerNotes = nil, nil, nil
 	m.marksGen, m.marksBuilt = m.marksGen+1, false
 	m.cursor, m.top, m.checked = 0, 0, time.Time{}
@@ -558,10 +496,10 @@ func (m *Model) landed(msg loadedMsg) tea.Cmd {
 	}
 	first := !m.loaded || m.badge != ""
 	m.loading, m.loaded = false, true
-	m.fields, m.missing, m.truncated = msg.fields, msg.missing, msg.truncated
+	m.fields, m.missing, m.truncated = msg.Fields, msg.Missing, msg.Truncated
 	m.badge, m.checked = "", m.now()
-	m.take(msg.resolution, msg.issues, first)
-	return notStored(msg.stored)
+	m.take(msg.Resolution, msg.Issues, first)
+	return notStored(msg.Stored)
 }
 
 func (m *Model) marked(msg markersMsg) {
@@ -569,26 +507,15 @@ func (m *Model) marked(msg markersMsg) {
 		return
 	}
 	m.versionMarks = m.versionMarks[:0]
-	for i := range msg.versions {
-		v := &msg.versions[i]
-		if v.ReleaseDate.IsZero() || v.Archived {
-			continue
-		}
-		m.versionMarks = append(m.versionMarks, versionMark{name: v.Name, on: v.ReleaseDate})
+	for _, r := range msg.Releases() {
+		m.versionMarks = append(m.versionMarks, versionMark{name: r.Name, on: r.On})
 	}
 	m.sprintMarks = m.sprintMarks[:0]
 	zone, _ := m.deps.Caps.Zone()
-	for _, s := range msg.sprints {
-		if s.Start == nil || s.End == nil || s.Start.IsZero() || s.End.IsZero() {
-			continue
-		}
-		m.sprintMarks = append(m.sprintMarks, sprintMark{
-			name: s.Name,
-			from: jira.DateOf(s.Start.In(zone)),
-			to:   jira.DateOf(s.End.In(zone)),
-		})
+	for _, s := range msg.SprintSpans(zone) {
+		m.sprintMarks = append(m.sprintMarks, sprintMark{name: s.Name, from: s.From, to: s.To})
 	}
-	m.markerNotes = msg.notes
+	m.markerNotes = msg.Notes
 	m.marksGen, m.marksBuilt = m.marksGen+1, false
 	m.reaxis(false)
 	m.buildNotes()

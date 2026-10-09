@@ -1,4 +1,4 @@
-package app
+package timeline
 
 import (
 	"go/ast"
@@ -197,7 +197,7 @@ func TestConformance_RuleFourHasAnImplementationOnBothSidesOfThePort(t *testing.
 func cloudClientMethods(t *testing.T) map[string]bool {
 	t.Helper()
 
-	dir := filepath.Join("..", "..", "pkg", "jira", "cloud")
+	dir := filepath.Join("..", "..", "..", "pkg", "jira", "cloud")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("reading %s: %v", dir, err)
