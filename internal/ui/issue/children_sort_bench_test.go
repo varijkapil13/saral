@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/sortpick"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -44,7 +45,7 @@ func benchSortSheet(b *testing.B) *sheet {
 
 func BenchmarkChildSort500(b *testing.B) {
 	issues := sortableChildren(500)
-	o := &childOrder{prio: map[string]int{"10401": 0, "10402": 1, "10403": 2, "10404": 3, "10405": 4}}
+	o := &childOrder{ChildOrder: appissue.ChildOrder{Prio: map[string]int{"10401": 0, "10402": 1, "10403": 2, "10404": 3, "10405": 4}}}
 	choices := [...]sortpick.Choice{{Field: fieldPriority}, {Field: "summary", Desc: true}, {Field: "key"}}
 	idx := make([]int, 0, len(issues))
 	b.ReportAllocs()

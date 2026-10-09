@@ -357,53 +357,6 @@ func TestLinks_FailuresKeepTheListAndSaySo(t *testing.T) {
 	}
 }
 
-func TestParseSpent(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		in   string
-		want time.Duration
-		ok   bool
-	}{
-		{"1h 30m", 90 * time.Minute, true},
-		{"90m", 90 * time.Minute, true},
-		{"1.5h", 90 * time.Minute, true},
-		{" 2H ", 2 * time.Hour, true},
-		{"", 0, false},
-		{"1d", 0, false},
-		{"2w", 0, false},
-		{"soon", 0, false},
-		{"30s", 0, false},
-		{"-1h", 0, false},
-	} {
-		got, err := parseSpent(tc.in)
-		if (err == nil) != tc.ok || got != tc.want {
-			t.Errorf("parseSpent(%q) = %v, %v", tc.in, got, err)
-		}
-	}
-}
-
-func TestParseStarted(t *testing.T) {
-	t.Parallel()
-	loc := time.FixedZone("account", 2*60*60)
-	now := time.Date(2025, time.March, 5, 9, 15, 0, 0, time.UTC)
-	for _, tc := range []struct {
-		in   string
-		want time.Time
-		ok   bool
-	}{
-		{"", now.In(loc), true},
-		{"2025-03-04", time.Date(2025, time.March, 4, 11, 15, 0, 0, loc), true},
-		{"2025-03-04 08:30", time.Date(2025, time.March, 4, 8, 30, 0, 0, loc), true},
-		{"2025-03-06", time.Time{}, false},
-		{"yesterday", time.Time{}, false},
-	} {
-		got, err := parseStarted(tc.in, now, loc)
-		if (err == nil) != tc.ok || !got.Equal(tc.want) {
-			t.Errorf("parseStarted(%q) = %v, %v", tc.in, got, err)
-		}
-	}
-}
-
 func TestWorklog_LogsTimeInThreeAnswers(t *testing.T) {
 	t.Parallel()
 	f := collabFake()
@@ -586,37 +539,6 @@ func TestClone_NeedsASummaryAndSaysWhyItFailed(t *testing.T) {
 				t.Error("a refused read still asked for a summary")
 			}
 		})
-	}
-}
-
-func TestCloneInput_SkipsFieldsTheScreenDoesNotTake(t *testing.T) {
-	t.Parallel()
-	src := jira.Issue{
-		Project: jira.ProjectRef{Key: "PROJ"}, Type: jira.IssueType{ID: "1"},
-		Labels: []string{"a"}, Priority: &jira.Priority{ID: "3"},
-		Fields: jira.NewFieldSet(map[string]jira.FieldValue{
-			"f1": {Kind: jira.KindNumber, Number: 5},
-			"f2": {Kind: jira.KindUnknown, Text: `{"id":1}`},
-			"f3": {Kind: jira.KindText, Text: "off screen"},
-		}),
-	}
-	schema := jira.Schema{Fields: []jira.FieldMeta{
-		{Field: jira.FieldRef{ID: "labels"}, Name: "Labels"},
-		{Field: jira.FieldRef{ID: "f1"}, Name: "Points"},
-		{Field: jira.FieldRef{ID: "f2"}, Name: "Sprint"},
-	}}
-	in, names := cloneInput(src, schema)
-	if !slices.Equal(names, []string{"Labels", "Points"}) {
-		t.Errorf("carried %v", names)
-	}
-	if _, ok := in.Fields.ByID("priority"); ok {
-		t.Error("the priority went although the screen does not take it")
-	}
-	if _, ok := in.Fields.ByID("f3"); ok {
-		t.Error("a field off the screen went")
-	}
-	if v, ok := in.Fields.ByID("f1"); !ok || v.Number != 5 {
-		t.Error("the number was not carried")
 	}
 }
 

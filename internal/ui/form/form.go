@@ -22,6 +22,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/mention"
@@ -73,8 +74,8 @@ type CreateMsg struct{ IssueTypeID string }
 type Model struct {
 	deps     kernel.Deps
 	search   *appquery.Search
-	cache    *schemaCache
-	drafts   draftStore
+	cache    *appissue.Schemas
+	drafts   appissue.CreateDrafts
 	styles   *styles
 	inList   map[string]action
 	inChoose map[string]action
@@ -169,13 +170,13 @@ func New(d kernel.Deps) kernel.View { return newWith(d, schemas) }
 // issue this form asked for, whatever has since been pushed over it.
 func (m *Model) Addr() kernel.Addr { return m.addr }
 
-func newWith(d kernel.Deps, cache *schemaCache) *Model {
+func newWith(d kernel.Deps, cache *appissue.Schemas) *Model {
 	if d.Theme == nil {
 		d.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
-	var store draftStore
+	var store appissue.CreateDrafts
 	if root, err := d.DraftRoot(); err == nil {
-		store = newDraftStore(root)
+		store = appissue.NewCreateDrafts(root)
 	}
 	m := &Model{
 		deps: d,
@@ -278,7 +279,7 @@ func (m *Model) leavingKey(stroke string) tea.Cmd {
 		if warn := m.keepDraft(); warn != nil {
 			return warn
 		}
-		if !m.drafts.available() {
+		if !m.drafts.Available() {
 			return kernel.Warn("there is nowhere to keep a draft in this session")
 		}
 		for _, f := range m.fields {
@@ -529,10 +530,12 @@ func (m *Model) openType(typ jira.IssueType) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (m *Model) screenKey() screen { return screen{project: m.project, issueType: m.chosen.ID} }
+func (m *Model) screenKey() appissue.Screen {
+	return appissue.Screen{Project: m.project, IssueType: m.chosen.ID}
+}
 
-func (m *Model) draftKey() draftKey {
-	return draftKey{site: m.deps.Site, project: m.project, issueType: m.chosen.ID}
+func (m *Model) draftKey() appissue.CreateDraftKey {
+	return appissue.CreateDraftKey{Site: m.deps.Site, Project: m.project, IssueType: m.chosen.ID}
 }
 
 func (m *Model) schemaLoaded(msg schemaLoadedMsg) tea.Cmd {
@@ -568,7 +571,7 @@ func (m *Model) accountFound(msg accountMsg) {
 
 func (m *Model) refresh(purge bool) tea.Cmd {
 	if purge {
-		m.cache.purge()
+		m.cache.Purge()
 		if m.search != nil {
 			m.search.Invalidate()
 		}
@@ -613,7 +616,7 @@ func (m *Model) build() {
 // it was kept in. A draft that cannot be read is said so and left where it is:
 // it is somebody's text, and the next commit here is what replaces it.
 func (m *Model) restoreDraft() tea.Cmd {
-	kept, ok, err := m.drafts.load(m.draftKey())
+	kept, ok, err := m.drafts.Load(m.draftKey())
 	if err != nil {
 		return kernel.Warn(err.Error())
 	}
@@ -625,7 +628,7 @@ func (m *Model) restoreDraft() tea.Cmd {
 		if !found {
 			continue
 		}
-		f.text, f.picked, f.rev = value.Text, fromDraftOptions(value.Picked), f.rev+1
+		f.text, f.picked, f.rev = value.Text, appissue.FromDraftOptions(value.Picked), f.rev+1
 	}
 	m.validateAll()
 	m.note = "what was typed here before has been put back"
@@ -636,14 +639,14 @@ func (m *Model) keepDraft() tea.Cmd {
 	if m.stage != stageFields || m.chosen.ID == "" {
 		return nil
 	}
-	if err := m.drafts.save(m.draftKey(), draftOf(m.draftKey(), m.fields, m.now())); err != nil {
+	if err := m.drafts.Save(m.draftKey(), appissue.NewCreateDraft(m.draftKey(), m.entries(), m.now())); err != nil {
 		return kernel.Warn(err.Error())
 	}
 	return nil
 }
 
 func (m *Model) discardDraft() tea.Cmd {
-	if err := m.drafts.discard(m.draftKey()); err != nil {
+	if err := m.drafts.Discard(m.draftKey()); err != nil {
 		return kernel.Warn(err.Error())
 	}
 	return nil
@@ -844,7 +847,7 @@ func (m *Model) clearFocused() tea.Cmd {
 		return nil
 	}
 	f.clear()
-	if f.kind == kindDoc {
+	if f.kind == appissue.ShapeDoc {
 		f.text = ""
 	}
 	f.problem = f.validate()
@@ -875,7 +878,7 @@ func (m *Model) activate() tea.Cmd {
 
 func (m *Model) openEditor(at int) tea.Cmd {
 	f := m.fields[at]
-	m.editing, m.edit = at, f.kind.pane()
+	m.editing, m.edit = at, paneOf(f.kind)
 	var cmd tea.Cmd
 	switch m.edit {
 	case editChoose:
@@ -883,7 +886,7 @@ func (m *Model) openEditor(at int) tea.Cmd {
 		m.people = peopleSearch{}
 		m.choices = m.choicesFor(f)
 		m.pick, m.pickTop = 0, 0
-		if f.kind.people() {
+		if f.kind.People() {
 			cmd = m.findPeople("")
 		}
 	case editDoc:
@@ -1000,7 +1003,7 @@ func (m *Model) chooseKey(msg tea.KeyPressMsg, stroke string) tea.Cmd {
 		m.toggle(visible)
 		return nil
 	case actAccept:
-		if m.fields[m.editing].kind.multiple() {
+		if m.fields[m.editing].kind.Multiple() {
 			m.toggle(visible)
 			return m.closeEditor()
 		}
@@ -1013,7 +1016,7 @@ func (m *Model) chooseKey(msg tea.KeyPressMsg, stroke string) tea.Cmd {
 	}
 	m.filter, _ = m.filter.Update(msg)
 	m.pick, m.pickTop = 0, 0
-	if !m.fields[m.editing].kind.people() {
+	if !m.fields[m.editing].kind.People() {
 		return nil
 	}
 	needle := strings.TrimSpace(m.filter.Value())
@@ -1031,7 +1034,7 @@ func (m *Model) toggle(visible []int) {
 		return
 	}
 	at := visible[m.pick]
-	if !m.fields[m.editing].kind.multiple() {
+	if !m.fields[m.editing].kind.Multiple() {
 		for i := range m.choices {
 			m.choices[i].on = i == at
 		}
@@ -1097,7 +1100,7 @@ func (m *Model) scrollChoices() {
 func (m *Model) choicesFor(f *field) []choice {
 	out := make([]choice, 0, len(f.meta.AllowedValues)+2)
 	switch f.kind {
-	case kindCascade:
+	case appissue.ShapeCascade:
 		for _, parent := range f.meta.AllowedValues {
 			top := jira.Option{ID: parent.ID, Label: parent.Label}
 			out = append(out, choice{label: parent.Label, value: top})
@@ -1107,7 +1110,7 @@ func (m *Model) choicesFor(f *field) []choice {
 				out = append(out, choice{label: parent.Label + " / " + child.Label, value: value})
 			}
 		}
-	case kindUser, kindUsers:
+	case appissue.ShapeUser, appissue.ShapeUsers:
 		out = append(out, m.userChoices(f, f.picked, nil)...)
 	default:
 		for _, option := range f.meta.AllowedValues {
@@ -1163,54 +1166,16 @@ func (m *Model) missingRequired() []string {
 	return out
 }
 
-// issueInput assembles what will be created. The fields the port carries in
-// their own right are read out of their widgets by the system name the site
-// gave them; everything else travels by field id in the FieldSet.
 func (m *Model) issueInput() jira.IssueInput {
-	in := jira.IssueInput{ProjectKey: m.project, IssueTypeID: m.chosen.ID}
-	values := make(map[string]jira.FieldValue, len(m.fields))
-	for _, f := range m.fields {
-		if f.empty() {
-			continue
-		}
-		if m.assign(&in, f) {
-			continue
-		}
-		if value, ok := f.value(); ok {
-			values[f.id()] = value
-		}
-	}
-	if len(values) > 0 {
-		in.Fields = jira.NewFieldSet(values)
-	}
-	return in
+	return appissue.CreateInput(m.project, m.chosen.ID, m.entries())
 }
 
-// assign puts a field on the input itself where the port has a slot for it, and
-// reports whether it did.
-func (m *Model) assign(in *jira.IssueInput, f *field) bool {
-	switch f.meta.Field.Schema.System {
-	case "summary":
-		in.Summary = strings.TrimSpace(f.text)
-	case "description":
-		doc, err := f.document()
-		if err != nil {
-			return false
-		}
-		in.Description = doc
-	case "parent":
-		in.ParentKey = strings.TrimSpace(f.text)
-	case "labels":
-		in.Labels = f.labels()
-	case "assignee":
-		if len(f.picked) == 0 {
-			return false
-		}
-		in.Assignee = f.picked[0].ID
-	default:
-		return false
+func (m *Model) entries() []appissue.Entry {
+	out := make([]appissue.Entry, len(m.fields))
+	for i, f := range m.fields {
+		out[i] = f.entry()
 	}
-	return true
+	return out
 }
 
 func (m *Model) created(msg createdMsg) tea.Cmd {

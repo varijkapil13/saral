@@ -19,7 +19,6 @@ var sharedKernel = []string{"cache", "issueref", "match", "query", "term"}
 
 var legacyRootFiles = []string{
 	"dates.go",
-	"issue.go",
 }
 
 type appPart uint8

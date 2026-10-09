@@ -770,14 +770,14 @@ on the second root rather than only leaving the pane. With a thread lent over th
 is not on screen to ask, so the switch is refused with its reason instead.
 
 **The dirty set survives a crash.** Every commit to a row writes the whole set through the same
-`draftStore` P2.3 built — one file per issue per site, replaced atomically — and it is picked back up
+`appissue.Drafts` store P2.3 built — one file per issue per site, replaced atomically — and it is picked back up
 the next time this issue is opened, with the identity line saying so: `unsaved changes from earlier
 restored · ctrl+s save · U discard`.
 
 **A save never overwrites what it did not see.** Jira Cloud answers a plain `PUT` with 204 whatever
 changed in between, so the pane checks for itself. Each edit keeps the base it was made against — the
-issue's `updated` stamp and a fingerprint of each field it writes (`app.EditBase`), in memory and in the
-draft — and the save re-reads exactly those fields through the issue endpoint first (`app.SaveIssue`).
+issue's `updated` stamp and a fingerprint of each field it writes (`appissue.EditBase`), in memory and in the
+draft — and the save re-reads exactly those fields through the issue endpoint first (`appissue.Save`).
 A field that moved is a `*jira.ConflictError` before anything is written, answered by reading the issue
 again and rebasing the dirty set on top; every row the site changed underneath is marked in its own
 words and takes the fresh read as its new base, so the next `ctrl+s` is a reviewed save. Any full read does

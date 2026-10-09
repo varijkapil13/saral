@@ -10,7 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	appmatch "github.com/varijkapil13/saral/internal/app/match"
 	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -83,32 +83,30 @@ func (k *childrenKind) load(s *sheet) tea.Cmd {
 	if k.search == nil {
 		return nil
 	}
-	in := childRead{
-		key: s.key, search: k.search, choice: currentChildSort(), order: k.order, bound: k.bound,
+	in := appissue.ChildRead{
+		Key: s.key, Search: k.search, Choice: appissue.ChildSort(currentChildSort()), Order: k.order.ChildOrder, Bound: k.bound,
 	}
 	return s.read(&s.loads, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
-		in.vocab = c
-		d := in.run(ctx)
+		in.Vocab = c
+		d := in.Run(ctx)
 		return func(s *sheet) tea.Cmd {
-			if d.err != nil {
-				return s.failed(d.err)
+			if d.Err != nil {
+				return s.failed(d.Err)
 			}
 			cmd := k.adopt(d)
-			k.set(s, d.page.Items, d.page)
+			k.set(s, d.Page.Items, d.Page)
 			return cmd
 		}
 	})
 }
 
-func (k *childrenKind) adopt(d childReadDone) tea.Cmd {
-	warned := k.order.prioWarned
-	k.order, k.haveRank, k.restRead = d.order, d.haveRank, d.restRead
-	k.order.prioWarned = k.order.prioWarned || warned
-	if d.warn == "" || warned {
+func (k *childrenKind) adopt(d appissue.ChildReadDone) tea.Cmd {
+	k.order.ChildOrder, k.haveRank, k.restRead = d.Order, d.HaveRank, d.RestRead
+	if d.PriorityErr == nil || k.order.prioWarned {
 		return nil
 	}
 	k.order.prioWarned = true
-	return kernel.Warn(d.warn)
+	return kernel.Warn(priorityWarning(d.PriorityErr))
 }
 
 func (k *childrenKind) set(s *sheet, issues []jira.Issue, page jira.Page[jira.Issue]) {
@@ -148,7 +146,7 @@ func (k *childrenKind) cursorKey(s *sheet) string {
 }
 
 func (k *childrenKind) note(s *sheet) string {
-	n, done := rollup(k.issues)
+	n, done := appissue.Rollup(k.issues)
 	text := strconv.Itoa(n) + " " + childWord(n) + " · " + strconv.Itoa(done) + " done"
 	if k.page.HasMore() {
 		text = strconv.Itoa(n) + "+ children · " + strconv.Itoa(done) + " done so far"
@@ -283,7 +281,7 @@ func (k *childrenKind) startAssign(s *sheet, iss *jira.Issue) tea.Cmd {
 func (k *childrenKind) startStatus(s *sheet, iss *jira.Issue) tea.Cmd {
 	target := *iss
 	return s.read(&s.looks, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
-		moves, err := c.Transitions(ctx, target.Key)
+		moves, err := appissue.Moves(ctx, c, target.Key)
 		return func(s *sheet) tea.Cmd {
 			if err != nil {
 				return s.failed(err)
@@ -300,7 +298,7 @@ func (k *childrenKind) startStatus(s *sheet, iss *jira.Issue) tea.Cmd {
 func (k *childrenKind) startPriority(s *sheet, iss *jira.Issue) tea.Cmd {
 	target := *iss
 	return s.read(&s.looks, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
-		meta, err := c.EditMeta(ctx, target.Key)
+		meta, err := appissue.EditScreen(ctx, c, target.Key)
 		return func(s *sheet) tea.Cmd {
 			if err != nil {
 				return s.failed(err)
@@ -332,7 +330,7 @@ func (k *childrenKind) changed(s *sheet, text string) tea.Cmd {
 		project := projectOfKey(k.target.Key)
 		return s.debounced(func(s *sheet) tea.Cmd {
 			return s.read(&s.looks, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
-				people, err := assignable(ctx, c, project, text, peopleLimit)
+				people, err := appissue.Assignable(ctx, c, project, text, peopleLimit)
 				return func(s *sheet) tea.Cmd {
 					if err != nil {
 						return s.failed(err)
@@ -380,24 +378,18 @@ func (k *childrenKind) answered(s *sheet, _ string, pick *sheetRow) tea.Cmd {
 	case opAssign:
 		return k.edit(s, &target, func(ctx context.Context, c jira.SessionClient) (string, error) {
 			id, name := chosen.id, chosen.text
-			switch chosen.key {
-			case "me":
-				me, err := c.Me(ctx)
-				if err != nil {
-					return "", err
-				}
-				id, name = me.AccountID, me.DisplayName
-			case "unassigned":
-				name = "unassigned"
-			default:
+			if chosen.key == "unassigned" {
+				id, name = "", "unassigned"
 			}
-			err := app.SaveIssue(ctx, c, target.Key, app.BaseOf(target, "assignee"), jira.IssuePatch{Assignee: &id})
+			who, err := appissue.Assign(ctx, c, target, id, chosen.key == "me")
+			if chosen.key == "me" {
+				name = who.DisplayName
+			}
 			return target.Key + " assigned to " + name, err
 		})
 	case opPriority:
 		return k.edit(s, &target, func(ctx context.Context, c jira.SessionClient) (string, error) {
-			id := chosen.id
-			err := app.SaveIssue(ctx, c, target.Key, app.BaseOf(target, "priority"), jira.IssuePatch{PriorityID: &id})
+			err := appissue.SetPriority(ctx, c, target, chosen.id)
 			return target.Key + " priority is now " + chosen.text, err
 		})
 	case opStatus:
@@ -418,10 +410,7 @@ func (k *childrenKind) move(s *sheet, target *jira.Issue, id string) tea.Cmd {
 	}
 	s.confirm("Move "+child.Key+" to "+tr.To.Name+"?", func() tea.Cmd {
 		return k.edit(s, &child, func(ctx context.Context, c jira.SessionClient) (string, error) {
-			if err := app.CheckBase(ctx, c, child.Key, app.BaseOf(child, "status")); err != nil {
-				return "", err
-			}
-			return child.Key + " moved to " + tr.To.Name, c.Transition(ctx, child.Key, tr.ID, jira.IssuePatch{})
+			return child.Key + " moved to " + tr.To.Name, appissue.MoveFrom(ctx, c, child, tr.ID)
 		})
 	}, nil)
 	return nil
@@ -450,10 +439,10 @@ func (k *childrenKind) edit(s *sheet, target *jira.Issue, do func(context.Contex
 func (k *childrenKind) reread(s *sheet, child string) tea.Cmd {
 	rankID := ""
 	if k.haveRank {
-		rankID = k.order.rankID
+		rankID = k.order.RankID
 	}
 	return s.read(&k.rereads, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
-		iss, err := c.IssueFields(ctx, child, childProjection(rankID).IDs)
+		iss, err := appissue.ReadFields(ctx, c, child, appissue.ChildProjection(rankID).IDs)
 		return func(s *sheet) tea.Cmd {
 			if err != nil {
 				return s.failed(err)
@@ -484,17 +473,17 @@ func (k *childrenKind) startSort(s *sheet) tea.Cmd {
 		s.picker.Fields = k.order.fields()
 		s.picker.Start(k.sortCurrent())
 	}
-	if k.order.rankTried || k.search == nil {
-		k.order.rankTried = true
+	if k.order.RankTried || k.search == nil {
+		k.order.RankTried = true
 		open(s)
 		return nil
 	}
 	search := k.search
 	return s.read(&s.looks, func(ctx context.Context, _ jira.SessionClient) func(*sheet) tea.Cmd {
-		fields, err := search.Fields(ctx)
+		rankID, err := appissue.RankField(ctx, search)
 		return func(s *sheet) tea.Cmd {
 			if err == nil {
-				k.order.rankTried, k.order.rankID = true, lexoRankID(fields)
+				k.order.RankTried, k.order.RankID = true, rankID
 			}
 			open(s)
 			return nil
@@ -519,22 +508,22 @@ func (k *childrenKind) resort(s *sheet) tea.Cmd {
 	}
 	page := k.page
 	page.Items = k.issues
-	in := childRead{
-		key: s.key, search: k.search, choice: raw, order: k.order, page: page,
-		loaded: true, haveRank: k.haveRank, restRead: k.restRead, bound: k.bound,
+	in := appissue.ChildRead{
+		Key: s.key, Search: k.search, Choice: appissue.ChildSort(raw), Order: k.order.ChildOrder, Page: page,
+		Loaded: true, HaveRank: k.haveRank, RestRead: k.restRead, Bound: k.bound,
 	}
 	cmd := s.read(&k.sorting, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
-		in.vocab = c
-		d := in.run(ctx)
+		in.Vocab = c
+		d := in.Run(ctx)
 		return func(s *sheet) tea.Cmd {
-			if d.err != nil {
-				return s.failed(d.err)
+			if d.Err != nil {
+				return s.failed(d.Err)
 			}
 			warn := k.adopt(d)
 			k.paging.stop()
 			k.paging.gen++
 			k.loadingMore = false
-			k.issues, k.page = slices.Clone(d.page.Items), d.page
+			k.issues, k.page = slices.Clone(d.Page.Items), d.Page
 			k.applyOrder(s)
 			return warn
 		}

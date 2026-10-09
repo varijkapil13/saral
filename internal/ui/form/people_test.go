@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -245,7 +246,7 @@ func TestPeople_CleansADisplayNameBeforeOfferingIt(t *testing.T) {
 func TestPeople_KeepsWhatIsPickedAcrossSearches(t *testing.T) {
 	t.Parallel()
 
-	m := newWith(testDeps(t, nil), newSchemaCache(schemaTTL, time.Now))
+	m := newWith(testDeps(t, nil), appissue.NewSchemas(appissue.SchemaTTL, time.Now))
 	f := newField(meta("customfield_8", "Reviewers", jira.FieldSchema{Type: "array", Items: "user", Custom: "x:people"}), time.UTC)
 	on := []jira.Option{{ID: "acct-ada", Label: "Ada Lovelace"}}
 

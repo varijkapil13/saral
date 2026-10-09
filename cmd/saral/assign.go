@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -50,7 +50,7 @@ func runAssign(inv *invocation, args []string) error {
 		if user != nil {
 			id = user.AccountID
 		}
-		if err := app.SaveIssue(ctx, s.client, key, app.EditBase{}, jira.IssuePatch{Assignee: &id}); err != nil {
+		if err := appissue.Save(ctx, s.client, key, appissue.EditBase{}, jira.IssuePatch{Assignee: &id}); err != nil {
 			return siteError(err)
 		}
 		if user == nil {

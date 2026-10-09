@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -91,63 +92,26 @@ func fieldValue(t *testing.T, f *jiratest.Fake, id string) (jira.FieldValue, boo
 	return iss.Fields.ByID(id)
 }
 
-func TestCustomKindOf(t *testing.T) {
-	t.Parallel()
-
-	set := []string{"set"}
-	opts := []jira.Option{{ID: "1", Label: "one"}}
-	meta := func(s jira.FieldSchema, allowed ...jira.Option) jira.FieldMeta {
-		return jira.FieldMeta{Field: jira.FieldRef{ID: "customfield_1", Schema: s}, Operations: set, AllowedValues: allowed}
-	}
-	cases := []struct {
-		name string
-		meta jira.FieldMeta
-		want customKind
-	}{
-		{"text", meta(jira.FieldSchema{Type: "string", Custom: "x:textfield"}), ckText},
-		{"paragraph", meta(jira.FieldSchema{Type: "string", Custom: "x:textarea"}), ckDoc},
-		{"url", meta(jira.FieldSchema{Type: "string", Custom: "x:url"}), ckURL},
-		{"number", meta(jira.FieldSchema{Type: "number", Custom: "x:float"}), ckNumber},
-		{"date", meta(jira.FieldSchema{Type: "date", Custom: "x:datepicker"}), ckDate},
-		{"datetime", meta(jira.FieldSchema{Type: "datetime", Custom: "x:datetime"}), ckDateTime},
-		{"labels", meta(jira.FieldSchema{Type: "array", Items: "string", Custom: "x:labels"}), ckLabels},
-		{"select", meta(jira.FieldSchema{Type: "option", Custom: "x:select"}, opts...), ckSelect},
-		{"select with no values", meta(jira.FieldSchema{Type: "option", Custom: "x:select"}), ckNone},
-		{"multi-select", meta(jira.FieldSchema{Type: "array", Items: "option", Custom: "x:multiselect"}, opts...), ckMulti},
-		{"cascade", meta(jira.FieldSchema{Type: "option-with-child", Custom: "x:cascadingselect"}, opts...), ckCascade},
-		{"user", meta(jira.FieldSchema{Type: "user", Custom: "x:userpicker"}), ckUser},
-		{"users", meta(jira.FieldSchema{Type: "array", Items: "user", Custom: "x:people"}), ckUsers},
-		{"a json array", meta(jira.FieldSchema{Type: "array", Items: "json", Custom: "x:sprint"}), ckNone},
-		{"a system field", meta(jira.FieldSchema{Type: "string", System: "environment"}), ckNone},
-		{"no set operation", jira.FieldMeta{Field: jira.FieldRef{Schema: jira.FieldSchema{Type: "string", Custom: "x:textfield"}}}, ckNone},
-	}
-	for _, tc := range cases {
-		if got := customKindOf(tc.meta); got != tc.want {
-			t.Errorf("%s: got %d, want %d", tc.name, got, tc.want)
-		}
-	}
-}
-
 func TestCustomParseTyped(t *testing.T) {
 	t.Parallel()
 
 	berlin := time.FixedZone("CET", 3600)
 	cases := []struct {
-		kind    customKind
+		kind    appissue.Custom
 		text    string
 		want    jira.FieldValue
 		problem bool
 	}{
-		{ckNumber, "2,5", jira.FieldValue{Kind: jira.KindNumber, Number: 2.5}, false},
-		{ckNumber, "many", jira.FieldValue{}, true},
-		{ckDate, "2026-03-01", jira.FieldValue{Kind: jira.KindDate, Date: jira.Date{Year: 2026, Month: 3, Day: 1}}, false},
-		{ckDate, "1 March", jira.FieldValue{}, true},
-		{ckDateTime, "2026-03-01 09:30", jira.FieldValue{Kind: jira.KindTime, Time: time.Date(2026, 3, 1, 9, 30, 0, 0, berlin)}, false},
-		{ckDateTime, "tomorrow", jira.FieldValue{}, true},
-		{ckURL, "https://example.invalid/x", jira.FieldValue{Kind: jira.KindText, Text: "https://example.invalid/x"}, false},
-		{ckURL, "example.invalid", jira.FieldValue{}, true},
-		{ckLabels, "a, b c", jira.FieldValue{Kind: jira.KindOptions, Options: []jira.Option{{Label: "a"}, {Label: "b-c"}}}, false},
-		{ckText, "hello", jira.FieldValue{Kind: jira.KindText, Text: "hello"}, false},
+		{appissue.CustomNumber, "2,5", jira.FieldValue{Kind: jira.KindNumber, Number: 2.5}, false},
+		{appissue.CustomNumber, "many", jira.FieldValue{}, true},
+		{appissue.CustomDate, "2026-03-01", jira.FieldValue{Kind: jira.KindDate, Date: jira.Date{Year: 2026, Month: 3, Day: 1}}, false},
+		{appissue.CustomDate, "1 March", jira.FieldValue{}, true},
+		{appissue.CustomDateTime, "2026-03-01 09:30", jira.FieldValue{Kind: jira.KindTime, Time: time.Date(2026, 3, 1, 9, 30, 0, 0, berlin)}, false},
+		{appissue.CustomDateTime, "tomorrow", jira.FieldValue{}, true},
+		{appissue.CustomURL, "https://example.invalid/x", jira.FieldValue{Kind: jira.KindText, Text: "https://example.invalid/x"}, false},
+		{appissue.CustomURL, "example.invalid", jira.FieldValue{}, true},
+		{appissue.CustomLabels, "a, b c", jira.FieldValue{Kind: jira.KindOptions, Options: []jira.Option{{Label: "a"}, {Label: "b-c"}}}, false},
+		{appissue.CustomText, "hello", jira.FieldValue{Kind: jira.KindText, Text: "hello"}, false},
 	}
 	for _, tc := range cases {
 		row := fieldRow{custom: tc.kind, loc: berlin}
@@ -394,7 +358,7 @@ func TestCustom_ARefusedSaveKeepsTheEditAndSaysWhere(t *testing.T) {
 			if tc.row && row.problem != "Effort must be under 100" {
 				t.Errorf("the row says %q, want Jira's own words", row.problem)
 			}
-			if d, ok, _ := drafts.load("example.atlassian.net", "PROJ-1"); !ok || d.Values[pointsID] != "500" {
+			if d, ok, _ := drafts.Load("example.atlassian.net", "PROJ-1"); !ok || d.Values[pointsID] != "500" {
 				t.Errorf("the draft holds %+v, want the edit", d)
 			}
 		})
@@ -408,9 +372,9 @@ func TestCustom_ADraftWaitsForTheScreenToList(t *testing.T) {
 
 	f := newCustomFake(t)
 	drafts := tempDrafts(t)
-	if err := drafts.save(draft{
+	if err := drafts.Save(appissue.Draft{
 		Key: "PROJ-1", Site: "example.atlassian.net",
-		Picks: map[string][]draftOption{phaseID: {{ID: "20001", Label: "Pilot"}}},
+		Picks: map[string][]appissue.DraftOption{phaseID: {{ID: "20001", Label: "Pilot"}}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -420,7 +384,7 @@ func TestCustom_ADraftWaitsForTheScreenToList(t *testing.T) {
 	if row == nil || !row.dirty() || row.display() != "Pilot" {
 		t.Fatalf("the drafted choice was not put back: %+v", row)
 	}
-	if !p.editor().held.isEmpty() {
+	if !p.editor().held.IsEmpty() {
 		t.Errorf("the draft is still held: %+v", p.editor().held)
 	}
 }
@@ -430,7 +394,7 @@ func TestCustom_AFieldThatFailsToListIsNotLostFromTheDraft(t *testing.T) {
 
 	f := newCustomFake(t)
 	drafts := tempDrafts(t)
-	if err := drafts.save(draft{
+	if err := drafts.Save(appissue.Draft{
 		Key: "PROJ-1", Site: "example.atlassian.net",
 		Values: map[string]string{pointsID: "8"},
 	}); err != nil {
@@ -439,7 +403,7 @@ func TestCustom_AFieldThatFailsToListIsNotLostFromTheDraft(t *testing.T) {
 	p := openCustom(t, f, record(f), []jira.FieldMeta{{Field: jira.FieldRef{ID: "summary"}}}, withDrafts(drafts))
 	editSummary(t, p, "another summary")
 
-	d, ok, err := drafts.load("example.atlassian.net", "PROJ-1")
+	d, ok, err := drafts.Load("example.atlassian.net", "PROJ-1")
 	if err != nil || !ok || d.Values[pointsID] != "8" || d.Values["summary"] != "another summary" {
 		t.Fatalf("the draft holds %+v, want both edits", d)
 	}
