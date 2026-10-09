@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -108,7 +108,7 @@ func scrollOver(b *testing.B, n int) {
 // drawn from it, with nothing behind the view to ask.
 func BenchmarkSprintsFirstPaintFromCache(b *testing.B) {
 	cache := newMemCache()
-	cache.held["PROJ"] = app.SprintsSnapshot{
+	cache.held["PROJ"] = appcache.SprintsSnapshot{
 		Boards:  []jira.Board{{ID: 1, Name: "PROJ board"}},
 		Sprints: many(200),
 		Closed:  true,

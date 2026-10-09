@@ -10,18 +10,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
-// fakeCache is an app.Cache and an app.BoardCache in a map. The real one is
+// fakeCache is a cache.Cache and a cache.BoardCache in a map. The real one is
 // bbolt-backed and lives below internal/app, which a view may not import —
 // which is the whole point of the interface being where it is.
 type fakeCache struct {
 	mu        sync.Mutex
-	boards    map[int64]app.BoardSnapshot
+	boards    map[int64]appcache.BoardSnapshot
 	lastBoard map[string]int64
 	issues    map[string]jira.Issue
 	gen       uint64
@@ -30,19 +30,19 @@ type fakeCache struct {
 }
 
 var (
-	_ app.Cache      = (*fakeCache)(nil)
-	_ app.BoardCache = (*fakeCache)(nil)
+	_ appcache.Cache      = (*fakeCache)(nil)
+	_ appcache.BoardCache = (*fakeCache)(nil)
 )
 
 func newFakeCache() *fakeCache {
 	return &fakeCache{
-		boards: map[int64]app.BoardSnapshot{}, lastBoard: map[string]int64{}, issues: map[string]jira.Issue{},
+		boards: map[int64]appcache.BoardSnapshot{}, lastBoard: map[string]int64{}, issues: map[string]jira.Issue{},
 	}
 }
 
 // hold puts a board's shape and cards in as though a previous session had left
 // them there.
-func (c *fakeCache) hold(project string, boardID int64, snap app.BoardSnapshot, stale bool) {
+func (c *fakeCache) hold(project string, boardID int64, snap appcache.BoardSnapshot, stale bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	snap.StoredAt, snap.Stale = cacheStoredAt, stale
@@ -53,14 +53,14 @@ func (c *fakeCache) hold(project string, boardID int64, snap app.BoardSnapshot, 
 	}
 }
 
-func (c *fakeCache) Board(boardID int64) (app.BoardSnapshot, bool) {
+func (c *fakeCache) Board(boardID int64) (appcache.BoardSnapshot, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	snap, ok := c.boards[boardID]
 	return snap, ok
 }
 
-func (c *fakeCache) PutBoard(boardID int64, snap app.BoardSnapshot) error {
+func (c *fakeCache) PutBoard(boardID int64, snap appcache.BoardSnapshot) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.putFail != nil {
@@ -70,7 +70,7 @@ func (c *fakeCache) PutBoard(boardID int64, snap app.BoardSnapshot) error {
 	snap.StoredAt = cacheStoredAt
 	c.boards[boardID] = snap
 	for i := range snap.Issues {
-		c.issues[snap.Issues[i].Key] = app.MergeIssue(c.issues[snap.Issues[i].Key], snap.Issues[i])
+		c.issues[snap.Issues[i].Key] = appcache.MergeIssue(c.issues[snap.Issues[i].Key], snap.Issues[i])
 	}
 	return nil
 }
@@ -99,9 +99,9 @@ func (c *fakeCache) PutLastBoard(project string, boardID int64) error {
 	return nil
 }
 
-// The rest of app.Cache is unused by this package: a board's cards are read by
+// The rest of cache.Cache is unused by this package: a board's cards are read by
 // id, never by JQL.
-func (c *fakeCache) Rows(string) (app.Snapshot, bool)         { return app.Snapshot{}, false }
+func (c *fakeCache) Rows(string) (appcache.Snapshot, bool)    { return appcache.Snapshot{}, false }
 func (c *fakeCache) PutRows(string, []jira.Issue, bool) error { return nil }
 func (c *fakeCache) Forget(string) error                      { return nil }
 
@@ -124,7 +124,7 @@ func (c *fakeCache) Generation() uint64 {
 
 var cacheStoredAt = time.Date(2025, time.March, 5, 8, 30, 0, 0, time.UTC)
 
-func withCache(d kernel.Deps, c app.Cache) kernel.Deps {
+func withCache(d kernel.Deps, c appcache.Cache) kernel.Deps {
 	d.Cache = c
 	return d
 }
@@ -143,7 +143,7 @@ func refusing(issues int) *jiratest.Fake {
 func primed(t *testing.T, d kernel.Deps) (boardID int64, cfg jira.BoardConfig, qf []jira.QuickFilter, issues []jira.Issue) {
 	t.Helper()
 	dr := newDriver(t, d, 120, 20)
-	return dr.m.plan.boardID, dr.m.rawConfig, dr.m.quickFilters, slices.Clone(dr.m.issues)
+	return dr.m.plan.BoardID, dr.m.rawConfig, dr.m.quickFilters, slices.Clone(dr.m.issues)
 }
 
 // TestBoard_DrawsTheStoredBoardBeforeAnythingIsAskedOfTheSite is the gate on
@@ -155,7 +155,7 @@ func TestBoard_DrawsTheStoredBoardBeforeAnythingIsAskedOfTheSite(t *testing.T) {
 
 	boardID, cfg, qf, issues := primed(t, testDeps(newFake(6)))
 	cache := newFakeCache()
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, false)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, false)
 
 	fake := refusing(6)
 	deps := withCache(testDeps(fake), cache)
@@ -184,7 +184,7 @@ func TestBoard_DoesNotAskTheSiteAgainWhileTheStoredBoardIsStillFresh(t *testing.
 
 	boardID, cfg, qf, issues := primed(t, testDeps(newFake(6)))
 	cache := newFakeCache()
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, false)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, false)
 
 	fake := newFake(6)
 	dr := newDriver(t, withCache(testDeps(fake), cache), 120, 20)
@@ -203,7 +203,7 @@ func TestBoard_RevalidatesAStoredBoardThatIsPastItsTTL(t *testing.T) {
 
 	boardID, cfg, qf, issues := primed(t, testDeps(newFake(6)))
 	cache := newFakeCache()
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, true)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, true)
 
 	fake := newFake(6)
 	dr := newDriver(t, withCache(testDeps(fake), cache), 120, 20)
@@ -234,12 +234,12 @@ func TestBoard_RevalidationLandsOnTheSameBoardTheSnapshotNamed(t *testing.T) {
 		t.Fatal("nothing was primed, so this test proves nothing")
 	}
 	cache := newFakeCache()
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, true)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, true)
 
 	dr := newDriver(t, withCache(testDeps(fake), cache), 120, 20)
 
-	if dr.m.plan.boardID != boardID {
-		t.Errorf("the revalidated board is %d, want the stored board %d", dr.m.plan.boardID, boardID)
+	if dr.m.plan.BoardID != boardID {
+		t.Errorf("the revalidated board is %d, want the stored board %d", dr.m.plan.BoardID, boardID)
 	}
 }
 
@@ -270,7 +270,7 @@ func TestBoard_KeepsTheStoredBoardOnScreenWhenTheSiteRefuses(t *testing.T) {
 
 			boardID, cfg, qf, issues := primed(t, testDeps(newFake(6)))
 			cache := newFakeCache()
-			cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, true)
+			cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, true)
 
 			fake := newFake(6)
 			fake.FailNextN(20, tc.err)
@@ -316,7 +316,7 @@ func TestBoard_AConfigFailureDuringRevalidationBadgesRatherThanBlanks(t *testing
 
 	boardID, cfg, qf, issues := primed(t, testDeps(newFake(6)))
 	cache := newFakeCache()
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, true)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, true)
 
 	fake := &failBoardConfigOnce{Fake: newFake(6)}
 	dr := newDriver(t, withCache(testDeps(fake), cache), 120, 20)
@@ -334,7 +334,7 @@ func TestBoard_StoresWhatItFetchedSoTheNextSessionDrawsItFirst(t *testing.T) {
 	cache := newFakeCache()
 	dr := newDriver(t, withCache(testDeps(newFake(9)), cache), 120, 20)
 
-	boardID := dr.m.plan.boardID
+	boardID := dr.m.plan.BoardID
 	snap, ok := cache.Board(boardID)
 	if !ok {
 		t.Fatal("a board that loaded stored nothing")
@@ -355,7 +355,7 @@ func TestBoard_APurgingRefreshDropsTheStoredCopyToo(t *testing.T) {
 
 	cache := newFakeCache()
 	dr := newDriver(t, withCache(testDeps(newFake(9)), cache), 120, 20)
-	boardID := dr.m.plan.boardID
+	boardID := dr.m.plan.BoardID
 
 	dr.send(kernel.RefreshMsg{Purge: true})
 
@@ -402,7 +402,7 @@ func TestStaleBoardBadge_Golden(t *testing.T) {
 
 	boardID, cfg, qf, issues := primed(t, testDeps(newFake(6)))
 	cache := newFakeCache()
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, true)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, true)
 
 	fake := newFake(6)
 	fake.FailNextN(20, &jira.TransportError{Op: "GET /board", Err: errors.New("dial tcp: no such host")})

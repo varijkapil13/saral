@@ -11,6 +11,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -41,7 +43,7 @@ func TestPicker_ClaimsTheKeyboardOnlyWhileTypingForAValue(t *testing.T) {
 		t.Error("the facets claim the keyboard, so esc could not close the picker")
 	}
 
-	dr.pick(FacetStatus)
+	dr.pick(appterm.FacetStatus)
 	if !dr.m.WantsRawKeys() {
 		t.Error("typing for a value does not claim the keyboard, so a q would quit the program")
 	}
@@ -63,7 +65,7 @@ func TestPicker_OffersTheAccountsAssignableInThisProject(t *testing.T) {
 
 	w := watching(newFake(20))
 	dr := newDriver(t, testDeps(w), 120, 30)
-	dr.pick(FacetAssignee)
+	dr.pick(appterm.FacetAssignee)
 
 	asked := w.asked()
 	if len(asked) != 1 {
@@ -89,7 +91,7 @@ func TestPicker_TheReporterSearchIsSiteWideAndBadgesWhatIsNotAPerson(t *testing.
 
 	w := watching(newFake(20))
 	dr := newDriver(t, testDeps(w), 120, 30)
-	dr.pick(FacetReporter)
+	dr.pick(appterm.FacetReporter)
 
 	asked := w.asked()
 	if len(asked) != 1 || asked[0].Project != "" {
@@ -115,13 +117,13 @@ func TestPicker_BadgesAnAccountThatIsNoLongerActive(t *testing.T) {
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake(20)), 120, 30)
-	dr.pick(FacetReporter)
+	dr.pick(appterm.FacetReporter)
 
-	at := slices.IndexFunc(dr.m.all, func(v value) bool { return v.term.Label == "Alan Turing" })
+	at := slices.IndexFunc(dr.m.all, func(v appsearch.Value) bool { return v.Term.Label == "Alan Turing" })
 	if at < 0 {
 		t.Fatal("the inactive account is not offered")
 	}
-	if got := dr.m.all[at].note; !strings.Contains(got, "inactive") {
+	if got := dr.m.all[at].Note; !strings.Contains(got, "inactive") {
 		t.Errorf("the inactive account's row says %q, want it to say so", got)
 	}
 }
@@ -135,7 +137,7 @@ func TestPicker_TypingCostsNoRoundTripWhileTheWholeDirectoryIsHeld(t *testing.T)
 
 	w := watching(newFake(20))
 	dr := newDriver(t, testDeps(w), 120, 30)
-	dr.pick(FacetAssignee)
+	dr.pick(appterm.FacetAssignee)
 	if !dr.m.complete {
 		t.Fatal("the fake answered fewer accounts than it was allowed and the picker did not notice")
 	}
@@ -156,9 +158,9 @@ func TestPicker_TypingCostsNoRoundTripWhileTheWholeDirectoryIsHeld(t *testing.T)
 func TestPicker_AsksTheSiteAgainOnlyWhenWhatIsHeldRunsThin(t *testing.T) {
 	t.Parallel()
 
-	w := watching(newFake(20, jiratest.WithPeople(crowd(peopleLimit+10))))
+	w := watching(newFake(20, jiratest.WithPeople(crowd(appsearch.PeopleLimit+10))))
 	dr := newDriver(t, testDeps(w), 120, 30)
-	dr.pick(FacetAssignee)
+	dr.pick(appterm.FacetAssignee)
 	if dr.m.complete {
 		t.Fatal("a directory bigger than the limit was taken for the whole of it")
 	}
@@ -197,10 +199,10 @@ func TestPicker_AsksTheSiteAgainOnlyWhenWhatIsHeldRunsThin(t *testing.T) {
 func TestPicker_AsksAgainForANeedleTheSiteRefused(t *testing.T) {
 	t.Parallel()
 
-	f := newFake(20, jiratest.WithPeople(crowd(peopleLimit+10)))
+	f := newFake(20, jiratest.WithPeople(crowd(appsearch.PeopleLimit+10)))
 	w := watching(f)
 	dr := newDriver(t, testDeps(w), 120, 30)
-	dr.pick(FacetAssignee)
+	dr.pick(appterm.FacetAssignee)
 
 	f.FailNext(&jira.TransportError{Op: "searching the accounts", Err: errors.New("connection refused")})
 	dr.typeText("z")
@@ -251,24 +253,24 @@ func itoa(n int) string {
 func TestPicker_DrawsBackAnAccountInForceThatTheSearchDoesNotAnswerWith(t *testing.T) {
 	t.Parallel()
 
-	robot := Term{Facet: FacetAssignee, ID: "acct:nightly-bot", Label: "Nightly Runner"}
+	robot := appterm.Term{Facet: appterm.FacetAssignee, ID: "acct:nightly-bot", Label: "Nightly Runner"}
 	f := newFake(20)
-	dr := newDriver(t, testDeps(f), 120, 30, WithTerms(Terms{robot}))
-	dr.pick(FacetAssignee)
+	dr := newDriver(t, testDeps(f), 120, 30, WithTerms(appterm.Terms{robot}))
+	dr.pick(appterm.FacetAssignee)
 
 	if got := countCalls(f, "People"); got != 1 {
 		t.Fatalf("the ids in force were resolved %d times, want once", got)
 	}
 	at := -1
 	for i, v := range dr.m.all {
-		if v.term.ID == robot.ID {
+		if v.Term.ID == robot.ID {
 			at = i
 		}
 	}
 	if at < 0 {
 		t.Fatalf("the account in force is not on offer: %v", dr.labels())
 	}
-	if !dr.m.terms.Has(dr.m.all[at].term) {
+	if !dr.m.terms.Has(dr.m.all[at].Term) {
 		t.Error("the account in force is on offer but not marked as in force")
 	}
 	mustContain(t, dr.view(), "Nightly Runner")
@@ -280,10 +282,10 @@ func TestPicker_DoesNotResolveAnAccountTheSearchAlreadyAnsweredWith(t *testing.T
 	t.Parallel()
 
 	f := newFake(20)
-	dr := newDriver(t, testDeps(f), 120, 30, WithTerms(Terms{
-		{Facet: FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"},
+	dr := newDriver(t, testDeps(f), 120, 30, WithTerms(appterm.Terms{
+		{Facet: appterm.FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"},
 	}))
-	dr.pick(FacetAssignee)
+	dr.pick(appterm.FacetAssignee)
 
 	if got := countCalls(f, "People"); got != 0 {
 		t.Errorf("an account the search returned was read again %d times", got)
@@ -296,8 +298,8 @@ func TestPicker_DoesNotResolveTheUnassignedTerm(t *testing.T) {
 	t.Parallel()
 
 	f := newFake(20)
-	dr := newDriver(t, testDeps(f), 120, 30, WithTerms(Terms{{Facet: FacetAssignee, Label: "unassigned"}}))
-	dr.pick(FacetAssignee)
+	dr := newDriver(t, testDeps(f), 120, 30, WithTerms(appterm.Terms{{Facet: appterm.FacetAssignee, Label: "unassigned"}}))
+	dr.pick(appterm.FacetAssignee)
 
 	if got := countCalls(f, "People"); got != 0 {
 		t.Errorf("the empty assignee was looked up as an account %d times", got)
@@ -308,24 +310,24 @@ func TestPicker_StatusesAreTheUnionOfEveryWorkflowAndSayWhichTypesTheyCameFrom(t
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake(20)), 120, 30)
-	dr.pick(FacetStatus)
+	dr.pick(appterm.FacetStatus)
 
-	byID := make(map[string]value, len(dr.m.all))
+	byID := make(map[string]appsearch.Value, len(dr.m.all))
 	for _, v := range dr.m.all {
-		if _, dup := byID[v.term.ID]; dup {
-			t.Errorf("status %q is offered twice", v.term.ID)
+		if _, dup := byID[v.Term.ID]; dup {
+			t.Errorf("status %q is offered twice", v.Term.ID)
 		}
-		byID[v.term.ID] = v
+		byID[v.Term.ID] = v
 	}
 	// The fake mints a project-scoped status reusing another's display name,
 	// which is what a team-managed project does. Both have to be on offer, and
 	// the row has to say which workflow each belongs to.
 	first, second := byID["10202"], byID["10204"]
-	if first.term.Label != second.term.Label {
-		t.Fatalf("the two ids that share a name are %q and %q", first.term.Label, second.term.Label)
+	if first.Term.Label != second.Term.Label {
+		t.Fatalf("the two ids that share a name are %q and %q", first.Term.Label, second.Term.Label)
 	}
-	if first.note == second.note || first.note == "" || second.note == "" {
-		t.Errorf("both rows read %q / %q, so nothing on screen tells them apart", first.note, second.note)
+	if first.Note == second.Note || first.Note == "" || second.Note == "" {
+		t.Errorf("both rows read %q / %q, so nothing on screen tells them apart", first.Note, second.Note)
 	}
 }
 
@@ -333,7 +335,7 @@ func TestPicker_PrioritiesKeepTheSitesOwnOrder(t *testing.T) {
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake(20)), 120, 30)
-	dr.pick(FacetPriority)
+	dr.pick(appterm.FacetPriority)
 
 	if got, want := dr.labels(), []string{"Urgent", "Normal", "Whenever"}; !slices.Equal(got, want) {
 		t.Errorf("the priorities are offered as %v, want the site's own ranking order %v", got, want)
@@ -347,7 +349,7 @@ func TestPicker_LabelsAreWalkedAndNarrowedLocally(t *testing.T) {
 
 	f := newFake(40)
 	dr := newDriver(t, testDeps(f), 120, 30)
-	dr.pick(FacetLabel)
+	dr.pick(appterm.FacetLabel)
 
 	if len(dr.m.all) == 0 {
 		t.Fatal("no labels were offered at all")
@@ -370,7 +372,7 @@ func TestPicker_ALabelThatIsNotASCIIKeepsTheColumnsWhereTheyAre(t *testing.T) {
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake(40)), 120, 30)
-	dr.pick(FacetLabel)
+	dr.pick(appterm.FacetLabel)
 	dr.typeText("検")
 
 	if got := dr.labels(); len(got) == 0 || got[0] != "検索" {
@@ -380,7 +382,7 @@ func TestPicker_ALabelThatIsNotASCIIKeepsTheColumnsWhereTheyAre(t *testing.T) {
 	for i, at := range dr.m.shown {
 		if got := ansi.StringWidth(lines[i]); got != 120 {
 			t.Errorf("the row for %q is %d columns wide, want 120: %q",
-				dr.m.all[at].term.Label, got, lines[i])
+				dr.m.all[at].Term.Label, got, lines[i])
 		}
 	}
 }
@@ -392,23 +394,23 @@ func TestPicker_ChoosingAValueTogglesItInForceWithoutClosing(t *testing.T) {
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake(20)), 120, 30)
-	dr.pick(FacetPriority)
+	dr.pick(appterm.FacetPriority)
 	dr.key("enter")
 
 	term, chose := dr.chosen()
 	if !chose {
 		t.Fatal("choosing a value named no term")
 	}
-	if term.Facet != FacetPriority || term.ID != "10401" || term.Label != "Urgent" {
+	if term.Facet != appterm.FacetPriority || term.ID != "10401" || term.Label != "Urgent" {
 		t.Errorf("the term is %+v, want the priority 10401", term)
 	}
 	if dr.pops != 0 {
 		t.Errorf("choosing a value closed the picker %d times, want it to stay open", dr.pops)
 	}
-	if dr.m.state != pickValue || dr.m.facet != FacetPriority {
+	if dr.m.state != pickValue || dr.m.facet != appterm.FacetPriority {
 		t.Fatal("choosing a value left the picker off the values it was on")
 	}
-	if !dr.m.terms.Has(Term{Facet: FacetPriority, ID: "10401"}) {
+	if !dr.m.terms.Has(appterm.Term{Facet: appterm.FacetPriority, ID: "10401"}) {
 		t.Error("the picker's own row does not show the value as in force")
 	}
 }
@@ -418,9 +420,9 @@ func TestPicker_ChoosingAValueTogglesItInForceWithoutClosing(t *testing.T) {
 func TestPicker_ChoosingAValueAlreadyInForceNamesItAgainSoItComesOff(t *testing.T) {
 	t.Parallel()
 
-	urgent := Term{Facet: FacetPriority, ID: "10401", Label: "Urgent"}
-	dr := newDriver(t, testDeps(newFake(20)), 120, 30, WithTerms(Terms{urgent}))
-	dr.pick(FacetPriority)
+	urgent := appterm.Term{Facet: appterm.FacetPriority, ID: "10401", Label: "Urgent"}
+	dr := newDriver(t, testDeps(newFake(20)), 120, 30, WithTerms(appterm.Terms{urgent}))
+	dr.pick(appterm.FacetPriority)
 
 	mustContain(t, dr.view(), "Urgent")
 	if !dr.m.terms.Has(urgent) {
@@ -443,7 +445,7 @@ func TestPicker_TwoValuesOfOneFacetAreBothInForceAfterTwoToggles(t *testing.T) {
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake(20)), 120, 30)
-	dr.pick(FacetPriority)
+	dr.pick(appterm.FacetPriority)
 	dr.key("enter")
 	dr.key("down")
 	dr.key("enter")
@@ -454,7 +456,7 @@ func TestPicker_TwoValuesOfOneFacetAreBothInForceAfterTwoToggles(t *testing.T) {
 	if got := len(dr.m.terms); got != 2 {
 		t.Fatalf("two toggles left %d terms in force, want 2: %+v", got, dr.m.terms)
 	}
-	if dr.m.terms[0].Facet != FacetPriority || dr.m.terms[1].Facet != FacetPriority {
+	if dr.m.terms[0].Facet != appterm.FacetPriority || dr.m.terms[1].Facet != appterm.FacetPriority {
 		t.Errorf("the two terms are %+v, want both priorities", dr.m.terms)
 	}
 }
@@ -464,9 +466,9 @@ func TestPicker_TwoValuesOfOneFacetAreBothInForceAfterTwoToggles(t *testing.T) {
 func TestPicker_TheFacetsSayWhatIsAlreadyInForce(t *testing.T) {
 	t.Parallel()
 
-	dr := newDriver(t, testDeps(newFake(20)), 120, 30, WithTerms(Terms{
-		{Facet: FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"},
-		{Facet: FacetAssignee, ID: "acct-grace", Label: "Grace Hopper"},
+	dr := newDriver(t, testDeps(newFake(20)), 120, 30, WithTerms(appterm.Terms{
+		{Facet: appterm.FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"},
+		{Facet: appterm.FacetAssignee, ID: "acct-grace", Label: "Grace Hopper"},
 	}))
 
 	mustContain(t, dr.view(), "2 in force", "assignee Ada Lovelace or Grace Hopper")
@@ -484,7 +486,7 @@ func TestPicker_SaysWhyItCannotOfferPeopleWhenTheTokenMayNotLookThemUp(t *testin
 
 	mustContain(t, dr.view(), "needs the Browse users and groups permission")
 
-	dr.pick(FacetAssignee)
+	dr.pick(appterm.FacetAssignee)
 
 	if dr.m.state != pickFacet {
 		t.Error("a refused facet opened anyway")
@@ -501,7 +503,7 @@ func TestPicker_SaysWhyItCannotOfferStatusesWithNoProject(t *testing.T) {
 	d.Project = ""
 	dr := newDriver(t, d, 120, 30)
 
-	dr.pick(FacetStatus)
+	dr.pick(appterm.FacetStatus)
 
 	if dr.m.state != pickFacet {
 		t.Error("a facet with nowhere to read its values from opened anyway")
@@ -547,7 +549,7 @@ func TestPicker_KeepsTheRefusalInThePaneWhenTheSiteSaysNo(t *testing.T) {
 			f := newFake(20)
 			f.FailNext(tc.err)
 			dr := newDriver(t, testDeps(f), 120, 30)
-			dr.pick(FacetPriority)
+			dr.pick(appterm.FacetPriority)
 
 			mustContain(t, dr.view(), "The site would not say.", tc.want)
 			if got := dr.lastStatus().Level; got != kernel.LevelError {
@@ -568,7 +570,7 @@ func TestPicker_ARefusedFacetStillOffersTheWayBack(t *testing.T) {
 	f := newFake(20)
 	f.FailNext(&jira.RateLimitError{RetryAfter: time.Minute})
 	dr := newDriver(t, testDeps(f), 120, 30)
-	dr.pick(FacetPriority)
+	dr.pick(appterm.FacetPriority)
 
 	set, _ := dr.m.LiveKeys()
 	if len(set.Acts) != 1 || set.Acts[0].Help().Key != "esc" {
@@ -586,14 +588,14 @@ func TestPicker_DropsAnAnswerToAFacetThatIsNoLongerOpen(t *testing.T) {
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake(20)), 120, 30)
-	dr.pick(FacetPriority)
+	dr.pick(appterm.FacetPriority)
 	stale := dr.m.gen
 
 	dr.key("esc")
-	dr.pick(FacetLabel)
+	dr.pick(appterm.FacetLabel)
 	labels := len(dr.m.all)
 
-	dr.send(vocabularyMsg{gen: stale, facet: FacetPriority, values: priorityValues([]jira.Priority{
+	dr.send(vocabularyMsg{gen: stale, facet: appterm.FacetPriority, values: appsearch.PriorityValues([]jira.Priority{
 		{ID: "10401", Name: "Urgent"},
 	})})
 
@@ -607,8 +609,8 @@ func TestPicker_DropsAnAnswerToAFacetThatIsNoLongerOpen(t *testing.T) {
 func TestPicker_DrawsOnlyTheRowsThatFit(t *testing.T) {
 	t.Parallel()
 
-	dr := newDriver(t, testDeps(newFake(20, jiratest.WithPeople(crowd(peopleLimit)))), 120, 12)
-	dr.pick(FacetReporter)
+	dr := newDriver(t, testDeps(newFake(20, jiratest.WithPeople(crowd(appsearch.PeopleLimit)))), 120, 12)
+	dr.pick(appterm.FacetReporter)
 
 	lines := strings.Split(dr.m.View(), "\n")
 	if got, want := len(lines), 12; got != want {
@@ -623,7 +625,7 @@ func TestPicker_TheEmptyStatesSayWhichKindOfEmptyTheyAre(t *testing.T) {
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake(20)), 120, 30, WithEditKey("e"))
-	dr.pick(FacetPriority)
+	dr.pick(appterm.FacetPriority)
 	dr.typeText("nothing like this")
 
 	mustContain(t, dr.view(), "No priority here matches", "e on the list edits the search by hand.")
@@ -639,31 +641,32 @@ func TestPicker_AnAnswerThatLandsLateLeavesTheCursorOnTheSameValue(t *testing.T)
 	t.Parallel()
 
 	for name, tc := range map[string]struct {
-		facet Facet
+		facet appterm.Facet
 		// first is what the late answer puts at the top of the list, so that the
 		// test fails if the answer was dropped instead of drawn.
 		first string
 		late  func(m *Model) tea.Msg
 	}{
 		"an account search": {
-			facet: FacetReporter,
+			facet: appterm.FacetReporter,
 			first: "Aaa Aardvark",
 			late: func(m *Model) tea.Msg {
-				return peopleMsg{gen: m.gen, facet: FacetReporter, needle: "aa", people: []jira.User{{
+				return peopleMsg{gen: m.gen, facet: appterm.FacetReporter, needle: "aa", people: []jira.User{{
 					AccountID: "acct-aardvark", DisplayName: "Aaa Aardvark",
 					Active: true, TimeZone: time.UTC, Kind: jira.AccountPerson,
 				}}}
 			},
 		},
 		"a vocabulary read": {
-			facet: FacetLabel,
+			facet: appterm.FacetLabel,
 			first: "aardvark",
 			late: func(m *Model) tea.Msg {
-				labels := []string{"aardvark"}
+				labels := make([]string, 0, 1+len(m.all))
+				labels = append(labels, "aardvark")
 				for i := range m.all {
-					labels = append(labels, m.all[i].term.ID)
+					labels = append(labels, m.all[i].Term.ID)
 				}
-				return vocabularyMsg{gen: m.gen, facet: FacetLabel, values: labelValues(labels)}
+				return vocabularyMsg{gen: m.gen, facet: appterm.FacetLabel, values: appsearch.LabelValues(labels)}
 			},
 		},
 	} {
@@ -678,7 +681,7 @@ func TestPicker_AnAnswerThatLandsLateLeavesTheCursorOnTheSameValue(t *testing.T)
 			if sel == nil {
 				t.Fatalf("the %s facet offered no row to stand on", tc.facet.Label())
 			}
-			was := sel.term
+			was := sel.Term
 
 			dr.send(tc.late(dr.m))
 
@@ -686,9 +689,9 @@ func TestPicker_AnAnswerThatLandsLateLeavesTheCursorOnTheSameValue(t *testing.T)
 				t.Fatalf("the answer never reached the list: it offers %v", got)
 			}
 			now := dr.m.selected()
-			if now == nil || now.term != was {
+			if now == nil || now.Term != was {
 				t.Errorf("the highlight moved from %q to %q; enter would filter by the wrong value",
-					was.Label, now.term.Label)
+					was.Label, now.Term.Label)
 			}
 		})
 	}

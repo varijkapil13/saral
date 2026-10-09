@@ -5,12 +5,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
-
-func assignable(ctx context.Context, finder jira.PeopleFinder, project, match string, limit int) ([]jira.User, error) {
-	return finder.FindPeople(ctx, jira.PeopleQuery{Match: match, Project: project, Limit: limit})
-}
 
 // peopleFoundMsg carries the accounts one assignee search brought back. needle
 // is what was asked for, so a keystroke changed while this was in flight is
@@ -26,7 +23,7 @@ type peopleFoundMsg struct {
 // app accounts for free — see jira.PeopleQuery's own documentation.
 func findAssignees(ctx context.Context, finder jira.PeopleFinder, project, match string, limit, gen int) tea.Cmd {
 	return func() tea.Msg {
-		people, err := assignable(ctx, finder, project, match, limit)
+		people, err := appissue.Assignable(ctx, finder, project, match, limit)
 		if err != nil {
 			return editFailedMsg{gen: gen, err: err}
 		}
@@ -45,7 +42,7 @@ type meLoadedMsg struct {
 
 func fetchMeCmd(ctx context.Context, ident jira.Identifier) tea.Cmd {
 	return func() tea.Msg {
-		me, err := ident.Me(ctx)
+		me, err := appissue.Account(ctx, ident)
 		if err != nil {
 			return meLoadedMsg{err: err}
 		}

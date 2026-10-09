@@ -3,14 +3,12 @@ package move
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/varijkapil13/saral/internal/ui/kernel"
-	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -19,108 +17,21 @@ func meta(id, name string) jira.FieldMeta {
 	return jira.FieldMeta{Field: jira.FieldRef{ID: id, Name: name}, Name: name}
 }
 
-func screen(fields ...jira.FieldMeta) jira.Schema { return jira.Schema{Fields: fields} }
-
-func withValues(values map[string]jira.FieldValue) jira.Issue {
-	return jira.Issue{Fields: jira.NewFieldSet(values)}
-}
-
-func TestDropsOf_ComparesTheSourceScreensWithTheTargetsAndCountsWhoHoldAValue(t *testing.T) {
+func TestFieldName_IsTheSitesOwnNameDrawnSafely(t *testing.T) {
 	t.Parallel()
-	text := func(s string) jira.FieldValue { return jira.FieldValue{Kind: jira.KindText, Text: s} }
 	for name, tc := range map[string]struct {
-		sources []jira.Schema
-		target  jira.Schema
-		issues  []jira.Issue
-		want    []dropped
+		meta jira.FieldMeta
+		want string
 	}{
-		"a field on both screens is kept": {
-			sources: []jira.Schema{screen(meta("customfield_1", "Kostenstelle"))},
-			target:  screen(meta("customfield_1", "Kostenstelle")),
-			issues:  []jira.Issue{withValues(map[string]jira.FieldValue{"customfield_1": text("A")})},
-		},
-		"a field the target lacks is dropped from the issues holding it": {
-			sources: []jira.Schema{screen(meta("customfield_1", "Kostenstelle"))},
-			target:  screen(),
-			issues: []jira.Issue{
-				withValues(map[string]jira.FieldValue{"customfield_1": text("A")}),
-				{},
-				withValues(map[string]jira.FieldValue{"customfield_1": text("B")}),
-			},
-			want: []dropped{{id: "customfield_1", name: "Kostenstelle", count: 2}},
-		},
-		"a field nobody holds a value in loses nothing": {
-			sources: []jira.Schema{screen(meta("customfield_1", "Kostenstelle"))},
-			target:  screen(),
-			issues: []jira.Issue{
-				withValues(map[string]jira.FieldValue{"customfield_1": text("  ")}),
-				withValues(map[string]jira.FieldValue{"customfield_1": {Kind: jira.KindEmpty}}),
-				withValues(map[string]jira.FieldValue{"customfield_1": {Kind: jira.KindOptions}}),
-			},
-		},
-		"the fields a move sets, maps or keeps are never reported": {
-			sources: []jira.Schema{screen(meta("summary", "Zusammenfassung"), meta("reporter", "Berichterstatter"),
-				meta("assignee", "Bearbeiter"), meta("issuetype", "Vorgangstyp"), meta("project", "Projekt"),
-				meta("attachment", "Anhang"), meta("issuelinks", "Verknüpfungen"))},
-			target: screen(),
-			issues: []jira.Issue{{Summary: "x", Reporter: &jira.User{AccountID: "a"}, Assignee: &jira.User{AccountID: "a"}}},
-		},
-		"system fields are read off the issue itself": {
-			sources: []jira.Schema{screen(meta("labels", "Stichwörter"), meta("fixVersions", "Lösungsversion"),
-				meta("duedate", "Fällig"), meta("description", "Beschreibung"), meta("priority", "Priorität"),
-				meta("components", "Komponenten"), meta("timetracking", "Zeiterfassung"))},
-			target: screen(meta("priority", "Priorität")),
-			issues: []jira.Issue{
-				{Labels: []string{"x"}, Due: jira.Date{Year: 2026, Month: time.March, Day: 1}},
-				{Labels: []string{"y"}, FixVersions: []jira.Version{{ID: "1"}}, Description: adf.Doc{Content: []adf.Node{{Type: "paragraph"}}}},
-				{TimeTracking: &jira.TimeTracking{}},
-			},
-			want: []dropped{
-				{id: "labels", name: "Stichwörter", count: 2},
-				{id: "fixVersions", name: "Lösungsversion", count: 1},
-				{id: "duedate", name: "Fällig", count: 1},
-				{id: "description", name: "Beschreibung", count: 1},
-			},
-		},
-		"two source screens are one list, most widely held first": {
-			sources: []jira.Schema{
-				screen(meta("customfield_1", "Eins"), meta("customfield_2", "Zwei")),
-				screen(meta("customfield_2", "Zwei"), meta("customfield_3", "Drei")),
-			},
-			target: screen(),
-			issues: []jira.Issue{
-				withValues(map[string]jira.FieldValue{"customfield_1": text("a"), "customfield_3": text("c")}),
-				withValues(map[string]jira.FieldValue{"customfield_3": {Kind: jira.KindNumber, Number: 0}}),
-			},
-			want: []dropped{
-				{id: "customfield_3", name: "Drei", count: 2},
-				{id: "customfield_1", name: "Eins", count: 1},
-			},
-		},
-		"a screen with no label falls back to the catalogue name and then the id": {
-			sources: []jira.Schema{screen(
-				jira.FieldMeta{Field: jira.FieldRef{ID: "customfield_1", Name: "Katalog"}},
-				jira.FieldMeta{Field: jira.FieldRef{ID: "customfield_2"}},
-			)},
-			target: screen(),
-			issues: []jira.Issue{withValues(map[string]jira.FieldValue{"customfield_1": text("a"), "customfield_2": text("b")})},
-			want: []dropped{
-				{id: "customfield_1", name: "Katalog", count: 1},
-				{id: "customfield_2", name: "customfield_2", count: 1},
-			},
-		},
-		"a name the site sent with a terminal escape in it is drawn without one": {
-			sources: []jira.Schema{screen(meta("customfield_1", "Kosten\x1b[31mstelle\x07"))},
-			target:  screen(),
-			issues:  []jira.Issue{withValues(map[string]jira.FieldValue{"customfield_1": text("a")})},
-			want:    []dropped{{id: "customfield_1", name: "Kostenstelle", count: 1}},
-		},
+		"the screen's label":             {meta: meta("customfield_1", "Kostenstelle"), want: "Kostenstelle"},
+		"the catalogue name without one": {meta: jira.FieldMeta{Field: jira.FieldRef{ID: "customfield_1", Name: "Katalog"}}, want: "Katalog"},
+		"the id without either":          {meta: jira.FieldMeta{Field: jira.FieldRef{ID: "customfield_2"}}, want: "customfield_2"},
+		"a terminal escape is not drawn": {meta: meta("customfield_1", "Kosten\x1b[31mstelle\x07"), want: "Kostenstelle"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got := dropsOf(gaps(tc.sources, tc.target), tc.issues)
-			if !slices.Equal(got, tc.want) {
-				t.Errorf("dropped\n got %+v\nwant %+v", got, tc.want)
+			if got := fieldName(&tc.meta); got != tc.want {
+				t.Errorf("fieldName = %q, want %q", got, tc.want)
 			}
 		})
 	}

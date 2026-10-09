@@ -33,7 +33,7 @@ above, `com.pyxis.greenhopper.jira:gh-lexo-rank` and its siblings.
 
 **A plugin key is not instance data.** It is the same string on every Jira Cloud site, which is what
 separates it from a field id, a field name or a status name. Nothing in this tree matched one before
-this packet: `internal/app/dates.go` finds the sprint and the date fields by *name*, through
+this packet: `internal/app/timeline/dates.go` finds the sprint and the date fields by *name*, through
 `jira.ResolveField`, which is a different and more fragile thing — a name is localised and a
 team-managed project mints its own.
 
@@ -121,7 +121,7 @@ pinned = ["customfield_13401", "duedate", "customfield_13402"]
 - Pinned fields draw first, in the order they were pinned, under their own heading; everything else
   follows as it does now.
 - Editing the list is a settings row, `issue.pinned` under a new Issue section. **`filter.Model`'s
-  multi-select picker (commit bc75989) was not reused**: it is wired to `filter.Facet`, a fixed enum of
+  multi-select picker (commit bc75989) was not reused**: it is wired to `term.Facet`, a fixed enum of
   assignee/reporter/status/type/priority/label, each fetched as JQL vocabulary through a package this
   packet does not own — a field catalogue is neither a facet nor a vocabulary of *values* for one, and
   offering it would mean adding a seventh facet and a new fetch to `internal/ui/filter`.
@@ -129,7 +129,7 @@ pinned = ["customfield_13401", "duedate", "customfield_13402"]
   way the existing single-select options picker already is: a fuzzy filter over rows, `enter` toggles
   membership without closing the picker — the one piece of bc75989's shape actually needed here — and
   `esc` writes the accumulated list to the profile in one save rather than one per toggle. The site's
-  field catalogue comes from `SchemaReader.Fields`, wrapped in the picker's own `app.Search` the way
+  field catalogue comes from `SchemaReader.Fields`, wrapped in the picker's own `appquery.Search` the way
   every other view already caches it.
 - Pinning from the issue itself was not in this packet, on the grounds that the sidebar had no
   per-field cursor and giving it one was a bigger change than the list was worth. P8 gave it one for a

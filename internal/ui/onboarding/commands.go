@@ -9,7 +9,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appconnect "github.com/varijkapil13/saral/internal/app/connect"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -156,28 +158,12 @@ func (m *Model) verify() tea.Cmd {
 		if err != nil {
 			return connectFailedMsg{seq: seq, err: err}
 		}
-		account, err := client.Me(ctx)
+		account, err := appconnect.Verify(ctx, client)
 		if err != nil {
-			return connectFailedMsg{seq: seq, err: err}
-		}
-		if err := refuseNonCloud(ctx, client); err != nil {
 			return connectFailedMsg{seq: seq, err: err}
 		}
 		return connectedMsg{seq: seq, client: client, account: account}
 	})
-}
-
-var errNotCloud = errors.New("this site is Jira Data Center or Server, which is not supported yet")
-
-// refuseNonCloud turns away a site that says it is not Jira Cloud. A site that
-// will not say is let through: the identity check has already answered on the
-// Cloud API, which is better evidence than a probe that failed.
-func refuseNonCloud(ctx context.Context, client jira.ServerInfoReader) error {
-	info, err := client.ServerInfo(ctx)
-	if err == nil && info.DeploymentType != "" && !info.Cloud() {
-		return errNotCloud
-	}
-	return nil
 }
 
 // refused names what a 401 on a token that has just been typed in comes down
@@ -204,7 +190,7 @@ func (m *Model) connected(msg connectedMsg) tea.Cmd {
 	}
 	m.busy, m.last = busyNone, busyNone
 	m.client, m.account = msg.client, msg.account
-	m.search = app.NewSearch(msg.client)
+	m.search = appquery.NewSearch(msg.client)
 	m.probed, m.caps = false, jira.Capabilities{}
 	return tea.Batch(m.goTo(stepStorage), m.suggest())
 }
@@ -223,7 +209,7 @@ func (m *Model) connectFailed(msg connectFailedMsg) tea.Cmd {
 	var rejected *jira.AuthError
 	var unreachable *jira.TransportError
 	switch {
-	case errors.Is(msg.err, errNotCloud):
+	case errors.Is(msg.err, appconnect.ErrNotCloud):
 		m.note = "Only Jira Cloud sites can be set up. Nothing was written."
 		return m.stay(stepSite)
 	case errors.As(msg.err, &rejected):
@@ -262,11 +248,11 @@ func (m *Model) suggest() tea.Cmd {
 	m.looking, m.suggested, m.lookup = true, nil, ""
 	return kernel.Reply(func() tea.Msg {
 		defer cancel()
-		keys, err := recentProjects(ctx, search)
+		refs, err := appsearch.RecentProjects(ctx, search, suggestionLimit)
 		if err != nil {
 			return projectsUnknownMsg{seq: seq, err: err}
 		}
-		return projectsFoundMsg{seq: seq, keys: keys}
+		return projectsFoundMsg{seq: seq, keys: projectKeys(refs)}
 	}, m.addr)
 }
 
@@ -275,34 +261,13 @@ func (m *Model) suggest() tea.Cmd {
 // only finds projects the account has not touched recently.
 const suggestionLimit = 50
 
-// recentProjects reads the projects behind the account's own recent issues,
-// then anything it can see at all. Both queries ask for one field.
-func recentProjects(ctx context.Context, search *app.Search) ([]string, error) {
-	projection := app.Projection{Name: "project picker", IDs: []string{"project"}}
-	for _, jql := range []string{"assignee = currentUser() ORDER BY updated DESC", "ORDER BY updated DESC"} {
-		result, err := search.Run(ctx, app.Request{JQL: jql, Projection: projection, MaxResults: suggestionLimit})
-		if err != nil {
-			return nil, err
-		}
-		if keys := distinctProjects(result.Page.Items); len(keys) > 0 {
-			return keys, nil
-		}
+func projectKeys(refs []jira.ProjectRef) []string {
+	if len(refs) == 0 {
+		return nil
 	}
-	return nil, nil
-}
-
-// distinctProjects keeps the order the issues came back in, which is the order
-// the query sorted them by and therefore the order worth offering.
-func distinctProjects(issues []jira.Issue) []string {
-	seen := make(map[string]bool, len(issues))
-	keys := make([]string, 0, 4)
-	for i := range issues {
-		key := issues[i].Project.Key
-		if key == "" || seen[key] {
-			continue
-		}
-		seen[key] = true
-		keys = append(keys, key)
+	keys := make([]string, len(refs))
+	for i := range refs {
+		keys[i] = refs[i].Key
 	}
 	return keys
 }
@@ -314,7 +279,7 @@ func (m *Model) probe() tea.Cmd {
 	}
 	client, project := m.client, m.value(fieldProject)
 	return m.start(busyProbe, func(ctx context.Context, seq int) tea.Msg {
-		caps, err := client.Capabilities(ctx, project)
+		caps, err := appconnect.NewCaps(client, nil).Probe(ctx, project)
 		if err != nil {
 			return probeFailedMsg{seq: seq, err: err}
 		}

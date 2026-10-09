@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -31,7 +32,7 @@ type sortField struct {
 // state its row was drawn in, which depends on the reader's own date.
 type sortable struct {
 	v     *jira.Version
-	state string
+	state apprelease.State
 	owner string
 }
 
@@ -40,39 +41,13 @@ const sortProject = "project"
 var sortFields = []sortField{
 	{id: sortProject, label: "project order"},
 	{id: "name", label: "name", compare: func(a, b sortable) int {
-		return strings.Compare(strings.ToLower(a.v.Name), strings.ToLower(b.v.Name))
+		return apprelease.CompareNames(a.v.Name, b.v.Name)
 	}},
 	{id: "release", label: "release date", date: func(v *jira.Version) jira.Date { return v.ReleaseDate }},
 	{id: "start", label: "start date", date: func(v *jira.Version) jira.Date { return v.StartDate }},
 	{id: "state", label: "state", compare: func(a, b sortable) int {
-		return stateRank(a.state) - stateRank(b.state)
+		return apprelease.CompareStates(a.state, b.state)
 	}},
-}
-
-// stateRank puts what still needs doing first: an overdue version, then one
-// still to ship, then the shipped ones and last whatever has been put away.
-func stateRank(state string) int {
-	switch state {
-	case stateOverdue:
-		return 0
-	case stateUnreleased:
-		return 1
-	case stateReleased:
-		return 2
-	default:
-		return 3
-	}
-}
-
-func compareDates(a, b jira.Date) int {
-	switch {
-	case a.Before(b):
-		return -1
-	case b.Before(a):
-		return 1
-	default:
-		return 0
-	}
 }
 
 func fieldIndex(fields []sortField, id string) int {
@@ -205,30 +180,19 @@ func (m *Model) reorder() {
 		return
 	}
 	for _, i := range m.sorted {
-		if m.filter.keeps(m.cells[i].state) && m.matches(i) {
+		if m.filter.Keeps(m.cells[i].state) && m.matches(i) {
 			m.order = append(m.order, slot{v: int32(i), g: -1})
 		}
 	}
 }
 
 func (m *Model) compareRows(f sortField, desc bool, a, b int) int {
-	var c int
 	if f.date != nil {
-		da, db := f.date(&m.versions[a]), f.date(&m.versions[b])
-		switch {
-		case da.IsZero() && db.IsZero():
-			return 0
-		case da.IsZero():
-			return 1
-		case db.IsZero():
-			return -1
-		}
-		c = compareDates(da, db)
-	} else {
-		c = f.compare(
-			sortable{&m.versions[a], m.cells[a].state, m.ownerLabel(a)},
-			sortable{&m.versions[b], m.cells[b].state, m.ownerLabel(b)})
+		return apprelease.CompareDated(f.date(&m.versions[a]), f.date(&m.versions[b]), desc)
 	}
+	c := f.compare(
+		sortable{&m.versions[a], m.cells[a].state, m.ownerLabel(a)},
+		sortable{&m.versions[b], m.cells[b].state, m.ownerLabel(b)})
 	if desc {
 		return -c
 	}

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 )
 
 // ctrl+k builds the palette from scratch and every keystroke re-ranks both
@@ -32,7 +32,7 @@ func TestBudget_PaletteKeystrokeOverEveryCachedIssue(t *testing.T) {
 	res := testing.Benchmark(BenchmarkPaletteKeystrokeCached)
 	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
 		t.Errorf("a keystroke over %d cached issues took %s, want under the 16ms in docs/PERFORMANCE.md",
-			app.DefaultIssueBound, per)
+			appcache.DefaultIssueBound, per)
 	}
 }
 
@@ -43,14 +43,14 @@ func TestBudget_PaletteOpeningIsOnTheKeystrokeBudget(t *testing.T) {
 	}
 }
 
-// ctrl+k over a cache at its bound shares build's app.Index across opens
-// (app.SharedIndex), so this stays on budget rather than paying for a walk of
+// ctrl+k over a cache at its bound shares build's appsearch.Index across opens
+// (appsearch.SharedIndex), so this stays on budget rather than paying for a walk of
 // the whole cache on every single open.
 func TestBudget_PaletteOpenWithCachedIssuesIsOnTheKeystrokeBudget(t *testing.T) {
 	res := testing.Benchmark(BenchmarkPaletteOpenCached)
 	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
 		t.Errorf("opening the palette over %d cached issues took %s, want under the 16ms in docs/PERFORMANCE.md",
-			app.DefaultIssueBound, per)
+			appcache.DefaultIssueBound, per)
 	}
 }
 
@@ -58,7 +58,7 @@ func TestBudget_PaletteFirstKeystrokeOverCachedIssuesIsOnBudget(t *testing.T) {
 	res := testing.Benchmark(BenchmarkPaletteFirstKeystrokeCached)
 	if per := time.Duration(res.NsPerOp()); per > 16*time.Millisecond {
 		t.Errorf("the first keystroke after opening over %d cached issues took %s, want under the 16ms in docs/PERFORMANCE.md",
-			app.DefaultIssueBound, per)
+			appcache.DefaultIssueBound, per)
 	}
 }
 

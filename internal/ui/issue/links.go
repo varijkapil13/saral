@@ -7,7 +7,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
+	appissueref "github.com/varijkapil13/saral/internal/app/issueref"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -30,14 +33,14 @@ func (k *linksKind) keys() *sheetKeys { return linksKeys }
 func (k *linksKind) load(s *sheet) tea.Cmd {
 	key := s.key
 	return s.read(&s.loads, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
-		iss, err := c.IssueFields(ctx, key, []string{"issuelinks"})
+		links, err := appissue.Links(ctx, c, key)
 		return func(s *sheet) tea.Cmd {
 			if err != nil {
 				return s.failed(err)
 			}
-			k.links = iss.Links
-			s.setRows(linkRows(iss.Links))
-			s.note = count(len(iss.Links), "link")
+			k.links = links
+			s.setRows(linkRows(links))
+			s.note = count(len(links), "link")
 			return nil
 		}
 	})
@@ -89,7 +92,7 @@ func (k *linksKind) act(s *sheet, a sheetAct) tea.Cmd {
 		id, other := row.id, row.key
 		s.confirm("Remove the link to "+other+"?", func() tea.Cmd {
 			return s.write(func(ctx context.Context, c jira.SessionClient) (func(*sheet) tea.Cmd, error) {
-				return k.written("removed the link to " + other), c.DeleteLink(ctx, id)
+				return k.written("removed the link to " + other), appissue.Unlink(ctx, c, id)
 			})
 		}, nil)
 	case sheetOpen:
@@ -115,7 +118,7 @@ func (k *linksKind) startAdd(s *sheet) tea.Cmd {
 		return s.ask("How is it linked?", "", true)
 	}
 	return s.read(&s.looks, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
-		types, err := c.IssueLinkTypes(ctx)
+		types, err := appissue.LinkTypes(ctx, c)
 		return func(s *sheet) tea.Cmd {
 			if err != nil {
 				return s.failed(err)
@@ -132,7 +135,7 @@ func (k *linksKind) startAdd(s *sheet) tea.Cmd {
 func (k *linksKind) changed(s *sheet, text string) tea.Cmd {
 	s.cands = s.cands[:0]
 	if k.phrase == nil {
-		p := app.NewPattern(text)
+		p := appmatch.NewPattern(text)
 		for _, t := range k.types {
 			for _, ph := range [...]sheetRow{{text: t.Outward, id: t.ID, key: "out"}, {text: t.Inward, id: t.ID, key: "in"}} {
 				if _, ok := p.Score(ph.text); ph.text != "" && ok && (ph.key == "out" || t.Inward != t.Outward) {
@@ -143,15 +146,15 @@ func (k *linksKind) changed(s *sheet, text string) tea.Cmd {
 		}
 		return nil
 	}
-	if key, ok := app.ParseKey(text); ok && key != s.key {
+	if key, ok := appissueref.ParseKey(text); ok && key != s.key {
 		s.cands = append(s.cands, sheetRow{text: key, key: key})
-	} else if key, _, ok := app.ParseIssueURL(text); ok && key != s.key {
+	} else if key, _, ok := appissueref.ParseIssueURL(text); ok && key != s.key {
 		s.cands = append(s.cands, sheetRow{text: key, key: key})
 	}
 	if s.deps.Cache == nil || text == "" {
 		return nil
 	}
-	hits, err := app.SharedIndex(s.deps.Cache).Search(text, maxCands)
+	hits, err := appsearch.SharedIndex(s.deps.Cache).Search(text, maxCands)
 	if err != nil {
 		return kernel.Warn("the cache on this machine could not be searched: " + err.Error())
 	}
@@ -169,13 +172,10 @@ func (k *linksKind) answered(s *sheet, _ string, pick *sheetRow) tea.Cmd {
 		k.phrase = &chosen
 		return s.ask(s.key+" "+chosen.text+"… which issue? A key, or words from one opened before", "", true)
 	}
-	in := jira.LinkInput{TypeID: k.phrase.id, From: s.key, To: pick.key}
-	if k.phrase.key == "in" {
-		in.From, in.To = pick.key, s.key
-	}
+	in := appissue.LinkBetween(k.phrase.id, k.phrase.key == "in", s.key, pick.key)
 	said := s.key + " " + k.phrase.text + " " + pick.key
 	s.endAsk()
 	return s.write(func(ctx context.Context, c jira.SessionClient) (func(*sheet) tea.Cmd, error) {
-		return k.written(said), c.LinkIssues(ctx, in)
+		return k.written(said), appissue.Link(ctx, c, in)
 	})
 }

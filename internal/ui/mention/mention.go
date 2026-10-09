@@ -16,6 +16,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appcomment "github.com/varijkapil13/saral/internal/app/comment"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -27,7 +28,6 @@ import (
 const Delay = 250 * time.Millisecond
 
 const (
-	limit    = 8
 	maxShown = 5
 	maxQuery = 40
 )
@@ -212,11 +212,11 @@ func (s *State) ask(search Search) tea.Cmd {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel, s.loading, s.fail = cancel, true, ""
-	owner, gen, q := s.owner, s.gen, jira.PeopleQuery{Match: s.query, Project: search.Project, Limit: limit}
+	owner, gen, match, project := s.owner, s.gen, s.query, search.Project
 	finder := search.Finder
 	return func() tea.Msg {
 		defer cancel()
-		people, err := finder.FindPeople(ctx, q)
+		people, err := appcomment.People(ctx, finder, match, project)
 		return FoundMsg{owner: owner, gen: gen, people: people, err: err}
 	}
 }

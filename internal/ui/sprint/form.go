@@ -8,31 +8,27 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	appsprint "github.com/varijkapil13/saral/internal/app/sprint"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// dateLayout is how a date is typed and drawn here. It is the one format that
-// is the same in every locale, which is the point: the site's own dates arrive
-// as instants and go back out in the layout the adapter writes.
-const dateLayout = "2006-01-02"
-
 // dateShape is the layout as a reader sees it, which is what a placeholder and
 // a complaint about a bad date both have to say.
 const dateShape = "YYYY-MM-DD"
 
-type field uint8
+type field = appsprint.Field
 
 const (
-	fieldName field = iota
-	fieldGoal
-	fieldStart
-	fieldEnd
-	fieldCount
+	fieldName  = appsprint.FieldName
+	fieldGoal  = appsprint.FieldGoal
+	fieldStart = appsprint.FieldStart
+	fieldEnd   = appsprint.FieldEnd
+	fieldCount = appsprint.FieldCount
 )
 
-func (f field) label() string {
+func label(f field) string {
 	switch f {
 	case fieldName:
 		return "name"
@@ -87,7 +83,7 @@ func newForm() form {
 // the port takes only its name and its goal, and a field that would be refused
 // is not one to let somebody type into.
 func (f *form) locked() bool {
-	return f.mode == formEdit && rankState(f.sprint.State) == rankClosed
+	return f.mode == formEdit && appsprint.RankOf(f.sprint.State) == appsprint.RankClosed
 }
 
 func (f *form) value(at field) string { return f.inputs[at].Value() }
@@ -201,7 +197,7 @@ func (m *Model) openEdit() tea.Cmd {
 	for i := range f.inputs {
 		f.was[i] = f.inputs[i].Value()
 	}
-	if rankState(sp.State) == rankClosed {
+	if appsprint.RankOf(sp.State) == appsprint.RankClosed {
 		f.notice = "a closed sprint takes only its name and its goal"
 	}
 	m.form = f
@@ -227,7 +223,7 @@ func writeDate(at *time.Time, loc *time.Location) string {
 	if at == nil {
 		return ""
 	}
-	return at.In(loc).Format(dateLayout)
+	return at.In(loc).Format(appsprint.DateLayout)
 }
 
 func (m *Model) formKey(msg tea.KeyPressMsg) tea.Cmd {
@@ -292,24 +288,16 @@ func (m *Model) save() tea.Cmd {
 	if m.deps.Jira == nil {
 		return kernel.Warn("there is no Jira connection in this session")
 	}
-	start, _ := parseDate(m.form.value(fieldStart), loc)
-	end, _ := parseDate(m.form.value(fieldEnd), loc)
 
 	if m.form.mode == formCreate {
-		in := jira.SprintInput{
-			BoardID: m.form.board.ID,
-			Name:    strings.TrimSpace(m.form.value(fieldName)),
-			Goal:    strings.TrimSpace(m.form.value(fieldGoal)),
-			Start:   start,
-			End:     end,
-		}
+		in := appsprint.Input(m.form.board.ID, m.form.typed(), loc)
 		ctx, gen := m.begin()
 		m.inflight = opCreate
 		m.chrome = [2]string{}
 		return m.reply(createSprint(ctx, m.deps.Jira, in, gen))
 	}
 
-	patch, named := m.form.patch(loc)
+	patch, named := appsprint.Patch(m.form.typed(), appsprint.Draft(m.form.was), m.form.locked(), loc)
 	if !named {
 		m.form.notice = "nothing on this screen has changed"
 		return kernel.Warn(m.form.notice)
@@ -320,36 +308,38 @@ func (m *Model) save() tea.Cmd {
 	return m.reply(updateSprint(ctx, m.deps.Jira, m.form.sprint.ID, patch, gen))
 }
 
+func (f *form) typed() appsprint.Draft {
+	var out appsprint.Draft
+	for i := range f.inputs {
+		out[i] = f.inputs[i].Value()
+	}
+	return out
+}
+
 // validate fills in the problems this program can see without asking, which are
 // the ones the port would refuse locally anyway. It reports whether the form can
 // be sent at all.
 func (f *form) validate(loc *time.Location) bool {
-	f.problems = [fieldCount]string{}
-	if strings.TrimSpace(f.value(fieldName)) == "" {
-		f.problems[fieldName] = "a sprint needs a name"
-	}
-	start, startErr := parseDate(f.value(fieldStart), loc)
-	end, endErr := parseDate(f.value(fieldEnd), loc)
-	if startErr != nil {
-		f.problems[fieldStart] = startErr.Error()
-	}
-	if endErr != nil {
-		f.problems[fieldEnd] = endErr.Error()
-	}
-	if start != nil && end != nil && end.Before(*start) {
-		f.problems[fieldEnd] = "a sprint cannot end before it starts"
-	}
-	// A date that was set and has been emptied is a request to unset one, and
-	// the port has no way to send that: a nil field in the patch means leave it
-	// alone, and an empty string would be a date of nothing.
-	if f.mode == formEdit {
-		for _, at := range [...]field{fieldStart, fieldEnd} {
-			if f.was[at] != "" && strings.TrimSpace(f.value(at)) == "" {
-				f.problems[at] = "a date that is set cannot be cleared from here"
-			}
-		}
+	found := appsprint.Validate(f.typed(), appsprint.Draft(f.was), loc)
+	for i, p := range found {
+		f.problems[i] = problemWords(p)
 	}
 	return f.firstProblem() == ""
+}
+
+func problemWords(p appsprint.Problem) string {
+	switch p {
+	case appsprint.NoName:
+		return "a sprint needs a name"
+	case appsprint.BadDate:
+		return "a date is written " + dateShape
+	case appsprint.EndsBeforeStart:
+		return "a sprint cannot end before it starts"
+	case appsprint.Cleared:
+		return "a date that is set cannot be cleared from here"
+	case appsprint.Fine:
+	}
+	return ""
 }
 
 func (f *form) firstProblem() string {
@@ -359,34 +349,6 @@ func (f *form) firstProblem() string {
 		}
 	}
 	return ""
-}
-
-// patch is the fields that have actually changed, each as a pointer, and
-// reports whether any has. Everything nil is what leaves a field alone; the
-// endpoint underneath nulls whatever it is not sent.
-func (f *form) patch(loc *time.Location) (jira.SprintPatch, bool) {
-	var out jira.SprintPatch
-	named := false
-	if name := strings.TrimSpace(f.value(fieldName)); name != strings.TrimSpace(f.was[fieldName]) {
-		out.Name, named = &name, true
-	}
-	if goal := f.value(fieldGoal); goal != f.was[fieldGoal] {
-		out.Goal, named = &goal, true
-	}
-	if f.locked() {
-		return out, named
-	}
-	if f.value(fieldStart) != f.was[fieldStart] {
-		if at, err := parseDate(f.value(fieldStart), loc); err == nil && at != nil {
-			out.Start, named = at, true
-		}
-	}
-	if f.value(fieldEnd) != f.was[fieldEnd] {
-		if at, err := parseDate(f.value(fieldEnd), loc); err == nil && at != nil {
-			out.End, named = at, true
-		}
-	}
-	return out, named
 }
 
 // annotate puts a refusal back on the fields it names. The port validates
@@ -399,7 +361,7 @@ func (f *form) annotate(err error) {
 	}
 	var loose []string
 	for _, fe := range ve.Fields {
-		if at, ok := fieldOf(fe.Field); ok {
+		if at, ok := appsprint.FieldOf(fe.Field); ok {
 			f.problems[at] = fe.Message
 			continue
 		}
@@ -409,34 +371,4 @@ func (f *form) annotate(err error) {
 	if len(loose) > 0 {
 		f.notice = strings.Join(loose, "; ")
 	}
-}
-
-// fieldOf maps the API's own field names onto the fields on this screen. A name
-// that is not one of them is drawn as a sentence instead of being dropped.
-func fieldOf(name string) (field, bool) {
-	switch name {
-	case "name":
-		return fieldName, true
-	case "goal":
-		return fieldGoal, true
-	case "startDate":
-		return fieldStart, true
-	case "endDate":
-		return fieldEnd, true
-	}
-	return fieldCount, false
-}
-
-// parseDate reads a date as it is typed. An empty field is not a bad date: it
-// is a date that has not been given, which is what a planned sprint has.
-func parseDate(s string, loc *time.Location) (*time.Time, error) {
-	trimmed := strings.TrimSpace(s)
-	if trimmed == "" {
-		return nil, nil
-	}
-	at, err := time.ParseInLocation(dateLayout, trimmed, loc)
-	if err != nil {
-		return nil, errors.New("a date is written " + dateShape)
-	}
-	return &at, nil
 }

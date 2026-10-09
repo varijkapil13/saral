@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -49,7 +50,7 @@ func TestNew_RestoresARememberedTermBeforeReadingTheCache(t *testing.T) {
 	if len(issues) < 2 {
 		t.Fatalf("primed only %d issues, need at least two with differing status", len(issues))
 	}
-	term := filter.Term{Facet: filter.FacetStatus, ID: issues[0].Status.ID, Label: issues[0].Status.Name}
+	term := appterm.Term{Facet: appterm.FacetStatus, ID: issues[0].Status.ID, Label: issues[0].Status.Name}
 
 	other := -1
 	for i, iss := range issues {
@@ -63,10 +64,10 @@ func TestNew_RestoresARememberedTermBeforeReadingTheCache(t *testing.T) {
 	}
 
 	cache := newFakeCache()
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, false)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, false)
 
 	mem := newFakeMemory()
-	mem.state[ViewID+"."+termsMemoryKey] = (filter.Terms{term}).Encode()
+	mem.state[ViewID+"."+termsMemoryKey] = (appterm.Terms{term}).Encode()
 
 	d := withMemory(withCache(testDeps(refusing(6)), cache), mem)
 	view, ok := New(d).(*Model)
@@ -103,14 +104,14 @@ func TestApplyFilterTerm_KeepsItInMemory(t *testing.T) {
 	mem := newFakeMemory()
 	dr := newDriver(t, withMemory(testDeps(newFake(6)), mem), 120, 20)
 
-	term := filter.Term{Facet: filter.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: dr.m.issues[0].Status.Name}
+	term := appterm.Term{Facet: appterm.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: dr.m.issues[0].Status.Name}
 	dr.send(filter.ChosenMsg{Term: term})
 
 	got, ok := mem.Recall(ViewID, termsMemoryKey)
 	if !ok {
 		t.Fatal("nothing was kept after applying a term")
 	}
-	terms, ok := filter.DecodeTerms(got)
+	terms, ok := appterm.DecodeTerms(got)
 	if !ok || len(terms) != 1 || !terms.Has(term) {
 		t.Errorf("kept %q, does not decode to just %+v", got, term)
 	}
@@ -122,7 +123,7 @@ func TestClearFilter_ForgetsItInMemory(t *testing.T) {
 	mem := newFakeMemory()
 	dr := newDriver(t, withMemory(testDeps(newFake(6)), mem), 120, 20)
 
-	term := filter.Term{Facet: filter.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: dr.m.issues[0].Status.Name}
+	term := appterm.Term{Facet: appterm.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: dr.m.issues[0].Status.Name}
 	dr.send(filter.ChosenMsg{Term: term})
 	if _, ok := mem.Recall(ViewID, termsMemoryKey); !ok {
 		t.Fatal("setup: the term was not kept")

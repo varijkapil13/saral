@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
@@ -223,7 +224,7 @@ func TestLanes_FoldingKeepsTheCountsAndSkipsTheCards(t *testing.T) {
 func TestLanes_ALaneTheFilterEmptiesIsNotDrawn(t *testing.T) {
 	t.Parallel()
 	_, dr := laned(t, 120, 24, "v")
-	dr.send(filter.ChosenMsg{Term: filter.Term{Facet: filter.FacetAssignee, ID: ada.AccountID, Label: ada.DisplayName}})
+	dr.send(filter.ChosenMsg{Term: appterm.Term{Facet: appterm.FacetAssignee, ID: ada.AccountID, Label: ada.DisplayName}})
 	if len(dr.m.lanes) != 1 || dr.m.lanes[0].key != ada.AccountID {
 		t.Fatalf("the lanes under a term naming Ada are %+v, want hers alone", dr.m.lanes)
 	}

@@ -24,7 +24,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -132,7 +132,7 @@ type Model struct {
 	note    string
 
 	client  jira.SessionClient
-	search  *app.Search
+	search  *appquery.Search
 	account jira.User
 	caps    jira.Capabilities
 	probed  bool

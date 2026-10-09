@@ -132,50 +132,6 @@ func sortedAndFiltered(dr *driver) {
 	m.sum = ""
 }
 
-// A version is drawn from the port's own flags and dates, never from a word the
-// site could rename.
-func TestReleases_TheStateOfAVersionComesFromItsFlagsAndItsDates(t *testing.T) {
-	t.Parallel()
-
-	today := jira.Date{Year: 2026, Month: 3, Day: 5}
-	for name, tc := range map[string]struct {
-		version jira.Version
-		want    string
-	}{
-		"released": {
-			version: jira.Version{Released: true},
-			want:    stateReleased,
-		},
-		"archived beats released": {
-			version: jira.Version{Released: true, Archived: true},
-			want:    stateArchived,
-		},
-		"a release date in the past": {
-			version: jira.Version{ReleaseDate: jira.Date{Year: 2026, Month: 3, Day: 4}},
-			want:    stateOverdue,
-		},
-		"a release date today is not late yet": {
-			version: jira.Version{ReleaseDate: today},
-			want:    stateUnreleased,
-		},
-		"no dates at all": {
-			version: jira.Version{},
-			want:    stateUnreleased,
-		},
-		"released and overdue is released": {
-			version: jira.Version{Released: true, ReleaseDate: jira.Date{Year: 2020, Month: 1, Day: 1}},
-			want:    stateReleased,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			if got := versionState(tc.version, today); got != tc.want {
-				t.Errorf("the version is drawn as %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
 // A count nobody has read is not a count of zero.
 func TestReleases_TheOpenColumnTellsNilFromZero(t *testing.T) {
 	t.Parallel()

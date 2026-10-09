@@ -7,7 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissueref "github.com/varijkapil13/saral/internal/app/issueref"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -55,7 +56,7 @@ func runIssueView(inv *invocation, args []string) error {
 }
 
 func readIssue(ctx context.Context, s session, key string) (issueView, error) {
-	iss, labels, err := app.NewSearch(s.client).ReadIssue(ctx, s.client, key, app.DetailProjection())
+	iss, labels, err := appquery.NewSearch(s.client).ReadIssue(ctx, s.client, key, appquery.DetailProjection())
 	if err != nil {
 		return issueView{}, siteError(err)
 	}
@@ -143,7 +144,7 @@ func runIssueCreate(inv *invocation, args []string) error {
 	var in jira.IssueInput
 	in.Summary = c.summary
 	if c.parent != "" {
-		parent, ok := app.ParseKey(c.parent)
+		parent, ok := appissueref.ParseKey(c.parent)
 		if !ok {
 			return usageErrorf("--parent %q is not an issue key", c.parent)
 		}

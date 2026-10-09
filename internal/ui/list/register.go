@@ -3,7 +3,7 @@ package list
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -86,12 +86,12 @@ func init() {
 	// the ones a loaded row happens to carry.
 	for _, f := range []struct {
 		id, title string
-		kind      filter.Facet
+		kind      appterm.Facet
 	}{
-		{"issues.only-status", "Filter by this row's status", filter.FacetStatus},
-		{"issues.only-type", "Filter by this row's type", filter.FacetType},
-		{"issues.only-assignee", "Filter by this row's assignee", filter.FacetAssignee},
-		{"issues.show-all", "Drop every filter on these issues", filter.FacetNone},
+		{"issues.only-status", "Filter by this row's status", appterm.FacetStatus},
+		{"issues.only-type", "Filter by this row's type", appterm.FacetType},
+		{"issues.only-assignee", "Filter by this row's assignee", appterm.FacetAssignee},
+		{"issues.show-all", "Drop every filter on these issues", appterm.FacetNone},
 	} {
 		kind := f.kind
 		kernel.RegisterCommand(kernel.Command{

@@ -173,14 +173,14 @@ func TestBulk_MoveTakesEachCardThroughItsOwnTransition(t *testing.T) {
 	if countCalls(fake, "Transition") != 0 {
 		t.Fatal("landing the set moved cards before the go-ahead")
 	}
-	mustContain(t, dr.view(), "move 3 cards to "+dr.m.plan.columns[1].name+"?")
+	mustContain(t, dr.view(), "move 3 cards to "+dr.m.plan.Columns[1].Name+"?")
 	dr.key("enter")
 	for _, key := range keys {
 		if !slices.Contains(dr.column(1), key) {
 			t.Errorf("%s is not drawn in the second column: %v", key, dr.column(1))
 		}
 		got := siteIssue(t, fake, key)
-		if at, _ := dr.m.plan.columnOf(got.Status.ID); at != 1 {
+		if at, _ := dr.m.plan.ColumnOf(got.Status.ID); at != 1 {
 			t.Errorf("%s is in %s on the site, want the second column", key, got.Status.Name)
 		}
 	}

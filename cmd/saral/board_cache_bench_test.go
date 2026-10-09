@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/store"
 	"github.com/varijkapil13/saral/internal/ui/board"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -22,7 +22,7 @@ func BenchmarkBoardPageLoads_IntoADiskCache(b *testing.B) {
 		b.Fatal(err)
 	}
 	b.Cleanup(func() { _ = db.Close() })
-	cache := app.NewCache(db, store.Scope{Site: "example.atlassian.net", Account: "bench"})
+	cache := appcache.New(db, store.Scope{Site: "example.atlassian.net", Account: "bench"})
 	fake := jiratest.New(
 		jiratest.WithProject("PROJ", jiratest.Kanban),
 		jiratest.WithIssues(jiratest.Gen(2000)),

@@ -10,7 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	uistate "github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
@@ -136,7 +136,7 @@ func TestBoardCards_ABoardWithNoStoredLookIsRoomy(t *testing.T) {
 	if m.look != card.Roomy {
 		t.Fatalf("a fresh board is drawn %s, want roomy", m.look.Word())
 	}
-	asked := m.plan.projectionFor(m.look).IDs
+	asked := projectionFor(m.plan, m.look).IDs
 	for _, id := range card.RoomyFields {
 		if !slices.Contains(asked, id) {
 			t.Errorf("a roomy board asks for %v, without %s", asked, id)
@@ -146,7 +146,7 @@ func TestBoardCards_ABoardWithNoStoredLookIsRoomy(t *testing.T) {
 		t.Errorf("a roomy board asks for a field twice: %v", asked)
 	}
 	for _, look := range []card.Look{card.Compact, card.Lines} {
-		if got := m.plan.projectionFor(look).IDs; slices.Contains(got, "duedate") {
+		if got := projectionFor(m.plan, look).IDs; slices.Contains(got, "duedate") {
 			t.Errorf("a %s board asks for %v, which is what only a roomy card draws", look.Word(), got)
 		}
 	}
@@ -179,7 +179,7 @@ func TestBoardCards_ARoomyBoardFromTheCacheReadsWhatItLacksOnce(t *testing.T) {
 	}
 
 	cache := newFakeCache()
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, false)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, false)
 	fake := newFake(6)
 	dr := newDriver(t, withCache(fresh(fake), cache), 120, 30)
 	if got := countCalls(fake, "SprintIssues"); got != 1 {
@@ -193,7 +193,7 @@ func TestBoardCards_ARoomyBoardFromTheCacheReadsWhatItLacksOnce(t *testing.T) {
 	}
 
 	again := newFake(6)
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: dr.m.issues}, false)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: dr.m.issues}, false)
 	_ = newDriver(t, withCache(fresh(again), cache), 120, 30)
 	if calls := viewCalls(again); len(calls) != 0 {
 		t.Errorf("a roomy board stored with its fields asked the site for %v", calls)

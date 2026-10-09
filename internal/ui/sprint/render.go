@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appsprint "github.com/varijkapil13/saral/internal/app/sprint"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -70,7 +71,7 @@ func (m *Model) zoneOf(at int) string {
 	return zoneSprint + strconv.FormatInt(m.sprints[at].ID, 10)
 }
 
-func fieldZone(at field) string { return zoneField + at.label() }
+func fieldZone(at field) string { return zoneField + label(at) }
 
 // styles are this view's own, built once per theme generation because
 // constructing a lipgloss.Style is the expensive half of drawing a row.
@@ -194,7 +195,7 @@ func (m *Model) row(at int) string {
 		return s
 	}
 	s := m.zones.Mark(m.zoneOf(at), renderRow(k, m.datesOf(sp), m.boardOf(sp),
-		m.styles, m.deps.Theme, rankState(sp.State)))
+		m.styles, m.deps.Theme, int(appsprint.RankOf(sp.State))))
 	m.memo.Put(k, s)
 	return s
 }
@@ -556,7 +557,7 @@ func (m *Model) formTitle() string {
 // fieldLine is one field: its name, what is in it, and nothing about where it
 // is on screen — the line is marked where it is drawn so a click resolves to it.
 func (m *Model) fieldLine(at field, room int) string {
-	label := widget.PadTruncate(at.label(), formLabel, m.deps.Theme.Glyphs.Ellipsis)
+	label := widget.PadTruncate(label(at), formLabel, m.deps.Theme.Glyphs.Ellipsis)
 	if at == m.form.at {
 		label = m.styles.accent.Render(label)
 	} else {
@@ -630,7 +631,7 @@ func (m *Model) confirmProse(sp jira.Sprint) []string {
 // nothingOpen is a count that is in and says there is nothing to send anywhere.
 func (m *Model) nothingOpen(sp jira.Sprint) bool {
 	p, ok := m.progress[sp.ID]
-	return ok && p.err == nil && p.total == p.done
+	return ok && p.Err == nil && p.Total == p.Done
 }
 
 // openWords is how much of the sprint is still open, from its progress when
@@ -638,14 +639,14 @@ func (m *Model) nothingOpen(sp jira.Sprint) bool {
 func (m *Model) openWords(sp jira.Sprint) string {
 	p, ok := m.progress[sp.ID]
 	switch {
-	case ok && p.err == nil && p.total == 0:
+	case ok && p.Err == nil && p.Total == 0:
 		return "There is nothing in it."
-	case ok && p.err == nil && p.total-p.done == 0:
+	case ok && p.Err == nil && p.Total-p.Done == 0:
 		return "Every issue in it is done."
-	case ok && p.err == nil && p.total-p.done == 1:
+	case ok && p.Err == nil && p.Total-p.Done == 1:
 		return "1 issue in it is not done."
-	case ok && p.err == nil:
-		return strconv.Itoa(p.total-p.done) + " issues in it are not done."
+	case ok && p.Err == nil:
+		return strconv.Itoa(p.Total-p.Done) + " issues in it are not done."
 	case m.counting:
 		return "The issues in it are still being counted."
 	}
@@ -667,7 +668,7 @@ func (m *Model) destLines(room int) []string {
 		if i == m.pending.at {
 			mark, style = "(*) ", m.styles.accent
 		}
-		out = append(out, "    "+m.zones.Mark(destZone(i), style.Render(ansi.Truncate(mark+widget.Sanitize(d.words()), room-4, ell))))
+		out = append(out, "    "+m.zones.Mark(destZone(i), style.Render(ansi.Truncate(mark+widget.Sanitize(destWords(d)), room-4, ell))))
 	}
 	return out
 }

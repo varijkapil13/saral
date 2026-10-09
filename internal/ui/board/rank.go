@@ -1,38 +1,17 @@
 package board
 
 import (
-	"context"
-	"errors"
 	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// ranking is one card whose rank has been changed on screen ahead of the site.
-// next is the card that followed it in the read before the first step, which is
-// where a refusal puts it back; later steps taken while one is out only mark it
-// dirty, and the position the card has on screen once the site answers is what
-// is sent next, so two quick steps cannot reach the site out of order. sent is
-// the card that followed it when the step now out was sent, which becomes next
-// once the site accepts that step.
-type ranking struct {
-	key    string
-	next   string
-	sent   string
-	dirty  bool
-	anchor string
-	after  bool
-}
-
-type rankMsg struct {
-	gen int
-	key string
-	err error
-}
+type rankMsg appboard.RankAnswer
 
 type rankWhere uint8
 
@@ -43,18 +22,12 @@ const (
 	rankBottom
 )
 
-func rankIssue(ctx context.Context, r jira.Ranker, key string, at jira.RankPosition, gen int) tea.Cmd {
-	return func() tea.Msg {
-		return rankMsg{gen: gen, key: key, err: r.RankIssues(ctx, []string{key}, at)}
-	}
-}
-
 // rankRefused is why no card on this board can be ranked, or "".
 func (m *Model) rankRefused() string {
 	switch {
 	case m.deps.Jira == nil:
 		return "there is no Jira connection in this session"
-	case m.plan.ordering != jira.OrderRank:
+	case m.plan.Ordering != jira.OrderRank:
 		return "this board is ordered by its filter, so its cards have no rank to change"
 	}
 	return ""
@@ -71,7 +44,7 @@ func (m *Model) reorder(where rankWhere) tea.Cmd {
 	}
 	col, row := m.curCol, m.curRow
 	lo, hi := m.laneSpan(col, row)
-	name := m.plan.columns[col].name
+	name := m.plan.Columns[col].Name
 	if m.lanesOn() {
 		name += " in this lane"
 	}
@@ -108,27 +81,23 @@ func (m *Model) rankNextTo(key, anchor string, after bool) tea.Cmd {
 	if refused := m.rankRefused(); refused != "" {
 		return kernel.Warn(refused)
 	}
-	if m.rank != nil && m.rank.key != key {
-		return kernel.Warn(m.rank.key + " is still being ranked; " + key + " can move once the site has answered")
+	if k := m.rank.Key(); k != "" && k != key {
+		return kernel.Warn(k + " is still being ranked; " + key + " can move once the site has answered")
 	}
 	from := m.indexOf(key)
 	if from < 0 || m.indexOf(anchor) < 0 {
 		return nil
 	}
-	pending := m.rank != nil
-	if !pending {
-		next := ""
-		if from+1 < len(m.issues) {
-			next = m.issues[from+1].Key
-		}
-		m.rank = &ranking{key: key, next: next}
+	next := ""
+	if from+1 < len(m.issues) {
+		next = m.issues[from+1].Key
 	}
-	m.issues = shiftIssue(m.issues, from, anchor, after)
+	start := m.rank.Step(key, next, struct{}{})
+	m.issues = appboard.ShiftIssue(m.issues, from, anchor, after)
 	m.place()
 	m.forget()
 	m.restore(key)
-	if pending {
-		m.rank.dirty = true
+	if start != appboard.RankFresh {
 		return nil
 	}
 	return m.sendRank()
@@ -137,119 +106,66 @@ func (m *Model) rankNextTo(key, anchor string, after bool) tea.Cmd {
 // sendRank asks the site for the position the card has on screen now, named by
 // the card beside it in its own column.
 func (m *Model) sendRank() tea.Cmd {
-	if m.rank == nil || m.deps.Jira == nil {
+	key := m.rank.Key()
+	if key == "" || m.deps.Jira == nil {
 		return nil
 	}
-	col, row, ok := m.locate(m.rank.key)
+	col, row, ok := m.locate(key)
 	if !ok {
-		m.rank = nil
+		m.rank.Drop()
 		return nil
 	}
 	lo, hi := m.laneSpan(col, row)
-	var at jira.RankPosition
-	switch {
-	case row+1 < hi:
-		at = jira.RankBefore(m.issueAt(col, row+1).Key)
-	case row > lo:
-		at = jira.RankAfter(m.issueAt(col, row-1).Key)
-	default:
-		m.rank = nil
+	var prev, next string
+	if row+1 < hi {
+		next = m.issueAt(col, row+1).Key
+	}
+	if row > lo {
+		prev = m.issueAt(col, row-1).Key
+	}
+	at, ok := appboard.RankBeside(prev, next, m.rawConfig.RankFieldID)
+	if !ok {
+		m.rank.Drop()
 		return nil
 	}
-	at.FieldID = m.rawConfig.RankFieldID
-	m.rank.anchor, m.rank.after = at.Anchor()
-	m.rank.sent = ""
-	if i := m.indexOf(m.rank.key); i >= 0 && i+1 < len(m.issues) {
-		m.rank.sent = m.issues[i+1].Key
+	sent := ""
+	if i := m.indexOf(key); i >= 0 && i+1 < len(m.issues) {
+		sent = m.issues[i+1].Key
 	}
-	m.stopRank()
-	m.rankGen++
-	ctx, cancel := context.WithCancel(context.Background())
-	m.rankStop = cancel
-	return kernel.Reply(withCancel(cancel, rankIssue(ctx, m.deps.Jira, m.rank.key, at, m.rankGen)), m.addr)
-}
-
-func (m *Model) stopRank() {
-	if m.rankStop != nil {
-		m.rankStop()
-		m.rankStop = nil
-	}
-}
-
-// dropRank forgets a rank in flight without putting anything back, for a board
-// whose cards have been replaced wholesale.
-func (m *Model) dropRank() {
-	m.stopRank()
-	m.rankGen++
-	m.rank = nil
+	run, cancel := m.rank.Send(m.deps.Jira, at, sent, struct{}{})
+	return kernel.Reply(withCancel(cancel, func() tea.Msg { return rankMsg(run()) }), m.addr)
 }
 
 func (m *Model) ranked(msg rankMsg) tea.Cmd {
-	if msg.gen != m.rankGen || m.rank == nil || m.rank.key != msg.key {
-		return nil
-	}
-	m.rankStop = nil
-	if msg.err != nil && !rankedAnyway(msg.err, msg.key) {
-		m.putRankBack()
-		return kernel.Fail(msg.err)
-	}
-	if m.rank.dirty {
-		m.rank.dirty, m.rank.next = false, m.rank.sent
+	res := m.rank.Answer(appboard.RankAnswer(msg))
+	switch res.Outcome {
+	case appboard.RankRefused:
+		m.putRankBack(res.Key, res.Next)
+		return kernel.Fail(msg.Err)
+	case appboard.RankResend:
 		return m.sendRank()
+	case appboard.RankDone:
+		where := " above "
+		if res.After {
+			where = " below "
+		}
+		return tea.Batch(kernel.Status(res.Key+" now sits"+where+res.Anchor), stored(m.pagePut(m.issues, true)))
 	}
-	anchor, after := m.rank.anchor, m.rank.after
-	m.rank = nil
-	where := " above "
-	if after {
-		where = " below "
-	}
-	return tea.Batch(kernel.Status(msg.key+" now sits"+where+anchor), stored(m.pagePut(m.issues, true)))
-}
-
-// rankedAnyway reads a partial answer for the one card sent: a PartialRankError
-// that names it among the ranked is a success.
-func rankedAnyway(err error, key string) bool {
-	var partial *jira.PartialRankError
-	return errors.As(err, &partial) && slices.Contains(partial.Ranked, key)
+	return nil
 }
 
 // putRankBack returns the card to where the read had it, before the card that
 // followed it then.
-func (m *Model) putRankBack() {
-	r := m.rank
-	m.rank = nil
-	from := m.indexOf(r.key)
+func (m *Model) putRankBack(key, next string) {
+	from := m.indexOf(key)
 	if from < 0 {
 		return
 	}
 	under := m.selectedKey()
-	iss := m.issues[from]
-	m.issues = slices.Delete(m.issues, from, from+1)
-	at := len(m.issues)
-	if r.next != "" {
-		if i := m.indexOf(r.next); i >= 0 {
-			at = i
-		}
-	}
-	m.issues = slices.Insert(m.issues, at, iss)
+	m.issues = appboard.PutBack(m.issues, from, next)
 	m.place()
 	m.forget()
 	m.restore(under)
-}
-
-// shiftIssue moves issues[from] to just before or just after the issue keyed
-// anchor, in place.
-func shiftIssue(issues []jira.Issue, from int, anchor string, after bool) []jira.Issue {
-	iss := issues[from]
-	issues = slices.Delete(issues, from, from+1)
-	at := slices.IndexFunc(issues, func(i jira.Issue) bool { return i.Key == anchor })
-	if at < 0 {
-		return slices.Insert(issues, from, iss)
-	}
-	if after {
-		at++
-	}
-	return slices.Insert(issues, at, iss)
 }
 
 func (m *Model) indexOf(key string) int {
@@ -300,7 +216,7 @@ func (m *Model) shiftCard(by int) tea.Cmd {
 		return nil
 	}
 	to := m.curCol + by
-	if to < 0 || to >= len(m.plan.columns) {
+	if to < 0 || to >= len(m.plan.Columns) {
 		side := "last"
 		if by < 0 {
 			side = "first"

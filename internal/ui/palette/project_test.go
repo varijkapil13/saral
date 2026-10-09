@@ -359,8 +359,8 @@ func TestProject_PutsTheProjectThisMachineActuallyPicksFirst(t *testing.T) {
 			t.Parallel()
 
 			freq := memoryProjects()
-			freq.ran(habit, clockAt)
-			freq.ran(habit, clockAt)
+			freq.Ran(habit, clockAt)
+			freq.Ran(habit, clockAt)
 
 			p := openPicker(t, projectDeps(twoProjects("ONE", "OWL")), freq, 120, 24)
 			p.typeText("o")

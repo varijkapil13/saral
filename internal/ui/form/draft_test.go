@@ -1,7 +1,6 @@
 package form
 
 import (
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -18,7 +18,7 @@ import (
 func fresh(t *testing.T, d kernel.Deps, issueType string) *driver {
 	t.Helper()
 
-	dr := &driver{t: t, m: newWith(d, newSchemaCache(schemaTTL, time.Now))}
+	dr := &driver{t: t, m: newWith(d, appissue.NewSchemas(appissue.SchemaTTL, time.Now))}
 	dr.send(kernel.SizeMsg{Width: 100, Height: 24})
 	dr.send(kernel.FocusMsg{Focused: true})
 	dr.run(dr.m.Init())
@@ -30,7 +30,7 @@ func fresh(t *testing.T, d kernel.Deps, issueType string) *driver {
 }
 
 func draftFile(d kernel.Deps, issueType string) string {
-	return filepath.Join(d.DraftsDir, "create", safeName(d.Site), "PROJ."+issueType+".json")
+	return filepath.Join(d.DraftsDir, "create", appissue.CreateSafeName(d.Site), "PROJ."+issueType+".json")
 }
 
 func (d *driver) fill(id, text string) {
@@ -378,102 +378,5 @@ func TestDraft_ACorruptOrUnreadableDraftIsSaidAndOverwritten(t *testing.T) {
 				t.Errorf("the corrupt draft was not replaced: %q", got)
 			}
 		})
-	}
-}
-
-func TestDraftStore_KeepsOnlyTheFieldsSomethingWasPutIn(t *testing.T) {
-	t.Parallel()
-
-	store := newDraftStore(t.TempDir())
-	key := draftKey{site: "example.atlassian.net", project: "PROJ", issueType: "10001"}
-
-	filled := newField(meta("summary", "Summary", jira.FieldSchema{Type: "string"}), time.UTC)
-	filled.text = "half a thought"
-	empty := newField(meta("duedate", "Due", jira.FieldSchema{Type: "date"}), time.UTC)
-	chosen := newField(meta("cascade", "Where", jira.FieldSchema{Type: "option-with-child"}, option("1", "One")), time.UTC)
-	chosen.picked = []jira.Option{{ID: "1", Label: "One", Children: []jira.Option{{ID: "2", Label: "Two"}}}}
-	at := time.Date(2026, time.March, 5, 9, 0, 0, 0, time.UTC)
-
-	if err := store.save(key, draftOf(key, []*field{filled, empty, chosen}, at)); err != nil {
-		t.Fatal(err)
-	}
-	kept, ok, err := store.load(key)
-	if err != nil || !ok {
-		t.Fatalf("load = %v, %v", ok, err)
-	}
-	if len(kept.Values) != 2 {
-		t.Fatalf("the draft holds %d fields, want only the two filled in: %+v", len(kept.Values), kept.Values)
-	}
-	if kept.Values["summary"].Text != "half a thought" {
-		t.Errorf("the summary reads %q", kept.Values["summary"].Text)
-	}
-	back := fromDraftOptions(kept.Values["cascade"].Picked)
-	if len(back) != 1 || len(back[0].Children) != 1 || back[0].Children[0].ID != "2" {
-		t.Errorf("the cascade came back as %+v", back)
-	}
-	if !kept.SavedAt.Equal(at) || kept.Site != key.site || kept.IssueType != key.issueType {
-		t.Errorf("the draft's own record reads %+v", kept)
-	}
-
-	if err := store.save(key, draftOf(key, []*field{empty}, at)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(store.path(key)); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("a form emptied of everything left its draft file: %v", err)
-	}
-}
-
-func TestDraftStore_KeepsNothingWithNowhereToWrite(t *testing.T) {
-	t.Parallel()
-
-	store := newDraftStore("")
-	key := draftKey{site: "s", project: "PROJ", issueType: "1"}
-	f := newField(meta("summary", "Summary", jira.FieldSchema{Type: "string"}), time.UTC)
-	f.text = "x"
-	if err := store.save(key, draftOf(key, []*field{f}, time.Time{})); err != nil {
-		t.Errorf("save = %v", err)
-	}
-	if _, ok, err := store.load(key); ok || err != nil {
-		t.Errorf("load = %v, %v from a store with no directory", ok, err)
-	}
-	if err := store.discard(key); err != nil {
-		t.Errorf("discard = %v", err)
-	}
-}
-
-func TestDraftStore_NeverLeavesItsOwnDirectory(t *testing.T) {
-	t.Parallel()
-
-	root := t.TempDir()
-	store := newDraftStore(root)
-	path := store.path(draftKey{site: "../..", project: "../x", issueType: "a/b"})
-	rel, err := filepath.Rel(filepath.Join(root, "create"), path)
-	if err != nil || strings.HasPrefix(rel, "..") || strings.Count(rel, string(filepath.Separator)) != 1 {
-		t.Errorf("a hostile key put the draft at %s", path)
-	}
-}
-
-func TestDraftStore_WritesJSONAnotherBuildCanRead(t *testing.T) {
-	t.Parallel()
-
-	store := newDraftStore(t.TempDir())
-	key := draftKey{site: "s", project: "PROJ", issueType: "1"}
-	f := newField(meta("summary", "Summary", jira.FieldSchema{Type: "string"}), time.UTC)
-	f.text = "portable"
-	if err := store.save(key, draftOf(key, []*field{f}, time.Time{})); err != nil {
-		t.Fatal(err)
-	}
-	body, err := os.ReadFile(store.path(key))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var raw map[string]any
-	if err := json.Unmarshal(body, &raw); err != nil {
-		t.Fatalf("the draft is not JSON: %v", err)
-	}
-	for _, name := range []string{"site", "project", "issueType", "savedAt", "values"} {
-		if _, ok := raw[name]; !ok {
-			t.Errorf("the draft has no %q: %s", name, body)
-		}
 	}
 }

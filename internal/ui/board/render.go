@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
@@ -345,7 +346,7 @@ var clearFilterKey = defaultKeys().Unfilter.Help().Key
 // connection, no board, a read in flight, a refusal — is a sentence rather than
 // a grid, and appendEmpty is where they are told apart.
 func (m *Model) drawable() bool {
-	return m.ready && len(m.plan.columns) > 0 && m.failure == nil && m.lay.cols > 0
+	return m.ready && len(m.plan.Columns) > 0 && m.failure == nil && m.lay.cols > 0
 }
 
 // grid is the whole window of composed rows, memoized as one unit so that a
@@ -548,8 +549,8 @@ func (m *Model) facts(iss *jira.Issue) card.Facts {
 	if iss.Priority != nil {
 		f.Priority = iss.Priority.Name
 	}
-	if m.plan.estimates {
-		if n, ok := iss.Fields.Number(m.plan.estimate); ok {
+	if m.plan.Estimates {
+		if n, ok := iss.Fields.Number(m.plan.Estimate); ok {
 			f.Estimate = trimNumber(n)
 		}
 	}
@@ -596,7 +597,7 @@ func subtaskCount(subtasks []jira.IssueRef) string {
 // renderCard draws one card to exactly cell columns: a marker saying whether it
 // is the one under the cursor or the one in hand, the issue key, as much of the
 // summary as is left, and the board's estimate for it where the board has one.
-func renderCard(iss *jira.Issue, cell int, look cardLook, st *styles, t *kernel.Theme, p plan) string {
+func renderCard(iss *jira.Issue, cell int, look cardLook, st *styles, t *kernel.Theme, p appboard.Plan) string {
 	selected, inHand := look.selected, look.inHand
 	ell := t.Glyphs.Ellipsis
 	// Selected and held both need the marker for their own gesture and take it
@@ -615,8 +616,8 @@ func renderCard(iss *jira.Issue, cell int, look cardLook, st *styles, t *kernel.
 	room := max(cell-ansi.StringWidth(mark)-1, 0)
 	markCell := st.markCell(t.Glyphs.TypeGlyph(iss.Type), look)
 	estimate := ""
-	if p.estimates {
-		if n, ok := iss.Fields.Number(p.estimate); ok {
+	if p.Estimates {
+		if n, ok := iss.Fields.Number(p.Estimate); ok {
 			estimate = " " + trimNumber(n)
 		}
 	}
@@ -663,7 +664,7 @@ func (m *Model) chrome() (head, rule string) {
 	var hb, rb strings.Builder
 	hb.Grow(m.lay.width + 64)
 	rb.Grow(m.lay.width + 64)
-	for c := m.colTop; c < min(m.colTop+m.lay.cols, len(m.plan.columns)); c++ {
+	for c := m.colTop; c < min(m.colTop+m.lay.cols, len(m.plan.Columns)); c++ {
 		if c > m.colTop {
 			hb.WriteString(strings.Repeat(" ", gap))
 			rb.WriteString(strings.Repeat(" ", gap))
@@ -690,11 +691,11 @@ func (m *Model) aimedAt() int {
 // the warning style when the board's own limit for that column is breached. Min
 // and Max are pointers because a column may have neither.
 func (m *Model) caption(col int) string {
-	c := m.plan.columns[col]
+	c := m.plan.Columns[col]
 	n := m.columnLen(col) + m.foldedIn(col)
 	count := strconv.Itoa(n)
 	room := max(m.lay.cell-ansi.StringWidth(count)-1, 1)
-	name := widget.PadTruncate(widget.Sanitize(c.name), room, m.deps.Theme.Glyphs.Ellipsis)
+	name := widget.PadTruncate(widget.Sanitize(c.Name), room, m.deps.Theme.Glyphs.Ellipsis)
 	style := m.styles.muted
 	if col == m.aimedAt() {
 		style = m.styles.aimed
@@ -711,11 +712,11 @@ func (m *Model) caption(col int) string {
 // says it should, counted the way the board counts them. A board whose limits
 // are off keeps the numbers and enforces neither.
 func (m *Model) overLimit(col int) bool {
-	if !m.plan.constraint.Enforced() || col < 0 || col >= len(m.wip) {
+	if !m.plan.Constraint.Enforced() || col < 0 || col >= len(m.wip) {
 		return false
 	}
-	c, n := m.plan.columns[col], m.wip[col]
-	return (c.min != nil && n < *c.min) || (c.max != nil && n > *c.max)
+	c, n := m.plan.Columns[col], m.wip[col]
+	return (c.Min != nil && n < *c.Min) || (c.Max != nil && n > *c.Max)
 }
 
 // ruleCell closes a column off, and carries its estimate total when the board
@@ -723,7 +724,7 @@ func (m *Model) overLimit(col int) bool {
 // than a zero.
 func (m *Model) ruleCell(col int) string {
 	line := m.deps.Theme.Glyphs.HLine
-	if !m.plan.estimates {
+	if !m.plan.Estimates {
 		return m.styles.muted.Render(repeatTo(line, m.lay.cell))
 	}
 	total := trimNumber(m.estimateOf(col))
@@ -737,13 +738,13 @@ func (m *Model) ruleCell(col int) string {
 func (m *Model) estimateOf(col int) float64 {
 	total := 0.0
 	for _, at := range m.cols[col] {
-		if n, ok := m.issues[at].Fields.Number(m.plan.estimate); ok {
+		if n, ok := m.issues[at].Fields.Number(m.plan.Estimate); ok {
 			total += n
 		}
 	}
 	if col < len(m.folded) {
 		for _, at := range m.folded[col] {
-			if n, ok := m.issues[at].Fields.Number(m.plan.estimate); ok {
+			if n, ok := m.issues[at].Fields.Number(m.plan.Estimate); ok {
 				total += n
 			}
 		}
@@ -779,10 +780,10 @@ type summaryKey struct {
 func (m *Model) summaryKey() summaryKey {
 	return summaryKey{
 		board: m.boardName(), width: m.width, gen: m.styles.gen,
-		columns: len(m.plan.columns), cards: len(m.issues), unmapped: m.unmapped,
+		columns: len(m.plan.Columns), cards: len(m.issues), unmapped: m.unmapped,
 		filteredOut: m.filteredOut, shown: m.lay.cols, boards: len(m.all), more: m.more,
 		loading: m.loading, loaded: m.loaded, failed: m.failure != nil, stale: m.stale || m.aged(),
-		ordering: m.plan.ordering, estimates: m.plan.estimates,
+		ordering: m.plan.Ordering, estimates: m.plan.Estimates,
 		checked: m.checked.UnixNano(), filters: m.quickFilterLine(), sprint: m.sprintLabel(),
 		lanes: m.laneMode, picked: len(m.picked),
 	}
@@ -871,8 +872,8 @@ func (m *Model) counts() string {
 	// reason beside it is the one thing this line must never fold down to, and
 	// it did — at 80 columns "11 hidden by filter" was dropped while "3 columns"
 	// stayed.
-	columns := strconv.Itoa(len(m.plan.columns)) + " columns"
-	if m.lay.cols > 0 && m.lay.cols < len(m.plan.columns) {
+	columns := strconv.Itoa(len(m.plan.Columns)) + " columns"
+	if m.lay.cols > 0 && m.lay.cols < len(m.plan.Columns) {
 		columns += " (" + strconv.Itoa(m.lay.cols) + " shown)"
 	}
 	parts := []string{cards}
@@ -885,7 +886,7 @@ func (m *Model) counts() string {
 	if m.filteredOut > 0 {
 		parts = append(parts, strconv.Itoa(m.filteredOut)+" hidden by filter")
 	}
-	parts = append(parts, columns, m.plan.orderWords())
+	parts = append(parts, columns, orderWords(m.plan))
 	if !m.checked.IsZero() {
 		parts = append(parts, "checked "+m.checked.In(m.deps.Caps.Location()).Format("15:04"))
 	}
@@ -921,12 +922,12 @@ func (m *Model) prompt() string {
 		return m.findPrompt()
 	case m.choosing() && !m.moving:
 		return m.choicePrompt("move "+m.card.key+" from "+m.card.status+" to "+
-			m.plan.columns[m.card.target].name+" as", m.card.labels, m.card.choice, choiceHints)
+			m.plan.Columns[m.card.target].Name+" as", m.card.labels, m.card.choice, choiceHints)
 	case m.card != nil:
 		said := "move " + m.card.key + " from " + m.card.status + " to " +
-			m.plan.columns[m.card.target].name
+			m.plan.Columns[m.card.target].Name
 		if m.card.set {
-			said = "move " + countCards(len(m.picked)) + " to " + m.plan.columns[m.card.target].name
+			said = "move " + countCards(len(m.picked)) + " to " + m.plan.Columns[m.card.target].Name
 		}
 		hint := dropHint
 		if m.moving {
@@ -983,7 +984,7 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 	case len(m.all) == 0:
 		lines = append(lines, m.say("  No board draws on "+m.deps.Project+"."),
 			m.say("  A project without one is ordinary; the issue list is where its work is."))
-	case !m.ready || len(m.plan.columns) == 0:
+	case !m.ready || len(m.plan.Columns) == 0:
 		lines = append(lines, m.say("  "+m.boardName()+" has no columns mapped."),
 			m.say("  A board with no status in any column has nothing to draw."))
 	case m.noActiveSprint():

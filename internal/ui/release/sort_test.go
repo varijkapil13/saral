@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -91,7 +92,7 @@ func TestSort_TheVersionsThemselvesStayInTheProjectsOrder(t *testing.T) {
 	dr := listOf(t, d, 120, 16)
 	stock(dr, mixedVersions())
 	m := dr.list()
-	m.sort, m.filter = sortChoice{field: "name", desc: true}, filterUnreleased
+	m.sort, m.filter = sortChoice{field: "name", desc: true}, apprelease.FilterUnreleased
 	m.reorder()
 	dr.send(versionsMsg{gen: m.gen, versions: mixedVersions()})
 
@@ -261,7 +262,7 @@ func TestSort_EveryActionTakesTheVersionDrawnUnderTheCursor(t *testing.T) {
 			w := watching(fake)
 			dr := listOf(t, testDeps(w), 120, 16)
 			m := dr.list()
-			m.sort, m.filter = sortChoice{field: "name", desc: true}, filterUnreleased
+			m.sort, m.filter = sortChoice{field: "name", desc: true}, apprelease.FilterUnreleased
 			m.reorder()
 			m.moveTo(1)
 

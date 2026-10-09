@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -49,7 +49,7 @@ const (
 // orderIssue is an issue carrying two ordinary custom fields, both with
 // values, so that reordering one above the other is visible without either
 // disappearing.
-func orderIssue() (jira.Issue, app.FieldLabels) {
+func orderIssue() (jira.Issue, appquery.FieldLabels) {
 	zebra := jira.Field{
 		ID: zebraID, Key: zebraID, Name: "Zebra Field",
 		Custom: true, Schema: jira.FieldSchema{Type: "string", Custom: "com.atlassian.jira:textfield"},
@@ -58,7 +58,7 @@ func orderIssue() (jira.Issue, app.FieldLabels) {
 		ID: alphaID, Key: alphaID, Name: "Alpha Field",
 		Custom: true, Schema: jira.FieldSchema{Type: "string", Custom: "com.atlassian.jira:textfield"},
 	}
-	labels := app.NewFieldLabels([]jira.Field{zebra, alpha}, []string{zebraID, alphaID})
+	labels := appquery.NewFieldLabels([]jira.Field{zebra, alpha}, []string{zebraID, alphaID})
 	iss := jira.Issue{
 		ID: "40001", Key: "PROJ-4", Summary: "ordering",
 		Project: jira.ProjectRef{Key: "PROJ"},

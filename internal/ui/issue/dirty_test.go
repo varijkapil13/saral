@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -123,7 +124,7 @@ func TestDirty_ThreeEditsOneSave(t *testing.T) {
 	if patch.Labels != nil {
 		t.Errorf("patch.Labels = %v, want the list edited by add and remove rather than replaced", *patch.Labels)
 	}
-	wantAdd, wantRemove := labelDiff(was, []string{"alpha", "beta"})
+	wantAdd, wantRemove := appissue.LabelDiff(was, []string{"alpha", "beta"})
 	if !slices.Equal(patch.AddLabels, wantAdd) || !slices.Equal(patch.RemoveLabels, wantRemove) {
 		t.Errorf("patch adds %v and removes %v, want %v and %v", patch.AddLabels, patch.RemoveLabels, wantAdd, wantRemove)
 	}

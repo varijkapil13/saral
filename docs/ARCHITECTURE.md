@@ -24,7 +24,8 @@ Three constraints drive every decision below:
 │    richtext/          ADF to styled lines, memoized         │
 ├─────────────────────────────────────────────────────────────┤
 │  internal/app         use cases — orchestration, no IO libs │
-│                       cache policy: kinds, TTLs, the codec  │
+│    board/ issue/ ...  bounded contexts, one per concern     │
+│    cache/ draft/ ...  shared kernel, a closed list          │
 ├─────────────────────────────────────────────────────────────┤
 │  internal/store       bbolt: the file, buckets, records     │
 ├─────────────────────────────────────────────────────────────┤
@@ -42,15 +43,75 @@ never import `pkg/jira/cloud` directly — it takes the port interface; only `cm
 because a use case is driven by a view and never reaches back up into one; `pkg/adf` must never
 import `pkg/jira`, because the document library does not know about issues; `internal/store` must
 never import `internal/ui`, because the cache is written to and read by the layers above it and never
-renders anything; and `internal/ui` must never import `internal/store`, because a view takes what it
-needs as an interface declared above the store and can then be driven by a fake. All seven are
-enforced in CI by an import-boundary test (see `docs/TESTING.md`).
+renders anything; `internal/ui` must never import `internal/store`, because a view takes what it
+needs as an interface declared above the store and can then be driven by a fake; and nothing but
+`cmd/*` and `internal/app/cache` imports `internal/store`, because the cache's kinds, TTLs and codec
+are the policy over the file and reaching it around them skips that policy. All eight are enforced in CI by an import-boundary test (see `docs/TESTING.md`). Inside `internal/app` a context
+imports only the shared kernel; that has a test of its own,
+described under [Bounded contexts in `internal/app`](#bounded-contexts-in-internalapp).
 
 The "no IO libs" on `internal/app` is the one line above that no test can hold you to: the
 import-boundary test only sees imports within this module, so a `net/http` in a use case is invisible
 to it. Treat it as a rule a reviewer enforces. It means a use case does not open sockets or files
-itself, not that it may not reach the layer below: `internal/app` holds the cache policy and so imports
-`internal/store`, which is downward and deliberate. bbolt is named in exactly one package.
+itself, not that it may not reach the layer below. Two shared-kernel packages touch the disk for the
+contexts: `internal/app/cache` holds the cache policy and so imports `internal/store`, which is
+downward and deliberate, and `internal/app/draft` keeps unsent text beside the profile for `comment`
+and `issue`. bbolt is named in exactly one package. The one context that still writes a file itself
+is `search`, for the palette's frecency.
+
+## Bounded contexts in `internal/app`
+
+Jira owns the domain model. What Saral owns is the client side of it: an edit shown before the site
+accepts it, a conflict between what was read and what is there now, duplicate requests coalesced, a
+draft kept, the cache, a bulk plan, a date resolved from whichever field the site has, a filter term.
+Much of that still lives in the views under `internal/ui`, which decide as well as draw. It moves
+into `internal/app`, split by the concern it serves, until a view only renders and calls a use case
+and the terminal is one front end among several that could be written.
+
+This is DDD without the ceremony: no aggregates, no repositories. `pkg/jira` stays the port and is
+the anti-corruption layer; a context takes the narrow `jira.*` interfaces it needs and speaks in the
+port's types.
+
+| Context | Holds | Drained from |
+|---|---|---|
+| `board` | board and backlog: the three-step load and paging, column and lane grouping, quick filters, backlog grouping by sprint, rank | `ui/board`, `ui/backlog` |
+| `issue` | read, edit and the conflict check, field coercion, create, drafts, links, watchers, worklogs, the children sort | `ui/issue`, `ui/form`, root `issue.go` |
+| `comment` | comment create, edit and delete, drafts | `ui/comment`, `ui/mention` |
+| `attach` | upload, download and delete | `ui/attach` (path completion stays in the view) |
+| `sprint` | create, start, complete with a destination, progress | `ui/sprint` |
+| `release` | versions, facets, the release flow, bulk fixVersion | `ui/release` |
+| `move` | the bulk-move plan and task progress | `ui/move` |
+| `search` | saved queries, list paging, refresh and polling, the local index, palette frecency, the filter value lookups, JQL building | `ui/list`, `ui/search`, `ui/palette`, `ui/filter`, root `index.go` |
+| `timeline` | date resolution | `ui/timeline`, root `dates.go` |
+| `plan` | plans and local plans | `ui/plan` |
+| `connect` | the onboarding probe, capabilities, profile and session switch, settings field mapping | `ui/onboarding`, `ui/settings`, the kernel's caps probe |
+
+The **shared kernel** is a closed list, `sharedKernel` in `internal/arch/contexts_test.go`: `cache`
+(the disk cache, its kinds, TTLs and codec, and the only package here that imports `internal/store`),
+`draft` (the file-backed store under the comment and issue drafts), `match` (the fuzzy pattern),
+`term` (the filter-term model, out of `ui/filter`, and the in-memory match a board, a backlog and a
+timeline share), `issueref` (issue key and URL parsing) and `query` (the coalescing search runner and
+projections every context reads with, out of root `search.go`). Adding to it is a decision with a
+reason, not a convenience, and the list carries each reason.
+
+The rules, the first three enforced by `internal/arch/contexts_test.go`:
+
+- **A context imports `pkg/*` and the shared kernel.** Never another context: contexts are changed
+  in parallel, and what two of them need belongs in the shared kernel.
+- **The shared kernel imports no context.**
+- **`internal/app` holds no Go of its own.** It is a directory of contexts and the shared kernel, not
+  a package; a Go file there fails, so new code goes into a context.
+- **A context has no Bubble Tea in it.** It exposes plain types and functions. The view keeps timing
+  (debounce ticks, wrapping a call in a `tea.Cmd`), focus, the cursor, layout and its messages, and
+  decides nothing a second front end would have to decide again.
+- **Long-running work is something a caller drains.** Polling, task progress and a bulk assign are
+  exposed as, say, a function returning the next event or a channel; the view turns each event into
+  a message.
+- **A context or a shared-kernel package is imported as `app<name>`**, as in
+  `appboard "…/internal/app/board"` or `appcache "…/internal/app/cache"`, always and not only where
+  the name collides with a local one, so a call site says which side of the line it is on.
+
+The migration was Batch 13 in `docs/ROADMAP.md`, which ended with the root package gone.
 
 ## Ports and adapters
 
@@ -194,7 +255,7 @@ ids it already holds instead of disappearing.
 
 `Client` is what an adapter grows into. It is **not** what a caller takes. A view that runs a search
 needs a search, and an adapter that cannot yet do the other forty-one should not have to pretend —
-the reasoning `internal/app.Counter` was already written with, generalised.
+the reasoning `appquery.Counter` was already written with, generalised.
 
 So `pkg/jira/roles.go` declares one interface per job, and callers take those:
 
@@ -254,7 +315,7 @@ reports of Jira returning a token that loops back to page one.
 The probe runs on the kernel's `Init`, once per site and project, and is refreshable with `R`. Views
 read it; nobody re-probes ad hoc.
 
-**It is kept between runs, and revalidated on every start.** `app.KindCaps` holds the last answer for
+**It is kept between runs, and revalidated on every start.** `cache.KindCaps` holds the last answer for
 one project — `*` for a session scoped to none, which is a real answer about the site and not the
 absence of one — under a one-hour TTL, and `kernel.New` installs it before the first frame. A stored
 answer **gates** a view exactly as a probed one does, because the alternative is what the zero
@@ -651,11 +712,12 @@ Conventions:
 
 `internal/store` is bbolt: the file, the buckets, and records that carry the moment they were
 written. It knows nothing about issues. The policy over it — what the kinds are, how long each lives,
-how a value is encoded, and what a bound is — is `internal/app/cache.go`, together with the `app.Cache`
+how a value is encoded, and what a bound is — is `internal/app/cache`, together with the `cache.Cache`
 interface a view reaches it through. That interface is declared with the implementation that exercises
 it so that its shape answers to a caller rather than being guessed at, and it is declared in
-`internal/app` because `internal/ui` sits above `internal/store` and must not import it, which
-`internal/arch` enforces.
+`internal/app/cache` because `internal/ui` sits above `internal/store` and must not import it, which
+`internal/arch` enforces. A test outside the package that needs a real one takes
+`cachetest.Open`, so no test opens the store itself.
 
 Stale-while-revalidate, as it actually runs:
 
@@ -698,7 +760,7 @@ otherwise keeps its old offset, clamped. Picks are pruned only against the swapp
 moved, re-read or bulk-changed while the walk was out keeps its on-screen copy, which is newer than
 the page that read it. A walk that breaks off keeps the old cards and badges them, and a walk
 superseded by a newer read drops what it had gathered. The pages still reach the cache one at a
-time as they arrive (`app.BoardPageCache` below). A session that dies mid-walk leaves a snapshot
+time as they arrive (`cache.BoardPageCache` below). A session that dies mid-walk leaves a snapshot
 marked `More`, which the next open reads again, as it did before. The board's quick filters stay in
 force across a revalidation of the same board's configuration. A board opened with no snapshot
 while a quick filter is recalled reads its quick filters before its cards, because a recalled
@@ -712,12 +774,12 @@ about cost rather than about change: a permission scheme moves about as often as
 does, but being wrong about it offers a view that 403s or hides one that would have worked, which a
 stale field catalogue does not.
 
-`app.CapsCache`, `app.BoardCache`, `app.BacklogCache`, `app.IssueCache`, `app.SprintsCache` and
-`app.VersionsCache` are each a second, smaller
+`cache.CapsCache`, `cache.BoardCache`, `cache.BacklogCache`, `cache.IssueCache`, `cache.SprintsCache` and
+`cache.VersionsCache` are each a second, smaller
 interface over the same file rather than more methods on `Cache`, because each is optional in both
 directions: a session with nowhere to keep one draws from a live read alone, and a `Cache` that is
 only a map of rows stays a `Cache`. A view asks for the one it needs with a type assertion and works
-without it, the way the kernel already does for `CapsCache`.
+without it, the way `connect.NewCaps` does for `CapsCache` on the kernel's behalf.
 
 A board's and a backlog's own snapshot hold their column configuration (or their sprints), their own
 quick filters, and only the *keys* of the cards or issues that landed in them — the values live once
@@ -734,16 +796,16 @@ frame is drawn before one could have answered.
 Issues are stored once each, keyed by issue key, and a search, a board or a backlog stores the keys it
 matched and their order. That is what makes two things work. A refresh merges into the copy already
 held rather than replacing it, so a narrow read cannot blank a field it never asked for —
-`app.MergeIssue` over `Issue.Requested`, which is what that mask exists for; `PutBoard` and
+`cache.MergeIssue` over `Issue.Requested`, which is what that mask exists for; `PutBoard` and
 `PutBacklog` merge into it exactly as `PutRows` does, and `IssueCache.PutIssue` is the same merge for
 the one issue the detail pane read. And the issue bucket is one corpus rather than one per search,
-bounded to `app.DefaultIssueBound` (5,000) by dropping what was stored longest ago, so a long session
+bounded to `cache.DefaultIssueBound` (5,000) by dropping what was stored longest ago, so a long session
 cannot grow the file without limit. Every other kind has a count too (`Kind.Retention`), and a write
 that takes a kind over its count trims it a tenth below, so a cache sitting at its bound walks the
 bucket once per tenth of it rather than on every write; `store.DB.Len` answers from a count the writes
 keep, which is exact for the reason `Generation` is. A search, a board or a backlog writes its entry
-and the issues it names in one transaction (`store.DB.PutAll`). `app.BoardPageCache` and
-`app.BacklogPageCache` store a walk one page at a time — only that page's issues are merged, and the
+and the issues it names in one transaction (`store.DB.PutAll`). `cache.BoardPageCache` and
+`cache.BacklogPageCache` store a walk one page at a time — only that page's issues are merged, and the
 key list is replaced by the first page and appended to by the rest — which is what a view calls per
 page, from a command rather than inside `Update`; `PutBoard` and `PutBacklog` still store a whole
 snapshot, which the board and backlog fall back to on a cache that keeps no pages, once on the first
@@ -751,7 +813,7 @@ page and once when the walk ends.
 
 Opening the file is when it is kept in bounds between sessions (`openCache` in `cmd/saral`): every
 scope no profile in `config.toml` names is dropped (`store.DB.DropScope`), so removing a profile or
-re-onboarding under another email leaves nothing behind, and `DiskCache.Sweep` drops this profile's
+re-onboarding under another email leaves nothing behind, and `cache.Disk.Sweep` drops this profile's
 entries past their `Retention` age. A file bbolt cannot read as a database is moved aside to
 `cache.db.corrupt-<timestamp>` and a fresh one created, and the status line says so on that launch
 only. What is kept, where, and how to wipe it is in `docs/SETTINGS.md`.
@@ -920,9 +982,9 @@ lock on `.ui.toml.lock`. The write itself goes through a temporary file and a re
 symlink first so a `config.toml` kept in a dotfiles repository stays a link, and syncs the directory
 after the rename.
 
-The queries are held by `app.SavedQueries` and validated by its rules rather than a second copy of
-them, so a file and a keypress cannot disagree about what a saved query is. The file refuses the two
-things a keyboard cannot express: two queries under one name, and two on one key.
+The queries are held by `appsearch.SavedQueries` and validated by its rules rather than a second copy
+of them, so a file and a keypress cannot disagree about what a saved query is. The file refuses the
+two things a keyboard cannot express: two queries under one name, and two on one key.
 
 ### What is not in the profile
 

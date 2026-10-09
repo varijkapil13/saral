@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissueref "github.com/varijkapil13/saral/internal/app/issueref"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -14,10 +14,10 @@ import (
 // A URL for another site is named rather than opened: the same key on this
 // profile's site may be somebody else's issue.
 func argument(arg, site string) (opts []kernel.Option, notice string, err error) {
-	if key, ok := app.ParseKey(arg); ok {
+	if key, ok := appissueref.ParseKey(arg); ok {
 		return []kernel.Option{openIssue(key)}, "", nil
 	}
-	if key, host, ok := app.ParseIssueURL(arg); ok {
+	if key, host, ok := appissueref.ParseIssueURL(arg); ok {
 		here, serr := config.NormalizeSite(site)
 		if serr == nil && !strings.EqualFold(here, host) {
 			return nil, fmt.Sprintf("%s is on %s and this profile is on %s, so it was not opened", key, host, here), nil
@@ -115,7 +115,7 @@ func tooManyArguments(words []string) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "saral opens one thing, and %q is not a command", words[0])
 	for _, w := range words {
-		if key, ok := app.ParseKey(w); ok {
+		if key, ok := appissueref.ParseKey(w); ok {
 			fmt.Fprintf(&b, "; to open %s, run: saral %s", key, key)
 			break
 		}

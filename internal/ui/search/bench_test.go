@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -28,8 +28,8 @@ func benchDeps(tb testing.TB) kernel.Deps {
 	}
 }
 
-func resultsOf(n int) app.Result {
-	return app.Result{Page: jira.NewPage(jiratest.Gen(n), nil)}
+func resultsOf(n int) appquery.Result {
+	return appquery.Result{Page: jira.NewPage(jiratest.Gen(n), nil)}
 }
 
 func land(tb testing.TB, m *Model, n int) {

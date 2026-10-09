@@ -10,7 +10,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -104,11 +105,11 @@ func TestChildren_EpicReadsParentJQLNarrowFields(t *testing.T) {
 	if want := "parent = " + epic + " ORDER BY created ASC"; q.JQL != want {
 		t.Errorf("JQL is %q, want %q", q.JQL, want)
 	}
-	if q.MaxResults != childrenPage {
-		t.Errorf("asked for %d rows, want %d", q.MaxResults, childrenPage)
+	if q.MaxResults != appissue.ChildrenPage {
+		t.Errorf("asked for %d rows, want %d", q.MaxResults, appissue.ChildrenPage)
 	}
 	for _, id := range q.Fields {
-		if !slices.Contains(childProjection("").IDs, id) {
+		if !slices.Contains(appissue.ChildProjection("").IDs, id) {
 			t.Errorf("the read asked for %q, which a list row does not carry", id)
 		}
 	}
@@ -245,18 +246,6 @@ func TestChildren_ReadsAreNotDoubledByTheOwnKeyChanging(t *testing.T) {
 	}
 }
 
-func TestRollup(t *testing.T) {
-	t.Parallel()
-	done := jira.Issue{Status: jira.Status{Category: jira.CategoryDone}}
-	open := jira.Issue{Status: jira.Status{Category: jira.CategoryToDo}}
-	if n, d := rollup([]jira.Issue{done, open, done}); n != 3 || d != 2 {
-		t.Errorf("rollup is %d of %d", d, n)
-	}
-	if n, d := rollup(nil); n != 0 || d != 0 {
-		t.Errorf("rollup of nothing is %d of %d", d, n)
-	}
-}
-
 func TestChildren_PaletteCommandsAreRegistered(t *testing.T) {
 	t.Parallel()
 	for id, keys := range map[string][]string{
@@ -296,7 +285,7 @@ func openChildrenSheet(t *testing.T, f *jiratest.Fake, epic string, opts ...func
 	if err != nil {
 		t.Fatal(err)
 	}
-	kind := &childrenKind{search: app.NewSearch(rec)}
+	kind := &childrenKind{search: appquery.NewSearch(rec)}
 	for _, o := range opts {
 		o(kind)
 	}

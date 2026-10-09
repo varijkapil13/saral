@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -43,47 +44,18 @@ func (w why) words() (did, failed string) {
 	return "", ""
 }
 
-// change is what a fetch brought back held against what was on screen before
-// it. It is the whole point of the line a refresh writes: a refresh that found
-// nothing new is indistinguishable from one that never ran unless it says so.
-type change struct{ added, gone, updated int }
-
-func (c change) any() bool { return c.added > 0 || c.gone > 0 || c.updated > 0 }
-
-// text names what moved, leaving out whichever of the three did not.
-func (c change) text() string {
+// changeText names what moved, leaving out whichever of the three did not.
+func changeText(c appsearch.RowChange) string {
 	parts := make([]string, 0, 3)
 	for _, part := range [...]struct {
 		n    int
 		word string
-	}{{c.added, "new"}, {c.updated, "changed"}, {c.gone, "gone"}} {
+	}{{c.Added, "new"}, {c.Updated, "changed"}, {c.Gone, "gone"}} {
 		if part.n > 0 {
 			parts = append(parts, strconv.Itoa(part.n)+" "+part.word)
 		}
 	}
 	return strings.Join(parts, ", ")
-}
-
-// diff compares two reads of the same search by key and by when each issue was
-// last touched, which is as much as a list projection knows about a row.
-func diff(before, after []jira.Issue) change {
-	was := make(map[string]int64, len(before))
-	for i := range before {
-		was[before[i].Key] = before[i].Updated.UnixNano()
-	}
-	var c change
-	for i := range after {
-		when, had := was[after[i].Key]
-		switch {
-		case !had:
-			c.added++
-		case when != after[i].Updated.UnixNano():
-			c.updated++
-		}
-		delete(was, after[i].Key)
-	}
-	c.gone = len(was)
-	return c
 }
 
 // refreshed is the status line a landed refresh writes. "Nothing has changed" is
@@ -94,15 +66,15 @@ func refreshed(w why, before, after []jira.Issue) tea.Cmd {
 	if did == "" {
 		return nil
 	}
-	switch c := diff(before, after); {
+	switch c := appsearch.DiffRows(before, after); {
 	case len(after) == 0:
 		return kernel.Status(did + ": still nothing matches this search")
 	case len(before) == 0:
 		return kernel.Status(did + ": " + issueCount(len(after)))
-	case !c.any():
+	case !c.Any():
 		return kernel.Status(did + ": nothing has changed, still " + issueCount(len(after)))
 	default:
-		return kernel.Status(did + ": " + c.text() + ", now " + issueCount(len(after)))
+		return kernel.Status(did + ": " + changeText(c) + ", now " + issueCount(len(after)))
 	}
 }
 

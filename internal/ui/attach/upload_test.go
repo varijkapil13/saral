@@ -1,9 +1,7 @@
 package attach
 
 import (
-	"context"
 	"errors"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -272,47 +270,5 @@ func TestPane_AnUploadTheSiteRefusesIsReportedInItsOwnWords(t *testing.T) {
 			mustContain(t, dr.view(), tc.says)
 			mustNotContain(t, dr.view(), "Attaching")
 		})
-	}
-}
-
-// progressDouble reports every byte of the file one at a time, which is what a
-// large file does to a callback that forwards every write.
-type progressDouble struct {
-	jira.Attacher
-	posted int
-	steps  chan int64
-}
-
-func (p *progressDouble) Upload(_ context.Context, _ string, files []jira.FileRef) ([]jira.Attachment, error) {
-	for sent := int64(1); sent <= files[0].Size; sent++ {
-		files[0].Progress(sent)
-		select {
-		case <-p.steps:
-			p.posted++
-		default:
-		}
-	}
-	return []jira.Attachment{{ID: "att-1", Filename: files[0].Name, Size: files[0].Size}}, nil
-}
-
-func TestUpload_PostsProgressOnlyWhenThePercentageMoves(t *testing.T) {
-	t.Parallel()
-
-	steps := make(chan int64, 1)
-	double := &progressDouble{steps: steps}
-	file := jira.FileRef{
-		Name: "big.bin", Size: 1000,
-		Open: func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("")), nil },
-	}
-	msg := upload(t.Context(), double, "PROJ-1", file, 1, steps)()
-
-	if _, ok := msg.(uploadedMsg); !ok {
-		t.Fatalf("the upload answered %T", msg)
-	}
-	if double.posted != 101 {
-		t.Errorf("a thousand writes posted %d steps, want one per percentage (101)", double.posted)
-	}
-	if _, open := <-steps; open {
-		t.Error("the progress channel was left open, so its waiter never ends")
 	}
 }

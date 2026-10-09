@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/list"
@@ -353,8 +354,8 @@ func TestSearch_PagesOnNearTheEndAndStopsAtTwoHundred(t *testing.T) {
 	t.Parallel()
 	f := newFake(bulkIssues(300))
 	dr := settled(t, f, Seed{Query: "paging widget"}, 120, 30)
-	if len(dr.m.rows) != pageSize {
-		t.Fatalf("the first page held %d rows, want %d", len(dr.m.rows), pageSize)
+	if len(dr.m.rows) != appsearch.TextPageSize {
+		t.Fatalf("the first page held %d rows, want %d", len(dr.m.rows), appsearch.TextPageSize)
 	}
 	dr.key("down")
 	for range 8 {

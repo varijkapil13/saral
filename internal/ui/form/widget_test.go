@@ -23,60 +23,6 @@ func option(id, label string, children ...jira.Option) jira.Option {
 	return jira.Option{ID: id, Label: label, Children: children}
 }
 
-func TestWidgetFor_PicksTheEditorTheSchemaEarns(t *testing.T) {
-	t.Parallel()
-
-	options := []jira.Option{option("1", "One"), option("2", "Two")}
-	tests := []struct {
-		name string
-		meta jira.FieldMeta
-		want kind
-	}{
-		{"a single line of text", meta("summary", "Summary", jira.FieldSchema{Type: "string", System: "summary"}), kindText},
-		{"a description, which v3 stores as a document", meta("description", "Description", jira.FieldSchema{Type: "string", System: "description"}), kindDoc},
-		{"an environment, which is a document too", meta("environment", "Environment", jira.FieldSchema{Type: "string", System: "environment"}), kindDoc},
-		{"a multi-line custom field, by its type URI", meta("customfield_1", "Notes", jira.FieldSchema{Type: "string", Custom: "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}), kindDoc},
-		{"a field the site already types as a document", meta("customfield_2", "Notes", jira.FieldSchema{Type: "doc"}), kindDoc},
-		{"a number", meta("customfield_3", "Points", jira.FieldSchema{Type: "number", Custom: "x:float"}), kindNumber},
-		{"a date", meta("duedate", "Due date", jira.FieldSchema{Type: "date", System: "duedate"}), kindDate},
-		{"a date and time", meta("customfield_4", "Cutover", jira.FieldSchema{Type: "datetime", Custom: "x:datetime"}), kindDateTime},
-		{"a single select", meta("customfield_5", "Phase", jira.FieldSchema{Type: "option", Custom: "x:select"}, options...), kindSelect},
-		{"a priority, which is a select of Jira's own", meta("priority", "Priority", jira.FieldSchema{Type: "priority", System: "priority"}, options...), kindSelect},
-		{"a cascading select", meta("customfield_6", "Scope", jira.FieldSchema{Type: "option-with-child", Custom: "x:cascadingselect"}, options...), kindCascade},
-		{"a multi select", meta("customfield_7", "Checks", jira.FieldSchema{Type: "array", Items: "option", Custom: "x:multicheckboxes"}, options...), kindMultiSelect},
-		{"fix versions, which is a multi select of versions", meta("fixVersions", "Fix versions", jira.FieldSchema{Type: "array", Items: "version", System: "fixVersions"}, options...), kindMultiSelect},
-		{"a person", meta("assignee", "Assignee", jira.FieldSchema{Type: "user", System: "assignee"}), kindUser},
-		{"several people", meta("customfield_8", "Reviewers", jira.FieldSchema{Type: "array", Items: "user", Custom: "x:people"}), kindUsers},
-		{"labels", meta("labels", "Labels", jira.FieldSchema{Type: "array", Items: "string", System: "labels"}), kindLabels},
-		{"a parent, which is an issue", meta("parent", "Parent", jira.FieldSchema{Type: "issuelink", System: "parent"}), kindIssueKey},
-		{"a select with no values stated", meta("customfield_9", "Phase", jira.FieldSchema{Type: "option", Custom: "x:select"}), kindOther},
-		{"an array of something this form has no editor for", meta("customfield_10", "Sprint", jira.FieldSchema{Type: "array", Items: "json", Custom: "x:gh-sprint"}), kindOther},
-		{"a field whose plugin declared no type at all", meta("customfield_11", "Rank", jira.FieldSchema{Type: "any", Custom: "x:gh-lexo-rank"}), kindOther},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := widgetFor(tt.meta); got != tt.want {
-				t.Errorf("%s got a %v, want a %v", tt.meta.Field.ID, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestWidgetFor_IgnoresTheDisplayNameEntirely(t *testing.T) {
-	t.Parallel()
-
-	// The same field on a German site. Nothing about the widget may change.
-	english := meta("customfield_5", "Release Level", jira.FieldSchema{Type: "option", Custom: "x:select"}, option("1", "One"))
-	german := meta("customfield_5", "Freigabestufe", jira.FieldSchema{Type: "option", Custom: "x:select"}, option("1", "Eins"))
-
-	if widgetFor(english) != widgetFor(german) {
-		t.Errorf("the widget changed with the language: %v and %v", widgetFor(english), widgetFor(german))
-	}
-}
-
 func TestOffer_KeepsAFieldOffTheFormWithAReason(t *testing.T) {
 	t.Parallel()
 

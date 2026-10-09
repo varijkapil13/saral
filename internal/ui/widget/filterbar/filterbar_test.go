@@ -7,16 +7,16 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
 var (
-	ada  = filter.Term{Facet: filter.FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"}
-	ben  = filter.Term{Facet: filter.FacetAssignee, ID: "acct-ben", Label: "Ben Adams"}
-	bug  = filter.Term{Facet: filter.FacetType, ID: "10001", Label: "Bug"}
-	prog = filter.Term{Facet: filter.FacetStatus, ID: "10203", Label: "In Progress"}
+	ada  = appterm.Term{Facet: appterm.FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"}
+	ben  = appterm.Term{Facet: appterm.FacetAssignee, ID: "acct-ben", Label: "Ben Adams"}
+	bug  = appterm.Term{Facet: appterm.FacetType, ID: "10001", Label: "Bug"}
+	prog = appterm.Term{Facet: appterm.FacetStatus, ID: "10203", Label: "In Progress"}
 )
 
 func plainTheme() *kernel.Theme {
@@ -32,13 +32,13 @@ func TestBar_DrawsNothingWithNoTermsInForce(t *testing.T) {
 	}
 }
 
-// One chip per facet, not one per value: the grouping filter.Terms already
+// One chip per facet, not one per value: the grouping term.Terms already
 // promises.
 func TestBar_GroupsTheValuesOfOneFacetIntoOneChip(t *testing.T) {
 	t.Parallel()
 
 	bar := New(widget.Zoner{})
-	got := ansi.Strip(bar.Render(filter.Terms{ada, ben, prog}, 120, plainTheme(), "ctrl+g", 1))
+	got := ansi.Strip(bar.Render(appterm.Terms{ada, ben, prog}, 120, plainTheme(), "ctrl+g", 1))
 
 	if strings.Count(got, "assignee:") != 1 {
 		t.Errorf("the assignee facet is named more than once: %q", got)
@@ -58,7 +58,7 @@ func TestBar_ClickOnAValueNamesJustThatValue(t *testing.T) {
 	t.Parallel()
 
 	bar, z, mgr := markedBar(t)
-	terms := filter.Terms{ada, ben, prog}
+	terms := appterm.Terms{ada, ben, prog}
 	theme := plainTheme()
 	frame := func() string { return bar.Render(terms, 120, theme, "ctrl+g", 1) }
 	msg := pressOn(t, mgr, z, frame, ValueZone(ben))
@@ -67,7 +67,7 @@ func TestBar_ClickOnAValueNamesJustThatValue(t *testing.T) {
 	if !ok {
 		t.Fatal("the click resolved to nothing")
 	}
-	if facet != filter.FacetNone {
+	if facet != appterm.FacetNone {
 		t.Errorf("a click on a value resolved to dropping the facet %q too", facet.Label())
 	}
 	if value != ben {
@@ -79,13 +79,13 @@ func TestBar_ClickOnTheCrossDropsTheWholeFacet(t *testing.T) {
 	t.Parallel()
 
 	bar, z, mgr := markedBar(t)
-	terms := filter.Terms{ada, ben, prog}
+	terms := appterm.Terms{ada, ben, prog}
 	theme := plainTheme()
 	frame := func() string { return bar.Render(terms, 120, theme, "ctrl+g", 1) }
-	msg := pressOn(t, mgr, z, frame, FacetZone(filter.FacetAssignee))
+	msg := pressOn(t, mgr, z, frame, FacetZone(appterm.FacetAssignee))
 
 	facet, _, ok := bar.Click(msg, terms)
-	if !ok || facet != filter.FacetAssignee {
+	if !ok || facet != appterm.FacetAssignee {
 		t.Errorf("the × resolved to %q, ok=%v, want the assignee facet", facet.Label(), ok)
 	}
 }
@@ -94,7 +94,7 @@ func TestBar_ClickOffAnyZoneResolvesToNothing(t *testing.T) {
 	t.Parallel()
 
 	bar, _, _ := markedBar(t)
-	terms := filter.Terms{ada}
+	terms := appterm.Terms{ada}
 	_ = bar.Render(terms, 120, plainTheme(), "ctrl+g", 1)
 
 	_, _, ok := bar.Click(tea.MouseClickMsg{X: 0, Y: 0, Button: tea.MouseLeft}, terms)
@@ -105,7 +105,7 @@ func TestBar_ClickOffAnyZoneResolvesToNothing(t *testing.T) {
 
 func TestBar_RenderIsMemoizedSoAFrameCostsNothingToRedraw(t *testing.T) {
 	bar := New(widget.Zoner{})
-	terms := filter.Terms{ada, ben, prog}
+	terms := appterm.Terms{ada, ben, prog}
 	theme := plainTheme()
 	_ = bar.Render(terms, 120, theme, "ctrl+g", 1)
 
@@ -119,8 +119,8 @@ func TestBar_ATermChangeInvalidatesTheMemo(t *testing.T) {
 
 	bar := New(widget.Zoner{})
 	theme := plainTheme()
-	first := bar.Render(filter.Terms{ada}, 120, theme, "ctrl+g", 1)
-	second := bar.Render(filter.Terms{ada, bug}, 120, theme, "ctrl+g", 2)
+	first := bar.Render(appterm.Terms{ada}, 120, theme, "ctrl+g", 1)
+	second := bar.Render(appterm.Terms{ada, bug}, 120, theme, "ctrl+g", 2)
 
 	if first == second {
 		t.Error("adding a term left the line unchanged")
@@ -133,9 +133,9 @@ func TestBar_NeverOverflowsTheWidthItWasGiven(t *testing.T) {
 	t.Parallel()
 
 	bar := New(widget.Zoner{})
-	terms := filter.Terms{
+	terms := appterm.Terms{
 		ada, ben,
-		{Facet: filter.FacetReporter, ID: "acct-x", Label: strings.Repeat("a very long name ", 4)},
+		{Facet: appterm.FacetReporter, ID: "acct-x", Label: strings.Repeat("a very long name ", 4)},
 		bug, prog,
 	}
 	for i, w := range []int{80, 100, 120, 200} {

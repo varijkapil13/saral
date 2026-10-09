@@ -50,7 +50,7 @@ func TestDescriptionEditor_EscKeepsTheTextAndReopeningRestoresIt(t *testing.T) {
 	if row.dirty() {
 		t.Error("text that was never kept is counted as an edit to send")
 	}
-	d, ok, err := drafts.load(testSite, "PROJ-1")
+	d, ok, err := drafts.Load(testSite, "PROJ-1")
 	if err != nil || !ok || d.DescriptionText == nil || !strings.Contains(*d.DescriptionText, "half a thought") {
 		t.Fatalf("the draft does not hold the typed text: %+v ok=%v err=%v", d, ok, err)
 	}
@@ -93,11 +93,11 @@ func TestDescriptionEditor_TypingReachesTheDraftOnlyWhenItPauses(t *testing.T) {
 		t.Fatalf("three keystrokes started %d pauses, want 3", len(waiting))
 	}
 	p.run(waiting[0])
-	if _, ok, _ := drafts.load(testSite, "PROJ-1"); ok {
+	if _, ok, _ := drafts.Load(testSite, "PROJ-1"); ok {
 		t.Fatal("a pause cut short by the next keystroke wrote the draft")
 	}
 	p.run(waiting[2])
-	d, ok, err := drafts.load(testSite, "PROJ-1")
+	d, ok, err := drafts.Load(testSite, "PROJ-1")
 	if err != nil || !ok || d.DescriptionText == nil || !strings.Contains(*d.DescriptionText, "abc") {
 		t.Fatalf("the last pause did not write the typed text: %+v", d)
 	}
@@ -117,7 +117,7 @@ func TestDescriptionEditor_RevertThrowsTheHeldTextAway(t *testing.T) {
 	if row := p.editor().rowByID("description"); row.pending != nil {
 		t.Fatalf("u kept the held text: %q", *row.pending)
 	}
-	if _, ok, _ := drafts.load(testSite, "PROJ-1"); ok {
+	if _, ok, _ := drafts.Load(testSite, "PROJ-1"); ok {
 		t.Error("the draft still holds text x threw away")
 	}
 }

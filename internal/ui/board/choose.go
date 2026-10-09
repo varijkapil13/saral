@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -24,25 +25,9 @@ func choiceZone(at int) string { return zoneChoice + strconv.Itoa(at) }
 func (m *Model) movesInto(list []jira.Transition, col int) []jira.Transition {
 	var out []jira.Transition
 	for _, tr := range list {
-		if at, mapped := m.plan.columnOf(tr.To.ID); mapped && at == col {
+		if at, mapped := m.plan.ColumnOf(tr.To.ID); mapped && at == col {
 			out = append(out, tr)
 		}
-	}
-	return out
-}
-
-// distinctTargets keeps the first transition to each status, which is what a
-// set of cards is asked about: each card takes its own transition to the status
-// chosen, and a transition id belongs to one issue's workflow.
-func distinctTargets(list []jira.Transition) []jira.Transition {
-	out := make([]jira.Transition, 0, len(list))
-	seen := make(map[string]bool, len(list))
-	for _, tr := range list {
-		if seen[tr.To.ID] {
-			continue
-		}
-		seen[tr.To.ID] = true
-		out = append(out, tr)
 	}
 	return out
 }
@@ -85,7 +70,7 @@ func choiceLabels(list []jira.Transition) []string {
 func (m *Model) choosing() bool { return m.card != nil && len(m.card.choices) > 0 }
 
 func (m *Model) land(key string, col int, tr jira.Transition) tea.Cmd {
-	if needsScreen(tr) {
+	if appboard.NeedsScreen(tr) {
 		iss := m.byKey(key)
 		m.putBack()
 		if iss == nil {
@@ -100,8 +85,8 @@ func (m *Model) land(key string, col int, tr jira.Transition) tea.Cmd {
 		m.putBack()
 		return kernel.Warn("there is no Jira connection in this session")
 	}
-	name := m.plan.columns[col].name
-	from := m.plan.columns[m.card.from].name
+	name := m.plan.Columns[col].Name
+	from := m.plan.Columns[m.card.from].Name
 	m.card.choices, m.card.labels = nil, nil
 	ctx, gen := m.beginMove()
 	return kernel.Reply(apply(ctx, m.deps.Jira, key, tr, name, from, gen), m.addr)
@@ -203,7 +188,7 @@ func (m *Model) askTarget(b *bulk) tea.Cmd {
 		if iss == nil {
 			continue
 		}
-		if at, mapped := m.plan.columnOf(iss.Status.ID); mapped && at == b.col {
+		if at, mapped := m.plan.ColumnOf(iss.Status.ID); mapped && at == b.col {
 			continue
 		}
 		probe = key
@@ -218,17 +203,8 @@ func (m *Model) askTarget(b *bulk) tea.Cmd {
 	b.askStop, b.searching = cancel, true
 	mover, gen, col, p := m.deps.Jira, b.askGen, b.col, m.plan
 	return kernel.Reply(withCancel(cancel, func() tea.Msg {
-		list, err := mover.Transitions(ctx, probe)
-		if err != nil {
-			return targetsMsg{gen: gen, err: err}
-		}
-		var into []jira.Transition
-		for _, tr := range list {
-			if at, mapped := p.columnOf(tr.To.ID); mapped && at == col {
-				into = append(into, tr)
-			}
-		}
-		return targetsMsg{gen: gen, options: distinctTargets(into)}
+		options, err := appboard.ColumnTargets(ctx, mover, p, probe, col)
+		return targetsMsg{gen: gen, options: options, err: err}
 	}), m.addr)
 }
 

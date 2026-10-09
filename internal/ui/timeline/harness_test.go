@@ -18,7 +18,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -334,7 +334,7 @@ func (s *spy) lastQuery(t *testing.T) jira.Query {
 	return s.queries[len(s.queries)-1]
 }
 
-// memCache is an app.Cache in memory, so a test can put rows on disk without a
+// memCache is a cache.Cache in memory, so a test can put rows on disk without a
 // disk.
 type memCache struct {
 	rows  map[string][]jira.Issue
@@ -347,12 +347,12 @@ func newMemCache() *memCache {
 	return &memCache{rows: map[string][]jira.Issue{}, stamp: theDay.Add(-time.Hour)}
 }
 
-func (c *memCache) Rows(jql string) (app.Snapshot, bool) {
+func (c *memCache) Rows(jql string) (appcache.Snapshot, bool) {
 	issues, ok := c.rows[jql]
 	if !ok {
-		return app.Snapshot{}, false
+		return appcache.Snapshot{}, false
 	}
-	return app.Snapshot{Issues: issues, StoredAt: c.stamp}, true
+	return appcache.Snapshot{Issues: issues, StoredAt: c.stamp}, true
 }
 
 func (c *memCache) PutRows(jql string, issues []jira.Issue, _ bool) error {

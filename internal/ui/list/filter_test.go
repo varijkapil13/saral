@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -13,10 +14,10 @@ import (
 )
 
 var (
-	adaTerm = filter.Term{Facet: filter.FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"}
-	grace   = filter.Term{Facet: filter.FacetAssignee, ID: "acct-grace", Label: "Grace Hopper"}
-	triage  = filter.Term{Facet: filter.FacetStatus, ID: "10201", Label: "Triage"}
-	shipped = filter.Term{Facet: filter.FacetStatus, ID: "10203", Label: "Shipped"}
+	adaTerm = appterm.Term{Facet: appterm.FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"}
+	grace   = appterm.Term{Facet: appterm.FacetAssignee, ID: "acct-grace", Label: "Grace Hopper"}
+	triage  = appterm.Term{Facet: appterm.FacetStatus, ID: "10201", Label: "Triage"}
+	shipped = appterm.Term{Facet: appterm.FacetStatus, ID: "10203", Label: "Shipped"}
 )
 
 // said reports whether the view put a sentence on the status line at any point.
@@ -162,19 +163,19 @@ func TestList_TermsCompose(t *testing.T) {
 	t.Parallel()
 
 	for name, tc := range map[string]struct {
-		terms []filter.Term
+		terms []appterm.Term
 		want  string
 	}{
 		"two values of one facet are either of them": {
-			terms: []filter.Term{adaTerm, grace},
+			terms: []appterm.Term{adaTerm, grace},
 			want:  `project = "PROJ" AND assignee IN ("acct-ada", "acct-grace") ORDER BY updated DESC`,
 		},
 		"two facets are both": {
-			terms: []filter.Term{adaTerm, shipped},
+			terms: []appterm.Term{adaTerm, shipped},
 			want:  `project = "PROJ" AND assignee = "acct-ada" AND status = "10203" ORDER BY updated DESC`,
 		},
 		"the same value twice comes off again": {
-			terms: []filter.Term{shipped, triage, shipped},
+			terms: []appterm.Term{shipped, triage, shipped},
 			want:  `project = "PROJ" AND status = "10201" ORDER BY updated DESC`,
 		},
 	} {
@@ -291,7 +292,7 @@ func TestList_ATermAndAKeptFilterAreBothOnScreen(t *testing.T) {
 func TestList_TermsGolden(t *testing.T) {
 	t.Parallel()
 
-	alan := filter.Term{Facet: filter.FacetAssignee, ID: "acct-alan", Label: "Alan Turing"}
+	alan := appterm.Term{Facet: appterm.FacetAssignee, ID: "acct-alan", Label: "Alan Turing"}
 	dr := openAll(t, testDeps(newFake(12)), 120, 30)
 	dr.send(filter.ChosenMsg{Term: shipped})
 	dr.send(filter.ChosenMsg{Term: alan})
@@ -339,53 +340,53 @@ func TestList_EveryFacetNarrowsToTheIssuesThatMatchIt(t *testing.T) {
 	t.Parallel()
 
 	const issues = 30
-	nobody := filter.Term{Facet: filter.FacetAssignee, Label: unassigned}
+	nobody := appterm.Term{Facet: appterm.FacetAssignee, Label: unassigned}
 	for name, tc := range map[string]struct {
-		terms []filter.Term
+		terms []appterm.Term
 		match func(iss *jira.Issue) bool
 	}{
 		"an assignee": {
-			terms: []filter.Term{adaTerm},
+			terms: []appterm.Term{adaTerm},
 			match: func(iss *jira.Issue) bool {
 				return iss.Assignee != nil && iss.Assignee.AccountID == "acct-ada"
 			},
 		},
 		"a reporter": {
-			terms: []filter.Term{{Facet: filter.FacetReporter, ID: "acct-grace", Label: "Grace Hopper"}},
+			terms: []appterm.Term{{Facet: appterm.FacetReporter, ID: "acct-grace", Label: "Grace Hopper"}},
 			match: func(iss *jira.Issue) bool {
 				return iss.Reporter != nil && iss.Reporter.AccountID == "acct-grace"
 			},
 		},
 		"a status": {
-			terms: []filter.Term{shipped},
+			terms: []appterm.Term{shipped},
 			match: func(iss *jira.Issue) bool { return iss.Status.ID == "10203" },
 		},
 		"a type": {
-			terms: []filter.Term{{Facet: filter.FacetType, ID: "10302", Label: "Defect"}},
+			terms: []appterm.Term{{Facet: appterm.FacetType, ID: "10302", Label: "Defect"}},
 			match: func(iss *jira.Issue) bool { return iss.Type.ID == "10302" },
 		},
 		"a priority": {
-			terms: []filter.Term{{Facet: filter.FacetPriority, ID: "10402", Label: "Normal"}},
+			terms: []appterm.Term{{Facet: appterm.FacetPriority, ID: "10402", Label: "Normal"}},
 			match: func(iss *jira.Issue) bool { return iss.Priority != nil && iss.Priority.ID == "10402" },
 		},
 		"a label": {
-			terms: []filter.Term{{Facet: filter.FacetLabel, ID: "infra", Label: "infra"}},
+			terms: []appterm.Term{{Facet: appterm.FacetLabel, ID: "infra", Label: "infra"}},
 			match: func(iss *jira.Issue) bool { return slices.Contains(iss.Labels, "infra") },
 		},
 		"two values of one facet, which widen it": {
-			terms: []filter.Term{triage, shipped},
+			terms: []appterm.Term{triage, shipped},
 			match: func(iss *jira.Issue) bool {
 				return iss.Status.ID == "10201" || iss.Status.ID == "10203"
 			},
 		},
 		"two facets, which narrow together": {
-			terms: []filter.Term{shipped, {Facet: filter.FacetPriority, ID: "10403", Label: "Whenever"}},
+			terms: []appterm.Term{shipped, {Facet: appterm.FacetPriority, ID: "10403", Label: "Whenever"}},
 			match: func(iss *jira.Issue) bool {
 				return iss.Status.ID == "10203" && iss.Priority != nil && iss.Priority.ID == "10403"
 			},
 		},
 		"nobody, or a named person": {
-			terms: []filter.Term{nobody, adaTerm},
+			terms: []appterm.Term{nobody, adaTerm},
 			match: func(iss *jira.Issue) bool {
 				return iss.Assignee == nil || iss.Assignee.AccountID == "acct-ada"
 			},

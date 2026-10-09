@@ -301,7 +301,7 @@ func (m *Model) arrangeSlots() {
 }
 
 func (m *Model) keeps(i int) bool {
-	if !m.filter.keeps(m.cells[i].state) {
+	if !m.filter.Keeps(m.cells[i].state) {
 		return false
 	}
 	s := m.set

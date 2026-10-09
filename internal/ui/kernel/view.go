@@ -6,7 +6,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -132,7 +133,7 @@ type Deps struct {
 	// Cache is what this session has already read from the site, or nil when it
 	// has nowhere to keep one. Every view has to draw without it: a first run has
 	// nothing on disk, and another copy of Saral may be holding the file.
-	Cache app.Cache
+	Cache appcache.Cache
 	// Site is what the profile calls the site this session is talking to. It is
 	// drawn in the header and it is what IssueURL builds a browse link from, so
 	// it is not display-only — but nothing after onboarding checks its shape, so
@@ -142,11 +143,11 @@ type Deps struct {
 	// Now is the clock. Tests inject a fixed one.
 	Now func() time.Time
 	// Saved are the queries the number keys run, as the profile last had them.
-	Saved app.SavedQueries
+	Saved appsearch.SavedQueries
 	// SaveQueries persists a changed set. A session with nowhere to write them —
 	// no profile yet — leaves it nil, and the kernel says so rather than
 	// pretending the binding survived.
-	SaveQueries func(app.SavedQueries) error
+	SaveQueries func(appsearch.SavedQueries) error
 	// Memory is what this profile remembers between runs: the root view it last
 	// opened, and whatever a view kept for itself. A session with nowhere to
 	// write it — no profile yet — leaves it nil, and Recall/Keep cope.

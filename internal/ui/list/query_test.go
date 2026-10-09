@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -35,16 +35,16 @@ func selectedKey(frame string) string {
 	return ""
 }
 
-func savedDeps(t *testing.T, client jira.Client, queries ...app.SavedQuery) (kernel.Deps, *[]app.SavedQuery) {
+func savedDeps(t *testing.T, client jira.Client, queries ...appsearch.SavedQuery) (kernel.Deps, *[]appsearch.SavedQuery) {
 	t.Helper()
-	saved, err := app.NewSavedQueries(queries...)
+	saved, err := appsearch.NewSavedQueries(queries...)
 	if err != nil {
 		t.Fatalf("NewSavedQueries: %v", err)
 	}
 	d := testDeps(client)
 	d.Saved = saved
-	written := new([]app.SavedQuery)
-	d.SaveQueries = func(q app.SavedQueries) error {
+	written := new([]appsearch.SavedQuery)
+	d.SaveQueries = func(q appsearch.SavedQueries) error {
 		*written = q.All()
 		return nil
 	}
@@ -79,7 +79,7 @@ func TestList_KeepsItsOwnGGesturesUnderTheKernelsPrefix(t *testing.T) {
 func TestList_RunsTheQueryTheKernelDispatchesFromANumberKey(t *testing.T) {
 	t.Parallel()
 
-	d, _ := savedDeps(t, newFake(20), app.SavedQuery{Name: "Shipped work", JQL: shippedJQL, Slot: 2})
+	d, _ := savedDeps(t, newFake(20), appsearch.SavedQuery{Name: "Shipped work", JQL: shippedJQL, Slot: 2})
 	m := start(t, d, 120, 30)
 
 	m = keys(t, m, "2")
@@ -116,7 +116,7 @@ func TestList_BindsTheQueryOnScreenToANumberKeyAndKeepsIt(t *testing.T) {
 func TestList_ConfirmsBeforeTakingAKeyAnotherQueryHolds(t *testing.T) {
 	t.Parallel()
 
-	d, written := savedDeps(t, newFake(20), app.SavedQuery{Name: "Shipped work", JQL: shippedJQL, Slot: 2})
+	d, written := savedDeps(t, newFake(20), appsearch.SavedQuery{Name: "Shipped work", JQL: shippedJQL, Slot: 2})
 	m := startAll(t, d, 120, 30)
 
 	m = keys(t, m, "ctrl+s", "2")
@@ -146,7 +146,7 @@ func TestList_ConfirmsBeforeTakingAKeyAnotherQueryHolds(t *testing.T) {
 func TestList_TakesTheDigitItselfWhileItIsPickingAKey(t *testing.T) {
 	t.Parallel()
 
-	d, _ := savedDeps(t, newFake(20), app.SavedQuery{Name: "Shipped work", JQL: shippedJQL, Slot: 2})
+	d, _ := savedDeps(t, newFake(20), appsearch.SavedQuery{Name: "Shipped work", JQL: shippedJQL, Slot: 2})
 	m := startAll(t, d, 120, 30)
 
 	m = keys(t, m, "ctrl+s", "2")
@@ -199,7 +199,7 @@ func TestList_BindPrompt_Golden(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			d, _ := savedDeps(t, newFake(12), app.SavedQuery{Name: "Shipped work", JQL: shippedJQL, Slot: 2})
+			d, _ := savedDeps(t, newFake(12), appsearch.SavedQuery{Name: "Shipped work", JQL: shippedJQL, Slot: 2})
 			dr := openAll(t, d, 120, 20)
 			dr.key(strokes...)
 			golden(t, "list_bind_"+name+"_120x20.golden", dr.view())

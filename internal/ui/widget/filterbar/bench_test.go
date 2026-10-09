@@ -3,7 +3,7 @@ package filterbar
 import (
 	"testing"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
@@ -13,7 +13,7 @@ import (
 // answer from its own memo rather than rebuild the line.
 func BenchmarkRenderMemoHit(b *testing.B) {
 	bar := New(widget.Zoner{})
-	terms := filter.Terms{ada, ben, prog, bug}
+	terms := appterm.Terms{ada, ben, prog, bug}
 	theme := kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs())
 	_ = bar.Render(terms, 120, theme, "ctrl+g", 1)
 	b.ReportAllocs()
@@ -27,7 +27,7 @@ func BenchmarkRenderMemoHit(b *testing.B) {
 // resize costs once.
 func BenchmarkRenderMiss(b *testing.B) {
 	bar := New(widget.Zoner{})
-	terms := filter.Terms{ada, ben, prog, bug}
+	terms := appterm.Terms{ada, ben, prog, bug}
 	theme := kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs())
 	b.ReportAllocs()
 	b.ResetTimer()

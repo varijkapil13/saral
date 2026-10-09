@@ -18,7 +18,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/store"
 	_ "github.com/varijkapil13/saral/internal/ui"
@@ -153,14 +154,14 @@ func build(opt options) (deps kernel.Deps, kopts []kernel.Option, notice string,
 	}
 	deps.Project = project
 
-	saved, err := app.NewSavedQueries(profile.Queries...)
+	saved, err := appsearch.NewSavedQueries(profile.Queries...)
 	if err != nil {
 		return deps, nil, notice, releaseCache, withCode(exitConfig, err)
 	}
 	deps.Saved = saved
 	deps.SaveQueries = queryWriter(profile.Name)
 	if fromEnv {
-		deps.SaveQueries = func(app.SavedQueries) error { return errEnvProfile }
+		deps.SaveQueries = func(appsearch.SavedQueries) error { return errEnvProfile }
 	}
 
 	// Nothing configured means the first thing to show is the thing that
@@ -252,7 +253,7 @@ func joinNotice(a, b string) string {
 // Opening is also when the file is kept in bounds: every scope no configured
 // profile names any more — a profile removed, or re-onboarded under another
 // email — is dropped, and this profile's own entries past their retention go.
-func openCache(p config.Profile, known []store.Scope) (cache app.Cache, release func(), notice string) {
+func openCache(p config.Profile, known []store.Scope) (cache appcache.Cache, release func(), notice string) {
 	release = func() {}
 	dir, err := config.CacheDir()
 	if err != nil {
@@ -273,7 +274,7 @@ func openCache(p config.Profile, known []store.Scope) (cache app.Cache, release 
 	// answered, and two profiles on one site differ by email anyway.
 	scope := store.Scope{Site: p.Site, Account: p.Email}
 	dropOrphans(db, append(known, scope))
-	c := app.NewCache(db, scope)
+	c := appcache.New(db, scope)
 	_, _ = c.Sweep()
 	return c, func() { _ = db.Close() }, notice
 }
@@ -353,8 +354,8 @@ func sessionProject(fromFlag, stored string) (string, error) {
 // session started with, because onboarding may have written one since; an empty
 // name is the first run, where the profile to write into is whichever one is
 // active by the time a key is bound.
-func queryWriter(name string) func(app.SavedQueries) error {
-	return func(saved app.SavedQueries) error {
+func queryWriter(name string) func(appsearch.SavedQueries) error {
+	return func(saved appsearch.SavedQueries) error {
 		path, err := config.Path()
 		if err != nil {
 			return err

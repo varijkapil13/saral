@@ -16,7 +16,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appconnect "github.com/varijkapil13/saral/internal/app/connect"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -475,11 +476,7 @@ func (m Model) unprobedWant() string {
 // Init revalidates unconditionally either way, so a stored answer is at most one
 // round trip old on screen.
 func (m *Model) restoreCaps() {
-	held, ok := m.deps.Cache.(app.CapsCache)
-	if !ok || held == nil {
-		return
-	}
-	snap, found := held.Caps(m.deps.Project)
+	snap, found := m.caps().Stored(m.deps.Project)
 	if !found {
 		return
 	}
@@ -1003,7 +1000,7 @@ func (m Model) queryView() (ViewSpec, bool) {
 // would dispatch a key the kernel no longer agrees about.
 func (m Model) bindQuery(msg BindQueryMsg) (tea.Model, tea.Cmd) {
 	replaced, taken := m.deps.Saved.BySlot(msg.Slot)
-	saved, err := m.deps.Saved.Add(app.SavedQuery{Name: msg.Name, JQL: msg.JQL, Slot: msg.Slot})
+	saved, err := m.deps.Saved.Add(appsearch.SavedQuery{Name: msg.Name, JQL: msg.JQL, Slot: msg.Slot})
 	if err != nil {
 		m.status, m.statusLevel = err.Error(), LevelWarn
 		return m, nil
@@ -1031,7 +1028,7 @@ func (m Model) bindQuery(msg BindQueryMsg) (tea.Model, tea.Cmd) {
 
 // persistQueries writes the set back where it came from. The key already works
 // when this runs, so a failure is reported without taking the binding away.
-func (m Model) persistQueries(saved app.SavedQueries) tea.Cmd {
+func (m Model) persistQueries(saved appsearch.SavedQueries) tea.Cmd {
 	save := m.deps.SaveQueries
 	if save == nil {
 		return nil
@@ -1523,13 +1520,13 @@ func (m Model) settle(seq int, caps jira.Capabilities) (tea.Model, tea.Cmd) {
 // applied but not stored: onboarding probes the site being set up, which is not
 // necessarily the one this profile's cache is scoped to.
 func (m Model) keepCaps(caps jira.Capabilities) tea.Cmd {
-	held, ok := m.deps.Cache.(app.CapsCache)
-	if !ok || held == nil {
+	held := m.caps()
+	if !held.Keeps() {
 		return nil
 	}
 	project := m.deps.Project
 	return func() tea.Msg {
-		if err := held.PutCaps(project, caps); err != nil {
+		if err := held.Keep(project, caps); err != nil {
 			return StatusMsg{
 				Text:  "this session knows what the token can do, but keeping it for the next one failed: " + err.Error(),
 				Level: LevelWarn,
@@ -1628,20 +1625,22 @@ func (m Model) probeCaps() (Model, tea.Cmd) {
 }
 
 func (m Model) probeAt(seq int) tea.Cmd {
-	client, project := m.deps.Jira, m.deps.Project
-	if client == nil {
+	probe, project := m.caps(), m.deps.Project
+	if !probe.CanProbe() {
 		return nil
 	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		caps, err := client.Capabilities(ctx, project)
+		caps, err := probe.Probe(ctx, project)
 		if err != nil {
 			return capsFailedMsg{seq: seq, err: err}
 		}
 		return capsProbedMsg{seq: seq, caps: caps}
 	}
 }
+
+func (m Model) caps() appconnect.Caps { return appconnect.NewCaps(m.deps.Jira, m.deps.Cache) }
 
 // View renders the frame. Alt screen, mouse mode and the window title are set
 // here and nowhere else.

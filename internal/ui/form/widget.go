@@ -1,198 +1,84 @@
 package form
 
 import (
-	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// kind is the widget one field earns. It is decided from the schema the site
-// sent — the type, the element type of an array, the system name of a built-in
-// field and the URI of a custom field type — and never from a display name,
-// which on a German site is a German word.
-type kind uint8
-
-// The widgets. kindOther is the honest answer for a shape this form has no
-// editor for: it keeps whatever was typed and says it does not understand it.
-const (
-	kindText kind = iota
-	kindDoc
-	kindNumber
-	kindDate
-	kindDateTime
-	kindSelect
-	kindMultiSelect
-	kindCascade
-	kindUser
-	kindUsers
-	kindLabels
-	kindIssueKey
-	kindOther
-)
-
-func (k kind) String() string {
+// shapeName is what a field's shape is called on screen.
+func shapeName(k appissue.Shape) string {
 	switch k {
-	case kindText:
+	case appissue.ShapeText:
 		return "text"
-	case kindDoc:
+	case appissue.ShapeDoc:
 		return "rich text"
-	case kindNumber:
+	case appissue.ShapeNumber:
 		return "number"
-	case kindDate:
+	case appissue.ShapeDate:
 		return "date"
-	case kindDateTime:
+	case appissue.ShapeDateTime:
 		return "date and time"
-	case kindSelect:
+	case appissue.ShapeSelect:
 		return "choice"
-	case kindMultiSelect:
+	case appissue.ShapeMultiSelect:
 		return "choices"
-	case kindCascade:
+	case appissue.ShapeCascade:
 		return "choice"
-	case kindUser:
+	case appissue.ShapeUser:
 		return "person"
-	case kindUsers:
+	case appissue.ShapeUsers:
 		return "people"
-	case kindLabels:
+	case appissue.ShapeLabels:
 		return "labels"
-	case kindIssueKey:
+	case appissue.ShapeIssueKey:
 		return "issue"
 	default:
 		return "unrecognised"
 	}
 }
 
-// pane is the editor a widget opens in.
-func (k kind) pane() editor {
-	switch k {
-	case kindDoc:
+// paneOf is the editor a field's shape opens in.
+func paneOf(k appissue.Shape) editor {
+	switch {
+	case k == appissue.ShapeDoc:
 		return editDoc
-	case kindSelect, kindMultiSelect, kindCascade, kindUser, kindUsers:
+	case k.Chooses():
 		return editChoose
 	default:
 		return editText
 	}
 }
 
-// chooses reports whether the widget is filled from a list rather than typed.
-func (k kind) chooses() bool { return k.pane() == editChoose }
-
-// multiple reports whether the widget holds more than one value.
-func (k kind) multiple() bool { return k == kindMultiSelect || k == kindUsers }
-
-func (k kind) people() bool { return k == kindUser || k == kindUsers }
-
-// selectable are the schema types whose values come from a list the site
-// states. They are Jira's own type names, which are not translated.
-var selectable = []string{
-	"option", "option-with-child", "priority", "issuetype", "resolution",
-	"project", "version", "component", "group", "securitylevel", "status",
-}
-
-// widgetFor picks the editor a field's schema earns.
-func widgetFor(meta jira.FieldMeta) kind {
-	schema := meta.Field.Schema
-	if isDocument(schema) {
-		return kindDoc
-	}
-	if schema.System == "parent" {
-		return kindIssueKey
-	}
-	switch schema.Type {
-	case "string":
-		return kindText
-	case "number":
-		return kindNumber
-	case "date":
-		return kindDate
-	case "datetime":
-		return kindDateTime
-	case "user":
-		return kindUser
-	case "option-with-child":
-		if len(meta.AllowedValues) > 0 {
-			return kindCascade
-		}
-		return kindOther
-	case "array":
-		return arrayWidget(meta)
-	default:
-		if slices.Contains(selectable, schema.Type) && len(meta.AllowedValues) > 0 {
-			return kindSelect
-		}
-		return kindOther
-	}
-}
-
-func arrayWidget(meta jira.FieldMeta) kind {
-	items := meta.Field.Schema.Items
-	switch items {
-	case "string":
-		return kindLabels
-	case "user":
-		return kindUsers
-	default:
-		if slices.Contains(selectable, items) && len(meta.AllowedValues) > 0 {
-			return kindMultiSelect
-		}
-		return kindOther
-	}
-}
-
-// isDocument reports a field whose value is an ADF document. The create screen
-// declares description and environment as plain strings and a multi-line custom
-// field by its own type URI, and v3 stores all three as documents.
-func isDocument(schema jira.FieldSchema) bool {
-	switch {
-	case schema.Type == "doc":
-		return true
-	case schema.System == "description", schema.System == "environment":
-		return true
-	default:
-		return strings.HasSuffix(schema.Custom, ":textarea")
-	}
-}
-
-// canSet reports whether the create screen lets this field be given a value at
-// all. Jira states the operations per field per issue type, and a field with
-// none is on the screen to be read.
-func canSet(operations []string) bool {
-	return slices.Contains(operations, "set") || slices.Contains(operations, "add")
-}
-
 // offer decides whether a field is put in front of the user, and says why not
-// when it is not. The reason is the answer, in the same shape a capability
-// gives one: a field silently missing from a form is indistinguishable from a
-// form that forgot it.
+// when it is not.
 func offer(meta jira.FieldMeta, project string, issueType jira.IssueType) (offered bool, reason string) {
-	schema := meta.Field.Schema
-	switch schema.System {
-	case "project":
+	switch appissue.Offer(meta) {
+	case appissue.WithheldProject:
 		return false, "this form creates the issue in " + project + ", the project it was opened for"
-	case "issuetype":
+	case appissue.WithheldIssueType:
 		return false, "this form creates a " + issueType.Name + ", the issue type it was opened for"
-	}
-	if !canSet(meta.Operations) {
+	case appissue.WithheldNotSettable:
 		return false, "Jira does not let this field be set while an issue is being created"
-	}
-	switch schema.Items {
-	case "attachment":
+	case appissue.WithheldAttachment:
 		return false, "files are attached once the issue exists"
-	case "issuelinks":
+	case appissue.WithheldLinks:
 		return false, "links to other issues are made from the issue itself"
+	default:
+		return true, ""
 	}
-	return true, ""
 }
 
 // field is one editable field: what the site said about it, which editor that
 // earned, and what has been put in it so far.
 type field struct {
 	meta jira.FieldMeta
-	kind kind
+	kind appissue.Shape
 
 	// text carries what was typed into a typed widget, and the markdown of a
 	// document widget.
@@ -217,8 +103,8 @@ type field struct {
 
 // newField builds the editor one field of a create screen earns.
 func newField(meta jira.FieldMeta, loc *time.Location) *field {
-	f := &field{meta: meta, kind: widgetFor(meta), loc: loc}
-	if f.kind == kindDoc {
+	f := &field{meta: meta, kind: appissue.ShapeOf(meta), loc: loc}
+	if f.kind == appissue.ShapeDoc {
 		f.text = adf.MarkdownWith(f.original, adf.Options{})
 	}
 	return f
@@ -226,12 +112,14 @@ func newField(meta jira.FieldMeta, loc *time.Location) *field {
 
 func (f *field) id() string { return f.meta.Field.ID }
 
+func (f *field) entry() appissue.Entry {
+	return appissue.Entry{Meta: f.meta, Shape: f.kind, Text: f.text, Picked: f.picked, Original: f.original, Loc: f.loc}
+}
+
 // empty reports whether nothing has been put in the field.
 func (f *field) empty() bool {
-	if f.kind.chooses() {
-		return len(f.picked) == 0
-	}
-	return strings.TrimSpace(f.text) == ""
+	e := f.entry()
+	return e.Empty()
 }
 
 func (f *field) clear() {
@@ -288,7 +176,7 @@ func defaultText(v jira.FieldValue) string {
 
 // display is the value as the field list shows it.
 func (f *field) display() string {
-	if f.kind.chooses() {
+	if f.kind.Chooses() {
 		labels := make([]string, 0, len(f.picked))
 		for _, option := range f.picked {
 			labels = append(labels, cascadeLabel(option))
@@ -308,27 +196,9 @@ func cascadeLabel(option jira.Option) string {
 	return label
 }
 
-// labels splits a labels field the way Jira stores one: separate values, never
-// a sentence. A label cannot contain whitespace, so whitespace and commas both
-// separate.
-func (f *field) labels() []string {
-	out := make([]string, 0, 4)
-	for _, token := range strings.FieldsFunc(f.text, func(r rune) bool {
-		return r == ',' || r == ' ' || r == '\t' || r == '\n'
-	}) {
-		if token != "" && !slices.Contains(out, token) {
-			out = append(out, token)
-		}
-	}
-	return out
-}
-
-// document reconciles the edited markdown against the document this field
-// started from. ParseMarkdownInto reuses the original node for every block that
-// was not touched, which is what keeps a mention's account id, a lozenge's
-// colour and an unknown node's attributes — none of which markdown carries.
 func (f *field) document() (adf.Doc, error) {
-	return adf.ParseMarkdownInto(f.original, f.text, adf.Options{})
+	e := f.entry()
+	return e.Document()
 }
 
 // oneWay names the constructs in this field's original document that a markdown
@@ -344,70 +214,9 @@ func (f *field) oneWay() []string {
 	return out
 }
 
-// value turns what is in the field into the tagged value the port carries. The
-// second result is false for a field holding nothing, which is not the same as
-// a field holding an empty value.
 func (f *field) value() (jira.FieldValue, bool) {
-	if f.empty() {
-		return jira.FieldValue{}, false
-	}
-	text := strings.TrimSpace(f.text)
-	switch f.kind {
-	case kindNumber:
-		number, err := parseNumber(text)
-		if err != nil {
-			return jira.FieldValue{}, false
-		}
-		return jira.FieldValue{Kind: jira.KindNumber, Number: number}, true
-	case kindDate:
-		date, err := jira.ParseDate(text)
-		if err != nil {
-			return jira.FieldValue{}, false
-		}
-		return jira.FieldValue{Kind: jira.KindDate, Date: date}, true
-	case kindDateTime:
-		at, err := parseDateTime(text, f.loc)
-		if err != nil {
-			return jira.FieldValue{}, false
-		}
-		return jira.FieldValue{Kind: jira.KindTime, Time: at}, true
-	case kindDoc:
-		doc, err := f.document()
-		if err != nil {
-			return jira.FieldValue{}, false
-		}
-		return jira.FieldValue{Kind: jira.KindDoc, Doc: doc}, true
-	case kindLabels:
-		options := make([]jira.Option, 0, 4)
-		for _, label := range f.labels() {
-			options = append(options, jira.Option{Label: label})
-		}
-		return jira.FieldValue{Kind: jira.KindOptions, Options: options}, true
-	case kindSelect, kindCascade:
-		return jira.FieldValue{Kind: jira.KindOption, Options: slices.Clone(f.picked)}, true
-	case kindMultiSelect:
-		return jira.FieldValue{Kind: jira.KindOptions, Options: slices.Clone(f.picked)}, true
-	case kindUser:
-		return jira.FieldValue{Kind: jira.KindUser, Users: f.users()}, true
-	case kindUsers:
-		return jira.FieldValue{Kind: jira.KindUsers, Users: f.users()}, true
-	case kindOther:
-		// Kept rather than guessed at: the value goes back as the text it was
-		// typed as, marked as a shape this client does not model.
-		return jira.FieldValue{Kind: jira.KindUnknown, Text: text}, true
-	default:
-		return jira.FieldValue{Kind: jira.KindText, Text: text}, true
-	}
-}
-
-// users reads a person picker's choices back as accounts. The option id is the
-// account id, which is the only identifier Jira accepts on a write.
-func (f *field) users() []jira.User {
-	out := make([]jira.User, 0, len(f.picked))
-	for _, option := range f.picked {
-		out = append(out, jira.User{AccountID: option.ID, DisplayName: option.Label})
-	}
-	return out
+	e := f.entry()
+	return e.Value()
 }
 
 // userOption is how an account is offered in a picker: the account id is the

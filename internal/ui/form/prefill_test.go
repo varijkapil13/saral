@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -13,7 +14,7 @@ import (
 func prefilled(t *testing.T, d kernel.Deps, w, h int, opts ...Option) *driver {
 	t.Helper()
 
-	m := newWith(d, newSchemaCache(schemaTTL, time.Now))
+	m := newWith(d, appissue.NewSchemas(appissue.SchemaTTL, time.Now))
 	for _, opt := range opts {
 		opt(m)
 	}

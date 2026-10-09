@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/mention"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -355,18 +356,18 @@ func placeholder(f *field, bullet string) string {
 		return head + "Jira will use " + stated
 	}
 	switch f.kind {
-	case kindDate:
+	case appissue.ShapeDate:
 		return head + "2026-03-27"
-	case kindDateTime:
+	case appissue.ShapeDateTime:
 		return head + "2026-03-27 09:30"
-	case kindIssueKey:
+	case appissue.ShapeIssueKey:
 		return head + "PROJ-142"
-	case kindLabels:
+	case appissue.ShapeLabels:
 		return head + "labels, separated by spaces"
-	case kindOther:
+	case appissue.ShapeOther:
 		return head + f.meta.Field.Schema.Type + ", kept as typed"
 	default:
-		return head + f.kind.String()
+		return head + shapeName(f.kind)
 	}
 }
 
@@ -410,17 +411,17 @@ func (m *Model) editing2Label() string {
 
 func (m *Model) hint() string {
 	switch m.fields[m.editing].kind {
-	case kindNumber:
+	case appissue.ShapeNumber:
 		return "  a number"
-	case kindDate:
+	case appissue.ShapeDate:
 		return "  2026-03-27"
-	case kindDateTime:
+	case appissue.ShapeDateTime:
 		return "  2026-03-27 09:30"
-	case kindIssueKey:
+	case appissue.ShapeIssueKey:
 		return "  an issue key, PROJ-142"
-	case kindLabels:
+	case appissue.ShapeLabels:
 		return "  labels, separated by spaces"
-	case kindOther:
+	case appissue.ShapeOther:
 		return "  kept as typed: " + m.fields[m.editing].meta.Field.Schema.Type
 	default:
 		return ""
@@ -446,7 +447,7 @@ func (m *Model) oneWayLine() string {
 func (m *Model) chooserLines() []string {
 	f := m.fields[m.editing]
 	head := m.editing2Label()
-	if f.kind.multiple() {
+	if f.kind.Multiple() {
 		head += "  tab picks, enter is done"
 	} else {
 		head += "  enter takes one, esc is done"
@@ -466,7 +467,7 @@ func (m *Model) chooserLines() []string {
 	}
 	end := min(m.pickTop+h, len(visible))
 	for i := m.pickTop; i < end; i++ {
-		out = append(out, m.choiceRow(i, visible[i], f.kind.multiple()))
+		out = append(out, m.choiceRow(i, visible[i], f.kind.Multiple()))
 	}
 	return out
 }

@@ -1,41 +1,26 @@
 package backlog
 
 import (
-	"context"
-	"errors"
 	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// ranking is one issue whose rank has been changed on screen ahead of the site,
-// the way board.ranking is: next is the issue that followed it in the read and
-// value its own rank before the first step, which is what a refusal puts back.
-// A section is ordered by the rank field's value, so a step gives the issue its
+// rankValue is the rank field an issue had, which a refusal puts back. A
+// section is ordered by the rank field's value, so a step gives the issue its
 // anchor's value and puts it beside the anchor in m.issues: the stable sort by
 // value then keeps the two side by side, in that order.
-type ranking struct {
-	key       string
-	next      string
-	value     jira.FieldValue
-	hadValue  bool
-	sent      string
-	sentValue jira.FieldValue
-	sentHad   bool
-	dirty     bool
-	anchor    string
-	after     bool
+type rankValue struct {
+	value jira.FieldValue
+	has   bool
 }
 
-type rankMsg struct {
-	gen int
-	key string
-	err error
-}
+type rankMsg appboard.RankAnswer
 
 type rankWhere uint8
 
@@ -49,12 +34,6 @@ const (
 // RankMsg ranks the issue under the cursor within its section. It is exported
 // so the palette reaches the gesture its key does.
 type RankMsg struct{ Where rankWhere }
-
-func rankIssue(ctx context.Context, r jira.Ranker, key string, at jira.RankPosition, gen int) tea.Cmd {
-	return func() tea.Msg {
-		return rankMsg{gen: gen, key: key, err: r.RankIssues(ctx, []string{key}, at)}
-	}
-}
 
 func (m *Model) rankRef() jira.FieldRef { return jira.FieldRef{ID: m.config.RankFieldID} }
 
@@ -115,33 +94,34 @@ func (m *Model) rankNextTo(key, anchor string, after bool) tea.Cmd {
 	if refused := m.rankRefused(); refused != "" {
 		return kernel.Warn(refused)
 	}
-	if m.inFlight != nil && m.inFlight.key != key {
-		return kernel.Warn(m.inFlight.key + " is still being ranked; " + key + " can move once the site has answered")
+	if k := m.ranking.Key(); k != "" && k != key {
+		return kernel.Warn(k + " is still being ranked; " + key + " can move once the site has answered")
 	}
 	from, ok := m.byKey[key]
 	to, known := m.byKey[anchor]
 	if !ok || !known {
 		return nil
 	}
-	pending := m.inFlight != nil
-	if !pending {
-		m.inFlight = &ranking{key: key}
-		m.inFlight.value, m.inFlight.hadValue = m.issues[from].Fields.Get(m.rankRef())
-		if from+1 < len(m.issues) {
-			m.inFlight.next = m.issues[from+1].Key
-		}
+	next := ""
+	if from+1 < len(m.issues) {
+		next = m.issues[from+1].Key
 	}
+	start := m.ranking.Step(key, next, m.rankValue(from))
 	value, has := m.issues[to].Fields.Get(m.rankRef())
 	m.setRank(from, value, has)
-	m.issues = shiftIssue(m.issues, from, anchor, after)
+	m.issues = appboard.ShiftIssue(m.issues, from, anchor, after)
 	m.reindex()
 	m.regroup()
 	m.restore(key)
-	if pending {
-		m.inFlight.dirty = true
+	if start != appboard.RankFresh {
 		return nil
 	}
 	return m.sendRank()
+}
+
+func (m *Model) rankValue(at int) rankValue {
+	value, has := m.issues[at].Fields.Get(m.rankRef())
+	return rankValue{value: value, has: has}
 }
 
 func (m *Model) setRank(at int, value jira.FieldValue, has bool) {
@@ -155,15 +135,16 @@ func (m *Model) setRank(at int, value jira.FieldValue, has bool) {
 // sendRank names the position the issue has on screen by its neighbour in its
 // own section.
 func (m *Model) sendRank() tea.Cmd {
-	if m.inFlight == nil || m.deps.Jira == nil {
+	key := m.ranking.Key()
+	if key == "" || m.deps.Jira == nil {
 		return nil
 	}
-	at, ok := m.byKey[m.inFlight.key]
+	at, ok := m.byKey[key]
 	if !ok {
-		m.inFlight = nil
+		m.ranking.Drop()
 		return nil
 	}
-	var pos jira.RankPosition
+	var prev, next string
 	for g := range m.groups {
 		issues := m.groups[g].issues
 		p := slices.Index(issues, at)
@@ -171,103 +152,55 @@ func (m *Model) sendRank() tea.Cmd {
 			continue
 		}
 		if p+1 < len(issues) {
-			pos = jira.RankBefore(m.issues[issues[p+1]].Key)
-		} else if p > 0 {
-			pos = jira.RankAfter(m.issues[issues[p-1]].Key)
+			next = m.issues[issues[p+1]].Key
+		}
+		if p > 0 {
+			prev = m.issues[issues[p-1]].Key
 		}
 		break
 	}
-	if pos.Before == "" && pos.After == "" {
-		m.inFlight = nil
+	pos, ok := appboard.RankBeside(prev, next, m.config.RankFieldID)
+	if !ok {
+		m.ranking.Drop()
 		return nil
 	}
-	pos.FieldID = m.config.RankFieldID
-	m.inFlight.anchor, m.inFlight.after = pos.Anchor()
-	m.inFlight.sent = ""
+	sent := ""
 	if at+1 < len(m.issues) {
-		m.inFlight.sent = m.issues[at+1].Key
+		sent = m.issues[at+1].Key
 	}
-	m.inFlight.sentValue, m.inFlight.sentHad = m.issues[at].Fields.Get(m.rankRef())
-	m.stopRank()
-	m.rankGen++
-	ctx, cancel := context.WithCancel(context.Background())
-	m.rankStop = cancel
-	return kernel.Reply(withCancel(cancel, rankIssue(ctx, m.deps.Jira, m.inFlight.key, pos, m.rankGen)), m.addr)
-}
-
-func (m *Model) stopRank() {
-	if m.rankStop != nil {
-		m.rankStop()
-		m.rankStop = nil
-	}
-}
-
-func (m *Model) dropRank() {
-	m.stopRank()
-	m.rankGen++
-	m.inFlight = nil
+	run, cancel := m.ranking.Send(m.deps.Jira, pos, sent, m.rankValue(at))
+	return kernel.Reply(withCancel(cancel, func() tea.Msg { return rankMsg(run()) }), m.addr)
 }
 
 func (m *Model) ranked(msg rankMsg) tea.Cmd {
-	if msg.gen != m.rankGen || m.inFlight == nil || m.inFlight.key != msg.key {
-		return nil
-	}
-	m.rankStop = nil
-	if msg.err != nil && !rankedAnyway(msg.err, msg.key) {
-		m.putRankBack()
-		return kernel.Fail(msg.err)
-	}
-	if m.inFlight.dirty {
-		m.inFlight.dirty = false
-		m.inFlight.next, m.inFlight.value, m.inFlight.hadValue = m.inFlight.sent, m.inFlight.sentValue, m.inFlight.sentHad
+	res := m.ranking.Answer(appboard.RankAnswer(msg))
+	switch res.Outcome {
+	case appboard.RankRefused:
+		m.putRankBack(res.Key, res.Next, res.Snap)
+		return kernel.Fail(msg.Err)
+	case appboard.RankResend:
 		return m.sendRank()
+	case appboard.RankDone:
+		where := " above "
+		if res.After {
+			where = " below "
+		}
+		return tea.Batch(kernel.Status(res.Key+" now sits"+where+res.Anchor), stored(m.pagePut(m.issues, true)))
 	}
-	anchor, after := m.inFlight.anchor, m.inFlight.after
-	m.inFlight = nil
-	where := " above "
-	if after {
-		where = " below "
-	}
-	return tea.Batch(kernel.Status(msg.key+" now sits"+where+anchor), stored(m.pagePut(m.issues, true)))
+	return nil
 }
 
-func rankedAnyway(err error, key string) bool {
-	var partial *jira.PartialRankError
-	return errors.As(err, &partial) && slices.Contains(partial.Ranked, key)
-}
-
-func (m *Model) putRankBack() {
-	r := m.inFlight
-	m.inFlight = nil
-	from, ok := m.byKey[r.key]
+func (m *Model) putRankBack(key, next string, was rankValue) {
+	from, ok := m.byKey[key]
 	if !ok {
 		return
 	}
 	under := m.under()
-	m.setRank(from, r.value, r.hadValue)
-	iss := m.issues[from]
-	m.issues = slices.Delete(m.issues, from, from+1)
-	at := len(m.issues)
-	if i := slices.IndexFunc(m.issues, func(i jira.Issue) bool { return i.Key == r.next }); r.next != "" && i >= 0 {
-		at = i
-	}
-	m.issues = slices.Insert(m.issues, at, iss)
+	m.setRank(from, was.value, was.has)
+	m.issues = appboard.PutBack(m.issues, from, next)
 	m.reindex()
 	m.regroup()
 	m.restore(under)
-}
-
-func shiftIssue(issues []jira.Issue, from int, anchor string, after bool) []jira.Issue {
-	iss := issues[from]
-	issues = slices.Delete(issues, from, from+1)
-	at := slices.IndexFunc(issues, func(i jira.Issue) bool { return i.Key == anchor })
-	if at < 0 {
-		return slices.Insert(issues, from, iss)
-	}
-	if after {
-		at++
-	}
-	return slices.Insert(issues, at, iss)
 }
 
 // dropWithin ends a drag released over another issue of the same section: the

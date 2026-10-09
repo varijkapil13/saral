@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -17,7 +17,7 @@ import (
 // rkStatic covers every field this build has no editor for at all — a
 // platform fact, a related issue, a custom field whose shape has no editor.
 // rkChoice, rkPerson and rkStatus are priority, assignee and status; rkField is
-// a custom field the issue's own screen lists, whose editor customKind picks.
+// a custom field the issue's own screen lists, whose editor appissue.Custom picks.
 type rowKind uint8
 
 const (
@@ -102,7 +102,7 @@ type fieldRow struct {
 	// custom, meta and loc belong to an rkField row: the editor its schema
 	// earned, the screen's own entry for it, and the zone a time is typed in.
 	// picked and originalPicked are a choice or person row's values.
-	custom         customKind
+	custom         appissue.Custom
 	meta           jira.FieldMeta
 	loc            *time.Location
 	picked         []jira.Option
@@ -136,7 +136,7 @@ func newFieldRow(id, label string, kind rowKind, iss jira.Issue) fieldRow {
 	}
 	row.originalID = row.chosenID
 	row.value = row.original
-	row.base = app.Fingerprint(iss, id)
+	row.base = appissue.Fingerprint(iss, id)
 	if kind == rkLabels {
 		row.baseLabels = slices.Clone(iss.Labels)
 	}
@@ -238,7 +238,7 @@ func (r *fieldRow) into(out *jira.IssuePatch) error {
 		}
 		out.Summary = &value
 	case rkLabels:
-		out.AddLabels, out.RemoveLabels = labelDiff(r.baseLabels, splitLabels(r.value))
+		out.AddLabels, out.RemoveLabels = appissue.LabelDiff(r.baseLabels, appissue.SplitLabels(r.value))
 	case rkDate:
 		if strings.TrimSpace(r.value) == "" {
 			out.Clear = append(out.Clear, jira.FieldRef{ID: r.id})
@@ -276,33 +276,6 @@ func notRead(row *fieldRow) error {
 		Field:   row.id,
 		Message: row.label + " was not read with this issue, so writing it would empty whatever is really there",
 	}}}
-}
-
-func labelDiff(was, now []string) (add, remove []string) {
-	for _, l := range now {
-		if !slices.Contains(was, l) {
-			add = append(add, l)
-		}
-	}
-	for _, l := range was {
-		if !slices.Contains(now, l) {
-			remove = append(remove, l)
-		}
-	}
-	return add, remove
-}
-
-// splitLabels reads the comma-separated form a label list is typed in. Jira
-// refuses a label with a space in it, so the separator is unambiguous.
-func splitLabels(s string) []string {
-	out := make([]string, 0, strings.Count(s, ",")+1)
-	for _, part := range strings.Split(s, ",") {
-		label := strings.Join(strings.Fields(part), "-")
-		if label != "" && !slices.Contains(out, label) {
-			out = append(out, label)
-		}
-	}
-	return out
 }
 
 // editableRowSpecs is the fixed fields this build offers a row for, in the

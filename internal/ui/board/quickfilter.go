@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -16,10 +17,8 @@ import (
 // filters were toggled on, under its own ViewID.
 const quickFiltersMemoryKey = "quickfilters"
 
-// quickFiltersMsg carries a board's own quick filters. An error reading them
-// answers the same shape with none: the board still draws without them, the
-// way it draws without an estimation field, so a site the token cannot ask a
-// second endpoint of does not lose the first one's cards over it.
+// quickFiltersMsg carries a board's own quick filters, none when they could
+// not be read.
 type quickFiltersMsg struct {
 	gen     int
 	filters []jira.QuickFilter
@@ -27,11 +26,7 @@ type quickFiltersMsg struct {
 
 func quickFiltersCmd(ctx context.Context, reader jira.BoardReader, boardID int64, gen int) tea.Cmd {
 	return func() tea.Msg {
-		found, err := reader.QuickFilters(ctx, boardID)
-		if err != nil {
-			return quickFiltersMsg{gen: gen}
-		}
-		return quickFiltersMsg{gen: gen, filters: found}
+		return quickFiltersMsg{gen: gen, filters: appboard.ReadQuickFilters(ctx, reader, boardID)}
 	}
 }
 

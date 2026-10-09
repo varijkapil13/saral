@@ -13,7 +13,9 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/comment"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -59,7 +61,7 @@ type Model struct {
 	styles *styles
 
 	issue       jira.Issue
-	labels      app.FieldLabels
+	labels      appquery.FieldLabels
 	loadedIssue bool
 	loadFailed  bool
 	loadErr     error
@@ -172,14 +174,14 @@ type Model struct {
 	mention mention.State
 
 	// held is a draft's edits for custom rows the screen has not listed yet.
-	held draft
+	held appissue.Draft
 
 	// editGen counts every keystroke a typing row or the description textarea
 	// takes, which is what tells the sidebar's own memo a frame has to be
 	// rebuilt when neither the cursor nor the stage has moved.
 	editGen int
 
-	drafts     draftStore
+	drafts     appissue.Drafts
 	launch     editorLauncher
 	after      func(time.Duration, func() tea.Msg) tea.Cmd
 	saveGen    int
@@ -208,8 +210,8 @@ type Model struct {
 	// inactive stops a pane under another view answering a palette broadcast.
 	inactive bool
 
-	search *app.Search
-	cache  app.Cache
+	search *appquery.Search
+	cache  appcache.Cache
 	gen    int
 	cancel context.CancelFunc
 
@@ -243,7 +245,7 @@ func tickAfter(d time.Duration, fn func() tea.Msg) tea.Cmd {
 }
 
 // withDrafts replaces where drafts are kept.
-func withDrafts(s draftStore) modelOption {
+func withDrafts(s appissue.Drafts) modelOption {
 	return func(m *Model) { m.drafts = s }
 }
 
@@ -280,7 +282,7 @@ func New(d kernel.Deps, seed jira.Issue, opts ...modelOption) kernel.View {
 	}
 	m.dividerMark = marker(m.zones, dividerZone)
 	if d.Jira != nil {
-		m.search = app.NewSearch(d.Jira)
+		m.search = appquery.NewSearch(d.Jira)
 	}
 	if store, err := newDraftStore(d); err == nil {
 		m.drafts = store
@@ -323,15 +325,13 @@ func (m *Model) fromCache() {
 	if m.issue.Key == "" || m.issue.Requested.Wide() {
 		return
 	}
-	held, ok := m.cache.(app.IssueCache)
+	held, ok := m.cache.(appcache.IssueCache)
 	if !ok || held == nil {
 		return
 	}
-	snap, ok := held.Issue(m.issue.Key)
-	if !ok {
-		return
+	if merged, ok := appissue.FromCache(held, m.issue); ok {
+		m.issue = merged
 	}
-	m.issue = app.MergeIssue(snap.Issue, m.issue)
 }
 
 // keepIssue stores a freshly read issue so this pane's next open draws it
@@ -339,11 +339,11 @@ func (m *Model) fromCache() {
 // rows do, so a field this pane never asked about — one a list row or a board
 // card happened to carry — is left as it was.
 func (m *Model) keepIssue(iss jira.Issue) tea.Cmd {
-	held, ok := m.cache.(app.IssueCache)
+	held, ok := m.cache.(appcache.IssueCache)
 	if !ok || held == nil {
 		return nil
 	}
-	if err := held.PutIssue(iss); err != nil {
+	if err := appissue.Keep(held, iss); err != nil {
 		return kernel.Warn("this issue could not be stored for next time: " + err.Error())
 	}
 	return nil

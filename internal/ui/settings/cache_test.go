@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -23,7 +23,7 @@ func runCmd(t *testing.T, d kernel.Deps) kernel.StatusMsg {
 }
 
 type clearableCache struct {
-	app.Cache
+	appcache.Cache
 	cleared int
 }
 
@@ -58,7 +58,7 @@ func TestClearCache_ASessionWithNoCacheIsToldSo(t *testing.T) {
 	}
 }
 
-type failingCache struct{ app.Cache }
+type failingCache struct{ appcache.Cache }
 
 func (failingCache) Clear() error { return errors.New("disk on fire") }
 

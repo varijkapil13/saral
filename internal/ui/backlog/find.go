@@ -3,12 +3,11 @@ package backlog
 import (
 	"context"
 	"strings"
-	"unicode/utf8"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -108,31 +107,11 @@ func (m *Model) nextMatch(from, dir int, inclusive bool) (int, bool) {
 	}
 	for step := start; step < n+start; step++ {
 		i := ((from+dir*step)%n + n) % n
-		if matchesNeedle(m.issueAt(i), m.needle) {
+		if appboard.MatchesNeedle(m.issueAt(i), m.needle) {
 			return i, true
 		}
 	}
 	return 0, false
-}
-
-func matchesNeedle(iss *jira.Issue, needle string) bool {
-	return iss != nil && (containsFold(iss.Key, needle) || containsFold(iss.Summary, needle))
-}
-
-// containsFold is a case-insensitive strings.Contains that allocates nothing,
-// which a search run on every keystroke over every row has to be.
-func containsFold(s, sub string) bool {
-	if sub == "" {
-		return true
-	}
-	for i := 0; i+len(sub) <= len(s); {
-		if strings.EqualFold(s[i:i+len(sub)], sub) {
-			return true
-		}
-		_, size := utf8.DecodeRuneInString(s[i:])
-		i += size
-	}
-	return false
 }
 
 func (m *Model) findPrompt() string {
@@ -150,7 +129,7 @@ type meMsg struct {
 
 func (m *Model) toggleMine() tea.Cmd {
 	if m.me != nil {
-		return m.setTerms(mineToggled(m.terms, *m.me))
+		return m.setTerms(appboard.MineToggled(m.terms, *m.me, widget.Sanitize(m.me.DisplayName)))
 	}
 	if m.deps.Jira == nil {
 		return kernel.Warn("there is no Jira connection in this session")
@@ -161,7 +140,7 @@ func (m *Model) toggleMine() tea.Cmd {
 	m.askingMe = true
 	who := m.deps.Jira
 	return kernel.Reply(func() tea.Msg {
-		u, err := who.Me(context.Background())
+		u, err := appboard.Account(context.Background(), who)
 		return meMsg{user: u, err: err}
 	}, m.addr)
 }
@@ -176,15 +155,5 @@ func (m *Model) tookMe(msg meMsg) tea.Cmd {
 	}
 	me := msg.user
 	m.me = &me
-	return m.setTerms(mineToggled(m.terms, me))
-}
-
-// mineToggled is the terms with the assignee facet set to exactly this account,
-// or with it taken off when that is already all it holds.
-func mineToggled(terms filter.Terms, me jira.User) filter.Terms {
-	mine := filter.Term{Facet: filter.FacetAssignee, ID: me.AccountID, Label: widget.Sanitize(me.DisplayName)}
-	if terms.Has(mine) && terms.Count(filter.FacetAssignee) == 1 {
-		return terms.Without(filter.FacetAssignee)
-	}
-	return terms.Without(filter.FacetAssignee).Toggle(mine)
+	return m.setTerms(appboard.MineToggled(m.terms, me, widget.Sanitize(me.DisplayName)))
 }

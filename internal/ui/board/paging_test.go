@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -25,9 +25,9 @@ type pageWrite struct {
 	more  bool
 }
 
-var _ app.BoardPageCache = (*pageCache)(nil)
+var _ appcache.BoardPageCache = (*pageCache)(nil)
 
-func (c *pageCache) PutBoardPage(boardID int64, page app.BoardSnapshot, first bool) error {
+func (c *pageCache) PutBoardPage(boardID int64, page appcache.BoardSnapshot, first bool) error {
 	c.mu.Lock()
 	c.pages = append(c.pages, pageWrite{first: first, cards: len(page.Issues), more: page.More})
 	c.mu.Unlock()
@@ -75,7 +75,7 @@ func TestBoard_EachPageIsStoredOnItsOwnAndOffTheUpdateLoop(t *testing.T) {
 	if last := cardWrites[len(cardWrites)-1]; last.more {
 		t.Error("the last page was stored as though there were more to come")
 	}
-	snap, ok := cache.Board(dr.m.plan.boardID)
+	snap, ok := cache.Board(dr.m.plan.BoardID)
 	if !ok || len(snap.Issues) != 24 || snap.Sprint != dr.m.sprint.ID {
 		t.Errorf("the stored board holds %d cards on sprint %d, want 24 on %d", len(snap.Issues), snap.Sprint, dr.m.sprint.ID)
 	}
@@ -95,7 +95,7 @@ func TestBoard_AStoredBoardCutShortIsReadAgain(t *testing.T) {
 	t.Parallel()
 	boardID, cfg, qf, issues := primed(t, testDeps(newFake(6)))
 	cache := newFakeCache()
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues[:3], More: true}, false)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues[:3], More: true}, false)
 
 	fake := newFake(6)
 	dr := newDriver(t, withCache(testDeps(fake), cache), 120, 20)
@@ -127,7 +127,7 @@ func TestBoard_AnOpenBoardGoesStaleAndIsReadAgainWhenItComesBack(t *testing.T) {
 	mustNotContain(t, dr.view(), staleLabel)
 
 	mu.Lock()
-	now = now.Add(app.KindBoard.TTL() + time.Minute)
+	now = now.Add(appcache.KindBoard.TTL() + time.Minute)
 	mu.Unlock()
 
 	mustContain(t, dr.view(), staleLabel)

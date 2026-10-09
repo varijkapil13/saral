@@ -9,7 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appboard "github.com/varijkapil13/saral/internal/app/board"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -113,7 +114,7 @@ func BenchmarkBacklogSteadyScroll20(b *testing.B) { scroll(b, stocked(b, 20, 120
 // force that still leaves rows on screen, which draws the bar under them.
 func BenchmarkBacklogSteadyScrollTermed10k(b *testing.B) {
 	m := stocked(b, 10000, 120, 40)
-	m.terms = filter.Terms{{Facet: filter.FacetType, ID: "10301", Label: "Story"}}
+	m.terms = appterm.Terms{{Facet: appterm.FacetType, ID: "10301", Label: "Story"}}
 	m.termsGen++
 	m.regroup()
 	if len(m.rows) == 0 {
@@ -259,7 +260,7 @@ func BenchmarkBacklogRank5k(b *testing.B) {
 		from, to := m.byKey[key], m.issues[anchor].Key
 		value, has := m.issues[anchor].Fields.Get(ref)
 		m.setRank(from, value, has)
-		m.issues = shiftIssue(m.issues, from, to, after)
+		m.issues = appboard.ShiftIssue(m.issues, from, to, after)
 		m.reindex()
 		m.regroup()
 		_ = m.View()
