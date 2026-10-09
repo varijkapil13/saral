@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
+	apptimeline "github.com/varijkapil13/saral/internal/app/timeline"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -41,13 +41,13 @@ func stocked(tb testing.TB, n, span, w, h int) *Model {
 	m, _ = next.(*Model)
 
 	issues := spread(n, span)
-	fields := app.ResolveDateFields(catalogueFor(tb), nil, nil)
-	res, err := app.NewDates(fields, app.WithZone(time.UTC, ""), app.WithNow(d.Now)).
+	fields := apptimeline.ResolveDateFields(catalogueFor(tb), nil, nil)
+	res, err := apptimeline.NewDates(fields, apptimeline.WithZone(time.UTC, ""), apptimeline.WithNow(d.Now)).
 		Resolve(context.Background(), issues)
 	if err != nil {
 		tb.Fatalf("resolving the cascade: %v", err)
 	}
-	next, _ = m.Update(loadedMsg{gen: m.gen, fields: fields, issues: issues, resolution: res})
+	next, _ = m.Update(loadedMsg{gen: m.gen, Loaded: apptimeline.Loaded{Fields: fields, Issues: issues, Resolution: res}})
 	m, _ = next.(*Model)
 	_ = m.View()
 	return m

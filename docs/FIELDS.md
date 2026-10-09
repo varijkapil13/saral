@@ -33,7 +33,7 @@ above, `com.pyxis.greenhopper.jira:gh-lexo-rank` and its siblings.
 
 **A plugin key is not instance data.** It is the same string on every Jira Cloud site, which is what
 separates it from a field id, a field name or a status name. Nothing in this tree matched one before
-this packet: `internal/app/dates.go` finds the sprint and the date fields by *name*, through
+this packet: `internal/app/timeline/dates.go` finds the sprint and the date fields by *name*, through
 `jira.ResolveField`, which is a different and more fragile thing — a name is localised and a
 team-managed project mints its own.
 

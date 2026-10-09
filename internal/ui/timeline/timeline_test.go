@@ -13,6 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	apptimeline "github.com/varijkapil13/saral/internal/app/timeline"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -239,7 +240,7 @@ func TestTimeline_AnAnswerToASupersededReadIsDropped(t *testing.T) {
 
 	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
 	was := len(dr.m.rows)
-	dr.send(loadedMsg{gen: dr.m.gen - 1, issues: []jira.Issue{issueIn("OTHER-1", "Not this")}})
+	dr.send(loadedMsg{gen: dr.m.gen - 1, Loaded: apptimeline.Loaded{Issues: []jira.Issue{issueIn("OTHER-1", "Not this")}}})
 	if len(dr.m.rows) != was {
 		t.Errorf("a stale answer replaced the chart: %d bars, want %d", len(dr.m.rows), was)
 	}
@@ -765,14 +766,14 @@ end   = ["Target end"]
 func TestTimeline_SaysWhenItIsShowingOnlyPartOfTheSearch(t *testing.T) {
 	t.Parallel()
 
-	dr := newDriver(t, testDeps(newFake(maxIssues+40)), 120, 24)
-	if len(dr.m.rows) != maxIssues {
-		t.Fatalf("the chart holds %d bars, want the cap of %d", len(dr.m.rows), maxIssues)
+	dr := newDriver(t, testDeps(newFake(apptimeline.MaxIssues+40)), 120, 24)
+	if len(dr.m.rows) != apptimeline.MaxIssues {
+		t.Fatalf("the chart holds %d bars, want the cap of %d", len(dr.m.rows), apptimeline.MaxIssues)
 	}
 	if !dr.m.truncated {
 		t.Fatal("the chart does not know it is showing part of the answer")
 	}
-	mustContain(t, strings.Join(dr.m.noteLines, "\n"), "holds the first "+strconv.Itoa(maxIssues))
+	mustContain(t, strings.Join(dr.m.noteLines, "\n"), "holds the first "+strconv.Itoa(apptimeline.MaxIssues))
 }
 
 // --- helpers ----------------------------------------------------------------
@@ -909,11 +910,11 @@ func TestTimeline_LeavesAnArchivedVersionOffTheChart(t *testing.T) {
 	dr := newDriver(t, testDeps(newFake(10)), 140, 24)
 	dr.send(markersMsg{
 		gen: dr.m.gen,
-		versions: []jira.Version{
+		Markers: apptimeline.Markers{Versions: []jira.Version{
 			{ID: "v1", Name: "live", ReleaseDate: day(2026, time.April, 2)},
 			{ID: "v2", Name: "archived", ReleaseDate: day(2026, time.April, 9), Archived: true},
 			{ID: "v3", Name: "undated"},
-		},
+		}},
 	})
 
 	names := make([]string, 0, len(dr.m.versionMarks))

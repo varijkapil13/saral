@@ -1327,7 +1327,7 @@ and the UI shows which source a bar came from so a wrong-looking bar is diagnosa
 | 7 | the earliest date on any child | the latest date on any child | a parent no rule above resolved. The walk recurses, so a child with no dates of its own rolls up first, and a parent chain that leads back to itself is warned about rather than followed. Drawn distinctly from a real range: moving it moves nothing |
 
 Rules 1 to 5 are tried in order and the first that yields **both** ends wins; the first lone date any
-of them found becomes the milestone under rule 6 when none does. `app.Provenance.Rule()` numbers
+of them found becomes the milestone under rule 6 when none does. `apptimeline.Provenance.Rule()` numbers
 itself against this table, so a row added here is a row the code already counts on — the rollup is 7
 and an unresolved issue is 0.
 
@@ -2006,7 +2006,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
   `IssueFields`; for `ui/palette`: `Search`; for `ui/filter`:
   `FindPeople|IssueTypeStatuses|Labels|People|Priorities`.
 
-- [ ] **P13.11 — `timeline`** · after P13.2 · **owns** `internal/app/timeline/**`, `internal/ui/timeline/**`, `internal/app/dates.go` and its tests (retired)
+- [x] **P13.11 — `timeline`** · after P13.2 · **owns** `internal/app/timeline/**`, `internal/ui/timeline/**`, `internal/app/dates.go` and its tests (retired)
   Date resolution. Empty for `ui/timeline`: `Boards|Fields|Sprints|Versions`.
 
 - [ ] **P13.12 — `plan`** · after P13.2 · **owns** `internal/app/plan/**`, `internal/ui/plan/**`
