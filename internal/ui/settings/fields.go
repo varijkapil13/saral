@@ -13,6 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appconnect "github.com/varijkapil13/saral/internal/app/connect"
 	appmatch "github.com/varijkapil13/saral/internal/app/match"
 	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/config"
@@ -132,11 +133,8 @@ var (
 	_ kernel.Closer      = (*fieldPickerModel)(nil)
 )
 
-// fieldRow is one field on offer: the id pinning writes and the name to draw.
-type fieldRow struct{ id, label string }
-
-// fieldsFoundMsg carries the site's field catalogue.
-type fieldsFoundMsg struct{ fields []jira.Field }
+// fieldsFoundMsg carries the fields on offer, already sorted.
+type fieldsFoundMsg struct{ fields []appconnect.PinnableField }
 
 // fieldsFailedMsg is a read that brought nothing back.
 type fieldsFailedMsg struct{ err error }
@@ -164,7 +162,7 @@ type fieldPickerModel struct {
 	input textinput.Model
 	query string
 
-	rows  []fieldRow
+	rows  []appconnect.PinnableField
 	shown []int
 
 	// pinned is the working copy, in pin order. It starts as the profile's own
@@ -241,7 +239,7 @@ func (m *fieldPickerModel) fetch() tea.Cmd {
 	m.cancel, m.loading, m.problem = cancel, true, ""
 	return kernel.Reply(func() tea.Msg {
 		defer cancel()
-		fields, err := search.Fields(ctx)
+		fields, err := appconnect.PinnableFields(ctx, search)
 		if err != nil {
 			return fieldsFailedMsg{err: err}
 		}
@@ -288,23 +286,9 @@ func (m *fieldPickerModel) Update(msg tea.Msg) (kernel.View, tea.Cmd) {
 	return m, cmd
 }
 
-// landed keeps every field with an id, named the way this site spells it, and
-// sorted by that name — the only order there is before anything is pinned.
-func (m *fieldPickerModel) landed(fields []jira.Field) {
+func (m *fieldPickerModel) landed(fields []appconnect.PinnableField) {
 	m.stop()
-	m.rows = make([]fieldRow, 0, len(fields))
-	for i := range fields {
-		f := &fields[i]
-		if f.ID == "" {
-			continue
-		}
-		label := f.Name
-		if strings.TrimSpace(label) == "" {
-			label = f.ID
-		}
-		m.rows = append(m.rows, fieldRow{id: f.ID, label: label})
-	}
-	slices.SortFunc(m.rows, func(a, b fieldRow) int { return strings.Compare(a.label, b.label) })
+	m.rows = fields
 	m.head = ""
 	m.refilter()
 }
@@ -355,7 +339,7 @@ func (m *fieldPickerModel) toggle() {
 	if m.cursor < 0 || m.cursor >= len(m.shown) {
 		return
 	}
-	id := m.rows[m.shown[m.cursor]].id
+	id := m.rows[m.shown[m.cursor]].ID
 	if at := slices.Index(m.pinned, id); at >= 0 {
 		m.pinned = slices.Delete(m.pinned, at, at+1)
 	} else {
@@ -413,7 +397,7 @@ func (m *fieldPickerModel) refilter() {
 	type ranked struct{ at, score int }
 	ranks := make([]ranked, 0, len(m.rows))
 	for i, r := range m.rows {
-		score, ok := pattern.Score(r.label)
+		score, ok := pattern.Score(r.Label)
 		if !ok {
 			continue
 		}
@@ -431,7 +415,7 @@ func (m *fieldPickerModel) refilter() {
 	m.cursor = 0
 	if under != "" {
 		for i, at := range m.shown {
-			if m.rows[at].id == under {
+			if m.rows[at].ID == under {
 				m.cursor = i
 				break
 			}
@@ -444,7 +428,7 @@ func (m *fieldPickerModel) underCursor() string {
 	if m.cursor < 0 || m.cursor >= len(m.shown) {
 		return ""
 	}
-	return m.rows[m.shown[m.cursor]].id
+	return m.rows[m.shown[m.cursor]].ID
 }
 
 func (m *fieldPickerModel) moveTo(at int) {
@@ -478,12 +462,12 @@ func (m *fieldPickerModel) row(at int) string {
 	sel := at == m.cursor
 	r := &m.rows[m.shown[at]]
 	mark := "[ ] "
-	if pin := slices.Index(m.pinned, r.id); pin >= 0 {
+	if pin := slices.Index(m.pinned, r.ID); pin >= 0 {
 		mark = "[" + strconv.Itoa(pin+1) + "] "
 	}
 	var b strings.Builder
 	writeMarker(&b, sel, m.deps.Theme)
-	text := widget.PadTruncate(mark+r.label, m.width-marker, m.deps.Theme.Glyphs.Ellipsis)
+	text := widget.PadTruncate(mark+r.Label, m.width-marker, m.deps.Theme.Glyphs.Ellipsis)
 	if sel {
 		b.WriteString(text)
 	} else {
