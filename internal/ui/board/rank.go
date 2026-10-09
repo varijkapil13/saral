@@ -6,12 +6,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-type rankMsg app.RankAnswer
+type rankMsg appboard.RankAnswer
 
 type rankWhere uint8
 
@@ -93,11 +93,11 @@ func (m *Model) rankNextTo(key, anchor string, after bool) tea.Cmd {
 		next = m.issues[from+1].Key
 	}
 	start := m.rank.Step(key, next, struct{}{})
-	m.issues = app.ShiftIssue(m.issues, from, anchor, after)
+	m.issues = appboard.ShiftIssue(m.issues, from, anchor, after)
 	m.place()
 	m.forget()
 	m.restore(key)
-	if start != app.RankFresh {
+	if start != appboard.RankFresh {
 		return nil
 	}
 	return m.sendRank()
@@ -123,7 +123,7 @@ func (m *Model) sendRank() tea.Cmd {
 	if row > lo {
 		prev = m.issueAt(col, row-1).Key
 	}
-	at, ok := app.RankBeside(prev, next, m.rawConfig.RankFieldID)
+	at, ok := appboard.RankBeside(prev, next, m.rawConfig.RankFieldID)
 	if !ok {
 		m.rank.Drop()
 		return nil
@@ -137,14 +137,14 @@ func (m *Model) sendRank() tea.Cmd {
 }
 
 func (m *Model) ranked(msg rankMsg) tea.Cmd {
-	res := m.rank.Answer(app.RankAnswer(msg))
+	res := m.rank.Answer(appboard.RankAnswer(msg))
 	switch res.Outcome {
-	case app.RankRefused:
+	case appboard.RankRefused:
 		m.putRankBack(res.Key, res.Next)
 		return kernel.Fail(msg.Err)
-	case app.RankResend:
+	case appboard.RankResend:
 		return m.sendRank()
-	case app.RankDone:
+	case appboard.RankDone:
 		where := " above "
 		if res.After {
 			where = " below "
@@ -162,7 +162,7 @@ func (m *Model) putRankBack(key, next string) {
 		return
 	}
 	under := m.selectedKey()
-	m.issues = app.PutBack(m.issues, from, next)
+	m.issues = appboard.PutBack(m.issues, from, next)
 	m.place()
 	m.forget()
 	m.restore(under)

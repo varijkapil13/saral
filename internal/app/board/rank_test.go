@@ -1,4 +1,4 @@
-package app
+package board
 
 import (
 	"context"
@@ -185,6 +185,14 @@ func issuesOf(keys ...string) []jira.Issue {
 	out := make([]jira.Issue, len(keys))
 	for i, k := range keys {
 		out[i] = jira.Issue{Key: k}
+	}
+	return out
+}
+
+func keysOf(issues []jira.Issue) []string {
+	out := make([]string, len(issues))
+	for i := range issues {
+		out[i] = issues[i].Key
 	}
 	return out
 }

@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
@@ -228,7 +228,7 @@ func BenchmarkBoardRank5k(b *testing.B) {
 		if i%2 == 1 {
 			anchor, after = m.issueAt(0, 6).Key, true
 		}
-		m.issues = app.ShiftIssue(m.issues, m.indexOf(key), anchor, after)
+		m.issues = appboard.ShiftIssue(m.issues, m.indexOf(key), anchor, after)
 		m.place()
 		m.forget()
 		m.restore(key)

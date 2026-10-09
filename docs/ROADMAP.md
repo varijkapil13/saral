@@ -1922,6 +1922,7 @@ record of what was built, what was left and why.
   the rank field's value in the backlog). `app.RankOne` reads a partial answer naming the key as
   success; `app.RankBeside`, `app.ShiftIssue` and `app.PutBack` are the shared list arithmetic. The
   views keep the refusal reasons, the cursor, the regrouping and the status lines. No visible change.
+  P13.1 moved all of it to `internal/app/board`, names unchanged: `appboard.Ranking[S]` and so on.
 
 ## Batch 12 — Full-text search
 
@@ -1941,6 +1942,85 @@ its PR; the PR description is the record of what was built and what was left.
 
 - [x] **T3 — The palette offers a site search** · [#193](https://github.com/varijkapil13/saral/pull/193) · after T2 · **owns** `internal/ui/palette/**`, `docs/{UX,ROADMAP}.md`, `CHANGELOG.md`
   Under whatever the palette found in the cache, one more row opens the search view with what was typed.
+
+## Batch 13 — Bounded contexts in `internal/app`
+
+The behaviour still deciding things inside `internal/ui/**` moves into one package per context under
+`internal/app`, so a view only renders and calls a use case. The target, the closed shared kernel and
+the rules are in [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#bounded-contexts-in-internalapp);
+`internal/arch/contexts_test.go` enforces them. P13.2 is serial and blocks the rest; P13.3 to P13.13
+are independent of each other and run in parallel; P13.14 is last. No packet changes what a user
+sees: the goldens stay byte-identical.
+
+A context packet is done when its views call no port method for the behaviour it moved. Concretely,
+`grep -rnE '\.(Method|Method|...)\(' internal/ui/<view> --include='*.go' --exclude='*_test.go'`
+with the methods listed against the packet comes back empty; the view still imports `pkg/jira` for
+its types, and that is fine. A packet that retires a root file deletes it from `legacyRootFiles` in
+`internal/arch/contexts_test.go` in the same PR, and each packet owns its own lines in that list.
+
+- [x] **P13.1 — Contexts, their rules, and rank into `board`** · **owns** `internal/arch/{contexts_test.go,arch.go}`, `internal/app/board/**`, `internal/app/{rank.go,rank_test.go}` (removed), `internal/ui/{board,backlog}/{rank.go,bench_test.go}`, the imports in `internal/ui/{board/board.go,backlog/backlog.go}`, `docs/{ARCHITECTURE,TESTING,ROADMAP}.md`
+  The decision, the three import rules and the frozen root list, with the rank state machine as the
+  first move. Views import a context as `app<context>`.
+
+- [ ] **P13.2 — The shared kernel** · serial, blocks P13.3 to P13.14 · **owns** `internal/app/{cache,cache_views,match,issuekey}.go` and their tests, `internal/app/{cache,match,issueref,term}/**`, `internal/ui/filter/term.go` and its tests, the import lines of every importer, `internal/arch/{imports_test.go,contexts_test.go}`, `docs/{ARCHITECTURE,TESTING,PERFORMANCE,ROADMAP}.md`
+  `cache.go` and `cache_views.go` become `cache` (`app.Cache` becomes `cache.Cache`), `match.go`
+  becomes `match`, `issuekey.go` becomes `issueref`, and the filter-term model leaves `ui/filter`
+  for `term`. The three files leave `legacyRootFiles`. Adds the import rule
+  `only-the-cache-imports-the-store` (forbid `internal/store`, except `cmd`, `internal/store` and
+  `internal/app/cache`), which could not exist before its exemption directory did. The budget rows
+  in `docs/PERFORMANCE.md` follow their tests.
+
+- [ ] **P13.3 — `board`** · after P13.2 · **owns** `internal/app/board/**`, `internal/ui/{board,backlog}/**`
+  The three-step load and paging, column and lane grouping, quick filters, backlog grouping by
+  sprint. Empty for `ui/board`: `BoardConfig|BoardIssues|Boards|FindPeople|IssueFields|Me|MoveToSprint|QuickFilters|SprintIssues|Sprints|Transition|Transitions`;
+  for `ui/backlog`: `BoardConfig|BoardIssues|Boards|Fields|IssueFields|Me|MoveToBacklog|MoveToSprint|Sprints`.
+
+- [ ] **P13.4 — `issue`** · after P13.2 · **owns** `internal/app/issue/**`, `internal/ui/{issue,form}/**`, `internal/app/{issue.go,issue_test.go}` (retired)
+  Read, edit and the conflict check, field coercion, create, drafts, links, watchers, worklogs, the
+  children sort. Empty for `ui/issue`: `AddWorklog|CreateIssue|CreateMeta|DeleteLink|EditMeta|Fields|FindPeople|Issue|IssueFields|IssueLinkTypes|LinkIssues|Me|Priorities|Search|Transition|Transitions|Unwatch|Watch|Watchers|Worklogs`;
+  for `ui/form`: `CreateIssue|CreateMeta|FindPeople|Me`.
+
+- [ ] **P13.5 — `comment`** · after P13.2 · **owns** `internal/app/comment/**`, `internal/ui/{comment,mention}/**`
+  Comment create, edit and delete, and drafts. Empty for `ui/comment`:
+  `AddComment|Comments|DeleteComment|EditComment`; for `ui/mention`: `FindPeople`.
+
+- [ ] **P13.6 — `attach`** · after P13.2 · **owns** `internal/app/attach/**`, `internal/ui/attach/**`
+  Upload, download and delete, with progress drained as events. Shell-style path completion stays in
+  the view. Empty for `ui/attach`: `Attachments|DeleteAttachment|Download|Upload`.
+
+- [ ] **P13.7 — `sprint`** · after P13.2 · **owns** `internal/app/sprint/**`, `internal/ui/sprint/**`
+  Create, start, complete with a destination, progress. Empty for `ui/sprint`:
+  `BoardConfig|Boards|CompleteSprint|CreateSprint|MoveToSprint|Sprint|SprintIssues|Sprints|StartSprint|UpdateSprint`.
+
+- [ ] **P13.8 — `release`** · after P13.2 · **owns** `internal/app/release/**`, `internal/ui/release/**`
+  Versions, facets, the release flow, bulk fixVersion. Empty for `ui/release`:
+  `ReleaseVersion|SaveVersion|Search|UnresolvedCount|UpdateIssue|Versions`.
+
+- [ ] **P13.9 — `move`** · after P13.2 · **owns** `internal/app/move/**`, `internal/ui/move/**`
+  The bulk-move plan, and the task's progress drained as events. Empty for `ui/move`:
+  `BulkMove|CreateMeta|Issue|IssueTypeStatuses|Search|Task`.
+
+- [ ] **P13.10 — `search`** · after P13.2 · **owns** `internal/app/search/**`, `internal/ui/{list,search,palette}/**`, `internal/ui/filter/**` but `term.go`, `internal/app/{search.go,index.go}` and their tests (retired)
+  The search runner, saved queries, list paging, refresh and polling, the local index, palette
+  frecency, and the value lookups behind the filter picker. Empty for `ui/list` and `ui/search`:
+  `IssueFields`; for `ui/palette`: `Search`; for `ui/filter`:
+  `FindPeople|IssueTypeStatuses|Labels|People|Priorities`.
+
+- [ ] **P13.11 — `timeline`** · after P13.2 · **owns** `internal/app/timeline/**`, `internal/ui/timeline/**`, `internal/app/dates.go` and its tests (retired)
+  Date resolution. Empty for `ui/timeline`: `Boards|Fields|Sprints|Versions`.
+
+- [ ] **P13.12 — `plan`** · after P13.2 · **owns** `internal/app/plan/**`, `internal/ui/plan/**`
+  Plans and local plans. Empty for `ui/plan`: `BoardProjects|PlanDetail|Plans|Project|Versions`.
+
+- [ ] **P13.13 — `connect`** · after P13.2 · **owns** `internal/app/connect/**`, `internal/ui/{onboarding,settings}/**`, the caps probe in `internal/ui/kernel`
+  The onboarding probe, capabilities, profile and session switch, settings field mapping. Empty for
+  `ui/onboarding`: `Capabilities|Fields|Me|ServerInfo`; for `ui/settings`: `Fields`; for
+  `ui/kernel`: `Capabilities`.
+
+- [ ] **P13.14 — The root goes** · after P13.3 to P13.13 · **owns** `internal/app/*.go`, `internal/arch/contexts_test.go`, `docs/{ARCHITECTURE,TESTING,ROADMAP}.md`
+  Whatever is left in the root package finds its context, `legacyRootFiles` is emptied, and the test
+  then holds the root to no non-test Go files at all. The migration clause leaves the first rule in
+  `docs/ARCHITECTURE.md`.
 
 ## Later, deliberately not now
 

@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/issue"
@@ -250,7 +251,7 @@ type Model struct {
 	// which half finished.
 	said string
 
-	ranking app.Ranking[rankValue]
+	ranking appboard.Ranking[rankValue]
 
 	me       *jira.User
 	askingMe bool
