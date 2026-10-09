@@ -32,8 +32,8 @@ getting thirty per cent worse with room to spare.
 | RSS with 10k issues cached | < 60 MB | *measured, not guarded.* Nothing reads the number. The regression gate compares `B/op`, which is allocation and not residency, so it is not this |
 | Stripped binary | **< 18 MiB** | `ci.yml`'s size step |
 | Cache read for a view's first paint | < 5 ms | `BenchmarkCacheReadFirstPaint` |
-| Store one page of a board holding 5k issues | *measured, not guarded.* About 13 ms on an M2 Pro, nearly all of it the one fsync, against 264 ms for re-storing the whole board | `BenchmarkPutBoardPage_At5kIssues` against `BenchmarkPutBoard_At5kIssues`, over a real `DiskCache`. It is disk time, which a ceiling would measure the runner's disk by |
-| Walk a 2,000-card board into the cache | *measured, not guarded.* About 38 ms for the walk on an M2 Pro, of which about 2.6 ms is spent inside `Update`; storing every card held on every page used to put about 62 ms of a 68 ms walk inside it | `BenchmarkBoardPageLoads_IntoADiskCache` in `cmd/saral`, the one package allowed to build a real `DiskCache` next to a view. The writes run in commands, one page at a time, so the number that matters is `update-ns/op` |
+| Store one page of a board holding 5k issues | *measured, not guarded.* About 13 ms on an M2 Pro, nearly all of it the one fsync, against 264 ms for re-storing the whole board | `BenchmarkPutBoardPage_At5kIssues` against `BenchmarkPutBoard_At5kIssues`, over a real `cache.Disk`. It is disk time, which a ceiling would measure the runner's disk by |
+| Walk a 2,000-card board into the cache | *measured, not guarded.* About 38 ms for the walk on an M2 Pro, of which about 2.6 ms is spent inside `Update`; storing every card held on every page used to put about 62 ms of a 68 ms walk inside it | `BenchmarkBoardPageLoads_IntoADiskCache` in `cmd/saral`, the one package allowed to build a real `cache.Disk` next to a view. The writes run in commands, one page at a time, so the number that matters is `update-ns/op` |
 | Rank 10k cached issues against a keystroke | **< 16 ms**, 1 allocation | `BenchmarkIndexSearch10k` and its two siblings |
 | Rebuild the local index over 10k cached issues | < 16 ms | `BenchmarkIndexRebuild10k` |
 | Resolve the date cascade over a timeline's worth of issues | **< 16 ms**, and linear in the issues | `BenchmarkResolveDates2k` against `BenchmarkResolveDates10k` |
@@ -113,7 +113,6 @@ table, which is the same thing as writing down that the budget is no longer held
 
 | Package | Guard |
 |---|---|
-| `internal/app` | `TestBudget_CacheReadForAViewsFirstPaint` |
 | `internal/app` | `TestBudget_CIComparesTheBenchmarksAgainstTheBaseBranch` |
 | `internal/app` | `TestBudget_CIRunsTheGuardsWithoutTheDetector` |
 | `internal/app` | `TestBudget_DateCascadeCostsNoMoreThanTheIssuesItIsGiven` |
@@ -125,6 +124,7 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/app` | `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` |
 | `internal/app` | `TestBudget_NoTestOutsideAGuardRunsABenchmark` |
 | `internal/app` | `TestBudget_TheDocumentNamesEveryGuardAndOnlyRealOnes` |
+| `internal/app/cache` | `TestBudget_CacheReadForAViewsFirstPaint` |
 | `internal/ui/attach` | `TestBudget_AttachAMemoLookupCostsNothing` |
 | `internal/ui/attach` | `TestBudget_AttachFullRedrawAt200x60` |
 | `internal/ui/attach` | `TestBudget_AttachKeystrokeToFrame` |
@@ -291,7 +291,7 @@ The work is spread so the job takes minutes rather than a quarter of an hour:
   do not move with CPU contention, and `sec/op` is only reported.
 - **Four `bench` shards**, each handed a slice of the packages by `benchgate.py --shard I/N`: every
   package holding a `func Benchmark` is assigned greedily, largest cost first (six per guarded
-  benchmark, one per other, plus a measured hint for `internal/app`, whose unguarded
+  benchmark, one per other, plus a measured hint for `internal/app/cache`, whose unguarded
   `PutBoard_At5kIssues` alone takes 26 s). A new package lands in a shard with no list to edit. The slice is computed once from
   the branch and both trees run it, the base skipping a package it does not have: computed per tree, a
   change in the costs moved a package to another shard in one tree only, and `benchstat` then found two
@@ -438,7 +438,7 @@ needlessly.
 - Reuse buffers; `strings.Builder` with `Grow` on hot paths.
 - No `fmt.Sprintf` in a per-row loop where concatenation or a builder will do.
 - Bound every cache. The issue cache drops what was written longest ago past a configurable ceiling,
-  default 5,000 issues, and every other kind has a count and an age (`app.Kind.Retention`).
+  default 5,000 issues, and every other kind has a count and an age (`cache.Kind.Retention`).
 - Do not hold decoded JSON. Map to domain types at the adapter boundary and let the raw bytes go.
 - One goroutine per in-flight request, cancelled when the view closes. No worker pools, no timers
   that outlive their view.
@@ -520,7 +520,7 @@ so the real worst case is half of each of these:
 
 The one allocation is the answer handed back, which the caller keeps. Everything behind it — the
 rows, the prepared pattern, the ranking buffer — outlives the call or never leaves the stack, and
-`app.Pattern` folds case without copying either side, so scoring is allocation-free however many
+`match.Pattern` folds case without copying either side, so scoring is allocation-free however many
 candidates it is run over. That is the property that made writing the scorer cheaper than taking
 `github.com/sahilm/fuzzy`, whose API materialises a `[]string` of every target and a `[]int` of
 matched offsets per hit.

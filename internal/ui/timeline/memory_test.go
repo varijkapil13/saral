@@ -3,6 +3,7 @@ package timeline
 import (
 	"testing"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
@@ -52,7 +53,7 @@ func TestNew_RestoresARememberedTermBeforeReadingTheCache(t *testing.T) {
 	if len(issues) < 2 {
 		t.Fatalf("primed only %d issues, need at least two with differing status", len(issues))
 	}
-	term := filter.Term{Facet: filter.FacetStatus, ID: issues[0].Status.ID, Label: issues[0].Status.Name}
+	term := appterm.Term{Facet: appterm.FacetStatus, ID: issues[0].Status.ID, Label: issues[0].Status.Name}
 	other := -1
 	for i, iss := range issues {
 		if iss.Status.ID != term.ID {
@@ -71,7 +72,7 @@ func TestNew_RestoresARememberedTermBeforeReadingTheCache(t *testing.T) {
 	}
 
 	mem := newFakeMemory()
-	mem.state[ViewID+"."+termsMemoryKey] = (filter.Terms{term}).Encode()
+	mem.state[ViewID+"."+termsMemoryKey] = (appterm.Terms{term}).Encode()
 
 	d := withMemory(withCache(testDeps(newFake(0)), cache), mem)
 	view, ok := New(d).(*Model)
@@ -104,14 +105,14 @@ func TestApplyFilterTerm_KeepsItInMemory(t *testing.T) {
 	if len(dr.m.issues) == 0 {
 		t.Fatal("nothing to build a term from")
 	}
-	term := filter.Term{Facet: filter.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: dr.m.issues[0].Status.Name}
+	term := appterm.Term{Facet: appterm.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: dr.m.issues[0].Status.Name}
 	dr.send(filter.ChosenMsg{Term: term})
 
 	got, ok := mem.Recall(ViewID, termsMemoryKey)
 	if !ok {
 		t.Fatal("nothing was kept after applying a term")
 	}
-	terms, ok := filter.DecodeTerms(got)
+	terms, ok := appterm.DecodeTerms(got)
 	if !ok || len(terms) != 1 || !terms.Has(term) {
 		t.Errorf("kept %q, does not decode to just %+v", got, term)
 	}
@@ -125,7 +126,7 @@ func TestClearFilter_ForgetsItInMemory(t *testing.T) {
 	if len(dr.m.issues) == 0 {
 		t.Fatal("nothing to build a term from")
 	}
-	term := filter.Term{Facet: filter.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: dr.m.issues[0].Status.Name}
+	term := appterm.Term{Facet: appterm.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: dr.m.issues[0].Status.Name}
 	dr.send(filter.ChosenMsg{Term: term})
 	if _, ok := mem.Recall(ViewID, termsMemoryKey); !ok {
 		t.Fatal("setup: the term was not kept")

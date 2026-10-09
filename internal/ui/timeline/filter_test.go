@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 )
@@ -98,8 +99,8 @@ func TestTimeline_ClickingTheBarDropsAFacetOrAValue(t *testing.T) {
 	dr.send(filter.ChosenMsg{Term: assignee})
 	dr.send(filter.ChosenMsg{Term: typ})
 
-	pressOn(t, d, dr, filterbar.FacetZone(filter.FacetType))
-	if got := dr.m.terms; len(got) != 1 || got[0].Facet != filter.FacetAssignee {
+	pressOn(t, d, dr, filterbar.FacetZone(appterm.FacetType))
+	if got := dr.m.terms; len(got) != 1 || got[0].Facet != appterm.FacetAssignee {
 		t.Fatalf("clicking the type chip's x left %v, want only the assignee term", got)
 	}
 
@@ -138,15 +139,15 @@ func TestTimelineRender_FilterBarGolden(t *testing.T) {
 	}
 }
 
-func firstAssignee(dr *driver) (filter.Term, bool) {
+func firstAssignee(dr *driver) (appterm.Term, bool) {
 	for i := range dr.m.issues {
 		if a := dr.m.issues[i].Assignee; a != nil && a.AccountID != "" {
-			return filter.Term{Facet: filter.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}, true
+			return appterm.Term{Facet: appterm.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}, true
 		}
 	}
-	return filter.Term{}, false
+	return appterm.Term{}, false
 }
 
-func firstType(dr *driver) filter.Term {
-	return filter.Term{Facet: filter.FacetType, ID: dr.m.issues[0].Type.ID, Label: dr.m.issues[0].Type.Name}
+func firstType(dr *driver) appterm.Term {
+	return appterm.Term{Facet: appterm.FacetType, ID: dr.m.issues[0].Type.ID, Label: dr.m.issues[0].Type.Name}
 }

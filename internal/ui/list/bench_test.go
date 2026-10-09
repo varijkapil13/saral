@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
@@ -101,9 +101,9 @@ func BenchmarkListSteadyScrollTermed10k(b *testing.B) {
 func termed(tb testing.TB, n, w, h int) *Model {
 	tb.Helper()
 	m := loaded(tb, n, w, h)
-	m.terms = filter.Terms{
-		{Facet: filter.FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"},
-		{Facet: filter.FacetStatus, ID: "10203", Label: "Shipped"},
+	m.terms = appterm.Terms{
+		{Facet: appterm.FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"},
+		{Facet: appterm.FacetStatus, ID: "10203", Label: "Shipped"},
 	}
 	m.termsGen++
 	_ = m.View()

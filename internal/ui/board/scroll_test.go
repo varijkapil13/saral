@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"testing"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -110,7 +111,7 @@ func TestBoardScroll_PlaceClampsAColumnsOffsetWhenItShrinks(t *testing.T) {
 		t.Fatal("setup: the long column did not scroll")
 	}
 
-	dr.send(filter.ChosenMsg{Term: filter.Term{Facet: filter.FacetLabel, ID: "kept", Label: "kept"}})
+	dr.send(filter.ChosenMsg{Term: appterm.Term{Facet: appterm.FacetLabel, ID: "kept", Label: "kept"}})
 
 	if got := dr.m.columnLen(0); got != 2 {
 		t.Fatalf("setup: column 0 holds %d cards after the filter, want 2", got)

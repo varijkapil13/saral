@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -36,12 +37,12 @@ func TestPicker_ClickingAFacetSelectsItAndClickingItAgainOpensIt(t *testing.T) {
 	if dr.m.state != pickFacet {
 		t.Fatal("one click opened the facet; it should only have selected it")
 	}
-	if got := dr.m.facets[dr.m.cursor].facet; got != FacetPriority {
+	if got := dr.m.facets[dr.m.cursor].facet; got != appterm.FacetPriority {
 		t.Fatalf("the click selected %q, want priority", got.Label())
 	}
 
 	pressOn(t, d, dr, "facet:priority")
-	if dr.m.state != pickValue || dr.m.facet != FacetPriority {
+	if dr.m.state != pickValue || dr.m.facet != appterm.FacetPriority {
 		t.Errorf("a second click left the picker on state %d and facet %q", dr.m.state, dr.m.facet.Label())
 	}
 }
@@ -51,7 +52,7 @@ func TestPicker_ClickingAValueTwiceChoosesIt(t *testing.T) {
 
 	d := testDeps(newFake(20))
 	dr := newDriver(t, d, 120, 30)
-	dr.pick(FacetPriority)
+	dr.pick(appterm.FacetPriority)
 
 	pressOn(t, d, dr, "value:priority:10403")
 	if _, chose := dr.chosen(); chose {
@@ -107,7 +108,7 @@ func TestPicker_WithTheMouseOffNoRowIsHit(t *testing.T) {
 	d := testDeps(newFake(20))
 	d.Zones = off
 	dr := newDriver(t, d, 120, 30)
-	dr.pick(FacetPriority)
+	dr.pick(appterm.FacetPriority)
 
 	_ = off.Scan(dr.m.View())
 	dr.send(tea.MouseClickMsg{X: 10, Y: 2, Button: tea.MouseLeft})
@@ -140,7 +141,7 @@ func TestPicker_TheWheelScrollsWithoutMovingTheSelection(t *testing.T) {
 
 	d := testDeps(newFake(40))
 	dr := newDriver(t, d, 120, 8)
-	dr.pick(FacetLabel)
+	dr.pick(appterm.FacetLabel)
 	under := dr.m.cursor
 
 	dr.send(tea.MouseWheelMsg{Button: tea.MouseWheelDown})

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -948,7 +949,7 @@ func TestMergeIssue_ADetailReadWidensACachedRowWithoutMakingItLookWide(t *testin
 		t.Fatalf("the list row is %s and the detail read is %s", row.Key, detail.Page.Items[0].Key)
 	}
 
-	merged := MergeIssue(row, detail.Page.Items[0])
+	merged := appcache.MergeIssue(row, detail.Page.Items[0])
 	if merged.Requested.Wide() {
 		t.Error("merging a detail read over a cached row claims every field the site has")
 	}
@@ -959,7 +960,7 @@ func TestMergeIssue_ADetailReadWidensACachedRowWithoutMakingItLookWide(t *testin
 		t.Errorf("the merged issue lost the %s value the detail read brought back", points.ID)
 	}
 
-	back := MergeIssue(merged, row)
+	back := appcache.MergeIssue(merged, row)
 	if back.Requested.Wide() {
 		t.Error("a narrow list refresh over the merged issue made it look wide")
 	}

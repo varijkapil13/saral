@@ -22,7 +22,7 @@ Everything that follows is that one sentence applied.
 Not opinions. Each of these is checkable against the tree as of `1f54075`.
 
 **The first screen of the palette is the colour picker.** `kernel.Commands` sorts by `Group` and then
-`Title`, and `app.Pattern.Score` returns `0, true` for every candidate when nothing is typed — so an
+`Title`, and `match.Pattern.Score` returns `0, true` for every candidate when nothing is typed — so an
 empty `ctrl+k` falls through to frecency, and on a fresh install the frecency table is empty and the
 registry's own order stands. `Appearance` sorts before `Attachments`. The first twenty rows of an
 80×24 palette are nine appearance commands, four attachment ones, two backlog, two board and three
@@ -344,7 +344,7 @@ says nothing" tolerance `LoadUIState` already gives a first run.
 | `kernel.Deps.Cache`: what the site answered, kept so a first frame draws from disk | `session.cache`, a `KindAction` right after `session.memory`: drops everything this profile has cached | the cache directory's `cache.db`, scoped by site and account |
 
 `session.cache` is registered in `internal/ui/settings` and reaches the cache through
-`app.CacheClearer`, the same optional-interface assertion a view makes for `app.BoardCache`. A session
+`cache.Clearer`, the same optional-interface assertion a view makes for `cache.BoardCache`. A session
 with no cache (a first run, another copy holding the file) is told there is nothing to clear. What is
 on screen stays until it is read again; the next read of anything fetches it from the site.
 
@@ -362,11 +362,11 @@ Two directories, both named for the build (`saral`, or `saral-dev` for a build f
 | `ui.toml`, `.ui.toml.lock` | the cache directory | split widths, sort orders (including the order of an epic's children), the row look (`[look] look = "roomy"`, `"compact"` or `"lines"`), each profile's remembered view and filters | until `session.memory` or you delete it |
 | `palette/usage.json`, `palette/projects.json` | the cache directory | how often and how recently each palette command and each project was picked, to rank them | at most 200 entries each, the lowest-ranked dropped first; until you delete them |
 
-What `cache.db` keeps, per profile (`app.Kind.Retention`):
+What `cache.db` keeps, per profile (`cache.Kind.Retention`):
 
 | Kind | At most | Dropped after |
 |---|---|---|
-| issues | 5,000 (`app.DefaultIssueBound`) | 30 days unwritten |
+| issues | 5,000 (`cache.DefaultIssueBound`) | 30 days unwritten |
 | searches | 200 | 30 days |
 | boards, backlogs | 50 each | 30 days |
 | last board per project | 200 | 90 days |

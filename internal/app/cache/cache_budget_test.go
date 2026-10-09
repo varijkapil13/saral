@@ -1,6 +1,6 @@
 //go:build !race
 
-package app
+package cache
 
 import (
 	"testing"

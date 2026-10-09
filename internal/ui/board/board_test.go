@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -618,11 +619,11 @@ func TestBoard_ChoosingATermNarrowsTheBoardLocallyAndChoosingItAgainRestoresIt(t
 	if before == 0 {
 		t.Fatal("the board answered with no cards before any term was chosen")
 	}
-	var term filter.Term
+	var term appterm.Term
 	found := false
 	for i := range dr.m.issues {
 		if a := dr.m.issues[i].Assignee; a != nil && a.AccountID != "" {
-			term = filter.Term{Facet: filter.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}
+			term = appterm.Term{Facet: appterm.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}
 			found = true
 			break
 		}
@@ -662,10 +663,10 @@ func TestBoard_ChoosingATermWhileMoreIsLoadedWarnsThatTheFilterCannotSeeThem(t *
 	t.Parallel()
 	dr := newDriver(t, testDeps(newFake(10)), 120, 20)
 	dr.m.more = true
-	var term filter.Term
+	var term appterm.Term
 	for i := range dr.m.issues {
 		if a := dr.m.issues[i].Assignee; a != nil && a.AccountID != "" {
-			term = filter.Term{Facet: filter.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}
+			term = appterm.Term{Facet: appterm.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}
 			break
 		}
 	}

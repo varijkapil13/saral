@@ -3,7 +3,7 @@ package settings
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -25,7 +25,7 @@ func clearCacheSetting() kernel.Setting {
 }
 
 func clearCache(d kernel.Deps) tea.Cmd {
-	held, ok := d.Cache.(app.CacheClearer)
+	held, ok := d.Cache.(appcache.Clearer)
 	if !ok {
 		return kernel.Warn("this session keeps no cache, so there is nothing to clear")
 	}

@@ -13,6 +13,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -79,7 +81,7 @@ type cascadeConfig struct {
 type Model struct {
 	deps      kernel.Deps
 	search    *app.Search
-	cache     app.Cache
+	cache     appcache.Cache
 	inChart   map[string]action
 	pendingGo bool
 	inNotes   map[string]action
@@ -98,7 +100,7 @@ type Model struct {
 	// priority or a label — applied locally against what is already loaded, the
 	// way board.terms and backlog.terms are and for the same reason: a chart's
 	// own read is already whole in memory.
-	terms filter.Terms
+	terms appterm.Terms
 	// termsGen counts the changes to them, because a slice cannot be part of the
 	// comparable key the bar is memoized on.
 	termsGen int

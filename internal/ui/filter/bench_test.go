@@ -7,7 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -31,9 +32,9 @@ func stocked(tb testing.TB, n, w, h int) *Model {
 	}
 	next, _ := m.Update(kernel.SizeMsg{Width: w, Height: h})
 	m, _ = next.(*Model)
-	m.state, m.facet, m.complete = pickValue, FacetLabel, true
+	m.state, m.facet, m.complete = pickValue, appterm.FacetLabel, true
 	_ = m.input.Focus()
-	next, _ = m.Update(vocabularyMsg{gen: m.gen, facet: FacetLabel, values: labelValues(manyLabels(n))})
+	next, _ = m.Update(vocabularyMsg{gen: m.gen, facet: appterm.FacetLabel, values: labelValues(manyLabels(n))})
 	m, _ = next.(*Model)
 	_ = m.View()
 	return m
@@ -78,7 +79,7 @@ func BenchmarkPickerRedraw200x60(b *testing.B) {
 
 func BenchmarkRankValues(b *testing.B) {
 	all := labelValues(manyLabels(2000))
-	pattern := app.NewPattern("serv")
+	pattern := appmatch.NewPattern("serv")
 	shown, ranks := make([]int, 0, len(all)), make([]ranked, 0, len(all))
 	b.ReportAllocs()
 	b.ResetTimer()

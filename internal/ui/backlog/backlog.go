@@ -15,6 +15,8 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	appboard "github.com/varijkapil13/saral/internal/app/board"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/issue"
@@ -121,7 +123,7 @@ type Model struct {
 	search *app.Search
 	site   site
 	mover  jira.SprintManager
-	cache  app.Cache
+	cache  appcache.Cache
 	addr   kernel.Addr
 
 	styles  *styles
@@ -181,7 +183,7 @@ type Model struct {
 	// priority or a label — applied locally against what is already loaded, the
 	// way board.terms is and for the same reason: a backlog's own read is
 	// already whole in memory.
-	terms filter.Terms
+	terms appterm.Terms
 	// termsGen counts the changes to them, because a slice cannot be part of the
 	// comparable key the bar is memoized on.
 	termsGen int
@@ -313,9 +315,9 @@ func New(d kernel.Deps) kernel.View {
 // backlogCache is the cache's optional backlog-shaped half, absent whenever
 // the session has nowhere to keep one or the cache in force is only rows and
 // issues — the same additive-interface pattern kernel.restoreCaps uses for
-// app.CapsCache.
-func (m *Model) backlogCache() (app.BacklogCache, bool) {
-	held, ok := m.cache.(app.BacklogCache)
+// cache.CapsCache.
+func (m *Model) backlogCache() (appcache.BacklogCache, bool) {
+	held, ok := m.cache.(appcache.BacklogCache)
 	return held, ok && held != nil
 }
 
@@ -350,7 +352,7 @@ func (m *Model) fromCache() {
 // boards this project has or which of them is selected: New and a project
 // switch know only the one board a snapshot names, while nextBoard already
 // holds the site's own list and must not collapse it down to one.
-func (m *Model) applyBacklogSnapshot(snap app.BacklogSnapshot) {
+func (m *Model) applyBacklogSnapshot(snap appcache.BacklogSnapshot) {
 	m.config, m.done, m.estimate = snap.Config, doneStatuses(snap.Config), estimateOf(snap.Config)
 	m.sprints, m.field, m.noSprints = snap.Sprints, snap.Field, snap.NoSprints
 	m.issues, m.page, m.missing = snap.Issues, jira.Page[jira.Issue]{}, nil
@@ -827,7 +829,7 @@ func (m *Model) pagePut(items []jira.Issue, first bool) func() error {
 	if len(m.boards) == 0 {
 		return nil
 	}
-	if paged, ok := m.cache.(app.BacklogPageCache); ok && paged != nil {
+	if paged, ok := m.cache.(appcache.BacklogPageCache); ok && paged != nil {
 		snap := m.snapshot(slices.Clone(items))
 		boardID := m.config.BoardID
 		return m.writes.put(m.gen, first, func() error { return paged.PutBacklogPage(boardID, snap, first) })
@@ -842,7 +844,7 @@ func (m *Model) movedPut(keys []string) func() error {
 	if len(m.boards) == 0 {
 		return nil
 	}
-	paged, ok := m.cache.(app.BacklogPageCache)
+	paged, ok := m.cache.(appcache.BacklogPageCache)
 	if !ok || paged == nil {
 		return m.wholePut()
 	}
@@ -865,8 +867,8 @@ func (m *Model) wholePut() func() error {
 	return m.writes.put(m.gen, true, func() error { return held.PutBacklog(boardID, snap) })
 }
 
-func (m *Model) snapshot(issues []jira.Issue) app.BacklogSnapshot {
-	return app.BacklogSnapshot{
+func (m *Model) snapshot(issues []jira.Issue) appcache.BacklogSnapshot {
+	return appcache.BacklogSnapshot{
 		Config: m.config, Sprints: slices.Clone(m.sprints), Field: m.field, NoSprints: m.noSprints,
 		Issues: issues, More: m.page.HasMore(),
 	}

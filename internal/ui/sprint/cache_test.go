@@ -9,7 +9,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -21,7 +21,7 @@ func contains(s, sub string) bool { return strings.Contains(s, sub) }
 
 // storedFrom is what a read of the fake would have stored, so a snapshot names
 // boards and sprints the site does have.
-func storedFrom(t *testing.T, f *jiratest.Fake) app.SprintsSnapshot {
+func storedFrom(t *testing.T, f *jiratest.Fake) appcache.SprintsSnapshot {
 	t.Helper()
 	boards, err := f.Boards(t.Context(), "PROJ")
 	if err != nil {
@@ -35,31 +35,31 @@ func storedFrom(t *testing.T, f *jiratest.Fake) app.SprintsSnapshot {
 		}
 		sprints = append(sprints, page.Items...)
 	}
-	return app.SprintsSnapshot{Boards: boards, Sprints: sprints}
+	return appcache.SprintsSnapshot{Boards: boards, Sprints: sprints}
 }
 
 // memCache is the sprint half of the cache and nothing else. The embedded
-// app.Cache is nil: this view never reaches for rows, and a call that did would
+// cache.Cache is nil: this view never reaches for rows, and a call that did would
 // panic rather than pass.
 type memCache struct {
-	app.Cache
+	appcache.Cache
 	mu      sync.Mutex
-	held    map[string]app.SprintsSnapshot
+	held    map[string]appcache.SprintsSnapshot
 	puts    int
 	forgets int
 	fail    error
 }
 
-func newMemCache() *memCache { return &memCache{held: make(map[string]app.SprintsSnapshot)} }
+func newMemCache() *memCache { return &memCache{held: make(map[string]appcache.SprintsSnapshot)} }
 
-func (c *memCache) Sprints(project string) (app.SprintsSnapshot, bool) {
+func (c *memCache) Sprints(project string) (appcache.SprintsSnapshot, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	snap, ok := c.held[project]
 	return snap, ok
 }
 
-func (c *memCache) PutSprints(project string, snap app.SprintsSnapshot) error {
+func (c *memCache) PutSprints(project string, snap appcache.SprintsSnapshot) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.puts++
@@ -78,8 +78,8 @@ func (c *memCache) ForgetSprints(project string) error {
 	return nil
 }
 
-func storedSprints(stale bool) app.SprintsSnapshot {
-	return app.SprintsSnapshot{
+func storedSprints(stale bool) appcache.SprintsSnapshot {
+	return appcache.SprintsSnapshot{
 		Boards:  []jira.Board{{ID: 1, Name: "PROJ board", Type: jira.BoardScrum}},
 		Sprints: many(4),
 		Closed:  true,

@@ -16,7 +16,8 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -60,7 +61,7 @@ const (
 // facetRow is one facet as the picker offers it, with why this site cannot
 // answer for it.
 type facetRow struct {
-	facet  Facet
+	facet  appterm.Facet
 	reason string
 }
 
@@ -69,8 +70,8 @@ type Option func(*Model)
 
 // WithTerms opens the picker over what is already in force, so that a value
 // already chosen is marked and choosing it again takes it off.
-func WithTerms(t Terms) Option {
-	return func(m *Model) { m.terms = append(Terms(nil), t...) }
+func WithTerms(t appterm.Terms) Option {
+	return func(m *Model) { m.terms = append(appterm.Terms(nil), t...) }
 }
 
 // WithEditKey names the key the view being filtered shows its search on, so
@@ -88,11 +89,11 @@ type Model struct {
 	inValue map[string]action
 
 	state   state
-	terms   Terms
+	terms   appterm.Terms
 	editKey string
 
 	facets []facetRow
-	facet  Facet
+	facet  appterm.Facet
 
 	input textinput.Model
 	query string
@@ -155,8 +156,8 @@ func New(d kernel.Deps, opts ...Option) kernel.View {
 // values cannot be read is still offered and still says why, because a facet
 // that disappears is one nobody can find out about.
 func (m *Model) buildFacets() []facetRow {
-	out := make([]facetRow, 0, len(Facets))
-	for _, f := range Facets {
+	out := make([]facetRow, 0, len(appterm.Facets))
+	for _, f := range appterm.Facets {
 		out = append(out, facetRow{facet: f, reason: m.refusal(f)})
 	}
 	return out
@@ -164,17 +165,17 @@ func (m *Model) buildFacets() []facetRow {
 
 // refusal is why this session cannot offer a facet's values, and "" when it
 // can. The words are the site's own wherever the site supplied any.
-func (m *Model) refusal(f Facet) string {
+func (m *Model) refusal(f appterm.Facet) string {
 	if m.deps.Jira == nil {
 		return "there is no Jira connection in this session"
 	}
-	if f.people() && !m.deps.Caps.Allows(jira.CapPeople) {
+	if f.People() && !m.deps.Caps.Allows(jira.CapPeople) {
 		if reason := m.deps.Caps.Capability(jira.CapPeople).Reason; reason != "" {
 			return reason
 		}
 		return "this token may not look accounts up on this site"
 	}
-	if (f == FacetStatus || f == FacetType) && strings.TrimSpace(m.deps.Project) == "" {
+	if (f == appterm.FacetStatus || f == appterm.FacetType) && strings.TrimSpace(m.deps.Project) == "" {
 		return "statuses and types are per project, and this session is not scoped to one"
 	}
 	return ""
@@ -332,7 +333,7 @@ func (m *Model) chooseFacet() tea.Cmd {
 	// Nobody is a value of the assignee facet like any other, and it is this
 	// program's own row rather than one the site answers with, so it goes on
 	// before anything is asked and survives a search that comes back refused.
-	if row.facet == FacetAssignee {
+	if row.facet == appterm.FacetAssignee {
 		m.all = append(m.all, unassignedValue())
 	}
 	m.asked, m.complete = make(map[string]bool, 4), false
@@ -367,14 +368,14 @@ func (m *Model) backToFacets() tea.Cmd {
 	m.query, m.failure = "", nil
 	m.all, m.shown = nil, m.shown[:0]
 	m.cursor, m.top = m.facetAt(m.facet), 0
-	m.facet = FacetNone
+	m.facet = appterm.FacetNone
 	m.memo.Reset()
 	m.head = ""
 	m.clampScroll()
 	return nil
 }
 
-func (m *Model) facetAt(f Facet) int {
+func (m *Model) facetAt(f appterm.Facet) int {
 	for i := range m.facets {
 		if m.facets[i].facet == f {
 			return i
@@ -413,7 +414,7 @@ func (m *Model) selected() *value {
 // picker is pushed over whatever view is being filtered and holds no pointer
 // to it — and a broadcast per toggle is what lets the rows behind it narrow
 // live instead of at the end.
-type ChosenMsg struct{ Term Term }
+type ChosenMsg struct{ Term appterm.Term }
 
 // --- fetching ---------------------------------------------------------------
 
@@ -460,7 +461,7 @@ func (m *Model) fetch(needle string) tea.Cmd {
 	}
 	ctx, gen := m.begin()
 	facet := m.facet
-	if facet.people() {
+	if facet.People() {
 		m.asked[needle] = true
 		return m.reply(findPeople(ctx, m.deps.Jira, facet, jira.PeopleQuery{
 			Match: needle, Project: m.peopleProject(facet), Limit: peopleLimit,
@@ -471,7 +472,7 @@ func (m *Model) fetch(needle string) tea.Cmd {
 
 // inForceIDs are the accounts this facet is already being filtered by, which
 // the search is asked to bring back whether or not it would have found them.
-func (m *Model) inForceIDs(f Facet) []string {
+func (m *Model) inForceIDs(f appterm.Facet) []string {
 	var out []string
 	for _, term := range m.terms {
 		if term.Facet == f && term.ID != "" {
@@ -487,8 +488,8 @@ func (m *Model) inForceIDs(f Facet) []string {
 // A reporter need not be assignable, though: an account that reported an issue
 // and then lost the permission is still on those rows, so that search is the
 // site-wide one and the app accounts it brings are badged and sunk instead.
-func (m *Model) peopleProject(f Facet) string {
-	if f == FacetAssignee {
+func (m *Model) peopleProject(f appterm.Facet) string {
+	if f == appterm.FacetAssignee {
 		return strings.TrimSpace(m.deps.Project)
 	}
 	return ""
@@ -503,7 +504,7 @@ func withCancel(cancel context.CancelFunc, cmd tea.Cmd) tea.Cmd {
 	}
 }
 
-func (m *Model) current(gen int, f Facet) bool { return gen == m.gen && f == m.facet }
+func (m *Model) current(gen int, f appterm.Facet) bool { return gen == m.gen && f == m.facet }
 
 func (m *Model) tookVocabulary(msg vocabularyMsg) tea.Cmd {
 	if !m.current(msg.gen, msg.facet) {
@@ -569,7 +570,7 @@ func (m *Model) retype() tea.Cmd {
 	m.rerank(m.underCursor())
 	needle := strings.TrimSpace(m.query)
 	switch {
-	case !m.facet.people(), needle == "", m.complete, m.asked[needle]:
+	case !m.facet.People(), needle == "", m.complete, m.asked[needle]:
 		return nil
 	case len(m.shown) >= thinAnswer:
 		return nil
@@ -584,7 +585,7 @@ func (m *Model) retype() tea.Cmd {
 // that appends to all and sorts it leaves them pointing at other values. Only
 // the caller still knows which row the reader was looking at.
 func (m *Model) rerank(under string) {
-	m.shown, m.ranks = rank(m.all, app.NewPattern(strings.TrimSpace(m.query)), m.shown[:0], m.ranks[:0])
+	m.shown, m.ranks = rank(m.all, appmatch.NewPattern(strings.TrimSpace(m.query)), m.shown[:0], m.ranks[:0])
 	m.cursor = 0
 	if under != "" {
 		for i, at := range m.shown {

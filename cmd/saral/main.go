@@ -19,6 +19,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/store"
 	_ "github.com/varijkapil13/saral/internal/ui"
@@ -252,7 +253,7 @@ func joinNotice(a, b string) string {
 // Opening is also when the file is kept in bounds: every scope no configured
 // profile names any more — a profile removed, or re-onboarded under another
 // email — is dropped, and this profile's own entries past their retention go.
-func openCache(p config.Profile, known []store.Scope) (cache app.Cache, release func(), notice string) {
+func openCache(p config.Profile, known []store.Scope) (cache appcache.Cache, release func(), notice string) {
 	release = func() {}
 	dir, err := config.CacheDir()
 	if err != nil {
@@ -273,7 +274,7 @@ func openCache(p config.Profile, known []store.Scope) (cache app.Cache, release 
 	// answered, and two profiles on one site differ by email anyway.
 	scope := store.Scope{Site: p.Site, Account: p.Email}
 	dropOrphans(db, append(known, scope))
-	c := app.NewCache(db, scope)
+	c := appcache.New(db, scope)
 	_, _ = c.Sweep()
 	return c, func() { _ = db.Close() }, notice
 }

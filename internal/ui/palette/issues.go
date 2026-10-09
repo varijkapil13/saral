@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -91,7 +92,7 @@ func newHit(h app.Hit, now time.Time) hit {
 	}
 	if !h.StoredAt.IsZero() {
 		age := now.Sub(h.StoredAt)
-		out.age, out.stale = ageLabel(age), age > app.KindIssue.TTL()
+		out.age, out.stale = ageLabel(age), age > appcache.KindIssue.TTL()
 	}
 	return out
 }

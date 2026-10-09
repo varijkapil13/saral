@@ -10,7 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	uistate "github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
@@ -179,7 +179,7 @@ func TestBoardCards_ARoomyBoardFromTheCacheReadsWhatItLacksOnce(t *testing.T) {
 	}
 
 	cache := newFakeCache()
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, false)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: issues}, false)
 	fake := newFake(6)
 	dr := newDriver(t, withCache(fresh(fake), cache), 120, 30)
 	if got := countCalls(fake, "SprintIssues"); got != 1 {
@@ -193,7 +193,7 @@ func TestBoardCards_ARoomyBoardFromTheCacheReadsWhatItLacksOnce(t *testing.T) {
 	}
 
 	again := newFake(6)
-	cache.hold("PROJ", boardID, app.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: dr.m.issues}, false)
+	cache.hold("PROJ", boardID, appcache.BoardSnapshot{Config: cfg, QuickFilters: qf, Issues: dr.m.issues}, false)
 	_ = newDriver(t, withCache(fresh(again), cache), 120, 30)
 	if calls := viewCalls(again); len(calls) != 0 {
 		t.Errorf("a roomy board stored with its fields asked the site for %v", calls)

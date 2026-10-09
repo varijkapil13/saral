@@ -9,7 +9,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -552,7 +552,7 @@ func rankPickOptions(all []pickOption, query string) []pickOption {
 	if q == "" {
 		return append([]pickOption(nil), all...)
 	}
-	p := app.NewPattern(q)
+	p := appmatch.NewPattern(q)
 	scored := make([]scoredOption, 0, len(all))
 	for i, o := range all {
 		if score, ok := p.Score(o.label); ok {

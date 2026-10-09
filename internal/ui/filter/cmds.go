@@ -5,13 +5,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 // vocabularyMsg carries the values of a facet the site answers in one read.
 type vocabularyMsg struct {
 	gen    int
-	facet  Facet
+	facet  appterm.Facet
 	values []value
 }
 
@@ -21,7 +22,7 @@ type vocabularyMsg struct {
 // answerable from what is already held.
 type peopleMsg struct {
 	gen      int
-	facet    Facet
+	facet    appterm.Facet
 	needle   string
 	people   []jira.User
 	complete bool
@@ -33,7 +34,7 @@ type peopleMsg struct {
 // again rather than being remembered as asked.
 type failedMsg struct {
 	gen    int
-	facet  Facet
+	facet  appterm.Facet
 	needle string
 	err    error
 }
@@ -49,7 +50,7 @@ type failedMsg struct {
 // account already being filtered by can be missing from what came back — and a
 // value in force that is not on the list is a filter that cannot be taken off
 // here. It is only made for the ids the search itself did not cover.
-func findPeople(ctx context.Context, finder jira.PeopleFinder, f Facet, q jira.PeopleQuery, inForce []string, gen int) tea.Cmd {
+func findPeople(ctx context.Context, finder jira.PeopleFinder, f appterm.Facet, q jira.PeopleQuery, inForce []string, gen int) tea.Cmd {
 	return func() tea.Msg {
 		people, err := finder.FindPeople(ctx, q)
 		if err != nil {
@@ -88,7 +89,7 @@ func absent(want []string, got []jira.User) []string {
 }
 
 // vocabulary reads the values of a facet that is not a person.
-func vocabulary(ctx context.Context, vocab jira.FilterVocabulary, f Facet, project string, gen int) tea.Cmd {
+func vocabulary(ctx context.Context, vocab jira.FilterVocabulary, f appterm.Facet, project string, gen int) tea.Cmd {
 	return func() tea.Msg {
 		values, err := readVocabulary(ctx, vocab, f, project)
 		if err != nil {
@@ -98,30 +99,30 @@ func vocabulary(ctx context.Context, vocab jira.FilterVocabulary, f Facet, proje
 	}
 }
 
-func readVocabulary(ctx context.Context, vocab jira.FilterVocabulary, f Facet, project string) ([]value, error) {
+func readVocabulary(ctx context.Context, vocab jira.FilterVocabulary, f appterm.Facet, project string) ([]value, error) {
 	switch f {
-	case FacetStatus, FacetType:
+	case appterm.FacetStatus, appterm.FacetType:
 		byType, err := vocab.IssueTypeStatuses(ctx, project)
 		if err != nil {
 			return nil, err
 		}
-		if f == FacetType {
+		if f == appterm.FacetType {
 			return typeValues(byType), nil
 		}
 		return statusValues(byType), nil
-	case FacetPriority:
+	case appterm.FacetPriority:
 		priorities, err := vocab.Priorities(ctx)
 		if err != nil {
 			return nil, err
 		}
 		return priorityValues(priorities), nil
-	case FacetLabel:
+	case appterm.FacetLabel:
 		labels, err := walkLabels(ctx, vocab)
 		if err != nil {
 			return nil, err
 		}
 		return labelValues(labels), nil
-	case FacetNone, FacetAssignee, FacetReporter:
+	case appterm.FacetNone, appterm.FacetAssignee, appterm.FacetReporter:
 	}
 	return nil, nil
 }

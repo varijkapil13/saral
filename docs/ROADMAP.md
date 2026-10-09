@@ -1962,7 +1962,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
   The decision, the three import rules and the frozen root list, with the rank state machine as the
   first move. Views import a context as `app<context>`.
 
-- [ ] **P13.2 — The shared kernel** · serial, blocks P13.3 to P13.14 · **owns** `internal/app/{cache,cache_views,match,issuekey}.go` and their tests, `internal/app/{cache,match,issueref,term}/**`, `internal/ui/filter/term.go` and its tests, the import lines of every importer, `internal/arch/{imports_test.go,contexts_test.go}`, `docs/{ARCHITECTURE,TESTING,PERFORMANCE,ROADMAP}.md`
+- [x] **P13.2 — The shared kernel** · serial, blocks P13.3 to P13.14 · **owns** `internal/app/{cache,cache_views,match,issuekey}.go` and their tests, `internal/app/{cache,match,issueref,term}/**`, `internal/ui/filter/term.go` and its tests, the import lines of every importer, `internal/arch/{imports_test.go,contexts_test.go}`, `docs/{ARCHITECTURE,TESTING,PERFORMANCE,ROADMAP}.md`
   `cache.go` and `cache_views.go` become `cache` (`app.Cache` becomes `cache.Cache`), `match.go`
   becomes `match`, `issuekey.go` becomes `issueref`, and the filter-term model leaves `ui/filter`
   for `term`. The three files leave `legacyRootFiles`. Adds the import rule

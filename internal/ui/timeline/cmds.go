@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -50,7 +51,7 @@ type failedMsg struct {
 // projection is the date cascade's own fields plus what a bar draws and what
 // this program's own local filter matches by. Assignee, reporter, priority
 // and labels join it for the same reason board.plan.projection and backlog's
-// own read carry reporter and labels: filter.Terms matches against this
+// own read carry reporter and labels: term.Terms matches against this
 // read's own issues, and none of the four is otherwise asked for.
 func projection(fields app.DateFields) app.Projection {
 	return fields.Projection().With(
@@ -59,7 +60,7 @@ func projection(fields app.DateFields) app.Projection {
 	)
 }
 
-func load(ctx context.Context, search *app.Search, sprints app.SprintDates, cache app.Cache,
+func load(ctx context.Context, search *app.Search, sprints app.SprintDates, cache appcache.Cache,
 	cfg cascadeConfig, jql string, gen int,
 ) tea.Cmd {
 	return func() tea.Msg {
@@ -151,7 +152,7 @@ func markers(ctx context.Context, client markerReader, project string, boards bo
 // boundaries nobody can see on a chart of the current quarter.
 const maxSprints = 200
 
-func keep(cache app.Cache, jql string, issues []jira.Issue, more bool) error {
+func keep(cache appcache.Cache, jql string, issues []jira.Issue, more bool) error {
 	if cache == nil {
 		return nil
 	}

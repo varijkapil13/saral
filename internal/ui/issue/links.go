@@ -8,6 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appissueref "github.com/varijkapil13/saral/internal/app/issueref"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -132,7 +134,7 @@ func (k *linksKind) startAdd(s *sheet) tea.Cmd {
 func (k *linksKind) changed(s *sheet, text string) tea.Cmd {
 	s.cands = s.cands[:0]
 	if k.phrase == nil {
-		p := app.NewPattern(text)
+		p := appmatch.NewPattern(text)
 		for _, t := range k.types {
 			for _, ph := range [...]sheetRow{{text: t.Outward, id: t.ID, key: "out"}, {text: t.Inward, id: t.ID, key: "in"}} {
 				if _, ok := p.Score(ph.text); ph.text != "" && ok && (ph.key == "out" || t.Inward != t.Outward) {
@@ -143,9 +145,9 @@ func (k *linksKind) changed(s *sheet, text string) tea.Cmd {
 		}
 		return nil
 	}
-	if key, ok := app.ParseKey(text); ok && key != s.key {
+	if key, ok := appissueref.ParseKey(text); ok && key != s.key {
 		s.cands = append(s.cands, sheetRow{text: key, key: key})
-	} else if key, _, ok := app.ParseIssueURL(text); ok && key != s.key {
+	} else if key, _, ok := appissueref.ParseIssueURL(text); ok && key != s.key {
 		s.cands = append(s.cands, sheetRow{text: key, key: key})
 	}
 	if s.deps.Cache == nil || text == "" {

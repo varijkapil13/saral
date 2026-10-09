@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/search"
@@ -23,7 +24,7 @@ import (
 // line names the key that reaches it directly. docs/UX.md says three.
 const hintAfter = 3
 
-// scoreTier is app.Pattern's ranking step, which it does not export: a whole
+// scoreTier is match.Pattern's ranking step, which it does not export: a whole
 // candidate, a prefix, a word start and a match inside a word are that far
 // apart.
 const scoreTier = 256
@@ -69,7 +70,7 @@ func (r *row) offered() bool { return r.reason == "" }
 // match is the best of the three ways a command can be found, each answering
 // for itself so that a title match is never beaten by a prefix of an ID nobody
 // can see.
-func (r *row) match(p app.Pattern) (int, bool) {
+func (r *row) match(p appmatch.Pattern) (int, bool) {
 	best, ok := p.Score(r.cmd.Title)
 	for _, other := range [...]string{r.cmd.Group, r.cmd.ID} {
 		if score, hit := p.Score(other); hit && (!ok || score-fieldPenalty > best) {
@@ -443,7 +444,7 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 func (m *Model) refilter(keep mark) tea.Cmd {
 	m.shown, m.refused, m.ranks = m.shown[:0], m.refused[:0], m.ranks[:0]
 	text := strings.TrimSpace(m.query)
-	pattern := app.NewPattern(text)
+	pattern := appmatch.NewPattern(text)
 	now := m.now()
 	for i := range m.rows {
 		score, ok := m.rows[i].match(pattern)

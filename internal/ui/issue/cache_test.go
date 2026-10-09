@@ -11,14 +11,14 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
-// fakeCache is an app.Cache and an app.IssueCache in a map. The real one is
+// fakeCache is a cache.Cache and a cache.IssueCache in a map. The real one is
 // bbolt-backed and lives below internal/app, which a view may not import —
 // which is the whole point of the interface being where it is.
 type fakeCache struct {
@@ -29,8 +29,8 @@ type fakeCache struct {
 }
 
 var (
-	_ app.Cache      = (*fakeCache)(nil)
-	_ app.IssueCache = (*fakeCache)(nil)
+	_ appcache.Cache      = (*fakeCache)(nil)
+	_ appcache.IssueCache = (*fakeCache)(nil)
 )
 
 func newFakeCache() *fakeCache {
@@ -44,14 +44,14 @@ func (c *fakeCache) hold(iss jira.Issue) {
 	c.issues[iss.Key] = iss
 }
 
-func (c *fakeCache) Issue(key string) (app.IssueSnapshot, bool) {
+func (c *fakeCache) Issue(key string) (appcache.IssueSnapshot, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	iss, ok := c.issues[key]
 	if !ok {
-		return app.IssueSnapshot{}, false
+		return appcache.IssueSnapshot{}, false
 	}
-	return app.IssueSnapshot{Issue: iss, StoredAt: cacheStoredAt}, true
+	return appcache.IssueSnapshot{Issue: iss, StoredAt: cacheStoredAt}, true
 }
 
 func (c *fakeCache) PutIssue(iss jira.Issue) error {
@@ -61,13 +61,13 @@ func (c *fakeCache) PutIssue(iss jira.Issue) error {
 		return c.putFail
 	}
 	c.gen++
-	c.issues[iss.Key] = app.MergeIssue(c.issues[iss.Key], iss)
+	c.issues[iss.Key] = appcache.MergeIssue(c.issues[iss.Key], iss)
 	return nil
 }
 
-// The rest of app.Cache is unused by this package: the detail pane reads and
+// The rest of cache.Cache is unused by this package: the detail pane reads and
 // writes one issue by key, never a search's rows.
-func (c *fakeCache) Rows(string) (app.Snapshot, bool)         { return app.Snapshot{}, false }
+func (c *fakeCache) Rows(string) (appcache.Snapshot, bool)    { return appcache.Snapshot{}, false }
 func (c *fakeCache) PutRows(string, []jira.Issue, bool) error { return nil }
 func (c *fakeCache) Forget(string) error                      { return nil }
 
@@ -90,7 +90,7 @@ func (c *fakeCache) Generation() uint64 {
 
 var cacheStoredAt = time.Date(2025, time.March, 5, 8, 30, 0, 0, time.UTC)
 
-func withCache(d kernel.Deps, c app.Cache) kernel.Deps {
+func withCache(d kernel.Deps, c appcache.Cache) kernel.Deps {
 	d.Cache = c
 	return d
 }

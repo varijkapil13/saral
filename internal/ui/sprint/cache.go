@@ -5,13 +5,13 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-func (m *Model) sprintsCache() (app.SprintsCache, bool) {
-	held, ok := m.deps.Cache.(app.SprintsCache)
+func (m *Model) sprintsCache() (appcache.SprintsCache, bool) {
+	held, ok := m.deps.Cache.(appcache.SprintsCache)
 	return held, ok && held != nil
 }
 
@@ -44,7 +44,7 @@ func (m *Model) keep() tea.Cmd {
 	if !ok || !m.loaded {
 		return nil
 	}
-	err := held.PutSprints(m.deps.Project, app.SprintsSnapshot{
+	err := held.PutSprints(m.deps.Project, appcache.SprintsSnapshot{
 		Boards: m.boards, More: m.more, Sprints: m.sprints, Closed: m.showAll,
 	})
 	if err != nil {

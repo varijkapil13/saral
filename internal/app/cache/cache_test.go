@@ -1,4 +1,4 @@
-package app
+package cache
 
 import (
 	"fmt"
@@ -41,17 +41,20 @@ func openDB(t testing.TB) *store.DB {
 	return db
 }
 
-func newTestCache(t testing.TB, opts ...CacheOption) (*DiskCache, *clock) {
+func newTestCache(t testing.TB, opts ...Option) (*Disk, *clock) {
 	t.Helper()
 
 	c := &clock{at: testNow}
-	return NewCache(openDB(t), testScope, append([]CacheOption{WithClock(c.now)}, opts...)...), c
+	return New(openDB(t), testScope, append([]Option{WithClock(c.now)}, opts...)...), c
 }
+
+// listFields mirrors app.ListProjection, which the shared kernel cannot import.
+var listFields = []string{"summary", "status", "assignee", "priority", "updated", "issuetype"}
 
 // listRows is what the list view stores: the six fields of ListProjection and a
 // mask saying so.
 func listRows(n int) []jira.Issue {
-	mask := jira.NewFieldMask(ListProjection().IDs)
+	mask := jira.NewFieldMask(listFields)
 	out := jiratest.Gen(n)
 	for i := range out {
 		out[i].Requested = mask
@@ -167,8 +170,8 @@ func TestRows_StayInsideTheProfileThatStoredThem(t *testing.T) {
 
 	db := openDB(t)
 	clk := &clock{at: testNow}
-	mine := NewCache(db, testScope, WithClock(clk.now))
-	theirs := NewCache(db, store.Scope{Site: testScope.Site, Account: "someone.else@example.com"}, WithClock(clk.now))
+	mine := New(db, testScope, WithClock(clk.now))
+	theirs := New(db, store.Scope{Site: testScope.Site, Account: "someone.else@example.com"}, WithClock(clk.now))
 
 	if err := mine.PutRows(cacheJQL, listRows(3), false); err != nil {
 		t.Fatalf("PutRows: %v", err)
@@ -184,7 +187,7 @@ func TestRows_StayInsideTheProfileThatStoredThem(t *testing.T) {
 		t.Errorf("another account's cache holds %d of this one's issues", seen)
 	}
 
-	otherSite := NewCache(db, store.Scope{Site: "other.atlassian.net", Account: testScope.Account}, WithClock(clk.now))
+	otherSite := New(db, store.Scope{Site: "other.atlassian.net", Account: testScope.Account}, WithClock(clk.now))
 	if _, ok := otherSite.Rows(cacheJQL); ok {
 		t.Error("one account on two sites shares one cache; the two sites are different Jiras")
 	}
@@ -201,7 +204,7 @@ func TestPutRows_DropsTheIssuesStoredLongestAgoOnceItIsOverTheBound(t *testing.T
 
 	clk.at = testNow.Add(time.Minute)
 	second := jiratest.GenFor("OTHER", 3)
-	mask := jira.NewFieldMask(ListProjection().IDs)
+	mask := jira.NewFieldMask(listFields)
 	for i := range second {
 		second[i].Requested = mask
 	}
@@ -332,7 +335,7 @@ func TestGeneration_TellsAnIndexBuiltFromTheCacheThatItIsBehind(t *testing.T) {
 func TestNilCache_AnswersEveryCallWithoutPanicking(t *testing.T) {
 	t.Parallel()
 
-	var cache *DiskCache
+	var cache *Disk
 	if _, ok := cache.Rows(cacheJQL); ok {
 		t.Error("a cache that does not exist found rows")
 	}
@@ -672,7 +675,7 @@ func TestEachIssue_SkipsARecordItCannotReadAndSaysHowMany(t *testing.T) {
 
 	db := openDB(t)
 	c := &clock{at: testNow}
-	cache := NewCache(db, testScope, WithClock(c.now))
+	cache := New(db, testScope, WithClock(c.now))
 	if err := cache.PutRows(cacheJQL, listRows(5), false); err != nil {
 		t.Fatalf("PutRows: %v", err)
 	}
@@ -714,7 +717,7 @@ func TestEachIssue_SkipsARecordItCannotReadAndSaysHowMany(t *testing.T) {
 	}
 }
 
-func walk(t *testing.T, cache *DiskCache) (seen []string, dropped int, err error) {
+func walk(t *testing.T, cache *Disk) (seen []string, dropped int, err error) {
 	t.Helper()
 
 	dropped, err = cache.EachIssue(func(iss jira.Issue, _ time.Time) bool {

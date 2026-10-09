@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -19,7 +19,7 @@ func BenchmarkBoardFirstPaintFromCache(b *testing.B) {
 		})
 	}
 	cache := newFakeCache()
-	cache.hold("PROJ", cfg.BoardID, app.BoardSnapshot{Config: cfg, Issues: manyCards(4, 200), NoSprints: true}, false)
+	cache.hold("PROJ", cfg.BoardID, appcache.BoardSnapshot{Config: cfg, Issues: manyCards(4, 200), NoSprints: true}, false)
 	d := withCache(testDeps(nil), cache)
 
 	b.ReportAllocs()

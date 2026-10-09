@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -15,9 +16,9 @@ func TestPicker_Golden(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		width, height int
-		open          Facet
+		open          appterm.Facet
 		typed         string
-		terms         Terms
+		terms         appterm.Terms
 		golden        string
 	}{
 		"the facets": {
@@ -25,25 +26,25 @@ func TestPicker_Golden(t *testing.T) {
 		},
 		"the facets with terms already in force": {
 			width: 120, height: 20, golden: "facets_terms_120x20.golden",
-			terms: Terms{
-				{Facet: FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"},
-				{Facet: FacetStatus, ID: "10203", Label: "Shipped"},
+			terms: appterm.Terms{
+				{Facet: appterm.FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"},
+				{Facet: appterm.FacetStatus, ID: "10203", Label: "Shipped"},
 			},
 		},
 		"the statuses of every workflow": {
-			width: 120, height: 20, open: FacetStatus, golden: "statuses_120x20.golden",
+			width: 120, height: 20, open: appterm.FacetStatus, golden: "statuses_120x20.golden",
 		},
 		"the accounts assignable here": {
-			width: 120, height: 20, open: FacetAssignee, golden: "people_120x20.golden",
+			width: 120, height: 20, open: appterm.FacetAssignee, golden: "people_120x20.golden",
 		},
 		"a needle that narrows the accounts": {
-			width: 120, height: 20, open: FacetAssignee, typed: "ada", golden: "people_typed_120x20.golden",
+			width: 120, height: 20, open: appterm.FacetAssignee, typed: "ada", golden: "people_typed_120x20.golden",
 		},
 		"a needle that matches nothing": {
-			width: 120, height: 20, open: FacetPriority, typed: "zzz", golden: "nothing_120x20.golden",
+			width: 120, height: 20, open: appterm.FacetPriority, typed: "zzz", golden: "nothing_120x20.golden",
 		},
 		"a narrow terminal": {
-			width: 80, height: 20, open: FacetStatus, golden: "statuses_80x20.golden",
+			width: 80, height: 20, open: appterm.FacetStatus, golden: "statuses_80x20.golden",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -54,7 +55,7 @@ func TestPicker_Golden(t *testing.T) {
 				opts = append(opts, WithTerms(tc.terms))
 			}
 			dr := newDriver(t, testDeps(newFake(20)), tc.width, tc.height, opts...)
-			if tc.open != FacetNone {
+			if tc.open != appterm.FacetNone {
 				dr.pick(tc.open)
 			}
 			if tc.typed != "" {
@@ -81,7 +82,7 @@ func TestPicker_FailureGolden(t *testing.T) {
 	f := newFake(20)
 	f.FailNext(&jira.CapabilityError{Capability: jira.CapPeople, Reason: "needs the Browse users and groups permission"})
 	dr := newDriver(t, testDeps(f), 120, 20, WithEditKey("e"))
-	dr.pick(FacetAssignee)
+	dr.pick(appterm.FacetAssignee)
 
 	golden(t, "failed_120x20.golden", dr.view())
 }
@@ -93,7 +94,7 @@ func TestPicker_EveryRowFillsTheWidth(t *testing.T) {
 
 	for _, width := range []int{80, 100, 120, 200} {
 		dr := newDriver(t, testDeps(newFake(20)), width, 20)
-		dr.pick(FacetStatus)
+		dr.pick(appterm.FacetStatus)
 		lines := strings.Split(dr.view(), "\n")[headHeight:]
 		for i := range dr.m.shown {
 			if got := ansi.StringWidth(lines[i]); got != width {
@@ -110,7 +111,7 @@ func TestPicker_FitsTheBoxItIsGiven(t *testing.T) {
 
 	for _, size := range []struct{ w, h int }{{40, 10}, {80, 20}, {120, 30}, {200, 60}} {
 		dr := newDriver(t, testDeps(newFake(20)), size.w, size.h)
-		dr.pick(FacetLabel)
+		dr.pick(appterm.FacetLabel)
 		lines := strings.Split(dr.m.View(), "\n")
 		if len(lines) != size.h {
 			t.Errorf("at %dx%d the frame is %d lines", size.w, size.h, len(lines))
@@ -129,11 +130,11 @@ func TestPicker_TheNeedleAsksAboutTheFacetItIsOpenOn(t *testing.T) {
 	t.Parallel()
 
 	dr := newDriver(t, testDeps(newFake(20)), 120, 20)
-	dr.pick(FacetStatus)
+	dr.pick(appterm.FacetStatus)
 	mustContain(t, dr.view(), "which status?")
 
 	dr.key("esc")
-	dr.pick(FacetPriority)
+	dr.pick(appterm.FacetPriority)
 
 	mustContain(t, dr.view(), "which priority?")
 	mustNotContain(t, dr.view(), "which status?")

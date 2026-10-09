@@ -10,7 +10,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	appboard "github.com/varijkapil13/saral/internal/app/board"
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -99,7 +99,7 @@ func BenchmarkBoardView20(b *testing.B) {
 // the bar under the grid and keeps the grid itself worth scrolling.
 func BenchmarkBoardView10kTermed(b *testing.B) {
 	m := marked(b, 4, 10000, 120, 40)
-	m.terms = filter.Terms{{Facet: filter.FacetStatus, ID: "9000", Label: "Column 0"}}
+	m.terms = appterm.Terms{{Facet: appterm.FacetStatus, ID: "9000", Label: "Column 0"}}
 	m.place()
 	if m.gridRows() == 0 {
 		b.Fatal("the term left no cards to scroll through, so this benchmark proves nothing")

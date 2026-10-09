@@ -8,7 +8,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -181,10 +181,10 @@ func (m *Model) tookMe(msg meMsg) tea.Cmd {
 
 // mineToggled is the terms with the assignee facet set to exactly this account,
 // or with it taken off when that is already all it holds.
-func mineToggled(terms filter.Terms, me jira.User) filter.Terms {
-	mine := filter.Term{Facet: filter.FacetAssignee, ID: me.AccountID, Label: widget.Sanitize(me.DisplayName)}
-	if terms.Has(mine) && terms.Count(filter.FacetAssignee) == 1 {
-		return terms.Without(filter.FacetAssignee)
+func mineToggled(terms appterm.Terms, me jira.User) appterm.Terms {
+	mine := appterm.Term{Facet: appterm.FacetAssignee, ID: me.AccountID, Label: widget.Sanitize(me.DisplayName)}
+	if terms.Has(mine) && terms.Count(appterm.FacetAssignee) == 1 {
+		return terms.Without(appterm.FacetAssignee)
 	}
-	return terms.Without(filter.FacetAssignee).Toggle(mine)
+	return terms.Without(appterm.FacetAssignee).Toggle(mine)
 }

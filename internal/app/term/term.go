@@ -1,4 +1,4 @@
-package filter
+package term
 
 import (
 	"encoding/json"
@@ -54,9 +54,9 @@ func (f Facet) Label() string {
 	return ""
 }
 
-// plural is the word for a count of the facet's values. It is spelt out rather
+// Plural is the word for a count of the facet's values. It is spelt out rather
 // than made by adding an s, because three of the six do not take one.
-func (f Facet) plural() string {
+func (f Facet) Plural() string {
 	switch f {
 	case FacetAssignee, FacetReporter:
 		return "accounts"
@@ -95,10 +95,10 @@ func (f Facet) field() string {
 	return ""
 }
 
-// people reports whether the facet's values are accounts, which is the half of
+// People reports whether the facet's values are accounts, which is the half of
 // the vocabulary that needs a permission of its own and cannot be ranked by the
 // site.
-func (f Facet) people() bool { return f == FacetAssignee || f == FacetReporter }
+func (f Facet) People() bool { return f == FacetAssignee || f == FacetReporter }
 
 // Term is one value a search is narrowed by, held by the id the site gave it.
 //
