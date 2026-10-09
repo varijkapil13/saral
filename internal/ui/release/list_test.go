@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -336,8 +337,8 @@ func TestReleases_ArchivingKeepsEverythingElseAboutTheVersion(t *testing.T) {
 	if !after.Archived {
 		t.Error("the row still says the version is not archived")
 	}
-	if got := versionState(after, dr.list().today()); got != stateArchived {
-		t.Errorf("the row is in state %q after being archived", got)
+	if got := apprelease.StateOf(after, dr.list().today()); got != apprelease.Archived {
+		t.Errorf("the row is in state %q after being archived", stateWord(got))
 	}
 }
 

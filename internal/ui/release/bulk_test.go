@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -201,21 +202,21 @@ func TestBulk_AChunkThatLandsNothingStopsTheRun(t *testing.T) {
 	dr := bulkOf(t, testDeps(r), versionByID(t, twoOh), 100, 24)
 	dr.key("enter")
 	todo := len(dr.bulk().todo)
-	if todo <= bulkChunk {
+	if todo <= apprelease.Chunk {
 		t.Fatalf("%d issues is one chunk, so this proves nothing", todo)
 	}
 	dr.key("y")
 	b := dr.bulk()
-	if len(b.failed) != bulkChunk || len(b.pending) != todo-bulkChunk {
+	if len(b.failed) != apprelease.Chunk || len(b.pending) != todo-apprelease.Chunk {
 		t.Errorf("failed=%d pending=%d of %d, want one chunk refused and the rest not sent", len(b.failed), len(b.pending), todo)
 	}
 	r.mu.Lock()
 	sent := len(r.sent)
 	r.mu.Unlock()
-	if sent != bulkChunk {
-		t.Errorf("%d edits reached the site after a chunk that landed nothing, want %d", sent, bulkChunk)
+	if sent != apprelease.Chunk {
+		t.Errorf("%d edits reached the site after a chunk that landed nothing, want %d", sent, apprelease.Chunk)
 	}
-	mustContain(t, dr.lastStatus().Text, strconv.Itoa(todo-bulkChunk)+" were not sent")
+	mustContain(t, dr.lastStatus().Text, strconv.Itoa(todo-apprelease.Chunk)+" were not sent")
 }
 
 func TestBulk_TheWriteIsAnAddOrARemoveAndNeverTheWholeList(t *testing.T) {
@@ -265,11 +266,11 @@ func TestBulk_AQueryTheSiteRefusesIsSaidOnTheQuery(t *testing.T) {
 func TestBulk_AQueryMatchingMoreThanOneRunWritesIsRefused(t *testing.T) {
 	t.Parallel()
 
-	f := newFake(bulkCap + 1)
+	f := newFake(apprelease.Cap + 1)
 	dr := bulkOf(t, testDeps(f), versionByID(t, threeOh), 100, 24)
 	dr.key("enter")
 	b := dr.bulk()
-	if b.state != bulkQuery || !errors.Is(b.failure, errTooMany) {
+	if b.state != bulkQuery || !errors.Is(b.failure, apprelease.ErrTooMany) {
 		t.Fatalf("state %d failure %v, want the query refused as too wide", b.state, b.failure)
 	}
 	mustContain(t, dr.view(), "narrow it")

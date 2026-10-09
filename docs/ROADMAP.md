@@ -1992,7 +1992,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
   Create, start, complete with a destination, progress. Empty for `ui/sprint`:
   `BoardConfig|Boards|CompleteSprint|CreateSprint|MoveToSprint|Sprint|SprintIssues|Sprints|StartSprint|UpdateSprint`.
 
-- [ ] **P13.8 — `release`** · after P13.2 · **owns** `internal/app/release/**`, `internal/ui/release/**`
+- [x] **P13.8 — `release`** · after P13.2 · **owns** `internal/app/release/**`, `internal/ui/release/**`
   Versions, facets, the release flow, bulk fixVersion. Empty for `ui/release`:
   `ReleaseVersion|SaveVersion|Search|UnresolvedCount|UpdateIssue|Versions`.
 

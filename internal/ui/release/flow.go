@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -291,12 +292,8 @@ func (f *Flow) release() tea.Cmd {
 	if f.deps.Jira == nil {
 		return kernel.Warn("there is no Jira connection in this session")
 	}
-	in := jira.ReleaseInput{Unresolved: f.policy}
-	if f.policy == jira.MoveUnresolved {
-		if f.target.ID == "" {
-			return kernel.Warn("nothing has been chosen to move the open issues to")
-		}
-		in.MoveToVersionID = f.target.ID
+	if f.policy == jira.MoveUnresolved && f.target.ID == "" {
+		return kernel.Warn("nothing has been chosen to move the open issues to")
 	}
 	f.stop()
 	f.gen++
@@ -304,7 +301,7 @@ func (f *Flow) release() tea.Cmd {
 	f.cancel = cancel
 	f.state, f.failure = flowWorking, nil
 	return kernel.Reply(
-		withCancel(cancel, releaseOne(ctx, f.deps.Jira, f.version.ID, in, f.open, f.gen)),
+		withCancel(cancel, releaseOne(ctx, f.deps.Jira, f.version.ID, f.policy, f.target.ID, f.open, f.gen)),
 		f.addr)
 }
 
@@ -317,20 +314,17 @@ func (f *Flow) tookRelease(msg releasedMsg) tea.Cmd {
 	if msg.gen != f.gen || f.state != flowWorking {
 		return nil
 	}
-	if !msg.version.Released {
+	out := apprelease.Outcome{Version: msg.version, Policy: msg.policy, Asked: msg.asked}
+	if !out.Released() {
 		f.state = flowStuck
 		f.failure = errors.New("the site answered without saying " + f.version.Name +
 			" is released, so it may not be")
 		return kernel.Fail(f.failure)
 	}
 	f.stop()
-	left := 0
-	if msg.version.Unresolved != nil {
-		left = *msg.version.Unresolved
-	}
 	report := kernel.Status(f.version.Name + " released. " + f.outcome(msg.policy, msg.asked))
-	if msg.policy != jira.ReleaseAnyway && left > 0 {
-		report = kernel.Warn(f.version.Name + " was released, but " + strconv.Itoa(left) +
+	if out.Unfinished() {
+		report = kernel.Warn(f.version.Name + " was released, but " + strconv.Itoa(out.Left()) +
 			" of the " + plural(msg.asked, "open issue", "open issues") +
 			" still carry it: the " + sweepWord(msg.policy) + " did not finish")
 	}

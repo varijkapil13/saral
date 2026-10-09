@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -68,7 +70,7 @@ type Model struct {
 	sorted []int
 	order  []slot
 	sort   sortChoice
-	filter stateFilter
+	filter apprelease.Filter
 
 	sortCursor     int
 	sortSaveFailed bool
@@ -402,15 +404,15 @@ func (m *Model) tookSave(msg savedMsg) tea.Cmd {
 	if msg.created {
 		said = msg.version.Name + " created."
 	}
-	if state := versionState(msg.version, m.day); !m.filter.keeps(state) {
+	if state := apprelease.StateOf(msg.version, m.day); !m.filter.Keeps(state) {
 		if msg.created {
 			// A version somebody has just made is the one thing they want to
 			// see next, so the filter gives way rather than hiding it.
-			m.setFilter(filterAll)
+			m.setFilter(apprelease.FilterAll)
 			said = msg.version.Name + " created; showing every version so it is on screen."
 		} else {
-			said = msg.version.Name + " saved; it is " + state + " now, which the " +
-				m.filter.name() + " filter hides."
+			said = msg.version.Name + " saved; it is " + stateWord(state) + " now, which the " +
+				m.filter.Name() + " filter hides."
 		}
 	}
 	m.sum = ""
@@ -465,50 +467,14 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	return kernel.Fail(msg.err)
 }
 
-// put replaces a version by id, or appends it. A create comes back with an id
-// the list has never seen and belongs at the end, which is where the project
-// put it.
-func (m *Model) put(v jira.Version) {
-	for i := range m.versions {
-		if m.versions[i].ID == v.ID {
-			// A count already read stays read: the write that came back knows
-			// nothing about what is open, and nil would say nobody had asked.
-			if v.Unresolved == nil {
-				v.Unresolved = m.versions[i].Unresolved
-			}
-			m.versions[i] = v
-			return
-		}
-	}
-	m.versions = append(m.versions, v)
-}
+func (m *Model) put(v jira.Version) { m.versions = apprelease.Put(m.versions, v) }
 
-func (m *Model) byID(id string) (jira.Version, bool) {
-	for i := range m.versions {
-		if m.versions[i].ID == id {
-			return m.versions[i], true
-		}
-	}
-	return jira.Version{}, false
-}
+func (m *Model) byID(id string) (jira.Version, bool) { return apprelease.ByID(m.versions, id) }
 
-// moveTargets are the versions the open issues on one version could move to:
-// the ones that are neither this one, nor already released, nor archived.
-// Moving open work onto a version that has shipped is not somewhere to put it.
+// moveTargets are the versions the open issues on one version could move to.
 // Over a set a version's issues belong to its own project, so only its versions are offered.
 func (m *Model) moveTargets(from jira.Version) []jira.Version {
-	out := make([]jira.Version, 0, len(m.versions))
-	for i := range m.versions {
-		v := m.versions[i]
-		if v.ID == from.ID || v.Released || v.Archived {
-			continue
-		}
-		if m.set != nil && v.ProjectID != from.ProjectID {
-			continue
-		}
-		out = append(out, v)
-	}
-	return out
+	return apprelease.MoveTargets(m.versions, from, m.set != nil)
 }
 
 // --- actions ----------------------------------------------------------------
@@ -563,9 +529,7 @@ func (m *Model) toggleArchive() tea.Cmd {
 	if m.deps.Jira == nil {
 		return kernel.Warn("there is no Jira connection in this session")
 	}
-	in := updateOf(v)
-	archived := !v.Archived
-	in.Archived = &archived
+	in := apprelease.Archiving(v, !v.Archived)
 	ctx, gen := m.begin()
 	m.saving = true
 	m.sum = ""
@@ -790,7 +754,7 @@ func (m *Model) moveOnto(id string) {
 			m.moveTo(min(shown, len(m.order)-1))
 			return
 		}
-		if m.filter.keeps(m.cells[i].state) {
+		if m.filter.Keeps(m.cells[i].state) {
 			shown++
 		}
 	}
@@ -988,51 +952,30 @@ func (f *form) height(showing bool) int {
 	return h
 }
 
-// input builds what the site is sent, or says in one sentence why it cannot be.
-// Both dates are read with the port's own parser, so a typed one is refused
-// here rather than turned into a day somewhere east of the reader.
+// versionInput builds what the site is sent, or says in one sentence why it
+// cannot be.
 func (f *form) versionInput(project string) (in jira.VersionInput, problem string) {
 	values := f.values
 	values[f.at] = f.input.Value()
-
-	name := strings.TrimSpace(values[fieldName])
-	if name == "" {
-		return jira.VersionInput{}, "a version needs a name"
-	}
-	start, problem := readDay(values[fieldStart], fieldLabels[fieldStart])
-	if problem != "" {
-		return jira.VersionInput{}, problem
-	}
-	release, problem := readDay(values[fieldRelease], fieldLabels[fieldRelease])
-	if problem != "" {
-		return jira.VersionInput{}, problem
-	}
-	if !start.IsZero() && !release.IsZero() && release.Before(start) {
-		return jira.VersionInput{}, "a version cannot be released before it starts"
-	}
-	in = jira.VersionInput{
+	in, err := apprelease.Draft{
 		ID:          f.id,
-		Name:        name,
-		Description: strings.TrimSpace(values[fieldDescription]),
-		StartDate:   start,
-		ReleaseDate: release,
+		Name:        values[fieldName],
+		Description: values[fieldDescription],
+		Start:       values[fieldStart],
+		Release:     values[fieldRelease],
+	}.Input(project)
+	if err == nil {
+		return in, ""
 	}
-	if in.ID == "" {
-		in.ProjectKey = project
+	var bad *apprelease.DateError
+	if errors.As(err, &bad) {
+		what := fieldLabels[fieldStart]
+		if bad.Field == apprelease.ReleaseDate {
+			what = fieldLabels[fieldRelease]
+		}
+		return jira.VersionInput{}, what + " has to be a date like " + exampleDay + ", not " + strconv.Quote(bad.Typed)
 	}
-	return in, ""
-}
-
-func readDay(typed, what string) (day jira.Date, problem string) {
-	typed = strings.TrimSpace(typed)
-	if typed == "" {
-		return jira.Date{}, ""
-	}
-	day, err := jira.ParseDate(typed)
-	if err != nil {
-		return jira.Date{}, what + " has to be a date like " + exampleDay + ", not " + strconv.Quote(typed)
-	}
-	return day, ""
+	return jira.VersionInput{}, err.Error()
 }
 
 // exampleDay is the shape Jira writes a version's dates in, spelt out because a
