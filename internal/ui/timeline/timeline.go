@@ -242,7 +242,7 @@ func (m *Model) take(res apptimeline.Resolution, issues []jira.Issue, recentre b
 			continue
 		}
 		seen[key] = true
-		if !apptimeline.MatchesTerms(&issues[i], m.terms) {
+		if !m.terms.Match(&issues[i]) {
 			m.filteredOut++
 			continue
 		}

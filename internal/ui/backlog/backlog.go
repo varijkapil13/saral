@@ -973,7 +973,7 @@ func (m *Model) regroup() {
 		if m.finished(&m.issues[i]) {
 			continue
 		}
-		if !appboard.MatchesTerms(&m.issues[i], m.terms) {
+		if !m.terms.Match(&m.issues[i]) {
 			m.filteredOut++
 			continue
 		}

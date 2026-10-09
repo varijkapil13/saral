@@ -1,4 +1,4 @@
-package app
+package draft
 
 import (
 	"os"

@@ -104,7 +104,7 @@ go test -count=1 -parallel 1 -run '^TestBudget_' ./...
 
 ### The guards
 
-Every `TestBudget_*` in the tree is listed here, and the list is checked both ways: `internal/app`
+Every `TestBudget_*` in the tree is listed here, and the list is checked both ways: `internal/arch`
 fails if a name here has no test or a test is missing from here, and the `budgets` job fails if the
 set that actually ran is not this one. So a guard cannot be deleted quietly — only by editing this
 table, which is the same thing as writing down that the budget is no longer held.
@@ -113,18 +113,18 @@ table, which is the same thing as writing down that the budget is no longer held
 
 | Package | Guard |
 |---|---|
-| `internal/app` | `TestBudget_CIComparesTheBenchmarksAgainstTheBaseBranch` |
-| `internal/app` | `TestBudget_CIRunsTheGuardsWithoutTheDetector` |
-| `internal/app` | `TestBudget_EveryWallClockAssertionSitsInAGuard` |
-| `internal/app` | `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` |
-| `internal/app` | `TestBudget_NoTestOutsideAGuardRunsABenchmark` |
-| `internal/app` | `TestBudget_TheDocumentNamesEveryGuardAndOnlyRealOnes` |
 | `internal/app/cache` | `TestBudget_CacheReadForAViewsFirstPaint` |
 | `internal/app/search` | `TestBudget_IndexRebuildAtTenThousandIssues` |
 | `internal/app/search` | `TestBudget_IndexSearchAllocatesOnlyTheAnswerItHandsBack` |
 | `internal/app/search` | `TestBudget_IndexSearchAtTenThousandIssues` |
 | `internal/app/timeline` | `TestBudget_DateCascadeCostsNoMoreThanTheIssuesItIsGiven` |
 | `internal/app/timeline` | `TestBudget_DateCascadeOverATimelineOfIssues` |
+| `internal/arch` | `TestBudget_CIComparesTheBenchmarksAgainstTheBaseBranch` |
+| `internal/arch` | `TestBudget_CIRunsTheGuardsWithoutTheDetector` |
+| `internal/arch` | `TestBudget_EveryWallClockAssertionSitsInAGuard` |
+| `internal/arch` | `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` |
+| `internal/arch` | `TestBudget_NoTestOutsideAGuardRunsABenchmark` |
+| `internal/arch` | `TestBudget_TheDocumentNamesEveryGuardAndOnlyRealOnes` |
 | `internal/ui/attach` | `TestBudget_AttachAMemoLookupCostsNothing` |
 | `internal/ui/attach` | `TestBudget_AttachFullRedrawAt200x60` |
 | `internal/ui/attach` | `TestBudget_AttachKeystrokeToFrame` |

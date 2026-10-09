@@ -27,7 +27,7 @@ func testQuickFilters(id int64) []jira.QuickFilter {
 
 // boardIssues is what a board's own read stores: the six fields of
 // ListProjection plus reporter and labels, and a mask saying so — the same
-// shape board.plan.projection asks for.
+// shape board.Plan.Projection asks for.
 func boardIssues(n int) []jira.Issue {
 	mask := jira.NewFieldMask(append(slices.Clone(listFields), "reporter", "labels"))
 	out := jiratest.Gen(n)

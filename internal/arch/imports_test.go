@@ -345,8 +345,8 @@ func TestBrokenRules_MatchTheOffendingPackagesAndNothingElse(t *testing.T) {
 			want:    nil,
 		},
 		{
-			name:    "the legacy root reaching down into the store",
-			pkgDir:  "internal/app",
+			name:    "the draft kernel reaching down into the store",
+			pkgDir:  "internal/app/draft",
 			imports: "internal/store",
 			want:    []string{"only-the-cache-imports-the-store"},
 		},

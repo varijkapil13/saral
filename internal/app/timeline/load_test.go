@@ -10,7 +10,6 @@ import (
 
 	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/app/cache/cachetest"
-	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -353,45 +352,6 @@ func TestMarkers_SprintSpansBucketBoundariesInTheZoneGiven(t *testing.T) {
 	want := []SprintSpan{{Name: "dated", From: day(2026, time.March, 2), To: day(2026, time.March, 15)}}
 	if !slices.Equal(got, want) {
 		t.Errorf("SprintSpans = %v, want %v", got, want)
-	}
-}
-
-func TestMatchesTerms_IsAndAcrossFacetsAndOrWithinOne(t *testing.T) {
-	t.Parallel()
-
-	iss := &jira.Issue{
-		Key:      "PROJ-1",
-		Assignee: &jira.User{AccountID: "ada"},
-		Status:   jira.Status{ID: "3"},
-		Type:     jira.IssueType{ID: "10"},
-		Labels:   []string{"ui"},
-	}
-	assignee := func(id string) appterm.Term { return appterm.Term{Facet: appterm.FacetAssignee, ID: id} }
-	status := func(id string) appterm.Term { return appterm.Term{Facet: appterm.FacetStatus, ID: id} }
-	tests := []struct {
-		name  string
-		terms appterm.Terms
-		want  bool
-	}{
-		{"no terms", nil, true},
-		{"one value that matches", appterm.Terms{assignee("ada")}, true},
-		{"either of two values", appterm.Terms{assignee("bob"), assignee("ada")}, true},
-		{"neither of two values", appterm.Terms{assignee("bob"), assignee("cy")}, false},
-		{"two facets that both match", appterm.Terms{assignee("ada"), status("3")}, true},
-		{"two facets where one does not", appterm.Terms{assignee("ada"), status("4")}, false},
-		{"unassigned on an assigned issue", appterm.Terms{assignee("")}, false},
-		{"no priority on an issue with none", appterm.Terms{{Facet: appterm.FacetPriority}}, true},
-		{"a label it carries", appterm.Terms{{Facet: appterm.FacetLabel, ID: "ui"}}, true},
-		{"a type it is not", appterm.Terms{{Facet: appterm.FacetType, ID: "11"}}, false},
-		{"no reporter on an issue with none", appterm.Terms{{Facet: appterm.FacetReporter}}, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := MatchesTerms(iss, tt.terms); got != tt.want {
-				t.Errorf("MatchesTerms = %v, want %v", got, tt.want)
-			}
-		})
 	}
 }
 

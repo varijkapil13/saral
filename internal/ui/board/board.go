@@ -1139,7 +1139,7 @@ func (m *Model) place() {
 		if subtasks || !m.issues[i].Type.Subtask {
 			m.wip[at]++
 		}
-		if !appboard.MatchesTerms(&m.issues[i], m.terms) {
+		if !m.terms.Match(&m.issues[i]) {
 			m.filteredOut++
 			continue
 		}

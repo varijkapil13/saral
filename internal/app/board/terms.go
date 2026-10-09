@@ -2,7 +2,6 @@ package board
 
 import (
 	"encoding/json"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -10,67 +9,6 @@ import (
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
-
-// MatchesTerms reports whether an issue passes every facet in force: AND across
-// facets, OR within one facet's own values, the same semantics Terms.Clause()
-// compiles to JQL for a search. A board or backlog evaluates it rather than
-// sending it, because what a board holds is the board's to define and its
-// contents are already whole in memory: a person, a status, a type, a priority
-// or a label is this program's own idea of a narrower board, not one the site's
-// board draws too.
-func MatchesTerms(iss *jira.Issue, terms appterm.Terms) bool {
-	if len(terms) == 0 {
-		return true
-	}
-	byFacet := make(map[appterm.Facet][]appterm.Term, len(terms))
-	for _, t := range terms {
-		byFacet[t.Facet] = append(byFacet[t.Facet], t)
-	}
-	for facet, want := range byFacet {
-		matched := false
-		for _, t := range want {
-			if matchesFacet(iss, facet, t.ID) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
-	}
-	return true
-}
-
-// matchesFacet reads the same field of an issue that Facet.field names on the
-// JQL side, an empty id meaning the field itself is empty — "unassigned" is a
-// value like any other, the way the picker already treats it.
-func matchesFacet(iss *jira.Issue, facet appterm.Facet, id string) bool {
-	switch facet {
-	case appterm.FacetAssignee:
-		if id == "" {
-			return iss.Assignee == nil || iss.Assignee.AccountID == ""
-		}
-		return iss.Assignee != nil && iss.Assignee.AccountID == id
-	case appterm.FacetReporter:
-		if id == "" {
-			return iss.Reporter == nil || iss.Reporter.AccountID == ""
-		}
-		return iss.Reporter != nil && iss.Reporter.AccountID == id
-	case appterm.FacetStatus:
-		return iss.Status.ID == id
-	case appterm.FacetType:
-		return iss.Type.ID == id
-	case appterm.FacetPriority:
-		if id == "" {
-			return iss.Priority == nil
-		}
-		return iss.Priority != nil && iss.Priority.ID == id
-	case appterm.FacetLabel:
-		return slices.Contains(iss.Labels, id)
-	case appterm.FacetNone:
-	}
-	return false
-}
 
 // MineToggled is the terms with the assignee facet set to exactly this account,
 // labelled label, or with it taken off when that is already all it holds.
