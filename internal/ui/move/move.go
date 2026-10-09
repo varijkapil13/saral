@@ -16,6 +16,7 @@ package move
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	appmove "github.com/varijkapil13/saral/internal/app/move"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -68,12 +70,12 @@ type Option func(*Model)
 // this: there is no port method that lists projects and none that lists a
 // selection, so both halves arrive from the view that already has them.
 func WithIssues(issues []jira.Issue) Option {
-	return func(m *Model) { m.issues = append([]jira.Issue(nil), issues...) }
+	return func(m *Model) { m.issues = slices.Clone(issues) }
 }
 
 // withWaiter replaces the pause between two questions about a task, so that a
 // test can hold the backoff to account without spending it.
-func withWaiter(w waiter) Option {
+func withWaiter(w appmove.Waiter) Option {
 	return func(m *Model) {
 		if w != nil {
 			m.wait = w
@@ -99,8 +101,8 @@ type Model struct {
 	vocab  []jira.IssueTypeStatuses
 	typeAt int
 
-	remaps []remap
-	fields []pending
+	remaps []appmove.Remap
+	fields []appmove.Pending
 	// schema records that the target has answered what it insists on, or has
 	// refused to, in which case schemaErr says why and every mandatory field is
 	// kept from the source. Nothing asks a user to confirm a move whose target
@@ -115,7 +117,7 @@ type Model struct {
 	dropErr    error
 	dropGen    int
 	dropCancel context.CancelFunc
-	sources    map[pair]jira.Schema
+	sources    map[appmove.Pair]jira.Schema
 
 	notify bool
 	// planGen counts the changes to the resolved mapping, which is what the
@@ -124,9 +126,9 @@ type Model struct {
 	planGen int
 
 	ref     jira.TaskRef
+	task    *appmove.Task
 	state   jira.TaskState
 	percent int
-	attempt int
 	failed  []string
 	// paused is what a rate limit asked for, kept so the pane can say why
 	// nothing is happening rather than looking wedged.
@@ -147,7 +149,7 @@ type Model struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	addr   kernel.Addr
-	wait   waiter
+	wait   appmove.Waiter
 
 	styles *styles
 	memo   *widget.RowCache[rowKey, string]
@@ -166,7 +168,7 @@ type Model struct {
 // question that has to be answered before anything else can be asked of the
 // site.
 func New(d kernel.Deps, opts ...Option) kernel.View {
-	m := &Model{deps: d, keys: defaultKeys(), input: newInput(), addr: kernel.NewAddr(), wait: sleep}
+	m := &Model{deps: d, keys: defaultKeys(), input: newInput(), addr: kernel.NewAddr(), wait: appmove.Sleep}
 	for _, opt := range opts {
 		opt(m)
 	}
@@ -213,7 +215,7 @@ func (m *Model) Init() tea.Cmd {
 		return nil
 	}
 	ctx, gen := m.begin()
-	return m.reply(candidates(ctx, m.deps.Jira, gen))
+	return m.reply(candidates(ctx, m.deps.Jira, m.issues, gen))
 }
 
 // Update handles one message.
@@ -384,26 +386,10 @@ func (m *Model) tookCandidates(msg candidatesMsg) tea.Cmd {
 	}
 	m.stop()
 	m.failure, m.looked = nil, true
-	m.found = m.without(msg.keys)
+	m.found = msg.keys
 	m.cursor, m.top = 0, 0
 	m.forget()
 	return nil
-}
-
-// without drops the projects the issues are already in. A move to the project
-// they are in is not a move, and offering it is offering a no-op.
-func (m *Model) without(keys []string) []string {
-	held := make(map[string]bool, 2)
-	for i := range m.issues {
-		held[m.issues[i].Project.Key] = true
-	}
-	out := make([]string, 0, len(keys))
-	for _, key := range keys {
-		if !held[key] {
-			out = append(out, key)
-		}
-	}
-	return out
 }
 
 func (m *Model) tookVocabulary(msg vocabularyMsg) tea.Cmd {
@@ -442,7 +428,7 @@ func (m *Model) tookSchema(msg schemaMsg) tea.Cmd {
 		m.drop, m.dropErr = dropFailed, msg.err
 		return kernel.Fail(msg.err)
 	}
-	m.fields, m.schema, m.schemaErr = mandatory(msg.schema), true, nil
+	m.fields, m.schema, m.schemaErr = appmove.Mandatory(msg.schema), true, nil
 	m.targetSchema = msg.schema
 	return m.startDrops()
 }
@@ -451,7 +437,7 @@ func (m *Model) tookSchema(msg schemaMsg) tea.Cmd {
 // than holding them up, and only the submit waits for it.
 func (m *Model) startDrops() tea.Cmd {
 	m.resetDrops()
-	leaving := leavingIssues(m.issues, m.target)
+	leaving := appmove.LeavingIssues(m.issues, m.target)
 	if len(leaving) == 0 || m.deps.Jira == nil {
 		return nil
 	}
@@ -492,11 +478,12 @@ func (m *Model) tookRef(msg submittedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
-	m.ref, m.attempt, m.paused = msg.ref, 0, 0
+	m.ref, m.paused = msg.ref, 0
+	m.task = appmove.Follow(m.deps.Jira, msg.ref, m.wait)
 	m.state, m.percent = jira.TaskEnqueued, 0
 	m.loading = true
 	m.head, m.tail = nil, nil
-	return m.reply(poll(m.pollContext(), m.deps.Jira, m.ref, m.wait, 0, m.gen))
+	return m.reply(poll(m.pollContext(), m.task, m.gen))
 }
 
 // pollContext is the context the poll runs under, which is the one begin opened
@@ -509,7 +496,9 @@ func (m *Model) pollContext() context.Context {
 	return m.ctx
 }
 
-// tookTask draws one answer from the queue and decides whether to ask again.
+// tookTask draws one answer from the queue and decides whether to ask again. A
+// rate limit is a pause rather than a failure: the queue is still working and
+// the wizard is being told to ask less often.
 //
 // Whether the task has stopped is State.Done and never a switch written here:
 // CANCEL_REQUESTED is a task still running, and a poller with no case for it
@@ -517,6 +506,11 @@ func (m *Model) pollContext() context.Context {
 func (m *Model) tookTask(msg taskMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
+	}
+	if msg.paused > 0 {
+		m.paused = msg.paused
+		m.head, m.tail = nil, nil
+		return m.reply(poll(m.pollContext(), m.task, m.gen))
 	}
 	m.state, m.percent, m.paused = msg.status.State, msg.status.Progress, 0
 	m.failed = msg.status.Failed
@@ -526,8 +520,7 @@ func (m *Model) tookTask(msg taskMsg) tea.Cmd {
 		m.step = stepDone
 		return m.finished()
 	}
-	m.attempt++
-	return m.reply(poll(m.pollContext(), m.deps.Jira, m.ref, m.wait, backoff(m.attempt), m.gen))
+	return m.reply(poll(m.pollContext(), m.task, m.gen))
 }
 
 // finished says on the status line what the queue reported, in the words of what
@@ -546,19 +539,13 @@ func (m *Model) finished() tea.Cmd {
 		" ended " + strings.ToLower(strings.ReplaceAll(string(m.state), "_", " ")))
 }
 
-// tookFailure keeps the refusal in the pane as well as on the status line, and a
-// rate limit is a pause rather than a failure: the queue is still working and
-// the wizard is being told to ask less often.
+// tookFailure keeps the refusal in the pane as well as on the status line.
 func (m *Model) tookFailure(msg failedMsg) tea.Cmd {
 	if !m.current(msg.gen) {
 		return nil
 	}
 	m.head, m.tail = nil, nil
 	if msg.at == stepRunning && m.step == stepRunning {
-		if wait, limited := held(msg.err, m.attempt); limited {
-			m.attempt, m.paused = m.attempt+1, wait
-			return m.reply(poll(m.pollContext(), m.deps.Jira, m.ref, m.wait, wait, m.gen))
-		}
 		m.stop()
 		m.failure = msg.err
 		m.step = stepDone

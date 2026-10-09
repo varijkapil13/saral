@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	appmove "github.com/varijkapil13/saral/internal/app/move"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -35,7 +36,7 @@ func stocked(tb testing.TB, n, w, h int) *Model {
 	m.target = "OTHER"
 	next, _ = m.Update(vocabularyMsg{gen: m.gen, project: "OTHER", types: benchVocabulary()})
 	m, _ = next.(*Model)
-	m.remaps = defaultRemap(sourceStatuses(m.issues), m.targetStatuses())
+	m.remaps = appmove.DefaultRemap(appmove.SourceStatuses(m.issues), m.targetStatuses())
 	m.schema = true
 	m.step = stepConfirm
 	m.forget()

@@ -366,8 +366,9 @@ func (d *driver) once(msg tea.Msg) tea.Cmd {
 }
 
 // running takes the wizard to a submitted move without letting the queue answer
-// it, so that the answer under test is the first one it sees.
-func (d *driver) running() {
+// it, so that the answer under test is the first one it sees. It returns the
+// first poll, unrun.
+func (d *driver) running() tea.Cmd {
 	d.t.Helper()
 	cmd := d.once(keyPress("y"))
 	if cmd == nil {
@@ -377,8 +378,9 @@ func (d *driver) running() {
 	if !ok {
 		d.t.Fatalf("the submit answered with %T", answer(cmd))
 	}
-	d.once(sub)
+	next := d.once(sub)
 	if d.m.step != stepRunning {
 		d.t.Fatalf("a submitted move left the wizard on step %d", d.m.step)
 	}
+	return next
 }

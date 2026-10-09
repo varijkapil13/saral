@@ -3,7 +3,6 @@ package move
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -69,23 +68,6 @@ func TestMove_NamesAFailedIssueByTheKeyItSubmittedForThatId(t *testing.T) {
 			mustContain(t, frame, want.Key, "did not move")
 			mustNotContain(t, frame, want.ID)
 		})
-	}
-}
-
-// The pause between two questions is a timer in the binary and injected in every
-// other test here, so this is the one place the real one runs.
-func TestSleep_GivesUpTheMomentTheViewIsClosed(t *testing.T) {
-	t.Parallel()
-	if err := sleep(context.Background(), 0); err != nil {
-		t.Errorf("waiting for no time at all answered %v", err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := sleep(ctx, time.Hour); err == nil {
-		t.Error("a closed wizard waited out the backoff")
-	}
-	if err := sleep(context.Background(), time.Microsecond); err != nil {
-		t.Errorf("a pause that elapsed answered %v", err)
 	}
 }
 

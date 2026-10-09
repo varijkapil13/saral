@@ -1996,7 +1996,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
   Versions, facets, the release flow, bulk fixVersion. Empty for `ui/release`:
   `ReleaseVersion|SaveVersion|Search|UnresolvedCount|UpdateIssue|Versions`.
 
-- [ ] **P13.9 — `move`** · after P13.2 · **owns** `internal/app/move/**`, `internal/ui/move/**`
+- [x] **P13.9 — `move`** · after P13.2 · **owns** `internal/app/move/**`, `internal/ui/move/**`
   The bulk-move plan, and the task's progress drained as events. Empty for `ui/move`:
   `BulkMove|CreateMeta|Issue|IssueTypeStatuses|Search|Task`.
 
