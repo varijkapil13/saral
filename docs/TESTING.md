@@ -149,10 +149,10 @@ green: a duplicated name, a missing `why`, an exemption that no package the rule
 or one broad enough to swallow the rule's whole scope.
 
 `internal/arch/contexts_test.go` holds the bounded contexts inside `internal/app` apart: a context
-imports no other context, the shared kernel imports no context and not the root, and the root imports
-no context. The root's non-test files are a closed list that fails on a file added and on a file
-gone. Both tests fail outright when they find nothing to scan, and the predicate has a table of its
-own, one row per rule and per near miss.
+imports no other context, and the shared kernel imports no context. `internal/app` itself is a
+directory of contexts and the kernel, not a package, so a Go file there, test or not, fails. Both
+tests fail outright when they find nothing to scan, every shared-kernel entry has to give its reason,
+and the predicate has a table of its own, one row per rule and per near miss.
 
 The rules only see imports within this module. "No IO libs in `internal/app`" is a convention nobody
 can check this way — a `net/http` import there is invisible to the walk.

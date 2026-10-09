@@ -1,11 +1,11 @@
 package comment
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	appdraft "github.com/varijkapil13/saral/internal/app/draft"
 	"github.com/varijkapil13/saral/pkg/adf"
 )
 
@@ -31,31 +31,11 @@ func (k DraftKey) file() string {
 	return safeName(k.Issue) + "." + safeName(name) + ".md"
 }
 
-// safeName keeps a path segment to characters that mean the same thing on every
-// filesystem, so an issue key or a comment id can never reach outside the
-// drafts directory.
-func safeName(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
-			b.WriteRune(r)
-		default:
-			b.WriteByte('_')
-		}
-	}
-	if b.Len() == 0 {
-		return "unnamed"
-	}
-	return b.String()
-}
+func safeName(s string) string { return appdraft.SafeName(s, "") }
 
-// Drafts is where unsent text is kept between sessions. docs/UX.md principle 6
-// asks that anything typed survive a failed request, a conflict and a crash,
-// which means on disk rather than in the model.
+// Drafts is where unsent comments are kept between sessions.
 type Drafts struct {
-	root string
+	store appdraft.Store
 }
 
 // OpenDrafts keeps comment drafts under dir. A session with nowhere to write
@@ -68,9 +48,9 @@ func OpenDrafts(dir, legacy string) *Drafts {
 	}
 	root := filepath.Join(dir, draftDirName)
 	if strings.TrimSpace(legacy) != "" {
-		migrateOnce.Do(func() { migrateDrafts(filepath.Join(legacy, legacyDraftDirName), root) })
+		migrateOnce.Do(func() { appdraft.Migrate(filepath.Join(legacy, legacyDraftDirName), root, ".md") })
 	}
-	return &Drafts{root: root}
+	return &Drafts{store: appdraft.Open(root)}
 }
 
 // legacyDraftDirName is where earlier builds kept comment drafts, under the
@@ -79,71 +59,23 @@ const legacyDraftDirName = "drafts"
 
 var migrateOnce sync.Once
 
-// migrateDrafts moves every draft under from into the same place under to. A
-// draft already at the destination is newer than the one left behind, so it
-// wins and the old one stays where it was rather than being lost.
-func migrateDrafts(from, to string) {
-	sites, err := os.ReadDir(from)
-	if err != nil {
-		return
-	}
-	for _, site := range sites {
-		if !site.IsDir() {
-			continue
-		}
-		files, err := os.ReadDir(filepath.Join(from, site.Name()))
-		if err != nil {
-			continue
-		}
-		for _, f := range files {
-			if f.IsDir() || !strings.HasSuffix(f.Name(), ".md") {
-				continue
-			}
-			moveDraft(filepath.Join(from, site.Name(), f.Name()), filepath.Join(to, site.Name(), f.Name()))
-		}
-		_ = os.Remove(filepath.Join(from, site.Name()))
-	}
-	_ = os.Remove(from)
-}
-
-func moveDraft(src, dst string) {
-	if _, err := os.Lstat(dst); err == nil {
-		return
-	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
-		return
-	}
-	if os.Rename(src, dst) == nil {
-		return
-	}
-	body, err := os.ReadFile(src) //nolint:gosec // src is a directory entry under the legacy drafts directory
-	if err != nil {
-		return
-	}
-	if os.WriteFile(dst, body, 0o600) == nil {
-		_ = os.Remove(src)
-	}
-}
-
 func (d *Drafts) path(k DraftKey) string {
-	if d == nil || d.root == "" {
+	if d == nil {
 		return ""
 	}
-	return filepath.Join(d.root, safeName(k.Site), k.file())
+	return d.store.Path(safeName(k.Site), k.file())
+}
+
+func (d *Drafts) read(path string) string {
+	if d == nil {
+		return ""
+	}
+	b, _, _ := d.store.Read(path)
+	return string(b)
 }
 
 // Read returns the draft kept for this key, and "" when there is none.
-func (d *Drafts) Read(k DraftKey) string {
-	path := d.path(k)
-	if path == "" {
-		return ""
-	}
-	b, err := os.ReadFile(path) //nolint:gosec // the path is built from safeName segments under the drafts directory
-	if err != nil {
-		return ""
-	}
-	return string(b)
-}
+func (d *Drafts) Read(k DraftKey) string { return d.read(d.path(k)) }
 
 // basePath is where the fingerprint of the body an edit's draft was written
 // against is kept, beside the draft.
@@ -156,32 +88,21 @@ func (d *Drafts) basePath(k DraftKey) string {
 }
 
 // ReadBase is the fingerprint kept with a draft, "" when none was.
-func (d *Drafts) ReadBase(k DraftKey) string {
-	path := d.basePath(k)
-	if path == "" {
-		return ""
-	}
-	b, err := os.ReadFile(path) //nolint:gosec // the path is built from safeName segments under the drafts directory
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(b))
-}
+func (d *Drafts) ReadBase(k DraftKey) string { return strings.TrimSpace(d.read(d.basePath(k))) }
 
-// Write keeps the text, replacing whatever was there. The file is written
-// beside its target and renamed over it, so a crash half way through leaves
-// the previous draft rather than a truncated one.
+// Write keeps the text, replacing whatever was there.
 func (d *Drafts) Write(k DraftKey, text, base string) error {
-	if err := d.writeFile(d.path(k), text); err != nil {
+	if d == nil {
+		return nil
+	}
+	if err := d.store.Write(d.path(k), []byte(text)); err != nil {
 		return err
 	}
 	if base == "" {
-		if path := d.basePath(k); path != "" {
-			_ = os.Remove(path)
-		}
+		_ = d.store.Remove(d.basePath(k))
 		return nil
 	}
-	return d.writeFile(d.basePath(k), base)
+	return d.store.Write(d.basePath(k), []byte(base))
 }
 
 // Keep writes the text, or forgets the draft when nothing but whitespace is left.
@@ -193,39 +114,11 @@ func (d *Drafts) Keep(k DraftKey, text, base string) error {
 	return d.Write(k, text, base)
 }
 
-func (d *Drafts) writeFile(path, text string) error {
-	if path == "" {
-		return nil
-	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, ".draft-*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer func() { _ = os.Remove(name) }()
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if _, err := tmp.WriteString(text); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
-}
-
 // Discard forgets a draft, which is what sending it does.
 func (d *Drafts) Discard(k DraftKey) {
 	if path := d.path(k); path != "" {
-		_ = os.Remove(path)
-		_ = os.Remove(d.basePath(k))
+		_ = d.store.Remove(path)
+		_ = d.store.Remove(d.basePath(k))
 	}
 }
 

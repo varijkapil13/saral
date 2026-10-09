@@ -24,9 +24,8 @@ Three constraints drive every decision below:
 │    richtext/          ADF to styled lines, memoized         │
 ├─────────────────────────────────────────────────────────────┤
 │  internal/app         use cases — orchestration, no IO libs │
-│    board/ issue/ ...  bounded contexts, one per concern      │
-│    cache/ match/ ...  shared kernel, a closed list          │
-│    (root)             legacy: dates, index, issue, search   │
+│    board/ issue/ ...  bounded contexts, one per concern     │
+│    cache/ draft/ ...  shared kernel, a closed list          │
 ├─────────────────────────────────────────────────────────────┤
 │  internal/store       bbolt: the file, buckets, records     │
 ├─────────────────────────────────────────────────────────────┤
@@ -48,14 +47,17 @@ renders anything; `internal/ui` must never import `internal/store`, because a vi
 needs as an interface declared above the store and can then be driven by a fake; and nothing but
 `cmd/*` and `internal/app/cache` imports `internal/store`, because the cache's kinds, TTLs and codec
 are the policy over the file and reaching it around them skips that policy. All eight are enforced in CI by an import-boundary test (see `docs/TESTING.md`). Inside `internal/app` a context
-imports only the shared kernel and, while it migrates, the legacy root; that has a test of its own,
+imports only the shared kernel; that has a test of its own,
 described under [Bounded contexts in `internal/app`](#bounded-contexts-in-internalapp).
 
 The "no IO libs" on `internal/app` is the one line above that no test can hold you to: the
 import-boundary test only sees imports within this module, so a `net/http` in a use case is invisible
 to it. Treat it as a rule a reviewer enforces. It means a use case does not open sockets or files
-itself, not that it may not reach the layer below: `internal/app/cache` holds the cache policy and so
-imports `internal/store`, which is downward and deliberate. bbolt is named in exactly one package.
+itself, not that it may not reach the layer below. Two shared-kernel packages touch the disk for the
+contexts: `internal/app/cache` holds the cache policy and so imports `internal/store`, which is
+downward and deliberate, and `internal/app/draft` keeps unsent text beside the profile for `comment`
+and `issue`. bbolt is named in exactly one package. The one context that still writes a file itself
+is `search`, for the palette's frecency.
 
 ## Bounded contexts in `internal/app`
 
@@ -70,7 +72,7 @@ This is DDD without the ceremony: no aggregates, no repositories. `pkg/jira` sta
 the anti-corruption layer; a context takes the narrow `jira.*` interfaces it needs and speaks in the
 port's types.
 
-| Context | Holds | Drains |
+| Context | Holds | Drained from |
 |---|---|---|
 | `board` | board and backlog: the three-step load and paging, column and lane grouping, quick filters, backlog grouping by sprint, rank | `ui/board`, `ui/backlog` |
 | `issue` | read, edit and the conflict check, field coercion, create, drafts, links, watchers, worklogs, the children sort | `ui/issue`, `ui/form`, root `issue.go` |
@@ -86,20 +88,19 @@ port's types.
 
 The **shared kernel** is a closed list, `sharedKernel` in `internal/arch/contexts_test.go`: `cache`
 (the disk cache, its kinds, TTLs and codec, and the only package here that imports `internal/store`),
-`match` (the fuzzy pattern), `term` (the filter-term model, out of `ui/filter`), `issueref` (issue
-key and URL parsing) and `query` (the coalescing search runner and projections every context reads
-with, out of root `search.go`). Adding to it is a decision with a reason, not a convenience.
+`draft` (the file-backed store under the comment and issue drafts), `match` (the fuzzy pattern),
+`term` (the filter-term model, out of `ui/filter`, and the in-memory match a board, a backlog and a
+timeline share), `issueref` (issue key and URL parsing) and `query` (the coalescing search runner and
+projections every context reads with, out of root `search.go`). Adding to it is a decision with a
+reason, not a convenience, and the list carries each reason.
 
 The rules, the first three enforced by `internal/arch/contexts_test.go`:
 
-- **A context imports `pkg/*`, the shared kernel and, while it migrates, the legacy root.** Never
-  another context: contexts are drained and changed in parallel, and what two of them need belongs
-  in the shared kernel.
-- **The shared kernel imports no context and not the root.**
-- **The root imports no context, and only shrinks.** It may import the shared kernel, which is
-  what lets `cache` and `match` leave it before `index.go` and `search.go` do. Its non-test files are
-  a closed list, `legacyRootFiles`; a file not on it fails, so new code goes into a context, and a
-  listed file that is gone fails too, so the list stays true. The migration ends with the root empty.
+- **A context imports `pkg/*` and the shared kernel.** Never another context: contexts are changed
+  in parallel, and what two of them need belongs in the shared kernel.
+- **The shared kernel imports no context.**
+- **`internal/app` holds no Go of its own.** It is a directory of contexts and the shared kernel, not
+  a package; a Go file there fails, so new code goes into a context.
 - **A context has no Bubble Tea in it.** It exposes plain types and functions. The view keeps timing
   (debounce ticks, wrapping a call in a `tea.Cmd`), focus, the cursor, layout and its messages, and
   decides nothing a second front end would have to decide again.
@@ -110,8 +111,7 @@ The rules, the first three enforced by `internal/arch/contexts_test.go`:
   `appboard "…/internal/app/board"` or `appcache "…/internal/app/cache"`, always and not only where
   the name collides with a local one, so a call site says which side of the line it is on.
 
-The migration is Batch 13 in `docs/ROADMAP.md`. `board` is first, holding the rank state machine
-the board and the backlog share.
+The migration was Batch 13 in `docs/ROADMAP.md`, which ended with the root package gone.
 
 ## Ports and adapters
 

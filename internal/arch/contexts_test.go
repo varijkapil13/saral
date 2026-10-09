@@ -15,15 +15,21 @@ import (
 
 const appDir = "internal/app"
 
-var sharedKernel = []string{"cache", "issueref", "match", "query", "term"}
-
-var legacyRootFiles = []string{}
+// sharedKernel is the closed list of packages under internal/app that every
+// context may import, each with why it is shared rather than owned.
+var sharedKernel = map[string]string{
+	"cache":    "the disk cache, its kinds, TTLs and codec, and the only package here that imports internal/store",
+	"draft":    "the file-backed store under the comment and issue drafts: safe names, atomic writes, the legacy move",
+	"issueref": "issue key and URL parsing",
+	"match":    "the fuzzy pattern",
+	"query":    "the coalescing search runner and the projections every context reads with",
+	"term":     "the filter-term model and the in-memory match a board, a backlog and a timeline share",
+}
 
 type appPart uint8
 
 const (
-	appRoot appPart = iota + 1
-	appKernel
+	appKernel appPart = iota + 1
 	appContext
 )
 
@@ -33,15 +39,12 @@ type appPkg struct {
 }
 
 func classifyApp(dir string) (appPkg, bool) {
-	if dir == appDir {
-		return appPkg{part: appRoot}, true
-	}
 	rest, ok := strings.CutPrefix(dir, appDir+"/")
 	if !ok {
 		return appPkg{}, false
 	}
 	name, _, _ := strings.Cut(rest, "/")
-	if slices.Contains(sharedKernel, name) {
+	if _, shared := sharedKernel[name]; shared {
 		return appPkg{part: appKernel, name: name}, true
 	}
 	return appPkg{part: appContext, name: name}, true
@@ -64,15 +67,8 @@ var contextRules = []contextRule{
 	},
 	{
 		name:   "the-shared-kernel-imports-no-context",
-		broken: func(from, to appPkg) bool { return from.part == appKernel && to.part != appKernel },
-		why: "the shared kernel sits beneath every context, so reaching up into one, or into the legacy root, " +
-			"ties every context to it",
-	},
-	{
-		name:   "the-legacy-root-imports-no-context",
-		broken: func(from, to appPkg) bool { return from.part == appRoot && to.part == appContext },
-		why: "the root is being drained into the contexts, which may still import it while they migrate, " +
-			"so importing one back is a cycle in waiting; new code goes into the context instead",
+		broken: func(from, to appPkg) bool { return from.part == appKernel && to.part == appContext },
+		why:    "the shared kernel sits beneath every context, so reaching up into one ties every context to it",
 	},
 }
 
@@ -105,13 +101,13 @@ func appLayout(t *testing.T, root string) (rootFiles, contexts []string) {
 	for _, entry := range entries {
 		switch {
 		case entry.IsDir():
-			if skipDir(entry.Name()) || slices.Contains(sharedKernel, entry.Name()) {
+			if _, shared := sharedKernel[entry.Name()]; skipDir(entry.Name()) || shared {
 				continue
 			}
 			if hasNonTestGo(t, filepath.Join(dir, entry.Name())) {
 				contexts = append(contexts, entry.Name())
 			}
-		case isNonTestGo(entry.Name()):
+		case strings.HasSuffix(entry.Name(), ".go"):
 			rootFiles = append(rootFiles, entry.Name())
 		}
 	}
@@ -135,15 +131,16 @@ func hasNonTestGo(t *testing.T, dir string) bool {
 func TestAppContexts_TheSharedKernelIsWellFormed(t *testing.T) {
 	t.Parallel()
 
-	seen := map[string]bool{}
-	for _, name := range sharedKernel {
+	if len(sharedKernel) == 0 {
+		t.Fatal("the shared kernel is empty, so nothing here proves the kernel rules hold for anything")
+	}
+	for name, why := range sharedKernel {
 		switch {
 		case name == "" || strings.Contains(name, "/"):
 			t.Errorf("shared-kernel entry %q is not a direct subpackage name of %s", name, appDir)
-		case seen[name]:
-			t.Errorf("shared-kernel entry %q is listed twice", name)
+		case strings.TrimSpace(why) == "":
+			t.Errorf("shared-kernel entry %q gives no reason: adding to the kernel is a decision with one", name)
 		}
-		seen[name] = true
 	}
 	for _, rule := range contextRules {
 		if rule.name == "" || rule.why == "" || rule.broken == nil {
@@ -152,36 +149,20 @@ func TestAppContexts_TheSharedKernelIsWellFormed(t *testing.T) {
 	}
 }
 
-func TestAppRoot_OnlyShrinks(t *testing.T) {
+func TestAppRoot_HoldsNoGo(t *testing.T) {
 	t.Parallel()
 
 	rootFiles, contexts := appLayout(t, moduleRoot(t))
-	if len(rootFiles) == 0 && len(contexts) == 0 {
-		t.Fatalf("found no Go files in the %s root and no contexts under it: the scan found nothing, "+
-			"so this check proves nothing", appDir)
+	if len(contexts) == 0 {
+		t.Fatalf("found no contexts under %s: the scan found nothing, so this check proves nothing", appDir)
 	}
-
 	for _, f := range rootFiles {
-		if slices.Contains(legacyRootFiles, f) {
-			continue
-		}
-		if len(legacyRootFiles) == 0 {
-			t.Errorf("%s/%s exists, but the legacy root has been emptied and must stay empty: "+
-				"put it in a context or the shared kernel", appDir, f)
-			continue
-		}
-		t.Errorf("%s/%s is not on legacyRootFiles: the root is legacy and only shrinks, so new code goes "+
-			"into a context (docs/ARCHITECTURE.md, Bounded contexts)", appDir, f)
-	}
-	for _, f := range legacyRootFiles {
-		if !slices.Contains(rootFiles, f) {
-			t.Errorf("legacyRootFiles names %s/%s, which no longer exists: delete it from the list "+
-				"in internal/arch/contexts_test.go so the list stays the truth", appDir, f)
-		}
+		t.Errorf("%s/%s exists, but %s is a directory of contexts and the shared kernel, not a package: "+
+			"put it in a context or the shared kernel (docs/ARCHITECTURE.md, Bounded contexts)", appDir, f, appDir)
 	}
 }
 
-func TestAppContexts_ImportOnlyTheSharedKernelAndTheLegacyRoot(t *testing.T) {
+func TestAppContexts_ImportOnlyTheSharedKernel(t *testing.T) {
 	t.Parallel()
 
 	root := moduleRoot(t)
@@ -254,16 +235,12 @@ func TestBrokenContextRules_MatchTheOffendingImportsAndNothingElse(t *testing.T)
 		{"a context whose name merely starts with another's", "internal/app/board", "internal/app/boardx", []string{"a-context-imports-no-other-context"}},
 		{"a context importing its own subpackage", "internal/app/board", "internal/app/board/lanes", nil},
 		{"a context importing the shared kernel", "internal/app/board", "internal/app/cache", nil},
-		{"a context importing the legacy root while it migrates", "internal/app/board", "internal/app", nil},
+		{"a context importing the draft kernel", "internal/app/comment", "internal/app/draft", nil},
+		{"the draft kernel importing a context", "internal/app/draft", "internal/app/issue", []string{"the-shared-kernel-imports-no-context"}},
 		{"a context taking the port", "internal/app/board", "pkg/jira", nil},
 		{"the shared kernel importing a context", "internal/app/cache", "internal/app/board", []string{"the-shared-kernel-imports-no-context"}},
-		{"the shared kernel importing the legacy root", "internal/app/match", "internal/app", []string{"the-shared-kernel-imports-no-context"}},
 		{"the shared kernel importing itself", "internal/app/cache", "internal/app/match", nil},
-		{"the legacy root importing a context", "internal/app", "internal/app/board", []string{"the-legacy-root-imports-no-context"}},
-		{"the legacy root importing the shared kernel", "internal/app", "internal/app/cache", nil},
-		{"the legacy root taking the port", "internal/app", "pkg/jira", nil},
 		{"a view driving a context", "internal/ui/board", "internal/app/board", nil},
-		{"a view driving the legacy root", "internal/ui/board", "internal/app", nil},
 		{"a package whose name merely starts with internal/app", "internal/apps/x", "internal/app/board", nil},
 	}
 

@@ -1,7 +1,6 @@
-package app
+package arch
 
 import (
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -17,7 +16,6 @@ import (
 
 const (
 	perfDoc      = "docs/PERFORMANCE.md"
-	ciWorkflow   = ".github/workflows/ci.yml"
 	guardsOpen   = "<!-- budget-guards -->"
 	guardsClose  = "<!-- /budget-guards -->"
 	guardsAnswer = "add it to the table between the budget-guards markers in " + perfDoc +
@@ -61,7 +59,7 @@ type guard struct{ pkg, test string }
 func TestBudget_TheDocumentNamesEveryGuardAndOnlyRealOnes(t *testing.T) {
 	t.Parallel()
 
-	root := repoRoot(t)
+	root := moduleRoot(t)
 	listed := guardsInTheDocument(t, root)
 	found := guardsInTheTree(t, root)
 
@@ -79,10 +77,10 @@ func TestBudget_TheDocumentNamesEveryGuardAndOnlyRealOnes(t *testing.T) {
 func TestBudget_CIRunsTheGuardsWithoutTheDetector(t *testing.T) {
 	t.Parallel()
 
-	root := repoRoot(t)
-	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(ciWorkflow)))
+	root := moduleRoot(t)
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(workflowPath)))
 	if err != nil {
-		t.Fatalf("reading %s: %v", ciWorkflow, err)
+		t.Fatalf("reading %s: %v", workflowPath, err)
 	}
 
 	lane, jailed := budgetLane(string(content))
@@ -90,20 +88,20 @@ func TestBudget_CIRunsTheGuardsWithoutTheDetector(t *testing.T) {
 	case lane == "":
 		t.Fatalf("%s no longer runs the budget guards. Every one of them is built `//go:build !race` "+
 			"and the rest of CI is the race suite, so without a lane that drops -race and selects "+
-			"%s they run nowhere at all", ciWorkflow, "'^TestBudget_'")
+			"%s they run nowhere at all", workflowPath, "'^TestBudget_'")
 	case strings.Contains(lane, "-race"):
 		t.Errorf("the budget lane in %s runs with the race detector: %s\n"+
 			"The detector puts about twenty times the cost on these paths, so the numbers it "+
-			"reports are the instrumentation's and not the binary's", ciWorkflow, lane)
+			"reports are the instrumentation's and not the binary's", workflowPath, lane)
 	}
 	if !jailed {
 		t.Errorf("the budget lane in %s runs outside the network namespace: %s\n"+
 			"docs/TESTING.md says no test opens a non-loopback connection, and a lane that runs "+
-			"tests the race suite skips is a lane where that stops being checked", ciWorkflow, lane)
+			"tests the race suite skips is a lane where that stops being checked", workflowPath, lane)
 	}
 	if !strings.Contains(string(content), perfDoc) {
 		t.Errorf("%s no longer reads the guard table out of %s, so the set of guards that ran "+
-			"is compared against nothing", ciWorkflow, perfDoc)
+			"is compared against nothing", workflowPath, perfDoc)
 	}
 }
 
@@ -167,14 +165,6 @@ func guardsInTheDocument(t *testing.T, root string) []guard {
 	return out
 }
 
-// skipWalk keeps the walk inside this checkout. A dot-directory is where a
-// nested worktree lives, and every guard in it is a second copy of one already
-// counted — internal/arch's walker skips the same shapes for the same reason.
-func skipWalk(name string) bool {
-	return name == "testdata" || name == "vendor" ||
-		strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
-}
-
 func guardsInTheTree(t *testing.T, root string) []guard {
 	t.Helper()
 
@@ -183,7 +173,7 @@ func guardsInTheTree(t *testing.T, root string) []guard {
 		switch {
 		case err != nil:
 			return err
-		case d.IsDir() && skipWalk(d.Name()):
+		case d.IsDir() && skipDir(d.Name()):
 			return fs.SkipDir
 		case d.IsDir() || !strings.HasSuffix(d.Name(), "_test.go"):
 			return nil
@@ -227,29 +217,6 @@ func missing(want, have []guard) []guard {
 	return out
 }
 
-func repoRoot(t *testing.T) string {
-	t.Helper()
-
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("working directory: %v", err)
-	}
-	for {
-		_, err := os.Stat(filepath.Join(dir, "go.mod"))
-		if err == nil {
-			return dir
-		}
-		if !errors.Is(err, fs.ErrNotExist) {
-			t.Fatalf("looking for go.mod in %s: %v", dir, err)
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatalf("no go.mod in any parent of the working directory")
-		}
-		dir = parent
-	}
-}
-
 // A wall-clock assertion outside a budget file is the hole the other two guards
 // leave open: the race suite builds it, the detector inflates what it measures
 // about twentyfold, and because the name is not TestBudget_ the table above
@@ -259,12 +226,12 @@ func repoRoot(t *testing.T) string {
 func TestBudget_EveryWallClockAssertionSitsInAGuard(t *testing.T) {
 	t.Parallel()
 
-	root := repoRoot(t)
+	root := moduleRoot(t)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		switch {
 		case err != nil:
 			return err
-		case d.IsDir() && skipWalk(d.Name()):
+		case d.IsDir() && skipDir(d.Name()):
 			return fs.SkipDir
 		case d.IsDir() || !strings.HasSuffix(d.Name(), "_test.go"):
 			return nil
@@ -341,12 +308,12 @@ func holdOneFile(t *testing.T, rel, content string) {
 func TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers(t *testing.T) {
 	t.Parallel()
 
-	root := repoRoot(t)
+	root := moduleRoot(t)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		switch {
 		case err != nil:
 			return err
-		case d.IsDir() && skipWalk(d.Name()):
+		case d.IsDir() && skipDir(d.Name()):
 			return fs.SkipDir
 		case d.IsDir() || !strings.HasSuffix(d.Name(), "_test.go"):
 			return nil
@@ -532,12 +499,12 @@ func sorted(set map[string]bool) []string {
 func TestBudget_NoTestOutsideAGuardRunsABenchmark(t *testing.T) {
 	t.Parallel()
 
-	root := repoRoot(t)
+	root := moduleRoot(t)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		switch {
 		case err != nil:
 			return err
-		case d.IsDir() && skipWalk(d.Name()):
+		case d.IsDir() && skipDir(d.Name()):
 			return fs.SkipDir
 		case d.IsDir() || !strings.HasSuffix(d.Name(), "_test.go"):
 			return nil
@@ -602,10 +569,10 @@ func firstMatch(re *regexp.Regexp, content string) string {
 func TestBudget_CIComparesTheBenchmarksAgainstTheBaseBranch(t *testing.T) {
 	t.Parallel()
 
-	root := repoRoot(t)
-	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(ciWorkflow)))
+	root := moduleRoot(t)
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(workflowPath)))
 	if err != nil {
-		t.Fatalf("reading %s: %v", ciWorkflow, err)
+		t.Fatalf("reading %s: %v", workflowPath, err)
 	}
 	text := string(content)
 
@@ -614,16 +581,16 @@ func TestBudget_CIComparesTheBenchmarksAgainstTheBaseBranch(t *testing.T) {
 	case lane == "":
 		t.Fatalf("%s no longer benchmarks anything. A budget ceiling fails on a step past a number "+
 			"and passes a path that got thirty per cent slower under it, which is what comparing a "+
-			"run against the base commit is for", ciWorkflow)
+			"run against the base commit is for", workflowPath)
 	case strings.Contains(lane, "-race"):
 		t.Errorf("the benchmark lane in %s runs with the race detector: %s\n"+
 			"The detector puts about twenty times the cost on these paths, so what it compares is "+
-			"the instrumentation on both sides", ciWorkflow, lane)
+			"the instrumentation on both sides", workflowPath, lane)
 	}
 	if !jailed {
 		t.Errorf("the benchmark lane in %s runs outside the network namespace: %s\n"+
 			"docs/TESTING.md says no test opens a non-loopback connection, and a lane that runs "+
-			"benchmarks the race suite skips is a lane where that stops being checked", ciWorkflow, lane)
+			"benchmarks the race suite skips is a lane where that stops being checked", workflowPath, lane)
 	}
 
 	for _, want := range []struct{ needle, why string }{
@@ -633,7 +600,7 @@ func TestBudget_CIComparesTheBenchmarksAgainstTheBaseBranch(t *testing.T) {
 		{"pull_request.base.sha", "there is no second tree to compare against, so a baseline would have to be stored — and a stored one goes stale the first time a real improvement lands"},
 	} {
 		if !strings.Contains(text, want.needle) {
-			t.Errorf("%s no longer names %s, so %s", ciWorkflow, want.needle, want.why)
+			t.Errorf("%s no longer names %s, so %s", workflowPath, want.needle, want.why)
 		}
 	}
 }

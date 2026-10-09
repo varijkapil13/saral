@@ -191,6 +191,24 @@ func (r Range) Backwards() bool {
 	return r.OK() && !r.Start.IsZero() && !r.End.IsZero() && r.End.Before(r.Start)
 }
 
+// CompareRanges orders ranges the way a reader scans a chart: earliest start
+// first, and everything with no date after everything with one.
+func CompareRanges(a, b Range) int {
+	switch {
+	case a.OK() != b.OK():
+		if a.OK() {
+			return -1
+		}
+		return 1
+	case a.Start.Before(b.Start):
+		return -1
+	case b.Start.Before(a.Start):
+		return 1
+	default:
+		return 0
+	}
+}
+
 // FieldProblem is a field name the cascade could not turn into one field on this
 // site.
 type FieldProblem struct {

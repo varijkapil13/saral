@@ -1957,6 +1957,10 @@ A context packet is done when its views call no port method for the behaviour it
 with the methods listed against the packet comes back empty; the view still imports `pkg/jira` for
 its types, and that is fine. A packet that retires a root file deletes it from `legacyRootFiles` in
 `internal/arch/contexts_test.go` in the same PR, and each packet owns its own lines in that list.
+Two hits remain once every packet has merged, and both are accepted rather than contorted away:
+`strings.Fields(` in `ui/onboarding/steps.go` matches `Fields` and is not the port, and
+`appsearch.SharedIndex(...).Search(` in `ui/issue/links.go` is the search context's local index, not
+a port call.
 
 - [x] **P13.1 — Contexts, their rules, and rank into `board`** · **owns** `internal/arch/{contexts_test.go,arch.go}`, `internal/app/board/**`, `internal/app/{rank.go,rank_test.go}` (removed), `internal/ui/{board,backlog}/{rank.go,bench_test.go}`, the imports in `internal/ui/{board/board.go,backlog/backlog.go}`, `docs/{ARCHITECTURE,TESTING,ROADMAP}.md`
   The decision, the three import rules and the frozen root list, with the rank state machine as the
@@ -2017,10 +2021,13 @@ its types, and that is fine. A packet that retires a root file deletes it from `
   `ui/onboarding`: `Capabilities|Fields|Me|ServerInfo`; for `ui/settings`: `Fields`; for
   `ui/kernel`: `Capabilities`.
 
-- [ ] **P13.14 — The root goes** · after P13.3 to P13.13 · **owns** `internal/app/*.go`, `internal/arch/contexts_test.go`, `docs/{ARCHITECTURE,TESTING,ROADMAP}.md`
+- [x] **P13.14 — The root goes** · after P13.3 to P13.13 · **owns** `internal/app/*.go`, `internal/arch/contexts_test.go`, `docs/{ARCHITECTURE,TESTING,ROADMAP}.md`
   Whatever is left in the root package finds its context, `legacyRootFiles` is emptied, and the test
   then holds the root to no non-test Go files at all. The migration clause leaves the first rule in
-  `docs/ARCHITECTURE.md`.
+  `docs/ARCHITECTURE.md`. As landed, the list went with the root package: `internal/app` holds no Go
+  at all, the budget guards that read the tree moved to `internal/arch`, the comment and issue draft
+  stores share the new kernel package `draft`, and the term match board and timeline each had became
+  `term.Terms.Match`.
 
 ## Later, deliberately not now
 

@@ -2,14 +2,12 @@ package issue
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	appdraft "github.com/varijkapil13/saral/internal/app/draft"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -70,7 +68,7 @@ func NewCreateDraft(key CreateDraftKey, entries []Entry, at time.Time) CreateDra
 }
 
 // CreateDrafts keeps the create form's drafts.
-type CreateDrafts struct{ dir string }
+type CreateDrafts struct{ store appdraft.Store }
 
 // NewCreateDrafts puts the create form's drafts in their own subdirectory of
 // the drafts root. A store with no directory keeps nothing, which is what a
@@ -79,46 +77,28 @@ func NewCreateDrafts(root string) CreateDrafts {
 	if strings.TrimSpace(root) == "" {
 		return CreateDrafts{}
 	}
-	return CreateDrafts{dir: filepath.Join(root, "create")}
+	return CreateDrafts{store: appdraft.Open(filepath.Join(root, "create"))}
 }
 
 // Available reports a store that keeps anything.
-func (s CreateDrafts) Available() bool { return s.dir != "" }
+func (s CreateDrafts) Available() bool { return s.store.Available() }
 
 func (s CreateDrafts) path(key CreateDraftKey) string {
-	return filepath.Join(s.dir, CreateSafeName(key.Site), CreateSafeName(key.Project)+"."+CreateSafeName(key.IssueType)+".json")
+	return s.store.Path(CreateSafeName(key.Site), CreateSafeName(key.Project)+"."+CreateSafeName(key.IssueType)+".json")
 }
 
 // CreateSafeName reduces a site host, a project key or an issue type id to
 // something that is a filename on every platform this runs on.
-func CreateSafeName(s string) string {
-	out := strings.Map(func(r rune) rune {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-			return r
-		case r == '-', r == '_':
-			return r
-		default:
-			return '_'
-		}
-	}, strings.TrimSpace(s))
-	if out == "" {
-		return "unnamed"
-	}
-	return out
-}
+func CreateSafeName(s string) string { return appdraft.SafeName(strings.TrimSpace(s), "") }
 
 // Load reads the draft kept for a screen, if there is one.
 func (s CreateDrafts) Load(key CreateDraftKey) (CreateDraft, bool, error) {
-	if !s.Available() {
-		return CreateDraft{}, false, nil
-	}
-	body, err := os.ReadFile(s.path(key)) //nolint:gosec // the path is built from the store's own directory
-	if errors.Is(err, fs.ErrNotExist) {
-		return CreateDraft{}, false, nil
-	}
+	body, ok, err := s.store.Read(s.path(key))
 	if err != nil {
 		return CreateDraft{}, false, fmt.Errorf("reading the draft of this new issue: %w", err)
+	}
+	if !ok {
+		return CreateDraft{}, false, nil
 	}
 	var kept CreateDraft
 	if err := json.Unmarshal(body, &kept); err != nil {
@@ -127,9 +107,8 @@ func (s CreateDrafts) Load(key CreateDraftKey) (CreateDraft, bool, error) {
 	return kept, len(kept.Values) > 0, nil
 }
 
-// Save writes a draft, replacing whatever was there, through a temporary file
-// so that a crash halfway through leaves the previous draft rather than half of
-// this one. A draft with nothing in it removes the file instead.
+// Save writes a draft, replacing whatever was there. A draft with nothing in
+// it removes the file instead.
 func (s CreateDrafts) Save(key CreateDraftKey, d CreateDraft) error {
 	if !s.Available() {
 		return nil
@@ -141,31 +120,8 @@ func (s CreateDrafts) Save(key CreateDraftKey, d CreateDraft) error {
 	if err != nil {
 		return fmt.Errorf("writing the draft of this new issue: %w", err)
 	}
-	final := s.path(key)
-	if err := os.MkdirAll(filepath.Dir(final), 0o700); err != nil {
+	if err := s.store.Write(s.path(key), body); err != nil {
 		return fmt.Errorf("writing the draft of this new issue: %w", err)
-	}
-	temp, err := os.CreateTemp(filepath.Dir(final), ".draft-*")
-	if err != nil {
-		return fmt.Errorf("writing the draft of this new issue: %w", err)
-	}
-	name := temp.Name()
-	fail := func(err error) error {
-		_ = os.Remove(name)
-		return fmt.Errorf("writing the draft of this new issue: %w", err)
-	}
-	if _, err := temp.Write(body); err != nil {
-		_ = temp.Close()
-		return fail(err)
-	}
-	if err := temp.Close(); err != nil {
-		return fail(err)
-	}
-	if err := os.Chmod(name, 0o600); err != nil {
-		return fail(err)
-	}
-	if err := os.Rename(name, final); err != nil {
-		return fail(err)
 	}
 	return nil
 }
@@ -173,10 +129,7 @@ func (s CreateDrafts) Save(key CreateDraftKey, d CreateDraft) error {
 // Discard removes a screen's draft, which is what a create that landed and a
 // draft the user threw away both mean.
 func (s CreateDrafts) Discard(key CreateDraftKey) error {
-	if !s.Available() {
-		return nil
-	}
-	if err := os.Remove(s.path(key)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := s.store.Remove(s.path(key)); err != nil {
 		return fmt.Errorf("removing the draft of this new issue: %w", err)
 	}
 	return nil

@@ -44,33 +44,9 @@ func TestContainsFold(t *testing.T) {
 	}
 }
 
-// AND across facets, OR within one, and an empty id is the field being empty.
-func TestMatchesTerms_AndAcrossFacetsOrWithinOne(t *testing.T) {
+func TestMatchesNeedle_ReadsTheKeyInAnyCase(t *testing.T) {
 	t.Parallel()
-	iss := jira.Issue{
-		Key: "PROJ-1", Assignee: &ada, Status: jira.Status{ID: "3"}, Type: jira.IssueType{ID: "10004"},
-		Labels: []string{"billing"},
-	}
-	assignee := func(id string) appterm.Term { return appterm.Term{Facet: appterm.FacetAssignee, ID: id} }
-	status := func(id string) appterm.Term { return appterm.Term{Facet: appterm.FacetStatus, ID: id} }
-	label := appterm.Term{Facet: appterm.FacetLabel, ID: "billing"}
-	noPriority := appterm.Term{Facet: appterm.FacetPriority}
-	for _, tc := range []struct {
-		name  string
-		terms appterm.Terms
-		want  bool
-	}{
-		{"nothing in force", nil, true},
-		{"one value that holds", appterm.Terms{assignee(ada.AccountID)}, true},
-		{"either of two values", appterm.Terms{status("1"), status("3")}, true},
-		{"one facet that fails", appterm.Terms{assignee(ada.AccountID), status("1")}, false},
-		{"unassigned on an assigned issue", appterm.Terms{assignee("")}, false},
-		{"a label and an empty priority", appterm.Terms{label, noPriority}, true},
-	} {
-		if got := MatchesTerms(&iss, tc.terms); got != tc.want {
-			t.Errorf("%s: MatchesTerms = %v, want %v", tc.name, got, tc.want)
-		}
-	}
+	iss := jira.Issue{Key: "PROJ-1", Assignee: &ada}
 	if MatchesNeedle(nil, "") {
 		t.Error("no issue matched a needle")
 	}

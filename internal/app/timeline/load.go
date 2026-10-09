@@ -80,7 +80,7 @@ type Loaded struct {
 
 // projection is the date cascade's own fields plus what a bar draws and what a
 // local filter matches by. Assignee, reporter, priority and labels are in it
-// because MatchesTerms reads them off this read's own issues, and none of the
+// because Terms.Match reads them off this read's own issues, and none of the
 // four is otherwise asked for.
 func projection(fields DateFields) appquery.Projection {
 	return fields.Projection().With(
