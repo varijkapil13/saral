@@ -6,8 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/varijkapil13/saral/internal/config"
-	"github.com/varijkapil13/saral/internal/ui/kernel"
+	"github.com/varijkapil13/saral/pkg/adf"
 )
 
 // draftDirName is where unsent comments live under the drafts directory. They
@@ -15,21 +14,21 @@ import (
 // program deletes one except sending it or clearing it by hand.
 const draftDirName = "comments"
 
-// draftKey names one draft: a new comment on an issue, or an edit of one
-// comment. The two are separate drafts, because abandoning an edit must not
-// take the half-written new comment beside it with it.
-type draftKey struct {
-	site    string
-	issue   string
-	comment string
+// DraftKey names one draft: a new comment on an issue when Comment is empty,
+// or an edit of one comment. The two are separate drafts, because abandoning an
+// edit must not take the half-written new comment beside it with it.
+type DraftKey struct {
+	Site    string
+	Issue   string
+	Comment string
 }
 
-func (k draftKey) file() string {
-	name := k.comment
+func (k DraftKey) file() string {
+	name := k.Comment
 	if name == "" {
 		name = "new"
 	}
-	return safeName(k.issue) + "." + safeName(name) + ".md"
+	return safeName(k.Issue) + "." + safeName(name) + ".md"
 }
 
 // safeName keeps a path segment to characters that mean the same thing on every
@@ -52,31 +51,26 @@ func safeName(s string) string {
 	return b.String()
 }
 
-// drafts is where unsent text is kept between sessions. docs/UX.md principle 6
+// Drafts is where unsent text is kept between sessions. docs/UX.md principle 6
 // asks that anything typed survive a failed request, a conflict and a crash,
 // which means on disk rather than in the model.
-type drafts struct {
+type Drafts struct {
 	root string
 }
 
-// openDrafts finds the drafts directory. A session with nowhere to write —
-// no home directory, an unwritable profile directory — gets a store that keeps
-// nothing rather than a failure, because a comment nobody can save is still
-// worth typing.
-func openDrafts(deps kernel.Deps) *drafts {
-	dir, err := deps.DraftRoot()
-	if err != nil || strings.TrimSpace(dir) == "" {
-		return &drafts{}
+// OpenDrafts keeps comment drafts under dir. A session with nowhere to write
+// gets a store that keeps nothing rather than a failure, because a comment
+// nobody can save is still worth typing. legacy is the cache directory earlier
+// builds kept drafts under, moved out once per process; "" moves nothing.
+func OpenDrafts(dir, legacy string) *Drafts {
+	if strings.TrimSpace(dir) == "" {
+		return &Drafts{}
 	}
 	root := filepath.Join(dir, draftDirName)
-	if deps.DraftsDir == "" {
-		migrateOnce.Do(func() {
-			if cache, err := config.CacheDir(); err == nil && strings.TrimSpace(cache) != "" {
-				migrateDrafts(filepath.Join(cache, legacyDraftDirName), root)
-			}
-		})
+	if strings.TrimSpace(legacy) != "" {
+		migrateOnce.Do(func() { migrateDrafts(filepath.Join(legacy, legacyDraftDirName), root) })
 	}
-	return &drafts{root: root}
+	return &Drafts{root: root}
 }
 
 // legacyDraftDirName is where earlier builds kept comment drafts, under the
@@ -131,15 +125,15 @@ func moveDraft(src, dst string) {
 	}
 }
 
-func (d *drafts) path(k draftKey) string {
+func (d *Drafts) path(k DraftKey) string {
 	if d == nil || d.root == "" {
 		return ""
 	}
-	return filepath.Join(d.root, safeName(k.site), k.file())
+	return filepath.Join(d.root, safeName(k.Site), k.file())
 }
 
-// read returns the draft kept for this key, and "" when there is none.
-func (d *drafts) read(k draftKey) string {
+// Read returns the draft kept for this key, and "" when there is none.
+func (d *Drafts) Read(k DraftKey) string {
 	path := d.path(k)
 	if path == "" {
 		return ""
@@ -153,7 +147,7 @@ func (d *drafts) read(k draftKey) string {
 
 // basePath is where the fingerprint of the body an edit's draft was written
 // against is kept, beside the draft.
-func (d *drafts) basePath(k draftKey) string {
+func (d *Drafts) basePath(k DraftKey) string {
 	path := d.path(k)
 	if path == "" {
 		return ""
@@ -161,8 +155,8 @@ func (d *drafts) basePath(k draftKey) string {
 	return strings.TrimSuffix(path, ".md") + ".base"
 }
 
-// readBase is the fingerprint kept with a draft, "" when none was.
-func (d *drafts) readBase(k draftKey) string {
+// ReadBase is the fingerprint kept with a draft, "" when none was.
+func (d *Drafts) ReadBase(k DraftKey) string {
 	path := d.basePath(k)
 	if path == "" {
 		return ""
@@ -174,10 +168,10 @@ func (d *drafts) readBase(k draftKey) string {
 	return strings.TrimSpace(string(b))
 }
 
-// write keeps the text, replacing whatever was there. The file is written
+// Write keeps the text, replacing whatever was there. The file is written
 // beside its target and renamed over it, so a crash half way through leaves
 // the previous draft rather than a truncated one.
-func (d *drafts) write(k draftKey, text, base string) error {
+func (d *Drafts) Write(k DraftKey, text, base string) error {
 	if err := d.writeFile(d.path(k), text); err != nil {
 		return err
 	}
@@ -190,7 +184,16 @@ func (d *drafts) write(k draftKey, text, base string) error {
 	return d.writeFile(d.basePath(k), base)
 }
 
-func (d *drafts) writeFile(path, text string) error {
+// Keep writes the text, or forgets the draft when nothing but whitespace is left.
+func (d *Drafts) Keep(k DraftKey, text, base string) error {
+	if strings.TrimSpace(text) == "" {
+		d.Discard(k)
+		return nil
+	}
+	return d.Write(k, text, base)
+}
+
+func (d *Drafts) writeFile(path, text string) error {
 	if path == "" {
 		return nil
 	}
@@ -218,10 +221,45 @@ func (d *drafts) writeFile(path, text string) error {
 	return os.Rename(name, path)
 }
 
-// discard forgets a draft, which is what sending it does.
-func (d *drafts) discard(k draftKey) {
+// Discard forgets a draft, which is what sending it does.
+func (d *Drafts) Discard(k DraftKey) {
 	if path := d.path(k); path != "" {
 		_ = os.Remove(path)
 		_ = os.Remove(d.basePath(k))
 	}
+}
+
+// Opening is what an editor starts with for one key.
+type Opening struct {
+	// Text is the draft left for this key, or the body rendered for editing.
+	Text string
+	// Base is the fingerprint to keep with the draft from here on.
+	Base string
+	// Restored is a draft that differs from what the site holds.
+	Restored bool
+	// Stale is a restored edit whose base the site has since moved, which
+	// sends only once the author has been told.
+	Stale bool
+}
+
+// Open seeds an editor for k: a new comment when k.Comment is empty and body is
+// the zero document, or an edit of the comment whose body is given.
+func (d *Drafts) Open(k DraftKey, body adf.Doc) Opening {
+	seeded := Markdown(body)
+	restored := d.Read(k)
+	o := Opening{Text: seeded}
+	if k.Comment != "" {
+		o.Base = Fingerprint(body)
+	}
+	if restored == "" {
+		return o
+	}
+	o.Text = restored
+	o.Restored = restored != seeded
+	if k.Comment != "" && o.Restored {
+		current := o.Base
+		o.Base = d.ReadBase(k)
+		o.Stale = o.Base != current
+	}
+	return o
 }

@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appcomment "github.com/varijkapil13/saral/internal/app/comment"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -149,7 +150,7 @@ func TestComposer_ADraftWithNoRecordedBaseIsTreatedAsStale(t *testing.T) {
 	c := comment(t, f, "PROJ-1", "first version")
 	d := testDeps(t, f)
 	dr := newDriver(t, d, "PROJ-1", 100, 24)
-	if err := dr.m.drafts.write(draftKey{site: d.Site, issue: "PROJ-1", comment: c.ID}, "an old draft", ""); err != nil {
+	if err := dr.m.drafts.Write(appcomment.DraftKey{Site: d.Site, Issue: "PROJ-1", Comment: c.ID}, "an old draft", ""); err != nil {
 		t.Fatal(err)
 	}
 	dr.key("e")

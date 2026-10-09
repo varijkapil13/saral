@@ -11,7 +11,6 @@ import (
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/richtext"
 	"github.com/varijkapil13/saral/internal/ui/widget"
-	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -580,22 +579,6 @@ func (m *Model) composerKeys() string {
 		hint{"ctrl+s sends", "esc keeps it"},
 		hint{"ctrl+s", "esc"})
 	return m.mark(zoneSend, f.left) + "  " + m.mark(zoneCancel, f.right)
-}
-
-// oneWay names the constructs in a document that markdown alone cannot carry,
-// read out of pkg/adf so that this view cannot end up warning about something
-// the parser has since learned to keep.
-func oneWay(d adf.Doc) []string {
-	losses := adf.LossyConstructs(d, editorOptions)
-	seen := make(map[string]bool, len(losses))
-	out := make([]string, 0, len(losses))
-	for _, l := range losses {
-		if !seen[l.Construct] {
-			seen[l.Construct] = true
-			out = append(out, l.Construct)
-		}
-	}
-	return out
 }
 
 // list joins names the way a sentence does.
