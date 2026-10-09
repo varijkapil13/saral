@@ -80,12 +80,12 @@ func (m *Model) lanesOn() bool { return m.laneMode != lanesOff && m.ready }
 // recallLanes loads the grouping this board was last drawn with, once per
 // board.
 func (m *Model) recallLanes() {
-	if m.laneFor == m.plan.boardID && m.laneKnown {
+	if m.laneFor == m.plan.BoardID && m.laneKnown {
 		return
 	}
-	m.laneFor, m.laneKnown = m.plan.boardID, true
+	m.laneFor, m.laneKnown = m.plan.BoardID, true
 	m.laneMode, m.foldedLanes, m.laneTop = lanesOff, nil, 0
-	if enc, ok := kernel.Recall(m.deps, ViewID, laneMemoryKey(m.plan.boardID)); ok {
+	if enc, ok := kernel.Recall(m.deps, ViewID, laneMemoryKey(m.plan.BoardID)); ok {
 		m.laneMode = parseLaneMode(enc)
 	}
 }
@@ -422,7 +422,7 @@ func (m *Model) cycleLanes() tea.Cmd {
 	under := m.selectedKey()
 	m.laneMode = (m.laneMode + 1) % laneModes
 	m.foldedLanes, m.laneTop = nil, 0
-	kernel.Keep(m.deps, ViewID, laneMemoryKey(m.plan.boardID), laneWords[m.laneMode])
+	kernel.Keep(m.deps, ViewID, laneMemoryKey(m.plan.BoardID), laneWords[m.laneMode])
 	m.place()
 	m.forget()
 	m.restore(under)

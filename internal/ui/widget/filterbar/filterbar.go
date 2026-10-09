@@ -1,7 +1,7 @@
 // Package filterbar draws the strip of chips a list-shaped view puts under its
 // rows to say what it is narrowed by: one chip per facet naming its values,
-// not one per value — the grouping filter.Terms already promises. Every
-// gesture on it goes through filter.Terms.Toggle and filter.Terms.Without, so
+// not one per value — the grouping term.Terms already promises. Every
+// gesture on it goes through term.Terms.Toggle and term.Terms.Without, so
 // the keyboard, the chips and the picker cannot disagree about what is in
 // force.
 package filterbar
@@ -13,7 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
@@ -44,7 +44,7 @@ func newStyles(t *kernel.Theme) *styles {
 }
 
 // renderKey is everything a rendered line depends on. gen is the caller's own
-// counter over the terms: filter.Terms is a slice and cannot sit in a
+// counter over the terms: term.Terms is a slice and cannot sit in a
 // comparable key, so a view that changes the terms bumps its own generation
 // the way list.Model already counted them before this widget existed.
 type renderKey struct {
@@ -55,10 +55,10 @@ type renderKey struct {
 // FacetZone is the mouse zone over the × that drops one facet's whole clause,
 // exported so a consuming view's own tests can resolve a click without
 // guessing the format one landed on.
-func FacetZone(f filter.Facet) string { return "facet:" + f.Label() }
+func FacetZone(f appterm.Facet) string { return "facet:" + f.Label() }
 
 // ValueZone is the mouse zone over one value's name inside its chip.
-func ValueZone(t filter.Term) string { return "value:" + t.Facet.Label() + ":" + t.ID }
+func ValueZone(t appterm.Term) string { return "value:" + t.Facet.Label() + ":" + t.ID }
 
 // Render draws the line: one chip per facet, its values joined by a comma, the
 // × that drops the facet, and clearKey at the right end to drop every term at
@@ -68,7 +68,7 @@ func ValueZone(t filter.Term) string { return "value:" + t.Facet.Label() + ":" +
 //
 // It draws nothing when there is nothing in force, which is what keeps a view
 // with no filter from losing a row to a bar it never needed.
-func (b *Bar) Render(terms filter.Terms, width int, t *kernel.Theme, clearKey string, gen int) string {
+func (b *Bar) Render(terms appterm.Terms, width int, t *kernel.Theme, clearKey string, gen int) string {
 	if len(terms) == 0 {
 		return ""
 	}
@@ -128,7 +128,7 @@ func (b *Bar) Render(terms filter.Terms, width int, t *kernel.Theme, clearKey st
 	return b.line
 }
 
-func labelsOf(group []filter.Term) []string {
+func labelsOf(group []appterm.Term) []string {
 	out := make([]string, len(group))
 	for i, term := range group {
 		out[i] = term.Label
@@ -139,23 +139,23 @@ func labelsOf(group []filter.Term) []string {
 // Click resolves a mouse click against the zones the last Render call marked:
 // a click on a value's name answers with just that value, and a click on the ×
 // answers with the whole facet it belongs to. Neither drops anything itself —
-// the caller runs filter.Terms.Toggle or filter.Terms.Without and re-runs its
+// the caller runs term.Terms.Toggle or term.Terms.Without and re-runs its
 // search, the way the terms it drew came from the caller in the first place.
-func (b *Bar) Click(msg tea.MouseClickMsg, terms filter.Terms) (dropFacet filter.Facet, dropValue filter.Term, ok bool) {
+func (b *Bar) Click(msg tea.MouseClickMsg, terms appterm.Terms) (dropFacet appterm.Facet, dropValue appterm.Term, ok bool) {
 	for _, term := range terms {
 		if b.zones.Hit(ValueZone(term), msg) {
-			return filter.FacetNone, term, true
+			return appterm.FacetNone, term, true
 		}
 	}
-	seen := make(map[filter.Facet]bool, len(filter.Facets))
+	seen := make(map[appterm.Facet]bool, len(appterm.Facets))
 	for _, term := range terms {
 		if seen[term.Facet] {
 			continue
 		}
 		seen[term.Facet] = true
 		if b.zones.Hit(FacetZone(term.Facet), msg) {
-			return term.Facet, filter.Term{}, true
+			return term.Facet, appterm.Term{}, true
 		}
 	}
-	return filter.FacetNone, filter.Term{}, false
+	return appterm.FacetNone, appterm.Term{}, false
 }

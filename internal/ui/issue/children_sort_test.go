@@ -1,7 +1,6 @@
 package issue
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/sortpick"
@@ -27,257 +27,6 @@ func useChildSort(t *testing.T, c sortpick.Choice) {
 		childSortNow.Store(&zero)
 		childSortSaveWarned.Store(false)
 	})
-}
-
-func orderedKeys(issues []jira.Issue, c sortpick.Choice, o *childOrder) []string {
-	idx := orderIndex(issues, c, o, nil)
-	out := make([]string, len(idx))
-	for i, at := range idx {
-		out[i] = issues[at].Key
-	}
-	return out
-}
-
-func issueAt(key string, created int) jira.Issue {
-	return jira.Issue{Key: key, Created: time.Date(2025, time.January, created, 9, 0, 0, 0, time.UTC)}
-}
-
-func TestChildSort_KeyIsNumericAware(t *testing.T) {
-	t.Parallel()
-	issues := []jira.Issue{{Key: "PROJ-10"}, {Key: "PROJ-2"}, {Key: "PROJ-1"}, {Key: "OTHER-3"}}
-	got := orderedKeys(issues, sortpick.Choice{Field: "key"}, &childOrder{})
-	if want := []string{"OTHER-3", "PROJ-1", "PROJ-2", "PROJ-10"}; !slices.Equal(got, want) {
-		t.Errorf("by key: %v, want %v", got, want)
-	}
-	got = orderedKeys(issues, sortpick.Choice{Field: "key", Desc: true}, &childOrder{})
-	if want := []string{"PROJ-10", "PROJ-2", "PROJ-1", "OTHER-3"}; !slices.Equal(got, want) {
-		t.Errorf("by key descending: %v, want %v", got, want)
-	}
-}
-
-func TestChildSort_StatusByCategoryThenName(t *testing.T) {
-	t.Parallel()
-	st := func(name string, c jira.StatusCategory) jira.Status { return jira.Status{Name: name, Category: c} }
-	issues := []jira.Issue{
-		{Key: "A-1", Status: st("Shipped", jira.CategoryDone)},
-		{Key: "A-2", Status: st("Mystery", jira.CategoryUnknown)},
-		{Key: "A-3", Status: st("Working", jira.CategoryInProgress)},
-		{Key: "A-4", Status: st("Backlog", jira.CategoryToDo)},
-		{Key: "A-5", Status: st("Accepted", jira.CategoryDone)},
-		{Key: "A-6", Status: st("Zebra", jira.CategoryToDo)},
-	}
-	got := orderedKeys(issues, sortpick.Choice{Field: "status"}, &childOrder{})
-	if want := []string{"A-4", "A-6", "A-3", "A-5", "A-1", "A-2"}; !slices.Equal(got, want) {
-		t.Errorf("by status: %v, want %v", got, want)
-	}
-}
-
-func TestChildSort_PriorityFollowsTheSiteOrderNotTheName(t *testing.T) {
-	t.Parallel()
-	f := newFake(1)
-	list, err := f.Priorities(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	byName := slices.SortedFunc(slices.Values(list), func(a, b jira.Priority) int { return strings.Compare(a.Name, b.Name) })
-	if slices.Equal(list, byName) {
-		t.Fatal("the fake's priorities are already alphabetical, so this test proves nothing")
-	}
-	issues := make([]jira.Issue, 0, len(list))
-	for i := range list {
-		issues = append(issues, jira.Issue{Key: fmt.Sprintf("A-%d", i+1), Priority: &list[len(list)-1-i]})
-	}
-	done := childRead{
-		key: "A-0", vocab: f, choice: sortpick.Choice{Field: fieldPriority}, bound: childrenSortBound,
-	}.run(t.Context())
-	if done.err != nil || done.warn != "" {
-		t.Fatalf("reading the order: %v %q", done.err, done.warn)
-	}
-	got := orderedKeys(issues, sortpick.Choice{Field: fieldPriority}, &done.order)
-	for i, key := range got {
-		at := slices.IndexFunc(issues, func(c jira.Issue) bool { return c.Key == key })
-		if issues[at].Priority.ID != list[i].ID {
-			t.Errorf("position %d holds %s, the site ranks %s there", i, issues[at].Priority.Name, list[i].Name)
-		}
-	}
-	desc := orderedKeys(issues, sortpick.Choice{Field: fieldPriority, Desc: true}, &done.order)
-	slices.Reverse(got)
-	if !slices.Equal(desc, got) {
-		t.Errorf("descending is %v, want %v", desc, got)
-	}
-}
-
-type failingVocab struct {
-	jira.FilterVocabulary
-	err   error
-	calls int
-}
-
-func (v *failingVocab) Priorities(context.Context) ([]jira.Priority, error) {
-	v.calls++
-	return nil, v.err
-}
-
-func TestChildSort_PriorityReadFailsFallsBackToNameAndWarnsOnce(t *testing.T) {
-	t.Parallel()
-	for name, fail := range map[string]error{
-		"403":       &jira.CapabilityError{Reason: "no Browse projects permission"},
-		"429":       &jira.RateLimitError{RetryAfter: 30 * time.Second},
-		"transport": errors.New("connection reset by peer"),
-	} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			v := &failingVocab{err: fail}
-			reason, _ := jira.Reason(fail)
-			in := childRead{vocab: v, choice: sortpick.Choice{Field: fieldPriority}, bound: childrenSortBound}
-			done := in.run(t.Context())
-			if want := "priority order could not be read: " + reason + "; by name"; done.warn != want {
-				t.Errorf("warning is %q, want %q", done.warn, want)
-			}
-			issues := []jira.Issue{
-				{Key: "A-1", Priority: &jira.Priority{ID: "9", Name: "Zeta"}},
-				{Key: "A-2", Priority: &jira.Priority{ID: "1", Name: "alpha"}},
-				{Key: "A-3", Priority: &jira.Priority{ID: "5", Name: "Mid"}},
-			}
-			if got := orderedKeys(issues, sortpick.Choice{Field: fieldPriority}, &done.order); !slices.Equal(got, []string{"A-2", "A-3", "A-1"}) {
-				t.Errorf("by name: %v", got)
-			}
-
-			kind := &childrenKind{}
-			if cmd := kind.adopt(done); cmd == nil {
-				t.Error("the first failure said nothing")
-			}
-			in.order = kind.order
-			if again := in.run(t.Context()); v.calls != 1 || again.warn != "" {
-				t.Errorf("a read that already failed was tried again: %d calls, warning %q", v.calls, again.warn)
-			}
-			in.order.prioTried = false
-			again := in.run(t.Context())
-			if v.calls != 2 || again.warn == "" {
-				t.Fatalf("the second failure: %d calls, warning %q", v.calls, again.warn)
-			}
-			if cmd := kind.adopt(again); cmd != nil {
-				t.Error("the second failure warned again")
-			}
-		})
-	}
-}
-
-func TestChildSort_UndatedLastBothWays(t *testing.T) {
-	t.Parallel()
-	dated := func(key string, day int) jira.Issue {
-		iss := issueAt(key, 1)
-		iss.Due = jira.Date{Year: 2025, Month: time.June, Day: day}
-		return iss
-	}
-	issues := []jira.Issue{issueAt("A-1", 1), dated("A-2", 20), dated("A-3", 5), issueAt("A-4", 2)}
-	asc := orderedKeys(issues, sortpick.Choice{Field: "due"}, &childOrder{})
-	if want := []string{"A-3", "A-2", "A-1", "A-4"}; !slices.Equal(asc, want) {
-		t.Errorf("ascending: %v, want %v", asc, want)
-	}
-	desc := orderedKeys(issues, sortpick.Choice{Field: "due", Desc: true}, &childOrder{})
-	if want := []string{"A-2", "A-3", "A-1", "A-4"}; !slices.Equal(desc, want) {
-		t.Errorf("descending: %v, want %v", desc, want)
-	}
-
-	ada := &jira.User{DisplayName: "Ada"}
-	who := []jira.Issue{{Key: "A-1"}, {Key: "A-2", Assignee: ada}, {Key: "A-3", Assignee: &jira.User{DisplayName: "bea"}}}
-	for _, desc := range []bool{false, true} {
-		got := orderedKeys(who, sortpick.Choice{Field: "assignee", Desc: desc}, &childOrder{})
-		if got[len(got)-1] != "A-1" {
-			t.Errorf("assignee desc=%v: %v puts the unassigned issue before an assigned one", desc, got)
-		}
-	}
-}
-
-func TestChildSort_TiesBreakByCreatedThenKey(t *testing.T) {
-	t.Parallel()
-	done := jira.Status{Name: "Done", Category: jira.CategoryDone}
-	issues := []jira.Issue{
-		{Key: "A-10", Status: done, Created: issueAt("", 3).Created},
-		{Key: "A-2", Status: done, Created: issueAt("", 3).Created},
-		{Key: "A-7", Status: done, Created: issueAt("", 1).Created},
-	}
-	for _, desc := range []bool{false, true} {
-		got := orderedKeys(issues, sortpick.Choice{Field: "status", Desc: desc}, &childOrder{})
-		if want := []string{"A-7", "A-2", "A-10"}; !slices.Equal(got, want) {
-			t.Errorf("desc=%v: %v, want %v", desc, got, want)
-		}
-	}
-}
-
-func TestChildSort_SummaryAndTypeAreCaseFoldedAndByLevel(t *testing.T) {
-	t.Parallel()
-	issues := []jira.Issue{
-		{Key: "A-1", Summary: "banana", Type: jira.IssueType{Name: "Task", HierarchyLevel: 0}},
-		{Key: "A-2", Summary: "Apple", Type: jira.IssueType{Name: "Story", HierarchyLevel: 0}},
-		{Key: "A-3", Summary: "cherry", Type: jira.IssueType{Name: "Epic", HierarchyLevel: 1}},
-	}
-	if got := orderedKeys(issues, sortpick.Choice{Field: "summary"}, &childOrder{}); !slices.Equal(got, []string{"A-2", "A-1", "A-3"}) {
-		t.Errorf("by summary: %v", got)
-	}
-	if got := orderedKeys(issues, sortpick.Choice{Field: "type"}, &childOrder{}); !slices.Equal(got, []string{"A-2", "A-1", "A-3"}) {
-		t.Errorf("by type: %v", got)
-	}
-}
-
-func TestChildSort_RankOfferedOnlyWithOneLexoRankField(t *testing.T) {
-	t.Parallel()
-	rank := func(id string) jira.Field { return jira.Field{ID: id, Schema: jira.FieldSchema{Custom: lexoRankType}} }
-	other := jira.Field{ID: "customfield_1", Schema: jira.FieldSchema{Custom: "x"}}
-	for name, tc := range map[string]struct {
-		fields []jira.Field
-		want   string
-	}{
-		"none":  {[]jira.Field{other}, ""},
-		"one":   {[]jira.Field{other, rank("customfield_7")}, "customfield_7"},
-		"two":   {[]jira.Field{rank("customfield_7"), rank("customfield_8")}, ""},
-		"empty": {nil, ""},
-	} {
-		if got := lexoRankID(tc.fields); got != tc.want {
-			t.Errorf("%s: rank is %q, want %q", name, got, tc.want)
-		}
-	}
-
-	o := childOrder{}
-	if slices.ContainsFunc(o.fields(), func(f sortpick.Field) bool { return f.ID == fieldRank }) {
-		t.Error("rank is offered with no rank field")
-	}
-	o.rankID = "customfield_7"
-	if !slices.ContainsFunc(o.fields(), func(f sortpick.Field) bool { return f.ID == fieldRank }) {
-		t.Error("rank is not offered with one rank field")
-	}
-
-	f, epic, _ := epicFake(t, 2)
-	d := openChildrenSheet(t, f, epic)
-	d.keys("s")
-	if !d.s.picker.Open || !slices.ContainsFunc(d.s.picker.Fields, func(f sortpick.Field) bool { return f.ID == fieldRank }) {
-		t.Errorf("the picker offers %v on a site with one rank field", d.s.picker.Fields)
-	}
-	mustContain(t, d.frame(), "rank")
-}
-
-func TestChildSort_RankOrdersByTheLexoValue(t *testing.T) {
-	t.Parallel()
-	set := func(key, rank string) jira.Issue {
-		iss := jira.Issue{Key: key}
-		if rank != "" {
-			iss.Fields = jira.NewFieldSet(map[string]jira.FieldValue{"customfield_7": {Kind: jira.KindText, Text: rank}})
-		}
-		return iss
-	}
-	issues := []jira.Issue{set("A-1", "0|i00c"), set("A-2", ""), set("A-3", "0|i00a"), set("A-4", "0|i00b")}
-	o := &childOrder{rankID: "customfield_7", rankTried: true}
-	for _, desc := range []bool{false, true} {
-		got := orderedKeys(issues, sortpick.Choice{Field: fieldRank, Desc: desc}, o)
-		want := []string{"A-3", "A-4", "A-1", "A-2"}
-		if desc {
-			want = []string{"A-1", "A-4", "A-3", "A-2"}
-		}
-		if !slices.Equal(got, want) {
-			t.Errorf("desc=%v: %v, want %v", desc, got, want)
-		}
-	}
 }
 
 func TestChildSort_SavedRankOnASiteWithoutOneDrawsDefaultAndKeepsFile(t *testing.T) {
@@ -412,7 +161,7 @@ func TestChildrenSheet_ActOnSortedRowHitsTheRightIssue(t *testing.T) {
 	d := openChildrenSheet(t, f, epic)
 	d.pickField("key")
 	d.pickField("key")
-	if got := d.rowKeys(); !slices.IsSortedFunc(got, func(a, b string) int { return -compareIssueKeys(a, b) }) {
+	if got := d.rowKeys(); !slices.IsSortedFunc(got, func(a, b string) int { return -appissue.CompareIssueKeys(a, b) }) {
 		t.Fatalf("rows are not in descending key order: %v", got)
 	}
 	for i := range d.s.rows {
@@ -487,7 +236,7 @@ func TestChildrenInline_FollowsTheSheetsOrder(t *testing.T) {
 	if slices.Equal(got, site) {
 		t.Fatal("the inline list did not move")
 	}
-	if !slices.IsSortedFunc(got, func(a, b string) int { return -compareIssueKeys(a, b) }) {
+	if !slices.IsSortedFunc(got, func(a, b string) int { return -appissue.CompareIssueKeys(a, b) }) {
 		t.Errorf("the first eight are %v, not the top of a descending key order", got)
 	}
 	mustContain(t, p.frame(), "sort: key v")
@@ -613,7 +362,7 @@ func TestChildrenSheet_SortedFrames(t *testing.T) {
 	sorted.pickField(fieldPriority)
 	golden(t, "sheet_children_sorted_priority_120x30.golden", sorted.frame())
 	k := sorted.kind()
-	if !k.order.prioTried || k.order.prio == nil {
+	if !k.order.PrioTried || k.order.Prio == nil {
 		t.Error("the priority order was not read from the site")
 	}
 }
@@ -663,4 +412,63 @@ func drain(cmd tea.Cmd) []tea.Msg {
 		out = append(out, msg)
 	}
 	return out
+}
+
+func TestChildSort_PriorityReadFailureWarnsOnce(t *testing.T) {
+	t.Parallel()
+	for name, fail := range map[string]error{
+		"403":       &jira.CapabilityError{Reason: "no Browse projects permission"},
+		"429":       &jira.RateLimitError{RetryAfter: 30 * time.Second},
+		"transport": errors.New("connection reset by peer"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			reason, _ := jira.Reason(fail)
+			if want := "priority order could not be read: " + reason + "; by name"; priorityWarning(fail) != want {
+				t.Errorf("warning is %q, want %q", priorityWarning(fail), want)
+			}
+			kind := &childrenKind{}
+			done := appissue.ChildReadDone{Order: appissue.ChildOrder{PrioTried: true}, PriorityErr: fail}
+			if cmd := kind.adopt(done); cmd == nil {
+				t.Error("the first failure said nothing")
+			}
+			if !kind.order.PrioTried {
+				t.Error("the read's order was not adopted")
+			}
+			if cmd := kind.adopt(done); cmd != nil {
+				t.Error("the second failure warned again")
+			}
+		})
+	}
+}
+
+func TestChildSort_RankOfferedOnlyWithARankField(t *testing.T) {
+	t.Parallel()
+	o := childOrder{}
+	if slices.ContainsFunc(o.fields(), func(f sortpick.Field) bool { return f.ID == fieldRank }) {
+		t.Error("rank is offered with no rank field")
+	}
+	o.RankID = "customfield_7"
+	if !slices.ContainsFunc(o.fields(), func(f sortpick.Field) bool { return f.ID == fieldRank }) {
+		t.Error("rank is not offered with one rank field")
+	}
+
+	f, epic, _ := epicFake(t, 2)
+	d := openChildrenSheet(t, f, epic)
+	d.keys("s")
+	if !d.s.picker.Open || !slices.ContainsFunc(d.s.picker.Fields, func(f sortpick.Field) bool { return f.ID == fieldRank }) {
+		t.Errorf("the picker offers %v on a site with one rank field", d.s.picker.Fields)
+	}
+	mustContain(t, d.frame(), "rank")
+}
+
+func TestChildSort_ThePickerOffersEveryOrderTheContextKnows(t *testing.T) {
+	t.Parallel()
+	got := make([]string, len(childPickFieldsRank))
+	for i := range childPickFieldsRank {
+		got[i] = childPickFieldsRank[i].ID
+	}
+	if want := appissue.ChildSortFields(); len(want) == 0 || !slices.Equal(got, want) {
+		t.Errorf("the picker offers %v, the context orders by %v", got, want)
+	}
 }

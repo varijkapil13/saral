@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -20,7 +21,7 @@ func TestReproject_TermsComeOffAndStayWithTheProjectTheyWereAbout(t *testing.T) 
 	if len(dr.m.issues) == 0 {
 		t.Fatal("nothing loaded to narrow")
 	}
-	term := filter.Term{Facet: filter.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: dr.m.issues[0].Status.Name}
+	term := appterm.Term{Facet: appterm.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: dr.m.issues[0].Status.Name}
 	dr.send(filter.ChosenMsg{Term: term})
 	if len(dr.m.terms) != 1 {
 		t.Fatalf("setup: terms = %+v", dr.m.terms)
@@ -36,7 +37,7 @@ func TestReproject_TermsComeOffAndStayWithTheProjectTheyWereAbout(t *testing.T) 
 		t.Error("the terms about PROJ were kept for OPS")
 	}
 	enc, kept := mem.Recall(ViewID, "terms:PROJ")
-	if back, ok := filter.DecodeTerms(enc); !kept || !ok || !back.Has(term) {
+	if back, ok := appterm.DecodeTerms(enc); !kept || !ok || !back.Has(term) {
 		t.Errorf("PROJ's terms were not kept for it: %q", enc)
 	}
 	mustNotContain(t, dr.view(), "status: "+term.Label)

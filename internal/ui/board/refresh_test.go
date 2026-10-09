@@ -13,7 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -23,10 +23,10 @@ const longBoard = 250
 
 // snapshotOf is what a session that read this site in full would have stored,
 // its sprint included, so the chrome drawn from it is the chrome drawn after.
-func snapshotOf(t *testing.T, site *jiratest.Fake) app.BoardSnapshot {
+func snapshotOf(t *testing.T, site *jiratest.Fake) appcache.BoardSnapshot {
 	t.Helper()
 	dr := newDriver(t, testDeps(site), 120, 20)
-	return app.BoardSnapshot{
+	return appcache.BoardSnapshot{
 		Config: dr.m.rawConfig, QuickFilters: dr.m.quickFilters, Issues: slices.Clone(dr.m.issues),
 		Sprints: dr.m.sprints, Sprint: dr.m.sprint.ID,
 	}
@@ -179,7 +179,7 @@ func TestRefresh_ComingBackAfterTheTTLKeepsTheWholeBoardAndTheReadersPlace(t *te
 
 	dr.send(kernel.FocusMsg{Focused: false})
 	mu.Lock()
-	now = now.Add(app.KindBoard.TTL() + time.Minute)
+	now = now.Add(appcache.KindBoard.TTL() + time.Minute)
 	mu.Unlock()
 	dr.park, dr.holdPages = isFirstPage, true
 	dr.send(kernel.FocusMsg{Focused: true})
@@ -455,9 +455,9 @@ func TestRefresh_AMoveThatLandsDuringTheWalkIsKept(t *testing.T) {
 	t.Parallel()
 	dr := newDriver(t, testDeps(newLongFake()), 160, 16)
 	key := dr.readDeep()
-	to := (dr.m.curCol + 1) % len(dr.m.plan.columns)
+	to := (dr.m.curCol + 1) % len(dr.m.plan.Columns)
 	var status jira.Status
-	for id, col := range dr.m.plan.byStatus {
+	for id, col := range dr.m.plan.ByStatus {
 		if col == to {
 			status.ID = id
 		}

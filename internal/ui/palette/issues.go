@@ -1,12 +1,15 @@
 package palette
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
+	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -45,20 +48,20 @@ func (m *Model) search(text string, now time.Time) tea.Cmd {
 	if text == "" {
 		return nil
 	}
-	found, err := m.index.Search(text, hitLimit)
-	for i := range found {
-		m.hits = append(m.hits, newHit(found[i], now))
+	here, herr := config.NormalizeSite(m.deps.Site)
+	found, err := appsearch.Find(m.index, text, hitLimit, here, herr == nil)
+	for i := range found.Hits {
+		m.hits = append(m.hits, newHit(found.Hits[i], now))
 	}
-	jump, warn := m.jumpHit(text)
-	if jump != nil && !m.alreadyFound(jump.key) {
-		m.hits = append([]hit{*jump}, m.hits...)
+	if found.Jump != "" {
+		m.hits = append([]hit{jumpHit(found.Jump)}, m.hits...)
 	}
 	for i := range m.hits {
 		m.shown = append(m.shown, entry{issue: true, at: i})
 	}
 	var cmds []tea.Cmd
-	if warn != nil {
-		cmds = append(cmds, warn)
+	if f := found.Foreign; f != nil {
+		cmds = append(cmds, kernel.Warn(fmt.Sprintf("%s is on %s and this profile is on %s, so it was not opened", f.Key, f.Host, f.Here)))
 	}
 	if err != nil {
 		cmds = append(cmds, kernel.Warn("the cache on this machine could not be walked: "+err.Error()))
@@ -81,7 +84,7 @@ func dropped(n int) string {
 	return strconv.Itoa(n) + " cached issues could not be read and have been dropped; the next fetch of them rewrites the records"
 }
 
-func newHit(h app.Hit, now time.Time) hit {
+func newHit(h appsearch.Hit, now time.Time) hit {
 	out := hit{key: h.Key, text: h.Key}
 	switch {
 	case !h.HasSummary:
@@ -91,7 +94,7 @@ func newHit(h app.Hit, now time.Time) hit {
 	}
 	if !h.StoredAt.IsZero() {
 		age := now.Sub(h.StoredAt)
-		out.age, out.stale = ageLabel(age), age > app.KindIssue.TTL()
+		out.age, out.stale = ageLabel(age), age > appcache.KindIssue.TTL()
 	}
 	return out
 }

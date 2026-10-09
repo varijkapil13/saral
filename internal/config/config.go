@@ -20,7 +20,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/gofrs/flock"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 )
 
 const (
@@ -107,7 +107,7 @@ type Profile struct {
 	// number key. They are app's own type, validated by app's own rules, so that
 	// a file and a keypress cannot disagree about what a saved query is; the
 	// projection is not written, because a saved query opens into the issue list.
-	Queries []app.SavedQuery
+	Queries []appsearch.SavedQuery
 }
 
 // TokenSource names where the API token comes from. Exactly one field is set.
@@ -345,13 +345,13 @@ func decodeProfile(md *toml.MetaData, name string, fp fileProfile) (Profile, err
 	return p, nil
 }
 
-func decodeQueries(in []fileQuery) []app.SavedQuery {
+func decodeQueries(in []fileQuery) []appsearch.SavedQuery {
 	if len(in) == 0 {
 		return nil
 	}
-	out := make([]app.SavedQuery, 0, len(in))
+	out := make([]appsearch.SavedQuery, 0, len(in))
 	for _, q := range in {
-		out = append(out, app.SavedQuery{
+		out = append(out, appsearch.SavedQuery{
 			Name: strings.TrimSpace(q.Name),
 			JQL:  strings.TrimSpace(q.JQL),
 			Slot: q.Key,
@@ -522,7 +522,7 @@ func (p Profile) Validate() error {
 // bound at the keyboard, and refuses the two things a file can say that a
 // keypress cannot: two queries under one name, or two on one key. Add resolves
 // both by taking the newer, which here would drop a line somebody wrote.
-func validateQueries(profile string, queries []app.SavedQuery) error {
+func validateQueries(profile string, queries []appsearch.SavedQuery) error {
 	names := make(map[string]struct{}, len(queries))
 	keys := make(map[int]string, len(queries))
 	for _, q := range queries {
@@ -540,7 +540,7 @@ func validateQueries(profile string, queries []app.SavedQuery) error {
 		}
 		keys[q.Slot] = name
 	}
-	if _, err := app.NewSavedQueries(queries...); err != nil {
+	if _, err := appsearch.NewSavedQueries(queries...); err != nil {
 		return fmt.Errorf("profile %q: %w", profile, err)
 	}
 	return nil

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -44,7 +46,7 @@ func TestNew_RestoresARememberedFilterAndDrawsItsChip(t *testing.T) {
 	t.Parallel()
 
 	mem := newFakeMemory()
-	mem.state[ViewID+"."+termsMemoryKey] = filter.Terms{shipped}.Encode()
+	mem.state[ViewID+"."+termsMemoryKey] = appterm.Terms{shipped}.Encode()
 	d := withMemory(testDeps(newFake(5)), mem)
 
 	dr := newDriver(t, d, 120, 30)
@@ -82,11 +84,11 @@ func TestNew_RestoresTheFilterBeforeReadingTheCache(t *testing.T) {
 	t.Parallel()
 
 	mem := newFakeMemory()
-	mem.state[ViewID+"."+termsMemoryKey] = filter.Terms{shipped}.Encode()
+	mem.state[ViewID+"."+termsMemoryKey] = appterm.Terms{shipped}.Encode()
 	d := testDeps(nil)
 	d.Memory = mem
-	jql, _ := termQuery(d.Project, filter.Terms{shipped})
-	jql = applySort(jql, sortChoice{})
+	jql, _ := termQuery(d.Project, appterm.Terms{shipped})
+	jql = appsearch.ApplySort(jql, appsearch.SortChoice{})
 
 	cache := newFakeCache()
 	cache.hold(jql, []jira.Issue{{Key: "PROJ-9"}}, false, false)
@@ -116,7 +118,7 @@ func TestApplyTerm_KeepsItInMemory(t *testing.T) {
 	if !ok {
 		t.Fatal("nothing was kept after applying a term")
 	}
-	terms, ok := filter.DecodeTerms(got)
+	terms, ok := appterm.DecodeTerms(got)
 	if !ok || len(terms) != 1 || !terms.Has(shipped) {
 		t.Errorf("kept %q, does not decode to just %+v", got, shipped)
 	}
@@ -129,7 +131,7 @@ func TestClearFilter_ForgetsItInMemory(t *testing.T) {
 	t.Parallel()
 
 	mem := newFakeMemory()
-	mem.state[ViewID+"."+termsMemoryKey] = filter.Terms{shipped}.Encode()
+	mem.state[ViewID+"."+termsMemoryKey] = appterm.Terms{shipped}.Encode()
 	dr := newDriver(t, withMemory(testDeps(newFake(5)), mem), 120, 30)
 
 	dr.send(ClearFilterMsg{})
@@ -148,7 +150,7 @@ func TestRecalledTerms_DroppedWhenTheSiteRefusesThem(t *testing.T) {
 	t.Parallel()
 
 	mem := newFakeMemory()
-	mem.state[ViewID+"."+termsMemoryKey] = filter.Terms{shipped}.Encode()
+	mem.state[ViewID+"."+termsMemoryKey] = appterm.Terms{shipped}.Encode()
 	f := newFake(0)
 	f.FailNext(&jira.ValidationError{Fields: []jira.FieldError{
 		{Field: "jql", Message: `the value '10203' does not exist for the field 'status'`},
@@ -178,7 +180,7 @@ func TestRecalledTerms_KeptWhenTheFailureIsNotAValidationError(t *testing.T) {
 	t.Parallel()
 
 	mem := newFakeMemory()
-	want := (filter.Terms{shipped}).Encode()
+	want := (appterm.Terms{shipped}).Encode()
 	mem.state[ViewID+"."+termsMemoryKey] = want
 	f := newFake(0)
 	f.FailNext(refusedConnection())
@@ -201,7 +203,7 @@ func TestRecalledTerms_ASecondFailureIsOrdinary(t *testing.T) {
 	t.Parallel()
 
 	mem := newFakeMemory()
-	mem.state[ViewID+"."+termsMemoryKey] = (filter.Terms{shipped}).Encode()
+	mem.state[ViewID+"."+termsMemoryKey] = (appterm.Terms{shipped}).Encode()
 	f := newFake(3)
 	d := withMemory(testDeps(f), mem)
 

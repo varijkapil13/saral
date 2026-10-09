@@ -9,18 +9,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
-// fakeCache is an app.Cache and an app.BacklogCache in a map. The real one is
+// fakeCache is a cache.Cache and a cache.BacklogCache in a map. The real one is
 // bbolt-backed and lives below internal/app, which a view may not import —
 // which is the whole point of the interface being where it is.
 type fakeCache struct {
 	mu        sync.Mutex
-	backlogs  map[int64]app.BacklogSnapshot
+	backlogs  map[int64]appcache.BacklogSnapshot
 	lastBoard map[string]int64
 	issues    map[string]jira.Issue
 	gen       uint64
@@ -29,18 +29,18 @@ type fakeCache struct {
 }
 
 var (
-	_ app.Cache        = (*fakeCache)(nil)
-	_ app.BacklogCache = (*fakeCache)(nil)
+	_ appcache.Cache        = (*fakeCache)(nil)
+	_ appcache.BacklogCache = (*fakeCache)(nil)
 )
 
 func newFakeCache() *fakeCache {
 	return &fakeCache{
-		backlogs: map[int64]app.BacklogSnapshot{}, lastBoard: map[string]int64{}, issues: map[string]jira.Issue{},
+		backlogs: map[int64]appcache.BacklogSnapshot{}, lastBoard: map[string]int64{}, issues: map[string]jira.Issue{},
 	}
 }
 
 // hold puts a backlog in as though a previous session had left it there.
-func (c *fakeCache) hold(project string, boardID int64, snap app.BacklogSnapshot, stale bool) {
+func (c *fakeCache) hold(project string, boardID int64, snap appcache.BacklogSnapshot, stale bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	snap.StoredAt, snap.Stale = cacheStoredAt, stale
@@ -51,14 +51,14 @@ func (c *fakeCache) hold(project string, boardID int64, snap app.BacklogSnapshot
 	}
 }
 
-func (c *fakeCache) Backlog(boardID int64) (app.BacklogSnapshot, bool) {
+func (c *fakeCache) Backlog(boardID int64) (appcache.BacklogSnapshot, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	snap, ok := c.backlogs[boardID]
 	return snap, ok
 }
 
-func (c *fakeCache) PutBacklog(boardID int64, snap app.BacklogSnapshot) error {
+func (c *fakeCache) PutBacklog(boardID int64, snap appcache.BacklogSnapshot) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.putFail != nil {
@@ -68,7 +68,7 @@ func (c *fakeCache) PutBacklog(boardID int64, snap app.BacklogSnapshot) error {
 	snap.StoredAt = cacheStoredAt
 	c.backlogs[boardID] = snap
 	for i := range snap.Issues {
-		c.issues[snap.Issues[i].Key] = app.MergeIssue(c.issues[snap.Issues[i].Key], snap.Issues[i])
+		c.issues[snap.Issues[i].Key] = appcache.MergeIssue(c.issues[snap.Issues[i].Key], snap.Issues[i])
 	}
 	return nil
 }
@@ -97,9 +97,9 @@ func (c *fakeCache) PutLastBacklogBoard(project string, boardID int64) error {
 	return nil
 }
 
-// The rest of app.Cache is unused by this package: a backlog's issues are read
+// The rest of cache.Cache is unused by this package: a backlog's issues are read
 // by id, never by JQL.
-func (c *fakeCache) Rows(string) (app.Snapshot, bool)         { return app.Snapshot{}, false }
+func (c *fakeCache) Rows(string) (appcache.Snapshot, bool)    { return appcache.Snapshot{}, false }
 func (c *fakeCache) PutRows(string, []jira.Issue, bool) error { return nil }
 func (c *fakeCache) Forget(string) error                      { return nil }
 
@@ -122,7 +122,7 @@ func (c *fakeCache) Generation() uint64 {
 
 var cacheStoredAt = time.Date(2025, time.March, 5, 8, 30, 0, 0, time.UTC)
 
-func withCache(d kernel.Deps, c app.Cache) kernel.Deps {
+func withCache(d kernel.Deps, c appcache.Cache) kernel.Deps {
 	d.Cache = c
 	return d
 }
@@ -137,10 +137,10 @@ func refusing(issues int) *jiratest.Fake {
 
 // primed runs a fresh backlog against a fake to get an authentic snapshot to
 // seed a cache with, rather than a hand-rolled approximation of a real read.
-func primed(t *testing.T, d kernel.Deps) (boardID int64, snap app.BacklogSnapshot) {
+func primed(t *testing.T, d kernel.Deps) (boardID int64, snap appcache.BacklogSnapshot) {
 	t.Helper()
 	dr := newDriver(t, d, 120, 20)
-	return dr.m.config.BoardID, app.BacklogSnapshot{
+	return dr.m.config.BoardID, appcache.BacklogSnapshot{
 		Config: dr.m.config, Sprints: slices.Clone(dr.m.sprints), Field: dr.m.field, NoSprints: dr.m.noSprints,
 		Issues: slices.Clone(dr.m.issues),
 	}

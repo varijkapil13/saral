@@ -16,7 +16,9 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -24,24 +26,6 @@ import (
 
 // ViewID is the name this view's keys are registered under.
 const ViewID = "filter"
-
-// peopleLimit is how many accounts one search asks for. It is a ceiling and not
-// a page size: the port does not page people, because a person is found by
-// typing more rather than by paging.
-const peopleLimit = 50
-
-// thinAnswer is how few candidates the held accounts have to leave before a
-// keystroke is worth a round trip. Jira's matching is neither substring nor
-// fuzzy and is documented nowhere, so a needle can find an account that nothing
-// local would have — but asking on every keystroke is slower than typing the
-// JQL this picker exists to replace, so the site is asked when what is held
-// stops answering rather than when a key is pressed.
-const thinAnswer = 8
-
-// maxLabels bounds the walk over a site's labels. The endpoint takes no query
-// and ignores one sent anyway, so the only way to narrow them is to walk them,
-// and a busy site has more than anybody scrolls.
-const maxLabels = 2000
 
 var (
 	_ kernel.View        = (*Model)(nil)
@@ -60,7 +44,7 @@ const (
 // facetRow is one facet as the picker offers it, with why this site cannot
 // answer for it.
 type facetRow struct {
-	facet  Facet
+	facet  appterm.Facet
 	reason string
 }
 
@@ -69,8 +53,8 @@ type Option func(*Model)
 
 // WithTerms opens the picker over what is already in force, so that a value
 // already chosen is marked and choosing it again takes it off.
-func WithTerms(t Terms) Option {
-	return func(m *Model) { m.terms = append(Terms(nil), t...) }
+func WithTerms(t appterm.Terms) Option {
+	return func(m *Model) { m.terms = append(appterm.Terms(nil), t...) }
 }
 
 // WithEditKey names the key the view being filtered shows its search on, so
@@ -88,20 +72,20 @@ type Model struct {
 	inValue map[string]action
 
 	state   state
-	terms   Terms
+	terms   appterm.Terms
 	editKey string
 
 	facets []facetRow
-	facet  Facet
+	facet  appterm.Facet
 
 	input textinput.Model
 	query string
 
 	// all is every value the site has answered with for the facet on screen,
 	// and shown is what the typed pattern leaves of it, best first.
-	all   []value
+	all   []appsearch.Value
 	shown []int
-	ranks []ranked
+	ranks []appsearch.ValueRank
 
 	// asked records the needles this site has already been asked for, so that a
 	// keystroke never repeats a request, and complete records that it answered
@@ -155,8 +139,8 @@ func New(d kernel.Deps, opts ...Option) kernel.View {
 // values cannot be read is still offered and still says why, because a facet
 // that disappears is one nobody can find out about.
 func (m *Model) buildFacets() []facetRow {
-	out := make([]facetRow, 0, len(Facets))
-	for _, f := range Facets {
+	out := make([]facetRow, 0, len(appterm.Facets))
+	for _, f := range appterm.Facets {
 		out = append(out, facetRow{facet: f, reason: m.refusal(f)})
 	}
 	return out
@@ -164,18 +148,19 @@ func (m *Model) buildFacets() []facetRow {
 
 // refusal is why this session cannot offer a facet's values, and "" when it
 // can. The words are the site's own wherever the site supplied any.
-func (m *Model) refusal(f Facet) string {
-	if m.deps.Jira == nil {
+func (m *Model) refusal(f appterm.Facet) string {
+	kind, why := appsearch.OfferFacet(f, m.deps.Jira != nil, m.deps.Caps, m.deps.Project)
+	switch kind {
+	case appsearch.ValueNoConnection:
 		return "there is no Jira connection in this session"
-	}
-	if f.people() && !m.deps.Caps.Allows(jira.CapPeople) {
-		if reason := m.deps.Caps.Capability(jira.CapPeople).Reason; reason != "" {
-			return reason
+	case appsearch.ValueNoPeople:
+		if why != "" {
+			return why
 		}
 		return "this token may not look accounts up on this site"
-	}
-	if (f == FacetStatus || f == FacetType) && strings.TrimSpace(m.deps.Project) == "" {
+	case appsearch.ValueNoProject:
 		return "statuses and types are per project, and this session is not scoped to one"
+	case appsearch.ValueOffered:
 	}
 	return ""
 }
@@ -332,8 +317,8 @@ func (m *Model) chooseFacet() tea.Cmd {
 	// Nobody is a value of the assignee facet like any other, and it is this
 	// program's own row rather than one the site answers with, so it goes on
 	// before anything is asked and survives a search that comes back refused.
-	if row.facet == FacetAssignee {
-		m.all = append(m.all, unassignedValue())
+	if row.facet == appterm.FacetAssignee {
+		m.all = append(m.all, appsearch.UnassignedValue())
 	}
 	m.asked, m.complete = make(map[string]bool, 4), false
 	m.query, m.failure = "", nil
@@ -367,14 +352,14 @@ func (m *Model) backToFacets() tea.Cmd {
 	m.query, m.failure = "", nil
 	m.all, m.shown = nil, m.shown[:0]
 	m.cursor, m.top = m.facetAt(m.facet), 0
-	m.facet = FacetNone
+	m.facet = appterm.FacetNone
 	m.memo.Reset()
 	m.head = ""
 	m.clampScroll()
 	return nil
 }
 
-func (m *Model) facetAt(f Facet) int {
+func (m *Model) facetAt(f appterm.Facet) int {
 	for i := range m.facets {
 		if m.facets[i].facet == f {
 			return i
@@ -397,11 +382,11 @@ func (m *Model) chooseValue() tea.Cmd {
 	if v == nil {
 		return nil
 	}
-	m.terms = m.terms.Toggle(v.term)
-	return kernel.Broadcast(ChosenMsg{Term: v.term})
+	m.terms = m.terms.Toggle(v.Term)
+	return kernel.Broadcast(ChosenMsg{Term: v.Term})
 }
 
-func (m *Model) selected() *value {
+func (m *Model) selected() *appsearch.Value {
 	if m.state != pickValue || m.cursor < 0 || m.cursor >= len(m.shown) {
 		return nil
 	}
@@ -413,7 +398,7 @@ func (m *Model) selected() *value {
 // picker is pushed over whatever view is being filtered and holds no pointer
 // to it — and a broadcast per toggle is what lets the rows behind it narrow
 // live instead of at the end.
-type ChosenMsg struct{ Term Term }
+type ChosenMsg struct{ Term appterm.Term }
 
 // --- fetching ---------------------------------------------------------------
 
@@ -460,10 +445,10 @@ func (m *Model) fetch(needle string) tea.Cmd {
 	}
 	ctx, gen := m.begin()
 	facet := m.facet
-	if facet.people() {
+	if appsearch.LookedUpByTyping(facet) {
 		m.asked[needle] = true
 		return m.reply(findPeople(ctx, m.deps.Jira, facet, jira.PeopleQuery{
-			Match: needle, Project: m.peopleProject(facet), Limit: peopleLimit,
+			Match: needle, Project: appsearch.PeopleProject(facet, m.deps.Project), Limit: appsearch.PeopleLimit,
 		}, m.inForceIDs(facet), gen))
 	}
 	return m.reply(vocabulary(ctx, m.deps.Jira, facet, m.deps.Project, gen))
@@ -471,7 +456,7 @@ func (m *Model) fetch(needle string) tea.Cmd {
 
 // inForceIDs are the accounts this facet is already being filtered by, which
 // the search is asked to bring back whether or not it would have found them.
-func (m *Model) inForceIDs(f Facet) []string {
+func (m *Model) inForceIDs(f appterm.Facet) []string {
 	var out []string
 	for _, term := range m.terms {
 		if term.Facet == f && term.ID != "" {
@@ -479,19 +464,6 @@ func (m *Model) inForceIDs(f Facet) []string {
 		}
 	}
 	return out
-}
-
-// peopleProject decides whether the search is the assignable one. Setting it
-// switches Jira to the accounts that can be given work in a project, which
-// drops the app accounts for free — ten of the eleven on the measured site.
-// A reporter need not be assignable, though: an account that reported an issue
-// and then lost the permission is still on those rows, so that search is the
-// site-wide one and the app accounts it brings are badged and sunk instead.
-func (m *Model) peopleProject(f Facet) string {
-	if f == FacetAssignee {
-		return strings.TrimSpace(m.deps.Project)
-	}
-	return ""
 }
 
 // withCancel makes a command release its context however it ends. The cancel is
@@ -503,7 +475,7 @@ func withCancel(cancel context.CancelFunc, cmd tea.Cmd) tea.Cmd {
 	}
 }
 
-func (m *Model) current(gen int, f Facet) bool { return gen == m.gen && f == m.facet }
+func (m *Model) current(gen int, f appterm.Facet) bool { return gen == m.gen && f == m.facet }
 
 func (m *Model) tookVocabulary(msg vocabularyMsg) tea.Cmd {
 	if !m.current(msg.gen, msg.facet) {
@@ -531,16 +503,16 @@ func (m *Model) tookPeople(msg peopleMsg) tea.Cmd {
 	under := m.underCursor()
 	held := make(map[string]bool, len(m.all)+len(msg.people))
 	for i := range m.all {
-		held[m.all[i].term.ID] = true
+		held[m.all[i].Term.ID] = true
 	}
 	for i := range msg.people {
 		if held[msg.people[i].AccountID] {
 			continue
 		}
 		held[msg.people[i].AccountID] = true
-		m.all = append(m.all, personValue(msg.facet, msg.people[i]))
+		m.all = append(m.all, appsearch.PersonValue(msg.facet, msg.people[i]))
 	}
-	sortPeople(m.all)
+	appsearch.SortPeople(m.all)
 	m.memo.Reset()
 	m.rerank(under)
 	return nil
@@ -568,10 +540,7 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 func (m *Model) retype() tea.Cmd {
 	m.rerank(m.underCursor())
 	needle := strings.TrimSpace(m.query)
-	switch {
-	case !m.facet.people(), needle == "", m.complete, m.asked[needle]:
-		return nil
-	case len(m.shown) >= thinAnswer:
+	if !appsearch.AskSiteFor(m.facet, needle, m.complete, m.asked[needle], len(m.shown)) {
 		return nil
 	}
 	return m.fetch(needle)
@@ -584,11 +553,11 @@ func (m *Model) retype() tea.Cmd {
 // that appends to all and sorts it leaves them pointing at other values. Only
 // the caller still knows which row the reader was looking at.
 func (m *Model) rerank(under string) {
-	m.shown, m.ranks = rank(m.all, app.NewPattern(strings.TrimSpace(m.query)), m.shown[:0], m.ranks[:0])
+	m.shown, m.ranks = appsearch.RankValues(m.all, appmatch.NewPattern(strings.TrimSpace(m.query)), m.shown[:0], m.ranks[:0])
 	m.cursor = 0
 	if under != "" {
 		for i, at := range m.shown {
-			if m.all[at].term.ID == under {
+			if m.all[at].Term.ID == under {
 				m.cursor = i
 				break
 			}
@@ -601,7 +570,7 @@ func (m *Model) rerank(under string) {
 // anything appends to or replaces all.
 func (m *Model) underCursor() string {
 	if v := m.selected(); v != nil {
-		return v.term.ID
+		return v.Term.ID
 	}
 	return ""
 }

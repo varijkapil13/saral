@@ -8,7 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -149,7 +150,7 @@ func BenchmarkReleasesSteadyScroll2000(b *testing.B) { scrollOver(b, 2000) }
 // chosen order and a state filter, which route every row through the order.
 func BenchmarkReleasesSteadyScrollSortedFiltered2000(b *testing.B) {
 	m := stocked(b, 2000, 120, 40)
-	m.sort, m.filter = sortChoice{field: "name", desc: true}, filterUnreleased
+	m.sort, m.filter = sortChoice{field: "name", desc: true}, apprelease.FilterUnreleased
 	m.reorder()
 	m.sum = ""
 	_ = m.View()
@@ -243,7 +244,7 @@ func BenchmarkFlowSteadyScroll20(b *testing.B)   { flowScrollOver(b, 20) }
 // from it, with nothing behind the view to ask.
 func BenchmarkReleasesFirstPaintFromCache(b *testing.B) {
 	cache := newMemCache()
-	cache.held["PROJ"] = app.VersionsSnapshot{Versions: benchVersions(200)}
+	cache.held["PROJ"] = appcache.VersionsSnapshot{Versions: benchVersions(200)}
 	d := kernel.Deps{
 		Caps:    fullCaps(),
 		Project: "PROJ",
@@ -286,7 +287,7 @@ func bulkStocked(tb testing.TB, n, w, h int) *Bulk {
 	return b
 }
 
-func BenchmarkBulkScroll1000(b *testing.B) { bulkScroll(b, bulkCap) }
+func BenchmarkBulkScroll1000(b *testing.B) { bulkScroll(b, apprelease.Cap) }
 
 func BenchmarkBulkScroll20(b *testing.B) { bulkScroll(b, 20) }
 
@@ -309,7 +310,7 @@ func bulkScroll(b *testing.B, n int) {
 // BenchmarkBulkWalk walks a fresh row into view on every frame, going back to
 // the top at the bottom so every iteration is a miss.
 func BenchmarkBulkWalk(b *testing.B) {
-	m := bulkStocked(b, bulkCap, 120, 40)
+	m := bulkStocked(b, apprelease.Cap, 120, 40)
 	var down, top tea.Msg = keyPress("down"), keyPress("pgup")
 	b.ReportAllocs()
 	b.ResetTimer()

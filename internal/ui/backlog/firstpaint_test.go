@@ -3,7 +3,7 @@ package backlog
 import (
 	"testing"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
@@ -19,7 +19,7 @@ func BenchmarkBacklogFirstPaintFromCache(b *testing.B) {
 
 	msg := benchLoaded(0, 50)
 	cache := newFakeCache()
-	cache.hold("PROJ", msg.config.BoardID, app.BacklogSnapshot{
+	cache.hold("PROJ", msg.config.BoardID, appcache.BacklogSnapshot{
 		Config: msg.config, Sprints: msg.sprints, Field: msg.field, Issues: msg.page.Items,
 	}, false)
 	d := withCache(stocked(b, 20, 120, 40).deps, cache)

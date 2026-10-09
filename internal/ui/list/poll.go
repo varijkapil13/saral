@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -33,20 +34,16 @@ func PollInterval() time.Duration { return time.Duration(pollEvery.Load()) }
 type pollMsg struct{ gen int }
 
 // pollTick schedules the next poll, or nothing at all.
-//
-// One tick is outstanding at a time, it is only scheduled for the view that has
-// the keyboard, and it stops for good the first time Jira says it is being asked
-// too often (docs/UX.md — a rate limit pauses any poller).
 func (m *Model) pollTick() tea.Cmd {
-	if m.poll <= 0 || m.pollArmed || m.pollPaused || !m.focused || m.search == nil {
+	every, ok := m.poller.Arm(m.focused && m.lister.Live())
+	if !ok {
 		return nil
 	}
-	m.pollArmed = true
 	gen := m.gen
 	// Addressed like a read and unlike a widget's tick: this one is the list's
 	// own, and a tick that came due while the palette was up would otherwise be
 	// eaten there and leave the poller armed for good.
-	return kernel.Reply(tea.Tick(m.poll, func(time.Time) tea.Msg { return pollMsg{gen: gen} }), m.addr)
+	return kernel.Reply(tea.Tick(every, func(time.Time) tea.Msg { return pollMsg{gen: gen} }), m.addr)
 }
 
 // polled acts on a tick: re-read what is on screen, which patches the rows and
@@ -57,12 +54,16 @@ func (m *Model) pollTick() tea.Cmd {
 // finished. The next tick is lined up anyway, so the poller does not stop
 // because somebody paused over a keystroke.
 func (m *Model) polled(msg pollMsg) tea.Cmd {
-	m.pollArmed = false
-	switch {
-	case m.pollPaused || !m.focused:
+	switch m.poller.Due(appsearch.PollState{
+		Focused: m.focused,
+		Current: m.current(msg.gen),
+		Busy:    m.loading || m.filtering || m.asking || m.bind != bindNone,
+	}) {
+	case appsearch.PollIdle:
 		return nil
-	case !m.current(msg.gen) || m.loading || m.filtering || m.asking || m.bind != bindNone:
+	case appsearch.PollWait:
 		return m.pollTick()
+	case appsearch.PollRun:
 	}
 	return m.refetch(whyBackground)
 }

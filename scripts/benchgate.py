@@ -32,7 +32,7 @@ BENCH_DECL = re.compile(r"(?m)^func (Benchmark\w+)\(")
 GUARDED_RUNS = 6
 UNGUARDED_RUNS = 1
 # Measured seconds a package costs beyond what its benchmark count says.
-COST_HINTS = {"internal/app": 30}
+COST_HINTS = {"internal/app/cache": 30}
 PROCS_SUFFIX = re.compile(r"-\d+$")
 DELTA = re.compile(r"^([+-])([\d.]+)%$")
 

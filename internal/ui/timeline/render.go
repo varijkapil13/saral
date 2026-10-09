@@ -9,7 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	apptimeline "github.com/varijkapil13/saral/internal/app/timeline"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -141,8 +141,8 @@ type rowKey struct {
 	summary  string
 	start    jira.Date
 	end      jira.Date
-	from     app.Provenance
-	absent   app.Absence
+	from     apptimeline.Provenance
+	absent   apptimeline.Absence
 	lay      layout
 	ax       axis
 	left     int
@@ -330,7 +330,7 @@ func renderRow(r *barRow, k rowKey, st *styles, t *kernel.Theme) string {
 // writeBar draws one row's chart cells: a solid run for dates somebody set, a
 // faint one for the pair the cascade guessed, dots for a range rolled up off the
 // children, and one glyph where only a single date resolved.
-func writeBar(b *strings.Builder, rng app.Range, k rowKey, st *styles) {
+func writeBar(b *strings.Builder, rng apptimeline.Range, k rowKey, st *styles) {
 	width := k.lay.chart
 	if width <= 0 {
 		return
@@ -377,8 +377,8 @@ func writeBlank(b *strings.Builder, from, to int, k rowKey, st *styles) {
 
 // columnsOf is the pair of chart columns a range covers, earliest first. A range
 // recorded the wrong way round is drawn over the days it actually spans;
-// app.Resolution.Warnings is what says it is the wrong way round.
-func columnsOf(rng app.Range, ax axis) (from, to int, ok bool) {
+// apptimeline.Resolution.Warnings is what says it is the wrong way round.
+func columnsOf(rng apptimeline.Range, ax axis) (from, to int, ok bool) {
 	if !rng.OK() || ax.empty() {
 		return 0, 0, false
 	}
@@ -392,7 +392,7 @@ func columnsOf(rng app.Range, ax axis) (from, to int, ok bool) {
 // whyLabel is the cascade rule in the width a column has. The whole sentence is
 // on the detail line under the rows, which is where a bar in the wrong place is
 // actually diagnosed.
-func whyLabel(rng app.Range) string {
+func whyLabel(rng apptimeline.Range) string {
 	switch {
 	case !rng.OK():
 		return "no dates"
@@ -404,13 +404,13 @@ func whyLabel(rng app.Range) string {
 		return "guessed"
 	}
 	switch rng.From {
-	case app.FromConfiguredFields:
+	case apptimeline.FromConfiguredFields:
 		return "config"
-	case app.FromTargetDates:
+	case apptimeline.FromTargetDates:
 		return "target"
-	case app.FromStartAndDue:
+	case apptimeline.FromStartAndDue:
 		return "start/due"
-	case app.FromSprint:
+	case apptimeline.FromSprint:
 		return "sprint"
 	default:
 		return ""
@@ -743,8 +743,8 @@ type detailKey struct {
 	key    string
 	start  jira.Date
 	end    jira.Date
-	from   app.Provenance
-	absent app.Absence
+	from   apptimeline.Provenance
+	absent apptimeline.Absence
 	source string
 	width  int
 	gen    int
@@ -850,7 +850,7 @@ var (
 func (m *Model) appendEmpty(lines []string, h int) []string {
 	at := len(lines)
 	switch {
-	case m.search == nil:
+	case !m.loader.Live():
 		lines = append(lines, m.styles.muted.Render("  No Jira connection in this session yet."))
 	case m.loading && !m.loaded:
 		lines = append(lines, m.styles.muted.Render("  Reading the fields these dates come from"+m.deps.Theme.Glyphs.Ellipsis))

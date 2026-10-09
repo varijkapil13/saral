@@ -21,6 +21,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	appattach "github.com/varijkapil13/saral/internal/app/attach"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -550,7 +551,7 @@ func (m *Model) sendUpload() tea.Cmd {
 	ctx, gen := m.begin()
 	m.mode, m.sending, m.sendSize, m.sent = uploading, file.Name, file.Size, 0
 	m.repaint()
-	steps := make(chan int64, 1)
+	steps := appattach.NewProgress()
 	return tea.Batch(
 		m.reply(upload(ctx, m.deps.Jira, m.issue, file, gen, steps)),
 		m.reply(awaitSent(steps, gen)),
@@ -658,7 +659,7 @@ func (m *Model) fetch(att jira.Attachment, why intent) tea.Cmd {
 			return downloadedMsg{gen: gen, id: att.ID, why: why, path: path}
 		})
 	}
-	steps := make(chan int64, 1)
+	steps := appattach.NewProgress()
 	// Each half is addressed on its own. A batch wrapped in one Reply is a
 	// kernel message inside an envelope meant for a view, and the kernel hands
 	// the list of commands to the pane rather than running them.

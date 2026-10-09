@@ -2,14 +2,13 @@ package release
 
 import (
 	"context"
-	"errors"
-	"slices"
 	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -21,16 +20,6 @@ var (
 	_ kernel.Blocker     = (*Bulk)(nil)
 	_ kernel.Closer      = (*Bulk)(nil)
 	_ kernel.Addressed   = (*Bulk)(nil)
-)
-
-const (
-	// bulkCap is the most issues one assignment reads and writes. A query
-	// matching more is refused rather than cut short: the preview has to be the
-	// whole of what will change.
-	bulkCap = 1000
-	// bulkChunk is how many issues one command edits before the screen hears how
-	// it went. There is no bulk edit in the port, so each is a write of its own.
-	bulkChunk = 25
 )
 
 // bulkState is which of the screen's four steps is up. It doubles as the
@@ -64,9 +53,9 @@ type Bulk struct {
 	// matched that already are the way the write would leave them.
 	todo    []jira.Issue
 	skipped int
-	next    int
+	run     *apprelease.Assignment
 	done    int
-	failed  []bulkFailure
+	failed  []apprelease.Failure
 	pending []string
 	items   []bulkItem
 
@@ -84,12 +73,6 @@ type Bulk struct {
 	chrome   [4]string
 	chromeAt bulkChromeKey
 	zones    widget.Zoner
-}
-
-// bulkFailure is one issue the site refused, in its own words.
-type bulkFailure struct {
-	key    string
-	reason string
 }
 
 // NewBulk builds the screen over one version.
@@ -210,11 +193,6 @@ type bulkReadMsg struct {
 
 const whatQuery = "The query could not be run."
 
-// errTooMany is a query matching more than one assignment will write.
-var errTooMany = &jira.ValidationError{Messages: []string{
-	"the query matches more than " + strconv.Itoa(bulkCap) + " issues; narrow it and ask again",
-}}
-
 func (b *Bulk) read() tea.Cmd {
 	jql := strings.TrimSpace(b.input.Value())
 	switch {
@@ -228,38 +206,13 @@ func (b *Bulk) read() tea.Cmd {
 	return b.reply(readMatches(ctx, b.deps.Jira, jql, b.version.ID, b.remove, gen))
 }
 
-// readMatches runs the query for the one field the write turns on and splits
-// what it matched into what will change and what already is the way it would
-// be left.
 func readMatches(ctx context.Context, s jira.Searcher, jql, versionID string, remove bool, gen int) tea.Cmd {
 	return func() tea.Msg {
-		page, err := s.Search(ctx, jira.Query{JQL: jql, Fields: []string{"summary", "fixVersions"}})
+		got, err := apprelease.ReadMatches(ctx, s, jql, versionID, remove)
 		if err != nil {
 			return failedMsg{gen: gen, what: whatQuery, err: err}
 		}
-		var todo []jira.Issue
-		skipped, seen := 0, 0
-		for {
-			for i := range page.Items {
-				seen++
-				if seen > bulkCap {
-					return failedMsg{gen: gen, what: whatQuery, err: errTooMany}
-				}
-				iss := page.Items[i]
-				carries := slices.ContainsFunc(iss.FixVersions, func(v jira.Version) bool { return v.ID == versionID })
-				if carries != remove {
-					skipped++
-					continue
-				}
-				todo = append(todo, iss)
-			}
-			if !page.HasMore() {
-				return bulkReadMsg{gen: gen, todo: todo, skipped: skipped}
-			}
-			if page, err = page.Next(ctx); err != nil {
-				return failedMsg{gen: gen, what: whatQuery, err: err}
-			}
-		}
+		return bulkReadMsg{gen: gen, todo: got.Todo, skipped: got.Skipped}
 	}
 }
 
@@ -289,19 +242,8 @@ func (b *Bulk) failedRead(msg failedMsg) {
 // --- writing ---------------------------------------------------------------
 
 type bulkChunkMsg struct {
-	gen    int
-	done   int
-	failed []bulkFailure
-	// stopped is a chunk that ended because its context did, with the keys it
-	// never sent.
-	stopped []string
-}
-
-func (b *Bulk) patch() jira.IssuePatch {
-	if b.remove {
-		return jira.IssuePatch{RemoveFixVersions: []string{b.version.ID}}
-	}
-	return jira.IssuePatch{AddFixVersions: []string{b.version.ID}}
+	gen      int
+	progress apprelease.Progress
 }
 
 func (b *Bulk) apply() tea.Cmd {
@@ -311,67 +253,31 @@ func (b *Bulk) apply() tea.Cmd {
 	if b.deps.Jira == nil {
 		return kernel.Warn("there is no Jira connection in this session")
 	}
-	b.state, b.next, b.done = bulkWorking, 0, 0
+	keys := make([]string, len(b.todo))
+	for i := range b.todo {
+		keys[i] = b.todo[i].Key
+	}
+	b.run = apprelease.NewAssignment(b.deps.Jira, keys, apprelease.Patch(b.version.ID, b.remove))
+	b.state, b.done = bulkWorking, 0
 	b.failed, b.pending = nil, nil
 	return b.sendChunk()
 }
 
 func (b *Bulk) sendChunk() tea.Cmd {
-	end := min(b.next+bulkChunk, len(b.todo))
-	keys := make([]string, 0, end-b.next)
-	for i := b.next; i < end; i++ {
-		keys = append(keys, b.todo[i].Key)
-	}
-	b.next = end
 	ctx, gen := b.begin()
-	return b.reply(editChunk(ctx, b.deps.Jira, keys, b.patch(), gen))
+	run := b.run
+	return b.reply(func() tea.Msg {
+		return bulkChunkMsg{gen: gen, progress: run.Next(ctx)}
+	})
 }
 
-// editChunk writes one chunk issue by issue. A refusal is that issue's and the
-// rest of the chunk still goes; a context that ends stops the chunk where it is.
-func editChunk(ctx context.Context, w jira.IssueWriter, keys []string, patch jira.IssuePatch, gen int) tea.Cmd {
-	return func() tea.Msg {
-		out := bulkChunkMsg{gen: gen}
-		for i, key := range keys {
-			if ctx.Err() != nil {
-				out.stopped = slices.Clone(keys[i:])
-				return out
-			}
-			err := w.UpdateIssue(ctx, key, patch)
-			switch {
-			case err == nil:
-				out.done++
-			case errors.Is(err, context.Canceled):
-				out.stopped = slices.Clone(keys[i:])
-				return out
-			default:
-				reason, _ := jira.Reason(err)
-				out.failed = append(out.failed, bulkFailure{key: key, reason: reason})
-			}
-		}
-		return out
-	}
-}
-
-// tookChunk counts one chunk and sends the next. A chunk in which nothing at
-// all landed stops the run: whatever refused every issue in it — a permission,
-// a rate limit that outlasted the retries, a connection — will refuse the next
-// chunk too, and the rest are reported as not sent rather than as refused.
 func (b *Bulk) tookChunk(msg bulkChunkMsg) tea.Cmd {
 	if msg.gen != b.gen || b.state != bulkWorking {
 		return nil
 	}
-	b.done += msg.done
-	b.failed = append(b.failed, msg.failed...)
-	stuck := msg.done == 0 && len(msg.failed) > 0
-	if len(msg.stopped) > 0 || stuck || b.next >= len(b.todo) {
-		b.pending = append(b.pending, msg.stopped...)
-		if b.next < len(b.todo) {
-			for i := b.next; i < len(b.todo); i++ {
-				b.pending = append(b.pending, b.todo[i].Key)
-			}
-			b.next = len(b.todo)
-		}
+	p := msg.progress
+	b.done, b.failed, b.pending = p.Done, p.Failed, p.Pending
+	if p.Finished {
 		return b.finish()
 	}
 	return b.sendChunk()
@@ -382,7 +288,7 @@ func (b *Bulk) finish() tea.Cmd {
 	b.state = bulkDone
 	b.items = b.items[:0]
 	for _, f := range b.failed {
-		b.items = append(b.items, bulkItem{key: f.key, text: widget.Sanitize(f.reason)})
+		b.items = append(b.items, bulkItem{key: f.Key, text: widget.Sanitize(f.Reason)})
 	}
 	for _, key := range b.pending {
 		b.items = append(b.items, bulkItem{key: key, text: "not sent"})

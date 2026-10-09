@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -37,7 +38,7 @@ func TestForm_BuildsEveryFieldFromWhatTheSiteSaysTheScreenHas(t *testing.T) {
 	// The fake's custom field ids are not the ones a stock site allocates, so a
 	// form that wrote one down would find nothing here.
 	points := dr.field("customfield_13401")
-	if points.kind != kindNumber {
+	if points.kind != appissue.ShapeNumber {
 		t.Errorf("the story point field is a %v, want a number", points.kind)
 	}
 	for _, f := range dr.m.fields {
@@ -52,15 +53,15 @@ func TestForm_GivesEachSchemaTypeTheWidgetItEarns(t *testing.T) {
 
 	dr := openOn(t, testDeps(t, newFake(20)), 100, 24, fakeStory)
 
-	tests := map[string]kind{
-		"summary":           kindText,
-		"description":       kindDoc,
-		"assignee":          kindUser,
-		"labels":            kindLabels,
-		"priority":          kindSelect,
-		"duedate":           kindDate,
-		"parent":            kindIssueKey,
-		"customfield_13401": kindNumber,
+	tests := map[string]appissue.Shape{
+		"summary":           appissue.ShapeText,
+		"description":       appissue.ShapeDoc,
+		"assignee":          appissue.ShapeUser,
+		"labels":            appissue.ShapeLabels,
+		"priority":          appissue.ShapeSelect,
+		"duedate":           appissue.ShapeDate,
+		"parent":            appissue.ShapeIssueKey,
+		"customfield_13401": appissue.ShapeNumber,
 	}
 	for id, want := range tests {
 		if got := dr.field(id).kind; got != want {
@@ -343,7 +344,7 @@ func TestForm_DropsAnAnswerToAQuestionTheUserHasMovedOn(t *testing.T) {
 func TestForm_StopsTheWorkInFlightWhenItIsAskedSomethingElse(t *testing.T) {
 	t.Parallel()
 
-	m := newWith(testDeps(t, newFake(20)), newSchemaCache(schemaTTL, time.Now))
+	m := newWith(testDeps(t, newFake(20)), appissue.NewSchemas(appissue.SchemaTTL, time.Now))
 	ctx, _ := m.begin()
 	m.stop()
 
@@ -356,7 +357,7 @@ func TestForm_ReadsTheCreateScreenOnceForTwoFormsOnTheSameThing(t *testing.T) {
 	t.Parallel()
 
 	c := newFake(20)
-	cache := newSchemaCache(schemaTTL, time.Now)
+	cache := appissue.NewSchemas(appissue.SchemaTTL, time.Now)
 	d := testDeps(t, c)
 
 	for range 2 {

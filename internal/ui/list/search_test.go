@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -234,32 +235,6 @@ func TestList_WithNoProjectDoesNotWidenToTheWholeSite(t *testing.T) {
 	}
 	if dr.m.title != "My issues" {
 		t.Errorf("the search is titled %q, want My issues", dr.m.title)
-	}
-}
-
-func TestScoped_ComposesTheProjectAndTheClauseWithoutInventingEither(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		project string
-		clause  string
-		want    string
-	}{
-		{"a project and a clause", "PROJ", "assignee = currentUser()", `project = "PROJ" AND assignee = currentUser()`},
-		{"a project and no clause at all", "PROJ", "", `project = "PROJ"`},
-		{"a clause and no project", "", "assignee IS EMPTY", "assignee IS EMPTY"},
-		{"neither", "", "", ""},
-		{"a key somebody typed a quote into", `PR"OJ`, "", `project = "PROJ"`},
-		{"a key with room around it", "  PROJ  ", "", `project = "PROJ"`},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			if got := scoped(tc.project, tc.clause); got != tc.want {
-				t.Errorf("scoped(%q, %q) = %q, want %q", tc.project, tc.clause, got, tc.want)
-			}
-		})
 	}
 }
 
@@ -524,7 +499,7 @@ func (a *asker) queries() []jira.Query {
 func (a *asker) probes() []jira.Query {
 	out := make([]jira.Query, 0, 1)
 	for _, q := range a.queries() {
-		if q.JQL == probeQuery() {
+		if q.JQL == appsearch.ProbeJQL() {
 			out = append(out, q)
 		}
 	}
@@ -540,7 +515,7 @@ type refuser struct {
 }
 
 func (r *refuser) Search(ctx context.Context, q jira.Query) (jira.Page[jira.Issue], error) {
-	if q.JQL == probeQuery() {
+	if q.JQL == appsearch.ProbeJQL() {
 		return jira.Page[jira.Issue]{}, r.err
 	}
 	return r.Client.Search(ctx, q)

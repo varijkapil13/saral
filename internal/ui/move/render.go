@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appmove "github.com/varijkapil13/saral/internal/app/move"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -127,9 +128,9 @@ func (m *Model) zoneOf(at int) string {
 	case stepType:
 		return "type:" + m.vocab[at].Type.ID
 	case stepStatus:
-		return "status:" + m.remaps[at].from.ID
+		return "status:" + m.remaps[at].From.ID
 	case stepFields:
-		return "field:" + m.fields[at].meta.Field.ID
+		return "field:" + m.fields[at].Meta.Field.ID
 	case stepTyping, stepConfirm, stepRunning, stepDone:
 	}
 	return ""
@@ -165,19 +166,19 @@ func (m *Model) rowKeyAt(at int) rowKey {
 		}
 	case stepStatus:
 		row := &m.remaps[at]
-		k.id, k.name = row.from.ID, row.from.Name
+		k.id, k.name = row.From.ID, row.From.Name
 		if to, ok := m.landing(at); ok {
-			k.note = m.deps.Theme.Glyphs.Arrow + " " + to.Name + "  " + plural(row.count, "issue")
+			k.note = m.deps.Theme.Glyphs.Arrow + " " + to.Name + "  " + plural(row.Count, "issue")
 		} else {
 			k.note, k.warn = "nothing to become in "+m.target, true
 		}
 	case stepFields:
 		f := &m.fields[at]
-		k.id, k.name = f.meta.Field.ID, f.name()+" *"
+		k.id, k.name = f.Meta.Field.ID, f.Name()+" *"
 		switch {
-		case !f.retains():
-			k.note = m.deps.Theme.Glyphs.Arrow + " " + f.value().Label
-		case f.fillable():
+		case !f.Retains():
+			k.note = m.deps.Theme.Glyphs.Arrow + " " + f.Value().Label
+		case f.Fillable():
 			k.note = "kept from the source issue"
 		default:
 			k.note = "kept from the source issue; this site offered no values to set instead"
@@ -370,23 +371,23 @@ func (m *Model) mappingLines() []string {
 	for i := range m.remaps {
 		row := &m.remaps[i]
 		to, ok := m.landing(i)
-		text := "  " + row.from.Name + " " + t.Glyphs.Arrow + " " + to.Name +
-			"   " + plural(row.count, "issue")
+		text := "  " + row.From.Name + " " + t.Glyphs.Arrow + " " + to.Name +
+			"   " + plural(row.Count, "issue")
 		style := m.styles.name
 		if !ok {
-			text, style = "  "+row.from.Name+" has nothing to become", m.styles.danger
+			text, style = "  "+row.From.Name+" has nothing to become", m.styles.danger
 		}
 		out = append(out, m.line(style, text))
 	}
 	for i := range m.fields {
 		f := &m.fields[i]
-		if f.retains() {
-			out = append(out, m.line(m.styles.muted, "  "+f.name()+" "+t.Glyphs.Arrow+" kept from the source issue"))
+		if f.Retains() {
+			out = append(out, m.line(m.styles.muted, "  "+f.Name()+" "+t.Glyphs.Arrow+" kept from the source issue"))
 			continue
 		}
-		out = append(out, m.line(m.styles.name, "  "+f.name()+" "+t.Glyphs.Arrow+" "+f.value().Label))
+		out = append(out, m.line(m.styles.name, "  "+f.Name()+" "+t.Glyphs.Arrow+" "+f.Value().Label))
 	}
-	if written(m.fields) {
+	if appmove.Written(m.fields) {
 		for _, said := range m.indented("  ", "Every mandatory field above is being written: naming one value "+
 			"on this endpoint stops the rest being kept from the source.") {
 			out = append(out, m.line(m.styles.warn, said))
@@ -395,7 +396,7 @@ func (m *Model) mappingLines() []string {
 	out = append(out, m.dropLines()...)
 	out = append(out, m.line(m.styles.muted, "  watchers "+t.Glyphs.Arrow+" "+m.notifyWords()))
 	for _, said := range m.indented("  ", "Subtasks travel with their parents and are retyped in "+m.target+
-		". They count towards the "+strconv.Itoa(maxKeys)+" one move takes, so the site can still refuse this.") {
+		". They count towards the "+strconv.Itoa(appmove.MaxKeys)+" one move takes, so the site can still refuse this.") {
 		out = append(out, m.line(m.styles.muted, said))
 	}
 	// Wrapped and not truncated: this is the sentence somebody has to read

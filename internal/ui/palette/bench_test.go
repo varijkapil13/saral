@@ -7,7 +7,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -129,11 +130,11 @@ func cachedIssues(n int) *fakeCache {
 }
 
 // BenchmarkPaletteOpenCached is ctrl+k itself with a cache behind it, over
-// app.SharedIndex: every iteration but the first pays a generation check
+// appsearch.SharedIndex: every iteration but the first pays a generation check
 // rather than a walk of the whole cache.
 func BenchmarkPaletteOpenCached(b *testing.B) {
 	d := paletteDeps()
-	d.Cache = cachedIssues(app.DefaultIssueBound)
+	d.Cache = cachedIssues(appcache.DefaultIssueBound)
 	cmds := manyCommands(64)
 	freq := memoryTable()
 	b.ReportAllocs()
@@ -147,11 +148,11 @@ func BenchmarkPaletteOpenCached(b *testing.B) {
 }
 
 // BenchmarkPaletteFirstKeystrokeCached is the keystroke right after ctrl+k,
-// over the same cache: build's app.Index is shared, so only the very first
+// over the same cache: build's appsearch.Index is shared, so only the very first
 // open of the whole run walks it.
 func BenchmarkPaletteFirstKeystrokeCached(b *testing.B) {
 	d := paletteDeps()
-	d.Cache = cachedIssues(app.DefaultIssueBound)
+	d.Cache = cachedIssues(appcache.DefaultIssueBound)
 	cmds := manyCommands(64)
 	freq := memoryTable()
 	key := tea.KeyPressMsg{Code: 'r', Text: "r"}
@@ -173,7 +174,7 @@ func BenchmarkPaletteFirstKeystrokeCached(b *testing.B) {
 // which is the worst case rather than the usual one.
 func BenchmarkPaletteKeystrokeCached(b *testing.B) {
 	d := paletteDeps()
-	d.Cache = cachedIssues(app.DefaultIssueBound)
+	d.Cache = cachedIssues(appcache.DefaultIssueBound)
 	m := build(d, manyCommands(64), memoryTable())
 	next, _ := m.Update(kernel.SizeMsg{Width: 120, Height: 40})
 	m, _ = next.(*Model)
@@ -214,7 +215,7 @@ func BenchmarkMatch(b *testing.B) {
 	r := row{cmd: kernel.Command{
 		ID: "issue.move", Title: "Move issues between projects", Group: "Issue",
 	}}
-	pattern := app.NewPattern("mvpr")
+	pattern := appmatch.NewPattern("mvpr")
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {

@@ -9,7 +9,9 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -75,7 +77,7 @@ const suggestionLimit = 50
 const zoneProject = "proj:"
 
 // namePenalty is what finding a project by its name rather than by its key
-// costs: app.Pattern's step nine times over, the calibration the palette and the
+// costs: match.Pattern's step nine times over, the calibration the palette and the
 // value picker already use.
 const namePenalty = 9 * scoreTier
 
@@ -117,7 +119,7 @@ type projectRow struct {
 }
 
 // match is the best of the two ways a project can be found.
-func (r *projectRow) match(p app.Pattern) (int, bool) {
+func (r *projectRow) match(p appmatch.Pattern) (int, bool) {
 	best, ok := p.Score(r.label)
 	if score, hit := p.Score(r.note); hit && (!ok || score-namePenalty > best) {
 		best, ok = score-namePenalty, true
@@ -266,7 +268,7 @@ func (m *projectModel) look() tea.Cmd {
 		return nil
 	}
 	m.stop()
-	search := app.NewSearch(m.deps.Jira)
+	search := appquery.NewSearch(m.deps.Jira)
 	ctx, cancel := context.WithTimeout(context.Background(), lookTimeout)
 	m.cancel, m.looking, m.problem = cancel, true, ""
 	return kernel.Reply(func() tea.Msg {
@@ -403,8 +405,8 @@ func (m *projectModel) choose() tea.Cmd {
 		return nil
 	}
 	row := &m.rows[m.shown[m.cursor]]
-	m.freq.ran(row.key, m.deps.Now())
-	return tea.Batch(m.freq.Save(), tea.Sequence(kernel.Pop(), kernel.SetProject(row.key)))
+	m.freq.Ran(row.key, m.deps.Now())
+	return tea.Batch(save(m.freq), tea.Sequence(kernel.Pop(), kernel.SetProject(row.key)))
 }
 
 func (m *projectModel) click(msg tea.MouseClickMsg) tea.Cmd {
@@ -445,14 +447,14 @@ func (m *projectModel) wheel(msg tea.MouseWheelMsg) {
 // so a keystroke allocates nothing.
 func (m *projectModel) refilter() {
 	m.shown, m.ranks = m.shown[:0], m.ranks[:0]
-	pattern := app.NewPattern(strings.TrimSpace(m.query))
+	pattern := appmatch.NewPattern(strings.TrimSpace(m.query))
 	now := m.deps.Now()
 	for i := range m.rows {
 		score, ok := m.rows[i].match(pattern)
 		if !ok {
 			continue
 		}
-		m.ranks = append(m.ranks, ranked{at: i, score: score, freq: m.freq.score(m.rows[i].key, now)})
+		m.ranks = append(m.ranks, ranked{at: i, score: score, freq: m.freq.Score(m.rows[i].key, now)})
 	}
 	// The filter decides which projects and frecency orders the equals, so a
 	// habit never demotes a better match. The whole site keeps its place at the
@@ -515,37 +517,14 @@ func (m *projectModel) clampScroll() {
 
 func (m *projectModel) rowsHeight() int { return max(m.height-headHeight, 1) }
 
-// recentProjects reads the projects behind this account's own recent issues, and
-// then anything it can see at all. Both queries ask for one field.
-//
-// The port exposes no project-list method, so a narrow read is the only answer
-// there is. Onboarding's picker asks the same question in its own package.
-func recentProjects(ctx context.Context, search *app.Search) ([]project, error) {
-	projection := app.Projection{Name: "project picker", IDs: []string{"project"}}
-	for _, jql := range []string{"assignee = currentUser() ORDER BY updated DESC", "ORDER BY updated DESC"} {
-		result, err := search.Run(ctx, app.Request{JQL: jql, Projection: projection, MaxResults: suggestionLimit})
-		if err != nil {
-			return nil, err
-		}
-		if found := distinctProjects(result.Page.Items); len(found) > 0 {
-			return found, nil
-		}
+func recentProjects(ctx context.Context, search *appquery.Search) ([]project, error) {
+	refs, err := appsearch.RecentProjects(ctx, search, suggestionLimit)
+	if err != nil || len(refs) == 0 {
+		return nil, err
 	}
-	return nil, nil
-}
-
-// distinctProjects keeps the order the issues came back in, which is the order
-// the query sorted them by and therefore the order worth offering.
-func distinctProjects(issues []jira.Issue) []project {
-	seen := make(map[string]bool, len(issues))
-	out := make([]project, 0, 4)
-	for i := range issues {
-		ref := issues[i].Project
-		if ref.Key == "" || seen[ref.Key] {
-			continue
-		}
-		seen[ref.Key] = true
+	out := make([]project, 0, len(refs))
+	for _, ref := range refs {
 		out = append(out, project{key: ref.Key, name: ref.Name})
 	}
-	return out
+	return out, nil
 }

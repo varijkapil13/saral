@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -28,7 +29,7 @@ func (k *watchKind) keys() *sheetKeys { return watchKeys }
 func (k *watchKind) load(s *sheet) tea.Cmd {
 	key := s.key
 	return s.read(&s.loads, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
-		list, err := c.Watchers(ctx, key)
+		list, err := appissue.WatchersOf(ctx, c, key)
 		return func(s *sheet) tea.Cmd {
 			if err != nil {
 				return s.failed(err)
@@ -62,14 +63,11 @@ func (k *watchKind) act(s *sheet, a sheetAct) tea.Cmd {
 	case sheetToggle:
 		stop := k.watching
 		return s.write(func(ctx context.Context, c jira.SessionClient) (func(*sheet) tea.Cmd, error) {
-			if !stop {
-				return k.written("watching " + key), c.Watch(ctx, key, "")
+			said := "watching " + key
+			if stop {
+				said = "stopped watching " + key
 			}
-			me, err := c.Me(ctx)
-			if err != nil {
-				return nil, err
-			}
-			return k.written("stopped watching " + key), c.Unwatch(ctx, key, me.AccountID)
+			return k.written(said), appissue.Toggle(ctx, c, key, stop)
 		})
 	case sheetAdd:
 		return s.ask("Who should watch it? A name or an email", "", true)
@@ -80,7 +78,7 @@ func (k *watchKind) act(s *sheet, a sheetAct) tea.Cmd {
 		}
 		id, name := row.id, row.text
 		return s.write(func(ctx context.Context, c jira.SessionClient) (func(*sheet) tea.Cmd, error) {
-			return k.written(name + " no longer watches " + key), c.Unwatch(ctx, key, id)
+			return k.written(name + " no longer watches " + key), appissue.RemoveWatcher(ctx, c, key, id)
 		})
 	default:
 	}
@@ -99,7 +97,7 @@ func (k *watchKind) changed(s *sheet, text string) tea.Cmd {
 	}
 	return s.debounced(func(s *sheet) tea.Cmd {
 		return s.read(&s.looks, func(ctx context.Context, c jira.SessionClient) func(*sheet) tea.Cmd {
-			people, err := c.FindPeople(ctx, jira.PeopleQuery{Match: text, Limit: peopleLimit})
+			people, err := appissue.FindAccounts(ctx, c, text, peopleLimit)
 			return func(s *sheet) tea.Cmd {
 				if err != nil {
 					return s.failed(err)
@@ -119,6 +117,6 @@ func (k *watchKind) answered(s *sheet, _ string, pick *sheetRow) tea.Cmd {
 	key, id, name := s.key, pick.id, pick.text
 	s.endAsk()
 	return s.write(func(ctx context.Context, c jira.SessionClient) (func(*sheet) tea.Cmd, error) {
-		return k.written(name + " now watches " + key), c.Watch(ctx, key, id)
+		return k.written(name + " now watches " + key), appissue.AddWatcher(ctx, c, key, id)
 	})
 }

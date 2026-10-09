@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -389,7 +390,7 @@ func TestChooseSet_ACardWithNoMoveToTheStatusIsReported(t *testing.T) {
 	if got := w.shelved(); !slices.Equal(got, keys[:1]) {
 		t.Errorf("shelved %v, want %v", got, keys[:1])
 	}
-	mustContain(t, dr.lastStatus().Text, keys[1], errNoMoveTo.Error())
+	mustContain(t, dr.lastStatus().Text, keys[1], appboard.ErrNoMoveTo.Error())
 	if !dr.m.picked[keys[1]] {
 		t.Error("the card that did not move was let go, so the gesture cannot try it again")
 	}

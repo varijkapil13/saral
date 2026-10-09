@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/store"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -80,7 +80,7 @@ func TestBuild_DropsTheCacheOfAProfileNoLongerConfigured(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range []store.Scope{gone, elsewhere} {
-		if err := app.NewCache(db, s).PutRows(`project = "PROJ"`, jiratest.Gen(2), false); err != nil {
+		if err := appcache.New(db, s).PutRows(`project = "PROJ"`, jiratest.Gen(2), false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -119,8 +119,8 @@ func TestBuild_SweepsWhatIsPastItsRetention(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	long := time.Now().Add(-app.KindSearch.Retention().MaxAge - time.Hour)
-	old := app.NewCache(db, scope, app.WithClock(func() time.Time { return long }))
+	long := time.Now().Add(-appcache.KindSearch.Retention().MaxAge - time.Hour)
+	old := appcache.New(db, scope, appcache.WithClock(func() time.Time { return long }))
 	if err := old.PutRows(`project = "OLD"`, jiratest.Gen(2), false); err != nil {
 		t.Fatal(err)
 	}

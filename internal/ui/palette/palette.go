@@ -11,7 +11,8 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/search"
@@ -23,7 +24,7 @@ import (
 // line names the key that reaches it directly. docs/UX.md says three.
 const hintAfter = 3
 
-// scoreTier is app.Pattern's ranking step, which it does not export: a whole
+// scoreTier is match.Pattern's ranking step, which it does not export: a whole
 // candidate, a prefix, a word start and a match inside a word are that far
 // apart.
 const scoreTier = 256
@@ -69,7 +70,7 @@ func (r *row) offered() bool { return r.reason == "" }
 // match is the best of the three ways a command can be found, each answering
 // for itself so that a title match is never beaten by a prefix of an ID nobody
 // can see.
-func (r *row) match(p app.Pattern) (int, bool) {
+func (r *row) match(p appmatch.Pattern) (int, bool) {
 	best, ok := p.Score(r.cmd.Title)
 	for _, other := range [...]string{r.cmd.Group, r.cmd.ID} {
 		if score, hit := p.Score(other); hit && (!ok || score-fieldPenalty > best) {
@@ -118,7 +119,7 @@ type Model struct {
 	query string
 
 	rows  []row
-	index *app.Index
+	index *appsearch.Index
 	hits  []hit
 	shown []entry
 	ranks []ranked
@@ -157,7 +158,7 @@ func build(d kernel.Deps, cmds []kernel.Command, freq *table) *Model {
 		keys:  defaultKeys(),
 		input: newInput(d.Cache != nil),
 		freq:  freq,
-		index: app.SharedIndex(d.Cache),
+		index: appsearch.SharedIndex(d.Cache),
 		memo:  widget.NewRowCache[rowKey, string](rowMemoLimit),
 	}
 	if m.deps.Theme == nil {
@@ -307,8 +308,8 @@ func (m *Model) recheck() tea.Cmd {
 // that reaches it without the palette. The count and the ranking are one table:
 // a second counter would be a second answer to the same question.
 func (m *Model) ran(msg kernel.CommandRanMsg) tea.Cmd {
-	count := m.freq.ran(msg.ID, m.now())
-	cmd := m.freq.Save()
+	count := m.freq.Ran(msg.ID, m.now())
+	cmd := save(m.freq)
 	if count != hintAfter || len(msg.Keys) == 0 {
 		return cmd
 	}
@@ -443,7 +444,7 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 func (m *Model) refilter(keep mark) tea.Cmd {
 	m.shown, m.refused, m.ranks = m.shown[:0], m.refused[:0], m.ranks[:0]
 	text := strings.TrimSpace(m.query)
-	pattern := app.NewPattern(text)
+	pattern := appmatch.NewPattern(text)
 	now := m.now()
 	for i := range m.rows {
 		score, ok := m.rows[i].match(pattern)
@@ -454,7 +455,7 @@ func (m *Model) refilter(keep mark) tea.Cmd {
 			m.refused = append(m.refused, i)
 			continue
 		}
-		m.ranks = append(m.ranks, ranked{at: i, score: score, freq: m.freq.score(m.rows[i].cmd.ID, now)})
+		m.ranks = append(m.ranks, ranked{at: i, score: score, freq: m.freq.Score(m.rows[i].cmd.ID, now)})
 	}
 	// The filter decides which commands and frecency orders the equals, so a
 	// habit never demotes a better match: the query is the later intent.

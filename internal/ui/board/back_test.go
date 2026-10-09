@@ -3,6 +3,7 @@ package board
 import (
 	"testing"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
@@ -14,7 +15,7 @@ func TestBoard_EscClearsTheTermsWhileAnyAreInForce(t *testing.T) {
 	if dr.m.WantsBack() {
 		t.Fatal("a board with nothing narrowing it claims esc")
 	}
-	dr.send(filter.ChosenMsg{Term: filter.Term{Facet: filter.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: "x"}})
+	dr.send(filter.ChosenMsg{Term: appterm.Term{Facet: appterm.FacetStatus, ID: dr.m.issues[0].Status.ID, Label: "x"}})
 	if !dr.m.WantsBack() {
 		t.Fatal("a narrowed board does not claim esc")
 	}

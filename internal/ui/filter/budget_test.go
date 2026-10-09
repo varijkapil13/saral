@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 )
 
 // The budgets in docs/PERFORMANCE.md are about the binary that ships, so a
@@ -61,15 +63,15 @@ func TestBudget_PickerFullRedrawAt200x60(t *testing.T) {
 }
 
 // Ranking is the work a keystroke does over everything held, and it may not
-// allocate per candidate: both buffers are reused and app.Pattern folds case
+// allocate per candidate: both buffers are reused and match.Pattern folds case
 // without copying either side.
 func TestBudget_RankingReusesItsBuffers(t *testing.T) {
-	all := labelValues(manyLabels(2000))
-	pattern := app.NewPattern("serv")
-	shown, ranks := make([]int, 0, len(all)), make([]ranked, 0, len(all))
-	shown, ranks = rank(all, pattern, shown, ranks)
+	all := appsearch.LabelValues(manyLabels(2000))
+	pattern := appmatch.NewPattern("serv")
+	shown, ranks := make([]int, 0, len(all)), make([]appsearch.ValueRank, 0, len(all))
+	shown, ranks = appsearch.RankValues(all, pattern, shown, ranks)
 	if got := testing.AllocsPerRun(50, func() {
-		shown, ranks = rank(all, pattern, shown[:0], ranks[:0])
+		shown, ranks = appsearch.RankValues(all, pattern, shown[:0], ranks[:0])
 	}); got != 0 {
 		t.Errorf("ranking two thousand values allocates %.1f times, want none", got)
 	}
@@ -77,7 +79,7 @@ func TestBudget_RankingReusesItsBuffers(t *testing.T) {
 
 func TestBudget_PickerRowsAreMemoizedSoAFrameCostsNothingToRedraw(t *testing.T) {
 	dr := newDriver(t, testDeps(newFake(40)), 120, 30)
-	dr.pick(FacetLabel)
+	dr.pick(appterm.FacetLabel)
 	_ = dr.m.View()
 
 	if got := testing.AllocsPerRun(200, func() { _ = dr.m.row(0) }); got != 0 {

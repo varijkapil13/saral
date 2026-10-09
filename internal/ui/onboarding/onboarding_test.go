@@ -10,7 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/zalando/go-keyring"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -556,7 +556,7 @@ func TestSave_ReRunningOverAProfileKeepsWhatTheWizardNeverAsksAbout(t *testing.T
 		Theme:    "dark",
 		Glyphs:   "ascii",
 		Timeline: config.Timeline{Start: []string{"customfield_10015"}, End: []string{"duedate"}},
-		Queries:  []app.SavedQuery{{Name: "mine", JQL: "assignee = currentUser()", Slot: 1}},
+		Queries:  []appsearch.SavedQuery{{Name: "mine", JQL: "assignee = currentUser()", Slot: 1}},
 	}
 
 	d := newDriver(t, testFake())

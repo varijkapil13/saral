@@ -11,13 +11,15 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// fakeCache is an app.Cache in a map. The real one is bbolt-backed and lives
+// fakeCache is a cache.Cache in a map. The real one is bbolt-backed and lives
 // under internal/app, which is why the palette takes the interface.
 type fakeCache struct {
 	mu     sync.Mutex
@@ -29,7 +31,7 @@ type fakeCache struct {
 	fail   error
 }
 
-var _ app.Cache = (*fakeCache)(nil)
+var _ appcache.Cache = (*fakeCache)(nil)
 
 func newFakeCache() *fakeCache {
 	return &fakeCache{issues: map[string]jira.Issue{}, stored: map[string]time.Time{}}
@@ -42,7 +44,7 @@ func (c *fakeCache) hold(key, summary string, storedAt time.Time) *fakeCache {
 	defer c.mu.Unlock()
 	c.issues[key] = jira.Issue{
 		Key: key, Summary: summary,
-		Requested: jira.NewFieldMask(app.ListProjection().IDs),
+		Requested: jira.NewFieldMask(appquery.ListProjection().IDs),
 	}
 	c.stored[key] = storedAt
 	c.gen++
@@ -60,7 +62,7 @@ func (c *fakeCache) holdUntitled(key string, storedAt time.Time) *fakeCache {
 	return c
 }
 
-func (c *fakeCache) Rows(string) (app.Snapshot, bool) { return app.Snapshot{}, false }
+func (c *fakeCache) Rows(string) (appcache.Snapshot, bool) { return appcache.Snapshot{}, false }
 
 func (c *fakeCache) PutRows(string, []jira.Issue, bool) error { return nil }
 
@@ -262,15 +264,15 @@ func TestPalette_SaysHowOldEachCopyIs(t *testing.T) {
 func TestPalette_BadgesACopyOlderThanTheCacheCallsCurrent(t *testing.T) {
 	t.Parallel()
 
-	fresh := newHit(app.Hit{Key: "PROJ-1", Summary: "x", HasSummary: true,
-		StoredAt: clockAt.Add(-app.KindIssue.TTL() / 2)}, clockAt)
-	old := newHit(app.Hit{Key: "PROJ-2", Summary: "x", HasSummary: true,
-		StoredAt: clockAt.Add(-2 * app.KindIssue.TTL())}, clockAt)
+	fresh := newHit(appsearch.Hit{Key: "PROJ-1", Summary: "x", HasSummary: true,
+		StoredAt: clockAt.Add(-appcache.KindIssue.TTL() / 2)}, clockAt)
+	old := newHit(appsearch.Hit{Key: "PROJ-2", Summary: "x", HasSummary: true,
+		StoredAt: clockAt.Add(-2 * appcache.KindIssue.TTL())}, clockAt)
 	if fresh.stale {
-		t.Errorf("a copy written %s ago is badged stale", app.KindIssue.TTL()/2)
+		t.Errorf("a copy written %s ago is badged stale", appcache.KindIssue.TTL()/2)
 	}
 	if !old.stale {
-		t.Errorf("a copy written %s ago is not badged", 2*app.KindIssue.TTL())
+		t.Errorf("a copy written %s ago is not badged", 2*appcache.KindIssue.TTL())
 	}
 
 	theme := kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs())
@@ -286,7 +288,7 @@ func TestPalette_BadgesACopyOlderThanTheCacheCallsCurrent(t *testing.T) {
 func TestPalette_ReadsACopyStoredInTheFutureAsJustNow(t *testing.T) {
 	t.Parallel()
 
-	got := newHit(app.Hit{Key: "PROJ-1", StoredAt: clockAt.Add(time.Hour)}, clockAt)
+	got := newHit(appsearch.Hit{Key: "PROJ-1", StoredAt: clockAt.Add(time.Hour)}, clockAt)
 	if got.age != "just now" || got.stale {
 		t.Errorf("a copy stored an hour from now reads %q (stale=%t)", got.age, got.stale)
 	}
@@ -401,8 +403,8 @@ func TestPalette_WalksTheCacheOnceWhileAFilterIsTyped(t *testing.T) {
 
 // Two opens are two ctrl+k presses over a session that has not touched the
 // cache in between: the second build must not pay for a walk the first one
-// already did, which is what app.SharedIndex's generation check is for.
-// Not t.Parallel(): app.SharedIndex keeps one Index behind the process, and a
+// already did, which is what appsearch.SharedIndex's generation check is for.
+// Not t.Parallel(): appsearch.SharedIndex keeps one Index behind the process, and a
 // concurrent test reusing it for a different cache would steal the slot mid-way
 // through this one, thrashing the reuse this test exists to prove.
 func TestPalette_ASecondOpenDoesNotWalkTheCacheAgainWhenNothingChanged(t *testing.T) {

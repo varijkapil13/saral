@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -39,20 +40,20 @@ func TestFilter_CyclesThroughEveryStateAndKeepsTheRightVersions(t *testing.T) {
 	stock(dr, mixedVersions())
 	m := dr.list()
 	for _, step := range []struct {
-		filter stateFilter
+		filter apprelease.Filter
 		want   []string
 	}{
-		{filterUnreleased, []string{"1", "3", "5"}},
-		{filterReleased, []string{"2"}},
-		{filterArchived, []string{"4"}},
-		{filterAll, []string{"1", "2", "3", "4", "5"}},
+		{apprelease.FilterUnreleased, []string{"1", "3", "5"}},
+		{apprelease.FilterReleased, []string{"2"}},
+		{apprelease.FilterArchived, []string{"4"}},
+		{apprelease.FilterAll, []string{"1", "2", "3", "4", "5"}},
 	} {
 		dr.key("f")
 		if m.filter != step.filter {
-			t.Fatalf("f moved the filter to %q, want %q", m.filter.name(), step.filter.name())
+			t.Fatalf("f moved the filter to %q, want %q", m.filter.Name(), step.filter.Name())
 		}
 		if got := drawnIDs(m); !slices.Equal(got, step.want) {
-			t.Errorf("%s draws %v, want %v", step.filter.name(), got, step.want)
+			t.Errorf("%s draws %v, want %v", step.filter.Name(), got, step.want)
 		}
 	}
 }
@@ -83,8 +84,8 @@ func TestFilter_IsRememberedForTheProfile(t *testing.T) {
 	if !ok {
 		t.Fatal("New did not build a *Model")
 	}
-	if again.filter != filterReleased {
-		t.Errorf("a new list opened on %q, want the filter last left in force", again.filter.name())
+	if again.filter != apprelease.FilterReleased {
+		t.Errorf("a new list opened on %q, want the filter last left in force", again.filter.Name())
 	}
 
 	dr.key("f", "f")
@@ -93,8 +94,8 @@ func TestFilter_IsRememberedForTheProfile(t *testing.T) {
 	}
 
 	mem.state[ViewID+"."+filterMemoryKey] = "shipped-by-a-later-build"
-	if got := recallFilter(d, ViewID); got != filterAll {
-		t.Errorf("a value this build does not know opened on %q, want all", got.name())
+	if got := recallFilter(d, ViewID); got != apprelease.FilterAll {
+		t.Errorf("a value this build does not know opened on %q, want all", got.Name())
 	}
 }
 
@@ -172,8 +173,8 @@ func TestFilter_ACreatedVersionIsNeverHidden(t *testing.T) {
 	dr.key("ctrl+s")
 
 	m := dr.list()
-	if m.filter != filterAll {
-		t.Errorf("the filter is %q after creating an unreleased version under released", m.filter.name())
+	if m.filter != apprelease.FilterAll {
+		t.Errorf("the filter is %q after creating an unreleased version under released", m.filter.Name())
 	}
 	if v, ok := m.selected(); !ok || v.Name != "4.0" {
 		t.Errorf("the cursor is on %+v, want the version just created", v)

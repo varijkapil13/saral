@@ -9,7 +9,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appboard "github.com/varijkapil13/saral/internal/app/board"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -199,7 +200,7 @@ func TestMine_OToggleIsAnAssigneeTermTheBarNames(t *testing.T) {
 	dr := newDriver(t, testDeps(fake), 120, 24)
 
 	dr.key("M")
-	want := filter.Term{Facet: filter.FacetAssignee, ID: ada.AccountID}
+	want := appterm.Term{Facet: appterm.FacetAssignee, ID: ada.AccountID}
 	if !dr.m.terms.Has(want) || len(dr.m.terms) != 1 {
 		t.Fatalf("o put %v in force, want only Ada", dr.m.terms)
 	}
@@ -256,7 +257,7 @@ func TestFind_TypingMovesTheCursorAndNWalksTheMatches(t *testing.T) {
 		t.Fatal("the search prompt does not take the keyboard")
 	}
 	typeInto(dr, "export")
-	if got := dr.m.issueAt(dr.m.cursor); got == nil || !containsFold(got.Summary, "export") {
+	if got := dr.m.issueAt(dr.m.cursor); got == nil || !appboard.ContainsFold(got.Summary, "export") {
 		t.Fatalf("typing export left the cursor on row %d", dr.m.cursor)
 	}
 	golden(t, "find_120x24.golden", dr.view())
@@ -267,14 +268,14 @@ func TestFind_TypingMovesTheCursorAndNWalksTheMatches(t *testing.T) {
 
 	want := 0
 	for i := range dr.m.rows {
-		if matchesNeedle(dr.m.issueAt(i), "export") {
+		if appboard.MatchesNeedle(dr.m.issueAt(i), "export") {
 			want++
 		}
 	}
 	seen := map[int]bool{dr.m.cursor: true}
 	for range want * 2 {
 		dr.key("n")
-		if !matchesNeedle(dr.m.issueAt(dr.m.cursor), "export") {
+		if !appboard.MatchesNeedle(dr.m.issueAt(dr.m.cursor), "export") {
 			t.Fatalf("n landed on row %d, which does not match", dr.m.cursor)
 		}
 		seen[dr.m.cursor] = true

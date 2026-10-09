@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -73,7 +74,7 @@ const (
 // session, because listing versions is all it does.
 func loadVersions(ctx context.Context, reader jira.VersionReader, project string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		versions, err := reader.Versions(ctx, project)
+		versions, err := apprelease.Load(ctx, reader, project)
 		if err != nil {
 			return failedMsg{gen: gen, what: whatVersions, err: err}
 		}
@@ -86,7 +87,7 @@ func loadVersions(ctx context.Context, reader jira.VersionReader, project string
 // not.
 func saveVersion(ctx context.Context, writer jira.Releaser, in jira.VersionInput, created bool, gen int) tea.Cmd {
 	return func() tea.Msg {
-		version, err := writer.SaveVersion(ctx, in)
+		version, err := apprelease.Save(ctx, writer, in)
 		if err != nil {
 			return failedMsg{gen: gen, what: whatSave, err: err}
 		}
@@ -99,7 +100,7 @@ func saveVersion(ctx context.Context, writer jira.Releaser, in jira.VersionInput
 // the release decision is the only thing that needs it.
 func countOpen(ctx context.Context, reader jira.VersionReader, id string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		open, err := reader.UnresolvedCount(ctx, id)
+		open, err := apprelease.CountOpen(ctx, reader, id)
 		if err != nil {
 			return failedMsg{gen: gen, what: whatCount, err: err}
 		}
@@ -110,13 +111,13 @@ func countOpen(ctx context.Context, reader jira.VersionReader, id string, gen in
 // releaseOne ships a version. asked is the count the reader decided against, so
 // that an answer leaving issues behind can be reported against the number that
 // was on the confirm rather than against nothing.
-func releaseOne(ctx context.Context, writer jira.Releaser, id string, in jira.ReleaseInput, asked, gen int) tea.Cmd {
+func releaseOne(ctx context.Context, writer jira.Releaser, id string, policy jira.UnresolvedPolicy, target string, asked, gen int) tea.Cmd {
 	return func() tea.Msg {
-		version, err := writer.ReleaseVersion(ctx, id, in)
+		out, err := apprelease.Release(ctx, writer, id, policy, target, asked)
 		if err != nil {
 			return failedMsg{gen: gen, what: whatRelease, err: err}
 		}
-		return releasedMsg{gen: gen, version: version, policy: in.Unresolved, asked: asked}
+		return releasedMsg{gen: gen, version: out.Version, policy: out.Policy, asked: out.Asked}
 	}
 }
 
@@ -126,22 +127,5 @@ func withCancel(cancel context.CancelFunc, cmd tea.Cmd) tea.Cmd {
 	return func() tea.Msg {
 		defer cancel()
 		return cmd()
-	}
-}
-
-// updateOf is the input that changes one thing about a version and nothing
-// else.
-//
-// Every field has to be sent. The endpoint empties a name, a description or a
-// date it is not given, so an input built to archive a version and nothing more
-// still carries the four values the version already had — otherwise archiving
-// 2.0 also forgets when it was meant to ship.
-func updateOf(v jira.Version) jira.VersionInput {
-	return jira.VersionInput{
-		ID:          v.ID,
-		Name:        v.Name,
-		Description: v.Description,
-		StartDate:   v.StartDate,
-		ReleaseDate: v.ReleaseDate,
 	}
 }

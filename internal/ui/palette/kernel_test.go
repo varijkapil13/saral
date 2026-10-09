@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/list"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -121,11 +121,7 @@ func TestSession_OpensACachedIssueOverTheViewThePaletteWasOpenedFrom(t *testing.
 func resetShared(t *testing.T) {
 	t.Helper()
 	for _, freq := range []*table{sharedTable(), sharedProjectTable()} {
-		freq.mu.Lock()
-		freq.uses = make(map[string]use, 8)
-		freq.dirty, freq.saving, freq.stopped, freq.warned = false, false, false, false
-		freq.failure = nil
-		freq.mu.Unlock()
+		freq.Reset()
 	}
 }
 
@@ -140,7 +136,7 @@ type session struct {
 
 func boot(t *testing.T, w, h int) *session { return bootWith(t, nil, w, h) }
 
-func bootWith(t *testing.T, cache app.Cache, w, h int) *session {
+func bootWith(t *testing.T, cache appcache.Cache, w, h int) *session {
 	t.Helper()
 	d := paletteDeps()
 	d.Caps = fullCaps()

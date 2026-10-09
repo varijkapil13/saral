@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -125,7 +126,7 @@ func (m *Model) zoneOf(at int) string {
 		return ""
 	}
 	v := &m.all[m.shown[at]]
-	return "value:" + v.term.Facet.Label() + ":" + v.term.ID
+	return "value:" + v.Term.Facet.Label() + ":" + v.Term.ID
 }
 
 func (m *Model) row(at int) string {
@@ -146,8 +147,8 @@ func (m *Model) row(at int) string {
 	}
 	v := &m.all[m.shown[at]]
 	k := rowKey{
-		id: v.term.ID, name: v.term.Label, note: v.note, lay: m.lay,
-		selected: sel, inForce: m.terms.Has(v.term), gen: m.styles.gen,
+		id: v.Term.ID, name: v.Term.Label, note: v.Note, lay: m.lay,
+		selected: sel, inForce: m.terms.Has(v.Term), gen: m.styles.gen,
 	}
 	if s, ok := m.memo.Get(k); ok {
 		return s
@@ -231,7 +232,7 @@ func renderRow(k rowKey, st *styles, t *kernel.Theme) string {
 // they are rebuilt when one of them moves and never once per frame.
 type headKey struct {
 	facets  bool
-	facet   Facet
+	facet   appterm.Facet
 	width   int
 	gen     int
 	shown   int
@@ -255,7 +256,7 @@ func (m *Model) headKey() headKey {
 // draws the same thing twice, and drawing it twice is most of what a frame
 // costs when the rows are memoized.
 type needleKey struct {
-	facet Facet
+	facet appterm.Facet
 	value string
 	at    int
 	width int
@@ -313,7 +314,7 @@ func countLabel(key headKey) string {
 	case key.total == 1:
 		return "1 " + key.facet.Label()
 	default:
-		return strconv.Itoa(key.total) + " " + key.facet.plural()
+		return strconv.Itoa(key.total) + " " + key.facet.Plural()
 	}
 }
 

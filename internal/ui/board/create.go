@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -22,21 +23,13 @@ type creation struct {
 	sprint jira.Sprint
 }
 
-type landStep uint8
-
-const (
-	landSprint landStep = iota
-	landMove
-	landRead
-)
-
 // landedMsg is how far a created issue got towards the column it was made in.
 type landedMsg struct {
 	gen    int
 	key    string
 	issue  jira.Issue
 	read   bool
-	step   landStep
+	step   appboard.LandStep
 	err    error
 	noMove bool
 	screen *jira.Transition
@@ -55,7 +48,7 @@ func (m *Model) startCreate() tea.Cmd {
 	if m.moving || m.card != nil || m.bulk != nil {
 		return nil
 	}
-	col := min(max(m.curCol, 0), len(m.plan.columns)-1)
+	col := min(max(m.curCol, 0), len(m.plan.Columns)-1)
 	opts := []form.Option{form.WithReport(m.addr)}
 	if iss := m.issueAt(m.curCol, m.curRow); iss != nil {
 		opts = append(opts, form.WithProject(iss.Project.Key))
@@ -66,7 +59,7 @@ func (m *Model) startCreate() tea.Cmd {
 	if m.sprint.ID != 0 {
 		opts = append(opts, form.WithSprint(m.sprint))
 	}
-	m.creating = &creation{board: m.plan.boardID, col: col, name: m.plan.columns[col].name, sprint: m.sprint}
+	m.creating = &creation{board: m.plan.BoardID, col: col, name: m.plan.Columns[col].Name, sprint: m.sprint}
 	return kernel.Push(form.ViewID, "New issue", form.NewWith(m.deps, opts...))
 }
 
@@ -86,7 +79,7 @@ func (m *Model) created(msg form.CreatedMsg) tea.Cmd {
 	m.landStop = cancel
 	job := landing{
 		created: msg.Issue, sprint: msg.Sprint.ID, col: c.col, plan: m.plan, fields: slices.Clone(m.fields),
-		onBoard: c.board == m.plan.boardID,
+		onBoard: c.board == m.plan.BoardID,
 	}
 	m.landingTo = c
 	return kernel.Reply(withCancel(cancel, job.run(ctx, m.deps.Jira, m.landGen)), m.addr)
@@ -103,62 +96,20 @@ type landing struct {
 	created jira.Issue
 	sprint  int64
 	col     int
-	plan    plan
+	plan    appboard.Plan
 	fields  []string
 	onBoard bool
 }
 
 func (l landing) run(ctx context.Context, client jira.SessionClient, gen int) tea.Cmd {
 	return func() tea.Msg {
-		key := l.created.Key
-		out := landedMsg{gen: gen, key: key, issue: l.created}
-		if l.sprint != 0 {
-			if err := client.MoveToSprint(ctx, l.sprint, []string{key}); err != nil {
-				out.step, out.err = landSprint, err
-				return out
-			}
+		got := appboard.Land(ctx, client, appboard.Landing{
+			Created: l.created, Sprint: l.sprint, Col: l.col, Plan: l.plan, Fields: l.fields, OnBoard: l.onBoard,
+		})
+		return landedMsg{
+			gen: gen, key: l.created.Key, issue: got.Issue, read: got.Read, step: got.Step, err: got.Err,
+			noMove: got.NoMove, screen: got.Screen,
 		}
-		if !l.onBoard {
-			return out
-		}
-		if at, mapped := l.plan.columnOf(l.created.Status.ID); !mapped || at != l.col {
-			list, err := client.Transitions(ctx, key)
-			if err != nil {
-				out.step, out.err = landMove, err
-				return out
-			}
-			tr, found := jira.Transition{}, false
-			for _, t := range list {
-				if at, mapped := l.plan.columnOf(t.To.ID); mapped && at == l.col {
-					tr, found = t, true
-					break
-				}
-			}
-			switch {
-			case !found:
-				out.noMove = true
-			case needsScreen(tr):
-				out.screen = &tr
-			default:
-				if err := client.Transition(ctx, key, tr.ID, jira.IssuePatch{}); err != nil {
-					out.step, out.err = landMove, err
-					return out
-				}
-				out.issue.Status = tr.To
-			}
-		}
-		if len(l.fields) == 0 {
-			out.read = true
-			return out
-		}
-		iss, err := client.IssueFields(ctx, key, l.fields)
-		if err != nil {
-			out.step, out.err = landRead, err
-			return out
-		}
-		iss.Status = out.issue.Status
-		out.issue, out.read = iss, true
-		return out
 	}
 }
 
@@ -173,16 +124,16 @@ func (m *Model) tookLanding(msg landedMsg) tea.Cmd {
 		reason, _ := jira.Reason(msg.err)
 		text := key + " was created, but "
 		switch msg.step {
-		case landSprint:
+		case appboard.LandSprint:
 			text += "not moved into " + widget.Sanitize(c.sprint.Name) + ", so it waits in the backlog: " + reason
-		case landMove:
+		case appboard.LandMove:
 			text += "not moved into " + name + ": " + reason
-		case landRead:
+		case appboard.LandRead:
 			text += "reading it back failed, so it is not on the board yet: " + reason
 		}
 		return func() tea.Msg { return kernel.StatusMsg{Text: text, Level: kernel.LevelError} }
 	}
-	if c.board != m.plan.boardID {
+	if c.board != m.plan.BoardID {
 		return kernel.Status(key + " created")
 	}
 	var said tea.Cmd
@@ -194,8 +145,8 @@ func (m *Model) tookLanding(msg landedMsg) tea.Cmd {
 		)
 	case msg.noMove:
 		where := "which this board maps to no column"
-		if at, mapped := m.plan.columnOf(msg.issue.Status.ID); mapped {
-			where = "in " + widget.Sanitize(m.plan.columns[at].name)
+		if at, mapped := m.plan.ColumnOf(msg.issue.Status.ID); mapped {
+			where = "in " + widget.Sanitize(m.plan.Columns[at].Name)
 		}
 		said = kernel.Warn(key + " was created " + where + "; no workflow move takes it from " +
 			widget.Sanitize(msg.issue.Status.Name) + " into " + name)

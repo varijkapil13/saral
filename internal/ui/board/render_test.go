@@ -8,6 +8,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
@@ -45,26 +47,26 @@ func TestBoardRender_Golden(t *testing.T) {
 	}
 }
 
-// The board holds a filter.Terms since it grew them, and the bar under the
+// The board holds a term.Terms since it grew them, and the bar under the
 // grid is the only thing that ever said so. One golden with one facet in
 // force, one with two, at the widths docs/FILTERS.md asks for.
 func TestBoardRender_FilterBarGolden(t *testing.T) {
 	t.Parallel()
-	waiting := filter.Term{Facet: filter.FacetStatus, ID: "10201", Label: "Triage"}
-	bug := filter.Term{Facet: filter.FacetType, ID: "3", Label: "Bug"}
+	waiting := appterm.Term{Facet: appterm.FacetStatus, ID: "10201", Label: "Triage"}
+	bug := appterm.Term{Facet: appterm.FacetType, ID: "3", Label: "Bug"}
 	for name, tc := range map[string]struct {
 		width, height int
-		terms         []filter.Term
+		terms         []appterm.Term
 		golden        string
 	}{
 		"one facet at 80": {
-			width: 80, height: 20, terms: []filter.Term{waiting}, golden: "board_term_80x20.golden",
+			width: 80, height: 20, terms: []appterm.Term{waiting}, golden: "board_term_80x20.golden",
 		},
 		"one facet at 120": {
-			width: 120, height: 20, terms: []filter.Term{waiting}, golden: "board_term_120x20.golden",
+			width: 120, height: 20, terms: []appterm.Term{waiting}, golden: "board_term_120x20.golden",
 		},
 		"two facets at 120": {
-			width: 120, height: 20, terms: []filter.Term{waiting, bug}, golden: "board_two_terms_120x20.golden",
+			width: 120, height: 20, terms: []appterm.Term{waiting, bug}, golden: "board_two_terms_120x20.golden",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -83,7 +85,7 @@ func TestBoardRender_FilterBarGolden(t *testing.T) {
 // in hand.
 func TestBoard_CtrlGClearsATermInForce(t *testing.T) {
 	t.Parallel()
-	waiting := filter.Term{Facet: filter.FacetStatus, ID: "10201", Label: "Triage"}
+	waiting := appterm.Term{Facet: appterm.FacetStatus, ID: "10201", Label: "Triage"}
 	dr := newDriver(t, testDeps(newFake(16)), 120, 20)
 	before := boardShown(dr)
 	dr.send(filter.ChosenMsg{Term: waiting})
@@ -106,15 +108,15 @@ func TestBoard_CtrlGClearsATermInForce(t *testing.T) {
 // drops just that value — both through the same widget the issue list uses.
 func TestBoard_ClickingTheBarDropsAFacetOrAValue(t *testing.T) {
 	t.Parallel()
-	waiting := filter.Term{Facet: filter.FacetStatus, ID: "10201", Label: "Triage"}
-	bug := filter.Term{Facet: filter.FacetType, ID: "3", Label: "Bug"}
+	waiting := appterm.Term{Facet: appterm.FacetStatus, ID: "10201", Label: "Triage"}
+	bug := appterm.Term{Facet: appterm.FacetType, ID: "3", Label: "Bug"}
 	d := testDeps(newFake(16))
 	dr := newDriver(t, d, 120, 20)
 	dr.send(filter.ChosenMsg{Term: waiting})
 	dr.send(filter.ChosenMsg{Term: bug})
 
-	pressOn(t, d, dr, filterbar.FacetZone(filter.FacetType))
-	if got := dr.m.terms; len(got) != 1 || got[0].Facet != filter.FacetStatus {
+	pressOn(t, d, dr, filterbar.FacetZone(appterm.FacetType))
+	if got := dr.m.terms; len(got) != 1 || got[0].Facet != appterm.FacetStatus {
 		t.Fatalf("clicking the type chip's x left %v, want only the status term", got)
 	}
 
@@ -264,7 +266,7 @@ func TestBoard_ColumnLimitsCountTheWayTheBoardCountsThem(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		constraint jira.ColumnConstraint
-		terms      filter.Terms
+		terms      appterm.Terms
 		want       bool
 	}{
 		{"a board that counts issues", jira.ConstraintIssueCount, nil, true},
@@ -272,7 +274,7 @@ func TestBoard_ColumnLimitsCountTheWayTheBoardCountsThem(t *testing.T) {
 		{"a board that reports no constraint", "", nil, false},
 		{"a board that leaves sub-tasks out", jira.ConstraintIssueCountExclSubs, nil, false},
 		{"a filter hiding cards the limit still counts", jira.ConstraintIssueCount,
-			filter.Terms{{Facet: filter.FacetType, ID: story.ID, Label: story.Name}}, true},
+			appterm.Terms{{Facet: appterm.FacetType, ID: story.ID, Label: story.Name}}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -349,7 +351,7 @@ func TestRenderCard_RestingMarkAcrossGlyphTiers(t *testing.T) {
 		t.Run(tier.name, func(t *testing.T) {
 			theme := kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
 			st := newStyles(theme)
-			got := ansi.Strip(renderCard(&iss, 30, cardLook{}, st, theme, plan{}))
+			got := ansi.Strip(renderCard(&iss, 30, cardLook{}, st, theme, appboard.Plan{}))
 			golden(t, "card_mark_"+tier.name+".golden", got+"\n")
 		})
 	}
@@ -375,7 +377,7 @@ func TestRenderCard_SubtaskMarkAcrossGlyphTiers(t *testing.T) {
 		t.Run(tier.name, func(t *testing.T) {
 			theme := kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
 			st := newStyles(theme)
-			got := ansi.Strip(renderCard(&iss, 30, cardLook{}, st, theme, plan{}))
+			got := ansi.Strip(renderCard(&iss, 30, cardLook{}, st, theme, appboard.Plan{}))
 			golden(t, "card_mark_subtask_"+tier.name+".golden", got+"\n")
 		})
 	}
@@ -385,7 +387,7 @@ func TestRenderCard_TheKeyCarriesItsStatusCategorysColourWhileResting(t *testing
 	t.Parallel()
 	th := kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs())
 	st := newStyles(th)
-	p := plan{}
+	p := appboard.Plan{}
 
 	// Same key and summary, only the category differs, so any difference in
 	// what renderCard answers with is the category's colour and nothing else.

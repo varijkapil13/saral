@@ -1,11 +1,10 @@
 package release
 
 import (
-	"strings"
-
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
@@ -25,7 +24,7 @@ func newFinder(placeholder string) finder {
 }
 
 func (m *Model) matches(i int) bool {
-	return m.find.needle == "" || strings.Contains(m.find.folds[i], m.find.needle)
+	return apprelease.Found(m.find.folds[i], m.find.needle)
 }
 
 // While the filter is open every key is text, so q, j and digits are typed.
@@ -73,7 +72,7 @@ func (m *Model) endFind() {
 func (m *Model) setNeedle(raw string) {
 	under, head := m.selectedID(), m.headKeyAtCursor()
 	m.find.rawNeedle = raw
-	m.find.needle = strings.ToLower(strings.TrimSpace(raw))
+	m.find.needle = apprelease.Needle(raw)
 	m.sum = ""
 	m.reorder()
 	m.moveOnto(under)

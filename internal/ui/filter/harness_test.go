@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -175,7 +176,7 @@ func (d *driver) typeText(text string) {
 
 // pick opens the facet by name, the way somebody would: move down to it and
 // press enter.
-func (d *driver) pick(f Facet) {
+func (d *driver) pick(f appterm.Facet) {
 	d.t.Helper()
 	d.send(keyPress("home"))
 	for i := 0; i < d.m.facetAt(f); i++ {
@@ -194,20 +195,20 @@ func (d *driver) lastStatus() kernel.StatusMsg {
 }
 
 // chosen is the term the picker was closed on, and false when it has not been.
-func (d *driver) chosen() (Term, bool) {
+func (d *driver) chosen() (appterm.Term, bool) {
 	for i := len(d.broadcasts) - 1; i >= 0; i-- {
 		if msg, ok := d.broadcasts[i].(ChosenMsg); ok {
 			return msg.Term, true
 		}
 	}
-	return Term{}, false
+	return appterm.Term{}, false
 }
 
 // labels is what the rows on offer say, in the order they are offered.
 func (d *driver) labels() []string {
 	out := make([]string, 0, len(d.m.shown))
 	for _, at := range d.m.shown {
-		out = append(out, d.m.all[at].term.Label)
+		out = append(out, d.m.all[at].Term.Label)
 	}
 	return out
 }

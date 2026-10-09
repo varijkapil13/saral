@@ -236,33 +236,3 @@ func TestValidate_AnswersWhatIsWrongWithAValue(t *testing.T) {
 		})
 	}
 }
-
-func TestParseDateTime_ReadsEveryFormAFieldAccepts(t *testing.T) {
-	t.Parallel()
-
-	east := time.FixedZone("east", 5*3600)
-	tests := []struct {
-		text string
-		utc  string
-	}{
-		{"2026-03-27T09:30:00.000+0000", "2026-03-27 09:30"},
-		{"2026-03-27T09:30:00Z", "2026-03-27 09:30"},
-		{"2026-03-27 09:30", "2026-03-27 04:30"},
-		{"2026-03-27 09:30:15", "2026-03-27 04:30"},
-		{"2026-03-27T09:30", "2026-03-27 04:30"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.text, func(t *testing.T) {
-			t.Parallel()
-
-			at, err := parseDateTime(tt.text, east)
-			if err != nil {
-				t.Fatalf("reading %q: %v", tt.text, err)
-			}
-			if got := at.UTC().Format("2006-01-02 15:04"); got != tt.utc {
-				t.Errorf("%q reads as %s in UTC, want %s", tt.text, got, tt.utc)
-			}
-		})
-	}
-}

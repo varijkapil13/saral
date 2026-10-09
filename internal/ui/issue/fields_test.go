@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -21,7 +21,7 @@ const wideSummary = "Größe der Spalte prüfen — 日本語の要約 🚀 ¾ l
 
 // relatedIssue is an issue with the three things the old pane comma-joined into
 // a row of bare keys, plus a custom field only the site can name.
-func relatedIssue() (jira.Issue, app.FieldLabels) {
+func relatedIssue() (jira.Issue, appquery.FieldLabels) {
 	points := jira.Field{
 		ID: "customfield_20001", Key: "customfield_20001", Name: "Aufwandsschätzung",
 		Custom: true, Schema: jira.FieldSchema{Type: "number", Custom: "com.atlassian.jira:float"},
@@ -30,7 +30,7 @@ func relatedIssue() (jira.Issue, app.FieldLabels) {
 		ID: "customfield_20002", Key: "customfield_20002", Name: "Abnahmekriterien",
 		Custom: true, Schema: jira.FieldSchema{Type: "string", Custom: "com.atlassian.jira:textarea"},
 	}
-	labels := app.NewFieldLabels([]jira.Field{points, unread}, []string{points.ID, unread.ID})
+	labels := appquery.NewFieldLabels([]jira.Field{points, unread}, []string{points.ID, unread.ID})
 
 	iss := jira.Issue{
 		ID: "30001", Key: "PROJ-2", Summary: wideSummary,
@@ -183,7 +183,7 @@ func sprintPane(t *testing.T, value string, w, h int) *driver {
 		ID: "customfield_13402", Key: "customfield_13402", Name: "Sprint", Custom: true,
 		Schema: jira.FieldSchema{Type: "array", Items: "json", Custom: "com.pyxis.greenhopper.jira:gh-sprint"},
 	}
-	labels := app.NewFieldLabels([]jira.Field{sprint}, []string{sprint.ID})
+	labels := appquery.NewFieldLabels([]jira.Field{sprint}, []string{sprint.ID})
 	iss := jira.Issue{
 		ID: "30002", Key: "PROJ-3", Summary: "an issue in a sprint",
 		Project: jira.ProjectRef{Key: "PROJ", Name: "Spaltenbreite"},
@@ -258,7 +258,7 @@ func bookkeepingPane(t *testing.T, w, h int) *driver {
 	for i := range catalogue {
 		ids[i] = catalogue[i].ID
 	}
-	labels := app.NewFieldLabels(catalogue, ids)
+	labels := appquery.NewFieldLabels(catalogue, ids)
 
 	dr := newDriver(t, testDeps(t, f), jira.Issue{Key: iss.Key, Summary: iss.Summary}, w, h)
 	dr.send(loadedMsg{gen: dr.m.gen, issue: iss, labels: labels})
@@ -366,7 +366,7 @@ func TestFields_ThePluginFieldsSettingBringsRankBack(t *testing.T) {
 
 // pinnableIssue carries four custom fields with values, named so that
 // alphabetical order and pin order never coincide by accident.
-func pinnableIssue() (jira.Issue, app.FieldLabels) {
+func pinnableIssue() (jira.Issue, appquery.FieldLabels) {
 	mk := func(id, name string) jira.Field {
 		return jira.Field{
 			ID: id, Key: id, Name: name, Custom: true,
@@ -378,7 +378,7 @@ func pinnableIssue() (jira.Issue, app.FieldLabels) {
 		mk("customfield_30003", "Charlie"), mk("customfield_30004", "Delta")
 	catalogue := []jira.Field{alpha, bravo, charlie, delta}
 	ids := []string{alpha.ID, bravo.ID, charlie.ID, delta.ID}
-	labels := app.NewFieldLabels(catalogue, ids)
+	labels := appquery.NewFieldLabels(catalogue, ids)
 
 	iss := jira.Issue{
 		ID: "40001", Key: "PROJ-4", Summary: "pinned fields",

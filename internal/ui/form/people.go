@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -33,7 +34,7 @@ type peopleFailedMsg struct {
 
 func findPeople(ctx context.Context, finder jira.PeopleFinder, project, match string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		people, err := finder.FindPeople(ctx, jira.PeopleQuery{Match: match, Project: project, Limit: peopleLimit})
+		people, err := appissue.Assignable(ctx, finder, project, match, peopleLimit)
 		if err != nil {
 			return peopleFailedMsg{gen: gen, err: err}
 		}
@@ -83,7 +84,7 @@ func (m *Model) peopleBlocked() (string, bool) {
 }
 
 func (m *Model) choosingPeople() bool {
-	return m.edit == editChoose && m.editing < len(m.fields) && m.fields[m.editing].kind.people()
+	return m.edit == editChoose && m.editing < len(m.fields) && m.fields[m.editing].kind.People()
 }
 
 func (m *Model) peopleFound(msg peopleFoundMsg) {

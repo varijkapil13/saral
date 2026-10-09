@@ -8,35 +8,35 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// capsStore is an app.Cache that keeps a probe answer in memory. The real one is
+// capsStore is a cache.Cache that keeps a probe answer in memory. The real one is
 // bbolt-backed and belongs to internal/app; what the kernel needs from it is the
-// two methods of app.CapsCache and nothing else.
+// two methods of cache.CapsCache and nothing else.
 type capsStore struct {
-	held    map[string]app.CapsSnapshot
+	held    map[string]appcache.CapsSnapshot
 	written map[string]jira.Capabilities
 	order   []string
 	err     error
 }
 
 var (
-	_ app.Cache     = (*capsStore)(nil)
-	_ app.CapsCache = (*capsStore)(nil)
+	_ appcache.Cache     = (*capsStore)(nil)
+	_ appcache.CapsCache = (*capsStore)(nil)
 )
 
 func newCapsStore() *capsStore {
-	return &capsStore{held: map[string]app.CapsSnapshot{}, written: map[string]jira.Capabilities{}}
+	return &capsStore{held: map[string]appcache.CapsSnapshot{}, written: map[string]jira.Capabilities{}}
 }
 
-func (c *capsStore) store(project string, snap app.CapsSnapshot) *capsStore {
+func (c *capsStore) store(project string, snap appcache.CapsSnapshot) *capsStore {
 	c.held[project] = snap
 	return c
 }
 
-func (c *capsStore) Caps(project string) (app.CapsSnapshot, bool) {
+func (c *capsStore) Caps(project string) (appcache.CapsSnapshot, bool) {
 	snap, ok := c.held[project]
 	return snap, ok
 }
@@ -50,7 +50,7 @@ func (c *capsStore) PutCaps(project string, caps jira.Capabilities) error {
 	return nil
 }
 
-func (c *capsStore) Rows(string) (app.Snapshot, bool)                        { return app.Snapshot{}, false }
+func (c *capsStore) Rows(string) (appcache.Snapshot, bool)                   { return appcache.Snapshot{}, false }
 func (c *capsStore) PutRows(string, []jira.Issue, bool) error                { return nil }
 func (c *capsStore) Forget(string) error                                     { return nil }
 func (c *capsStore) EachIssue(func(jira.Issue, time.Time) bool) (int, error) { return 0, nil }
@@ -58,8 +58,8 @@ func (c *capsStore) Generation() uint64                                      { r
 
 // storedAnswer is what a previous run left behind: boards allowed here, plans
 // refused with the site's own sentence.
-func storedAnswer(at time.Time, stale bool) app.CapsSnapshot {
-	return app.CapsSnapshot{
+func storedAnswer(at time.Time, stale bool) appcache.CapsSnapshot {
+	return appcache.CapsSnapshot{
 		Caps: jira.Capabilities{
 			Boards: jira.Capability{OK: true},
 			Plans:  jira.Capability{Reason: "Plans need Administer Jira, which this token does not have"},

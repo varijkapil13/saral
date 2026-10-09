@@ -1,7 +1,7 @@
 package issue
 
 import (
-	"net/url"
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -9,131 +9,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
-
-// customKind is the editor a custom field on the issue's own screen earns. It
-// is read off the schema editmeta sent — the type, an array's element type and
-// the plugin key — and never off a field's id or name, which differ per site.
-type customKind uint8
-
-const (
-	ckNone customKind = iota
-	ckText
-	ckURL
-	ckDoc
-	ckNumber
-	ckDate
-	ckDateTime
-	ckLabels
-	ckSelect
-	ckMulti
-	ckCascade
-	ckUser
-	ckUsers
-)
-
-func (k customKind) chooses() bool {
-	switch k {
-	case ckSelect, ckMulti, ckCascade, ckUser, ckUsers:
-		return true
-	default:
-		return false
-	}
-}
-
-func (k customKind) multiple() bool { return k == ckMulti || k == ckUsers }
-
-func (k customKind) people() bool { return k == ckUser || k == ckUsers }
-
-// choosable are the schema types whose values are a list the screen states.
-var choosable = []string{"option", "version", "component", "group"}
-
-// dateTimeLayout is how a date-and-time field is typed and shown, in the
-// account's own zone.
-const dateTimeLayout = "2006-01-02 15:04"
-
-// customKindOf decides whether a screen field gets an editor here at all. A
-// field the screen does not let be set, or a shape with no editor, is ckNone
-// and stays a read-only line.
-func customKindOf(meta jira.FieldMeta) customKind {
-	s := meta.Field.Schema
-	if s.Custom == "" || !slices.Contains(meta.Operations, "set") {
-		return ckNone
-	}
-	switch {
-	case s.Type == "doc", strings.HasSuffix(s.Custom, ":textarea"):
-		return ckDoc
-	case strings.HasSuffix(s.Custom, ":url"):
-		return ckURL
-	}
-	allowed := len(meta.AllowedValues) > 0
-	switch s.Type {
-	case "string":
-		return ckText
-	case "number":
-		return ckNumber
-	case "date":
-		return ckDate
-	case "datetime":
-		return ckDateTime
-	case "user":
-		return ckUser
-	case "option-with-child":
-		if allowed {
-			return ckCascade
-		}
-	case "array":
-		switch {
-		case s.Items == "string":
-			return ckLabels
-		case s.Items == "user":
-			return ckUsers
-		case slices.Contains(choosable, s.Items) && allowed:
-			return ckMulti
-		}
-	default:
-		if slices.Contains(choosable, s.Type) && allowed {
-			return ckSelect
-		}
-	}
-	return ckNone
-}
-
-// valueFits reports whether the value the issue carries is in the shape the
-// editor writes back. One that is not — a document field the site sent as a
-// plain string — is left read-only rather than overwritten from a guess.
-func valueFits(k customKind, v jira.FieldValue, present bool) bool {
-	if !present || v.Kind == jira.KindEmpty {
-		return true
-	}
-	switch k {
-	case ckText, ckURL:
-		return v.Kind == jira.KindText
-	case ckDoc:
-		return v.Kind == jira.KindDoc
-	case ckNumber:
-		return v.Kind == jira.KindNumber
-	case ckDate:
-		return v.Kind == jira.KindDate
-	case ckDateTime:
-		return v.Kind == jira.KindTime
-	case ckLabels, ckMulti:
-		return v.Kind == jira.KindOptions || v.Kind == jira.KindOption
-	case ckSelect, ckCascade:
-		return v.Kind == jira.KindOption
-	case ckUser:
-		return v.Kind == jira.KindUser
-	case ckUsers:
-		return v.Kind == jira.KindUsers || v.Kind == jira.KindUser
-	default:
-		return false
-	}
-}
 
 // customRows are the rows the issue's own screen earns beyond the seven fixed
 // ones, in the order the screen lists them. have skips ids that already have a
@@ -154,8 +35,8 @@ func (m *Model) customRows(have func(id string) bool) []fieldRow {
 		if isBookkeeping(meta.Field.Schema.Custom) {
 			continue
 		}
-		kind := customKindOf(meta)
-		if kind == ckNone {
+		kind := appissue.CustomOf(meta)
+		if kind == appissue.CustomNone {
 			continue
 		}
 		label := widget.Sanitize(firstNonEmpty(meta.Name, meta.Field.Name, ref.Name, id))
@@ -166,10 +47,10 @@ func (m *Model) customRows(have func(id string) bool) []fieldRow {
 	return out
 }
 
-func newCustomRow(meta jira.FieldMeta, kind customKind, label string, iss jira.Issue, loc *time.Location) (fieldRow, bool) {
+func newCustomRow(meta jira.FieldMeta, kind appissue.Custom, label string, iss jira.Issue, loc *time.Location) (fieldRow, bool) {
 	id := meta.Field.ID
 	v, present := iss.Fields.ByID(id)
-	if !valueFits(kind, v, present) {
+	if !appissue.ValueFits(kind, v, present) {
 		return fieldRow{}, false
 	}
 	row := fieldRow{
@@ -177,41 +58,41 @@ func newCustomRow(meta jira.FieldMeta, kind customKind, label string, iss jira.I
 		fetched: iss.Requested.Has(id), listed: true,
 	}
 	switch kind {
-	case ckText, ckURL:
+	case appissue.CustomText, appissue.CustomURL:
 		row.original = v.Text
-	case ckDoc:
+	case appissue.CustomDoc:
 		row.doc = v.Doc
-	case ckNumber:
+	case appissue.CustomNumber:
 		if v.Kind == jira.KindNumber {
 			row.original = strconv.FormatFloat(v.Number, 'f', -1, 64)
 		}
-	case ckDate:
+	case appissue.CustomDate:
 		if v.Kind == jira.KindDate {
 			row.original = v.Date.String()
 		}
-	case ckDateTime:
+	case appissue.CustomDateTime:
 		if v.Kind == jira.KindTime {
-			row.original = v.Time.In(loc).Format(dateTimeLayout)
+			row.original = v.Time.In(loc).Format(appissue.DateTimeLayout)
 		}
-	case ckLabels:
+	case appissue.CustomLabels:
 		labels := make([]string, 0, len(v.Options))
 		for _, o := range v.Options {
 			labels = append(labels, firstNonEmpty(o.Label, o.ID))
 		}
 		row.original = strings.Join(labels, ", ")
-	case ckUser, ckUsers:
+	case appissue.CustomUser, appissue.CustomUsers:
 		for _, u := range v.Users {
 			row.originalPicked = append(row.originalPicked, personOption(u))
 		}
-	case ckSelect, ckMulti, ckCascade:
+	case appissue.CustomSelect, appissue.CustomMulti, appissue.CustomCascade:
 		row.originalPicked = sanitizeOptions(v.Options)
 	}
-	if kind.chooses() {
+	if kind.Chooses() {
 		row.picked = slices.Clone(row.originalPicked)
 		row.original = pickedText(row.originalPicked)
 	}
 	row.value = row.original
-	row.base = app.Fingerprint(iss, id)
+	row.base = appissue.Fingerprint(iss, id)
 	return row, true
 }
 
@@ -241,37 +122,16 @@ func pickedText(in []jira.Option) string {
 	return strings.Join(parts, ", ")
 }
 
-// optionKey identifies a chosen option, its second level included.
-func optionKey(o jira.Option) string {
-	if len(o.Children) > 0 {
-		return o.ID + "/" + o.Children[0].ID
-	}
-	return o.ID
+func (r *fieldRow) isDoc() bool {
+	return r.kind == rkDoc || (r.kind == rkField && r.custom == appissue.CustomDoc)
 }
-
-func samePicks(a, b []jira.Option, asSet bool) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	ka, kb := make([]string, len(a)), make([]string, len(b))
-	for i := range a {
-		ka[i], kb[i] = optionKey(a[i]), optionKey(b[i])
-	}
-	if asSet {
-		slices.Sort(ka)
-		slices.Sort(kb)
-	}
-	return slices.Equal(ka, kb)
-}
-
-func (r *fieldRow) isDoc() bool { return r.kind == rkDoc || (r.kind == rkField && r.custom == ckDoc) }
 
 func (r *fieldRow) customDirty() bool {
 	switch {
-	case r.custom == ckDoc:
+	case r.custom == appissue.CustomDoc:
 		return r.edited != nil || (r.cleared && !r.doc.IsEmpty())
-	case r.custom.chooses():
-		return !samePicks(r.picked, r.originalPicked, r.custom.multiple())
+	case r.custom.Chooses():
+		return !appissue.SamePicks(r.picked, r.originalPicked, r.custom.Multiple())
 	default:
 		return r.value != r.original
 	}
@@ -280,46 +140,20 @@ func (r *fieldRow) customDirty() bool {
 // parseTyped reads what was typed into a typed custom row as the value it
 // writes, or says in one clause what is wrong with it.
 func (r *fieldRow) parseTyped(text string) (value jira.FieldValue, problem string) {
-	switch r.custom {
-	case ckNumber:
-		n, err := strconv.ParseFloat(strings.ReplaceAll(text, ",", "."), 64)
-		if err != nil {
-			return jira.FieldValue{}, "write a number, like 3 or 2.5"
-		}
-		return jira.FieldValue{Kind: jira.KindNumber, Number: n}, ""
-	case ckDate:
-		d, err := jira.ParseDate(text)
-		if err != nil {
-			return jira.FieldValue{}, "write the date as 2006-01-02"
-		}
-		return jira.FieldValue{Kind: jira.KindDate, Date: d}, ""
-	case ckDateTime:
-		loc := r.loc
-		if loc == nil {
-			loc = time.UTC
-		}
-		at, err := time.ParseInLocation(dateTimeLayout, text, loc)
-		if err != nil {
-			if at, err = time.Parse(time.RFC3339, text); err != nil {
-				return jira.FieldValue{}, "write the time as 2006-01-02 15:04"
-			}
-		}
-		return jira.FieldValue{Kind: jira.KindTime, Time: at}, ""
-	case ckURL:
-		u, err := url.Parse(text)
-		if err != nil || u.Scheme == "" || u.Host == "" {
-			return jira.FieldValue{}, "write a whole address, starting https://"
-		}
-		return jira.FieldValue{Kind: jira.KindText, Text: text}, ""
-	case ckLabels:
-		labels := splitLabels(text)
-		opts := make([]jira.Option, len(labels))
-		for i, l := range labels {
-			opts[i] = jira.Option{Label: l}
-		}
-		return jira.FieldValue{Kind: jira.KindOptions, Options: opts}, ""
+	v, err := appissue.ParseTyped(r.custom, text, r.loc)
+	switch {
+	case err == nil:
+		return v, ""
+	case errors.Is(err, appissue.ErrTypedNumber):
+		return v, "write a number, like 3 or 2.5"
+	case errors.Is(err, appissue.ErrTypedDate):
+		return v, "write the date as 2006-01-02"
+	case errors.Is(err, appissue.ErrTypedTime):
+		return v, "write the time as 2006-01-02 15:04"
+	case errors.Is(err, appissue.ErrTypedURL):
+		return v, "write a whole address, starting https://"
 	default:
-		return jira.FieldValue{Kind: jira.KindText, Text: text}, ""
+		return v, err.Error()
 	}
 }
 
@@ -352,22 +186,22 @@ func (r *fieldRow) customInto(out *jira.IssuePatch) error {
 		return nil
 	}
 	switch r.custom {
-	case ckDoc:
+	case appissue.CustomDoc:
 		if r.edited == nil {
 			return empty()
 		}
 		return set(jira.FieldValue{Kind: jira.KindDoc, Doc: *r.edited})
-	case ckSelect, ckCascade:
+	case appissue.CustomSelect, appissue.CustomCascade:
 		if len(r.picked) == 0 {
 			return empty()
 		}
 		return set(jira.FieldValue{Kind: jira.KindOption, Options: slices.Clone(r.picked[:1])})
-	case ckMulti:
+	case appissue.CustomMulti:
 		if len(r.picked) == 0 {
 			return empty()
 		}
 		return set(jira.FieldValue{Kind: jira.KindOptions, Options: slices.Clone(r.picked)})
-	case ckUser, ckUsers:
+	case appissue.CustomUser, appissue.CustomUsers:
 		if len(r.picked) == 0 {
 			return empty()
 		}
@@ -376,7 +210,7 @@ func (r *fieldRow) customInto(out *jira.IssuePatch) error {
 			users[i] = jira.User{AccountID: o.ID, DisplayName: o.Label}
 		}
 		kind := jira.KindUsers
-		if r.custom == ckUser {
+		if r.custom == appissue.CustomUser {
 			kind, users = jira.KindUser, users[:1]
 		}
 		return set(jira.FieldValue{Kind: kind, Users: users})
@@ -398,11 +232,11 @@ func (r *fieldRow) customInto(out *jira.IssuePatch) error {
 // opens the way it opens every other typed row.
 func (m *Model) startCustomEdit(row *fieldRow) (tea.Cmd, bool) {
 	switch {
-	case row.custom == ckDoc:
+	case row.custom == appissue.CustomDoc:
 		return m.startDocEdit(row), true
-	case row.custom.people():
+	case row.custom.People():
 		return m.openCustomPeople(row), true
-	case row.custom.chooses():
+	case row.custom.Chooses():
 		return m.openCustomChoice(row), true
 	}
 	return nil, false
@@ -426,7 +260,7 @@ func pickKeyOf(picked []jira.Option) string {
 	if len(picked) == 0 {
 		return ""
 	}
-	return optionKey(picked[0])
+	return appissue.OptionKey(picked[0])
 }
 
 // customChoices is every value a choice row's list offers: "None" first where
@@ -434,18 +268,18 @@ func pickKeyOf(picked []jira.Option) string {
 // second level each under its first.
 func customChoices(row *fieldRow) []pickOption {
 	out := make([]pickOption, 0, len(row.meta.AllowedValues)+1)
-	if !row.custom.multiple() && !row.meta.Required {
+	if !row.custom.Multiple() && !row.meta.Required {
 		out = append(out, pickOption{id: "", label: "None"})
 	}
 	for _, o := range sanitizeOptions(row.meta.AllowedValues) {
 		label := firstNonEmpty(o.Label, o.ID)
 		out = append(out, pickOption{id: o.ID, label: label, option: jira.Option{ID: o.ID, Label: o.Label}})
-		if row.custom != ckCascade {
+		if row.custom != appissue.CustomCascade {
 			continue
 		}
 		for _, c := range o.Children {
 			child := jira.Option{ID: o.ID, Label: o.Label, Children: []jira.Option{{ID: c.ID, Label: c.Label}}}
-			out = append(out, pickOption{id: optionKey(child), label: label + " / " + firstNonEmpty(c.Label, c.ID), option: child})
+			out = append(out, pickOption{id: appissue.OptionKey(child), label: label + " / " + firstNonEmpty(c.Label, c.ID), option: child})
 		}
 	}
 	return out
@@ -453,7 +287,7 @@ func customChoices(row *fieldRow) []pickOption {
 
 func (m *Model) openCustomChoice(row *fieldRow) tea.Cmd {
 	m.beginPicking(row.id, rkField)
-	m.pick.multi = row.custom.multiple()
+	m.pick.multi = row.custom.Multiple()
 	m.pick.all = customChoices(row)
 	m.markPicked(row)
 	m.rerankPick("", m.pick.currentID)
@@ -465,7 +299,7 @@ func (m *Model) openCustomPeople(row *fieldRow) tea.Cmd {
 		return kernel.Warn(reason)
 	}
 	m.beginPicking(row.id, rkField)
-	m.pick.multi, m.pick.people = row.custom.multiple(), true
+	m.pick.multi, m.pick.people = row.custom.Multiple(), true
 	m.pick.all = m.customPeopleSeed(row, nil)
 	m.markPicked(row)
 	m.rerankPick("", m.pick.currentID)
@@ -475,7 +309,7 @@ func (m *Model) openCustomPeople(row *fieldRow) tea.Cmd {
 func (m *Model) markPicked(row *fieldRow) {
 	m.pick.on = make(map[string]bool, len(row.picked))
 	for _, o := range row.picked {
-		m.pick.on[optionKey(o)] = true
+		m.pick.on[appissue.OptionKey(o)] = true
 	}
 	if !m.pick.multi {
 		m.pick.currentID = pickKeyOf(row.picked)
@@ -495,7 +329,7 @@ func (m *Model) customPeopleSeed(row *fieldRow, found []jira.User) []pickOption 
 		seen[o.ID] = true
 		out = append(out, pickOption{id: o.ID, label: o.Label, option: o})
 	}
-	if !row.custom.multiple() && !row.meta.Required {
+	if !row.custom.Multiple() && !row.meta.Required {
 		out = append(out, pickOption{id: "", label: "None"})
 	}
 	for _, o := range row.picked {
@@ -522,7 +356,7 @@ func (m *Model) chooseCustom(opt pickOption) tea.Cmd {
 	row.problem = ""
 	m.draftRestored, m.saveFail = false, ""
 	if m.pick.multi {
-		at := slices.IndexFunc(row.picked, func(o jira.Option) bool { return optionKey(o) == opt.id })
+		at := slices.IndexFunc(row.picked, func(o jira.Option) bool { return appissue.OptionKey(o) == opt.id })
 		if at >= 0 {
 			row.picked = slices.Delete(slices.Clone(row.picked), at, at+1)
 		} else {
@@ -560,11 +394,11 @@ func (m *Model) resetRow(row *fieldRow) fieldRow {
 // a custom row only exists once the screen has been read — and keeps the rest
 // for the next time rows are added.
 func (m *Model) placeHeld() {
-	if m.held.isEmpty() {
+	if m.held.IsEmpty() {
 		return
 	}
 	held := m.held
-	m.held = draft{}
+	m.held = appissue.Draft{}
 	m.applyEdits(held)
 	if m.loadedIssue {
 		m.moved += m.flagMoved()
@@ -573,76 +407,8 @@ func (m *Model) placeHeld() {
 
 // heldFor copies out of d the edits for fields that have no row, so they can
 // wait for one.
-func (m *Model) heldFor(d draft) draft {
-	missing := func(id string) bool { return m.rowByID(id) == nil }
-	out := draft{Key: d.Key, Site: d.Site}
-	for id, v := range d.Values {
-		if missing(id) {
-			out.Values = setIn(out.Values, id, v)
-		}
-	}
-	for id, v := range d.Choices {
-		if missing(id) {
-			out.Choices = setIn(out.Choices, id, v)
-		}
-	}
-	for id, v := range d.Picks {
-		if missing(id) {
-			out.Picks = setIn(out.Picks, id, v)
-		}
-	}
-	for id, v := range d.Docs {
-		if missing(id) {
-			out.Docs = setIn(out.Docs, id, v)
-		}
-	}
-	for id, v := range d.Pending {
-		if missing(id) {
-			out.Pending = setIn(out.Pending, id, v)
-		}
-	}
-	for id, v := range d.Base.Fields {
-		if missing(id) {
-			out.Base.Fields = setIn(out.Base.Fields, id, v)
-		}
-	}
-	return out
-}
-
-// withHeld adds to d the edits still waiting for a row, without overwriting
-// anything d already says about a field.
-func withHeld(d, held draft) draft {
-	for id, v := range held.Values {
-		if _, ok := d.Values[id]; !ok {
-			d.Values = setIn(d.Values, id, v)
-		}
-	}
-	for id, v := range held.Choices {
-		if _, ok := d.Choices[id]; !ok {
-			d.Choices = setIn(d.Choices, id, v)
-		}
-	}
-	for id, v := range held.Picks {
-		if _, ok := d.Picks[id]; !ok {
-			d.Picks = setIn(d.Picks, id, v)
-		}
-	}
-	for id, v := range held.Docs {
-		if _, ok := d.Docs[id]; !ok {
-			d.Docs = setIn(d.Docs, id, v)
-		}
-	}
-	for id, v := range held.Pending {
-		if _, ok := d.Pending[id]; !ok {
-			d.Pending = setIn(d.Pending, id, v)
-		}
-	}
-	for id, v := range held.Base.Fields {
-		if _, ok := d.Base.Fields[id]; !ok {
-			d.Base.Fields = setIn(d.Base.Fields, id, v)
-		}
-	}
-	return d
+func (m *Model) heldFor(d appissue.Draft) appissue.Draft {
+	return appissue.Held(d, func(id string) bool { return m.rowByID(id) == nil })
 }
 
 func setIn[V any](m map[string]V, id string, v V) map[string]V {
@@ -651,25 +417,6 @@ func setIn[V any](m map[string]V, id string, v V) map[string]V {
 	}
 	m[id] = v
 	return m
-}
-
-func toDraftOptions(in []jira.Option) []draftOption {
-	out := make([]draftOption, len(in))
-	for i, o := range in {
-		out[i] = draftOption{ID: o.ID, Label: o.Label, Children: toDraftOptions(o.Children)}
-	}
-	return out
-}
-
-func fromDraftOptions(in []draftOption) []jira.Option {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]jira.Option, len(in))
-	for i, o := range in {
-		out[i] = jira.Option{ID: o.ID, Label: o.Label, Children: fromDraftOptions(o.Children)}
-	}
-	return out
 }
 
 func unmarshalDoc(body []byte) (adf.Doc, bool) {

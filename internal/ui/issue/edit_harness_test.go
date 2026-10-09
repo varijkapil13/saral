@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -317,9 +318,9 @@ func patchFieldNames(in jira.IssuePatch) []string {
 }
 
 // tempDrafts is a draft store nowhere near the person running the tests.
-func tempDrafts(t *testing.T) draftStore {
+func tempDrafts(t *testing.T) appissue.Drafts {
 	t.Helper()
-	return draftStore{dir: t.TempDir()}
+	return appissue.NewDrafts(t.TempDir())
 }
 
 // scriptedEditor stands in for the user's editor: it writes what the test says

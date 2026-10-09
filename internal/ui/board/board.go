@@ -12,7 +12,10 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appboard "github.com/varijkapil13/saral/internal/app/board"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/issue"
@@ -60,8 +63,8 @@ type held struct {
 // Model is the board.
 type Model struct {
 	deps   kernel.Deps
-	search *app.Search
-	cache  app.Cache
+	search *appquery.Search
+	shelf  *appboard.Shelf[appcache.BoardSnapshot]
 	styles *styles
 	cards  *cardCache
 	look   card.Look
@@ -76,7 +79,7 @@ type Model struct {
 	all []jira.Board
 	at  int
 
-	plan  plan
+	plan  appboard.Plan
 	ready bool
 	// rawConfig is the configuration plan was built from, kept only so that a
 	// snapshot written to disk can carry it: nothing in this file reads it back
@@ -103,7 +106,7 @@ type Model struct {
 	// terms is this program's own narrowing — a person, a status, a type, a
 	// priority or a label — applied locally against what is already loaded; see
 	// terms.go for why this is never sent to the site the way a quick filter is.
-	terms filter.Terms
+	terms appterm.Terms
 	// bar draws the chip line naming the terms in force, the same widget list and
 	// backlog draw one through.
 	bar *filterbar.Bar
@@ -125,7 +128,6 @@ type Model struct {
 	noSprints    bool
 	sprintsKnown bool
 	fields       []string
-	writes       *writer
 	// dataGen counts the rebuilds of cols, because a slice cannot be part of the
 	// comparable key the chrome is memoized on.
 	dataGen int
@@ -169,9 +171,7 @@ type Model struct {
 	card   *held
 	moving bool
 
-	rank     *ranking
-	rankGen  int
-	rankStop context.CancelFunc
+	rank appboard.Ranking[struct{}]
 
 	// me is the account this session is signed in as, asked for the first
 	// time only-my-issues is toggled.
@@ -284,7 +284,7 @@ func (m *Model) WantsBack() bool {
 // columns a board has is an answer, and the frame before that answer says which
 // question is outstanding rather than a spinner.
 func New(d kernel.Deps) kernel.View {
-	m := &Model{deps: d, addr: kernel.NewAddr(), cache: d.Cache, writes: &writer{}}
+	m := &Model{deps: d, addr: kernel.NewAddr(), shelf: appboard.NewBoardShelf(d.Cache)}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
@@ -299,22 +299,13 @@ func New(d kernel.Deps) kernel.View {
 	m.clicks = widget.NewClicks(d.Now)
 	m.bar = filterbar.New(m.zones)
 	if d.Jira != nil {
-		m.search = app.NewSearch(d.Jira)
+		m.search = appquery.NewSearch(d.Jira)
 	}
 	if terms, ok := m.recallTerms(); ok {
 		m.terms = terms
 	}
 	m.fromCache()
 	return m
-}
-
-// boardCache is the cache's optional board-shaped half, absent whenever the
-// session has nowhere to keep one or the cache in force is only rows and
-// issues — the same additive-interface pattern kernel.restoreCaps uses for
-// app.CapsCache.
-func (m *Model) boardCache() (app.BoardCache, bool) {
-	held, ok := m.cache.(app.BoardCache)
-	return held, ok && held != nil
 }
 
 // fromCache draws the board this project was last showing, before anything is
@@ -326,15 +317,7 @@ func (m *Model) boardCache() (app.BoardCache, bool) {
 // happens: kernel.FirstPaint builds the view and renders one frame without
 // ever calling Init, which is the thing docs/PERFORMANCE.md budgets.
 func (m *Model) fromCache() {
-	held, ok := m.boardCache()
-	if !ok {
-		return
-	}
-	boardID, ok := held.LastBoard(m.deps.Project)
-	if !ok {
-		return
-	}
-	snap, ok := held.Board(boardID)
+	boardID, snap, ok := m.shelf.Last(m.deps.Project)
 	if !ok {
 		return
 	}
@@ -348,9 +331,9 @@ func (m *Model) fromCache() {
 // touching which boards this project has or which of them is selected: New and
 // a project switch know only the one board a snapshot names, while nextBoard
 // already holds the site's own list and must not collapse it down to one.
-func (m *Model) applyBoardSnapshot(snap app.BoardSnapshot) {
+func (m *Model) applyBoardSnapshot(snap appcache.BoardSnapshot) {
 	m.rawConfig = snap.Config
-	m.plan, m.ready = newPlan(snap.Config), true
+	m.plan, m.ready = appboard.NewPlan(snap.Config), true
 	m.quickFilters = snap.QuickFilters
 	m.qfOn = make(map[int64]bool, len(snap.QuickFilters))
 	m.applyRecalledQuickFilters()
@@ -558,7 +541,7 @@ func (m *Model) Close() {
 	m.stop()
 	m.stopQuickFilters()
 	m.stopMove()
-	m.stopRank()
+	m.rank.Stop()
 	m.stopLanding()
 	if m.bulk != nil {
 		m.bulk.stopAsking()
@@ -732,11 +715,7 @@ func (m *Model) refresh(purge bool) tea.Cmd {
 // they are shared with every other read that named them, and the refetch
 // overwrites what it asked for anyway.
 func (m *Model) forgetBoard() tea.Cmd {
-	held, ok := m.boardCache()
-	if !ok || m.plan.boardID == 0 {
-		return nil
-	}
-	if err := held.ForgetBoard(m.plan.boardID); err != nil {
+	if err := m.shelf.Forget(m.plan.BoardID); err != nil {
 		return kernel.Warn("the stored copy of this board could not be dropped: " + err.Error())
 	}
 	return nil
@@ -752,7 +731,7 @@ func (m *Model) reproject(project string) tea.Cmd {
 	m.terms, said = filterbar.Reproject(m.deps, ViewID, was, m.terms)
 	m.abandon()
 	m.stopMove()
-	m.dropRank()
+	m.rank.Drop()
 	m.letGoOfBoard()
 	m.needle, m.finding = "", false
 	m.all, m.at, m.ready = nil, 0, false
@@ -789,7 +768,7 @@ func (m *Model) tookBoards(msg boardsMsg) tea.Cmd {
 		return nil
 	}
 	m.loading, m.loaded, m.step = false, true, stepIdle
-	was := m.plan.boardID
+	was := m.plan.BoardID
 	m.all, m.at = msg.boards, resolveBoardIndex(msg.boards, m.boardIDHint)
 	m.boardIDHint = 0
 	m.forget()
@@ -830,13 +809,13 @@ func (m *Model) tookConfig(msg configMsg) tea.Cmd {
 	}
 	m.loading, m.step = false, stepIdle
 	m.rawConfig = msg.cfg
-	if msg.cfg.BoardID != m.plan.boardID {
+	if msg.cfg.BoardID != m.plan.BoardID {
 		m.forgetSprints()
 	}
-	same := msg.cfg.BoardID == m.plan.boardID && m.ready
+	same := msg.cfg.BoardID == m.plan.BoardID && m.ready
 	_, recalled := m.recallQuickFilterIDs()
 	wait := recalled && (!same || len(m.quickFilters) == 0 || m.qfWait)
-	m.plan, m.ready, m.stale = newPlan(msg.cfg), true, false
+	m.plan, m.ready, m.stale = appboard.NewPlan(msg.cfg), true, false
 	if !same {
 		m.quickFilters, m.qfOn = nil, nil
 	}
@@ -857,11 +836,7 @@ func (m *Model) tookConfig(msg configMsg) tea.Cmd {
 // opening cold knows which board's snapshot to read before the site has said
 // which boards this project has.
 func (m *Model) rememberLastBoard(boardID int64) tea.Cmd {
-	held, ok := m.boardCache()
-	if !ok {
-		return nil
-	}
-	if err := held.PutLastBoard(m.deps.Project, boardID); err != nil {
+	if err := m.shelf.Remember(m.deps.Project, boardID); err != nil {
 		return kernel.Warn("this board could not be remembered for next time: " + err.Error())
 	}
 	return nil
@@ -880,21 +855,17 @@ func (m *Model) putShape(items []jira.Issue, first bool, w walk) func() error {
 	if !m.ready {
 		return nil
 	}
-	snap := app.BoardSnapshot{
+	snap := appcache.BoardSnapshot{
 		Config: m.rawConfig, QuickFilters: slices.Clone(m.quickFilters), More: w.more,
 		Sprints: slices.Clone(w.sprints), Sprint: w.sprint.ID, NoSprints: w.noSprints,
 	}
-	boardID := m.plan.boardID
-	if paged, ok := m.cache.(app.BoardPageCache); ok && paged != nil {
-		snap.Issues = slices.Clone(items)
-		return m.writes.put(m.gen, first, func() error { return paged.PutBoardPage(boardID, snap, first) })
+	with := func(issues []jira.Issue) func() appcache.BoardSnapshot {
+		return func() appcache.BoardSnapshot {
+			snap.Issues = slices.Clone(issues)
+			return snap
+		}
 	}
-	held, ok := m.boardCache()
-	if !ok || (!first && w.more) {
-		return nil
-	}
-	snap.Issues = slices.Clone(w.issues)
-	return m.writes.put(m.gen, true, func() error { return held.PutBoard(boardID, snap) })
+	return m.shelf.Write(m.gen, m.plan.BoardID, first, w.more, with(items), with(w.issues))
 }
 
 type walk struct {
@@ -1109,7 +1080,7 @@ func (m *Model) nextBoard() tea.Cmd {
 	m.at = (m.at + 1) % len(m.all)
 	m.abandon()
 	m.stopMove()
-	m.dropRank()
+	m.rank.Drop()
 	m.letGoOfBoard()
 	m.forgetSprints()
 	m.ready, m.issues, m.cols, m.unmapped, m.stale = false, nil, nil, 0, false
@@ -1117,12 +1088,10 @@ func (m *Model) nextBoard() tea.Cmd {
 	m.curCol, m.curRow, m.colTop, m.rowTop = 0, 0, 0, nil
 	m.card = nil
 	m.forget()
-	if held, ok := m.boardCache(); ok {
-		if snap, ok := held.Board(m.all[m.at].ID); ok {
-			m.applyBoardSnapshot(snap)
-			if !m.stale {
-				return nil
-			}
+	if snap, ok := m.shelf.Get(m.all[m.at].ID); ok {
+		m.applyBoardSnapshot(snap)
+		if !m.stale {
+			return nil
 		}
 	}
 	return m.loadConfig()
@@ -1140,16 +1109,16 @@ func (m *Model) place() {
 		m.cols, m.rowTop, m.wip = nil, nil, nil
 		return
 	}
-	if len(m.cols) != len(m.plan.columns) {
-		m.cols = make([][]int, len(m.plan.columns))
+	if len(m.cols) != len(m.plan.Columns) {
+		m.cols = make([][]int, len(m.plan.Columns))
 	}
-	if len(m.wip) != len(m.plan.columns) {
-		m.wip = make([]int, len(m.plan.columns))
+	if len(m.wip) != len(m.plan.Columns) {
+		m.wip = make([]int, len(m.plan.Columns))
 	}
 	clear(m.wip)
-	subtasks := m.plan.constraint.CountsSubtasks()
-	if len(m.rowTop) != len(m.plan.columns) {
-		grown := make([]int, len(m.plan.columns))
+	subtasks := m.plan.Constraint.CountsSubtasks()
+	if len(m.rowTop) != len(m.plan.Columns) {
+		grown := make([]int, len(m.plan.Columns))
 		copy(grown, m.rowTop)
 		m.rowTop = grown
 	}
@@ -1162,7 +1131,7 @@ func (m *Model) place() {
 		seen = m.beginLanes()
 	}
 	for i := range m.issues {
-		at, mapped := m.plan.columnOf(m.issues[i].Status.ID)
+		at, mapped := m.plan.ColumnOf(m.issues[i].Status.ID)
 		if !mapped {
 			m.unmapped++
 			continue
@@ -1170,7 +1139,7 @@ func (m *Model) place() {
 		if subtasks || !m.issues[i].Type.Subtask {
 			m.wip[at]++
 		}
-		if !matchesTerms(&m.issues[i], m.terms) {
+		if !m.terms.Match(&m.issues[i]) {
 			m.filteredOut++
 			continue
 		}
@@ -1324,7 +1293,7 @@ func (m *Model) pickUp() tea.Cmd {
 	if iss == nil {
 		return nil
 	}
-	if len(m.plan.columns) < 2 {
+	if len(m.plan.Columns) < 2 {
 		return kernel.Warn("this board has one column, so there is nowhere to move " + iss.Key + " to")
 	}
 	m.card = &held{key: iss.Key, status: iss.Status.Name, from: m.curCol, row: m.curRow, target: m.curCol}
@@ -1335,10 +1304,10 @@ func (m *Model) pickUp() tea.Cmd {
 // aim points the card in hand at a column. Both the two keys and the pointer
 // come through here, so what the prompt says is what either gesture will do.
 func (m *Model) aim(col int) {
-	if m.card == nil || len(m.plan.columns) == 0 {
+	if m.card == nil || len(m.plan.Columns) == 0 {
 		return
 	}
-	col = min(max(col, 0), len(m.plan.columns)-1)
+	col = min(max(col, 0), len(m.plan.Columns)-1)
 	if col == m.card.target {
 		return
 	}
@@ -1367,7 +1336,7 @@ func (m *Model) drop() tea.Cmd {
 		return nil
 	}
 	if m.card.target == m.card.from {
-		name := m.plan.columns[m.card.from].name
+		name := m.plan.Columns[m.card.from].Name
 		key := m.card.key
 		m.putBack()
 		return kernel.Status(key + " is already in " + name)
@@ -1395,14 +1364,14 @@ func (m *Model) tookMoves(msg movesMsg) tea.Cmd {
 		return nil
 	}
 	col := msg.column
-	if col < 0 || col >= len(m.plan.columns) {
+	if col < 0 || col >= len(m.plan.Columns) {
 		m.putBack()
 		return nil
 	}
 	into := m.movesInto(msg.moves, col)
 	switch len(into) {
 	case 0:
-		from, name := m.card.status, m.plan.columns[col].name
+		from, name := m.card.status, m.plan.Columns[col].Name
 		m.putBack()
 		return kernel.Warn("no workflow move takes " + msg.key + " from " + from + " into " + name +
 			"; the columns a board draws and the moves a workflow allows are two different things")
@@ -1840,7 +1809,7 @@ func (m *Model) cardUnder(msg tea.MouseMsg) (col, row int, ok bool) {
 // caption to the rule under the grid, so the whole of a column answers — an
 // empty one included, which is the column a card is most often dropped on.
 func (m *Model) columnUnder(msg tea.MouseMsg) (col int, ok bool) {
-	for c := m.colTop; c < min(m.colTop+m.lay.cols, len(m.plan.columns)); c++ {
+	for c := m.colTop; c < min(m.colTop+m.lay.cols, len(m.plan.Columns)); c++ {
 		if m.zones.Hit(colZone(c), msg) {
 			return c, true
 		}
@@ -1859,7 +1828,7 @@ func (m *Model) resize(w, h int) {
 }
 
 func (m *Model) relayout() {
-	lay := planLayout(m.width, m.itemsHeight(), len(m.plan.columns))
+	lay := planLayout(m.width, m.itemsHeight(), len(m.plan.Columns))
 	if lay == m.lay && (!m.look.Cards() || len(m.blanks) == m.look.Lines()) {
 		return
 	}
@@ -1903,7 +1872,7 @@ func (m *Model) boardName() string {
 	if name := strings.TrimSpace(m.all[m.at].Name); name != "" {
 		return name
 	}
-	return m.plan.name
+	return m.plan.Name
 }
 
 // --- sprints ----------------------------------------------------------------
@@ -1914,7 +1883,7 @@ func (m *Model) wantedSprint() int64 {
 	if m.sprint.ID != 0 {
 		return m.sprint.ID
 	}
-	if enc, ok := kernel.Recall(m.deps, ViewID, sprintMemoryKey(m.plan.boardID)); ok {
+	if enc, ok := kernel.Recall(m.deps, ViewID, sprintMemoryKey(m.plan.BoardID)); ok {
 		if id, err := strconv.ParseInt(enc, 10, 64); err == nil {
 			return id
 		}
@@ -1926,7 +1895,7 @@ func (m *Model) saidSprints() tea.Cmd {
 	if len(m.sprints) < 2 {
 		return nil
 	}
-	if _, chosen := kernel.Recall(m.deps, ViewID, sprintMemoryKey(m.plan.boardID)); chosen {
+	if _, chosen := kernel.Recall(m.deps, ViewID, sprintMemoryKey(m.plan.BoardID)); chosen {
 		return nil
 	}
 	return kernel.Status(strconv.Itoa(len(m.sprints)) + " sprints are running on this board; " +
@@ -1945,8 +1914,8 @@ func (m *Model) nextSprint() tea.Cmd {
 	}
 	at := slices.IndexFunc(m.sprints, func(sp jira.Sprint) bool { return sp.ID == m.sprint.ID })
 	m.sprint = m.sprints[(at+1)%len(m.sprints)]
-	kernel.Keep(m.deps, ViewID, sprintMemoryKey(m.plan.boardID), strconv.FormatInt(m.sprint.ID, 10))
-	m.dropRank()
+	kernel.Keep(m.deps, ViewID, sprintMemoryKey(m.plan.BoardID), strconv.FormatInt(m.sprint.ID, 10))
+	m.rank.Drop()
 	m.letGoOfBoard()
 	m.issues, m.more = nil, false
 	m.curRow = 0
@@ -1972,5 +1941,5 @@ func (m *Model) noActiveSprint() bool {
 }
 
 func (m *Model) aged() bool {
-	return m.loaded && !m.checked.IsZero() && m.now().Sub(m.checked) > app.KindBoard.TTL()
+	return m.loaded && !m.checked.IsZero() && m.now().Sub(m.checked) > appcache.KindBoard.TTL()
 }

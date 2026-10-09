@@ -15,7 +15,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/adf"
@@ -322,6 +322,6 @@ func mustContain(t *testing.T, got string, want ...string) {
 
 func ansiStrip(s string) string { return ansi.Strip(s) }
 
-func appResult(issues ...jira.Issue) app.Result {
-	return app.Result{Page: jira.NewPage(issues, nil)}
+func appResult(issues ...jira.Issue) appquery.Result {
+	return appquery.Result{Page: jira.NewPage(issues, nil)}
 }

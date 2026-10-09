@@ -1,0 +1,321 @@
+package term
+
+import (
+	"testing"
+)
+
+func TestTerms_ComposeTheClauseTheSiteIsAsked(t *testing.T) {
+	t.Parallel()
+
+	ada := Term{Facet: FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"}
+	grace := Term{Facet: FacetAssignee, ID: "acct-grace", Label: "Grace Hopper"}
+	nobody := Term{Facet: FacetAssignee, Label: "unassigned"}
+	shipped := Term{Facet: FacetStatus, ID: "10203", Label: "Shipped"}
+	chore := Term{Facet: FacetType, ID: "10303", Label: "Chore"}
+
+	for name, tc := range map[string]struct {
+		terms  Terms
+		clause string
+		words  string
+	}{
+		"nothing at all": {},
+		"one person": {
+			terms: Terms{ada}, clause: `assignee = "acct-ada"`, words: "assignee Ada Lovelace",
+		},
+		"two people are either of them": {
+			terms:  Terms{ada, grace},
+			clause: `assignee IN ("acct-ada", "acct-grace")`,
+			words:  "assignee Ada Lovelace or Grace Hopper",
+		},
+		"nobody at all": {
+			terms: Terms{nobody}, clause: "assignee IS EMPTY", words: "assignee unassigned",
+		},
+		"somebody or nobody": {
+			terms:  Terms{ada, nobody},
+			clause: `(assignee = "acct-ada" OR assignee IS EMPTY)`,
+			words:  "assignee Ada Lovelace or unassigned",
+		},
+		"two people or nobody": {
+			terms:  Terms{ada, grace, nobody},
+			clause: `(assignee IN ("acct-ada", "acct-grace") OR assignee IS EMPTY)`,
+			words:  "assignee Ada Lovelace or Grace Hopper or unassigned",
+		},
+		"two facets narrow together": {
+			terms:  Terms{ada, shipped},
+			clause: `assignee = "acct-ada" AND status = "10203"`,
+			words:  "assignee Ada Lovelace and status Shipped",
+		},
+		"a type is issuetype in JQL": {
+			terms: Terms{chore}, clause: `issuetype = "10303"`, words: "type Chore",
+		},
+		"a label is its own id": {
+			terms:  Terms{{Facet: FacetLabel, ID: "tech-debt", Label: "tech-debt"}},
+			clause: `labels = "tech-debt"`, words: "label tech-debt",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := tc.terms.Clause(); got != tc.clause {
+				t.Errorf("clause is %q, want %q", got, tc.clause)
+			}
+			if got := tc.terms.Words(); got != tc.words {
+				t.Errorf("words are %q, want %q", got, tc.words)
+			}
+		})
+	}
+}
+
+// Three of the eleven account ids on the measured site carry a colon, and a
+// label is whatever anybody typed. Both go into a clause the site parses, so
+// both have to survive being quoted.
+func TestTerms_QuoteWhatCannotBeWrittenBare(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		term Term
+		want string
+	}{
+		"an account id with a colon": {
+			term: Term{Facet: FacetAssignee, ID: "5f2a:ee0c-92b1", Label: "Nightly Runner"},
+			want: `assignee = "5f2a:ee0c-92b1"`,
+		},
+		"a label with a quote in it": {
+			term: Term{Facet: FacetLabel, ID: `we"ird`, Label: `we"ird`},
+			want: `labels = "we\"ird"`,
+		},
+		"a label with a backslash in it": {
+			term: Term{Facet: FacetLabel, ID: `back\slash`, Label: `back\slash`},
+			want: `labels = "back\\slash"`,
+		},
+		"a label that is not ASCII": {
+			term: Term{Facet: FacetLabel, ID: "検索", Label: "検索"},
+			want: `labels = "検索"`,
+		},
+		"a label with a space in it": {
+			term: Term{Facet: FacetLabel, ID: "two words", Label: "two words"},
+			want: `labels = "two words"`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := (Terms{tc.term}).Clause(); got != tc.want {
+				t.Errorf("clause is %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// The clause is written in the facets' own order rather than the order they
+// were chosen in, so two ways of arriving at one filter ask the site one
+// question — and store their rows under one cache key.
+func TestTerms_TheClauseDoesNotDependOnTheOrderTheyWereChosenIn(t *testing.T) {
+	t.Parallel()
+
+	ada := Term{Facet: FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"}
+	shipped := Term{Facet: FacetStatus, ID: "10203", Label: "Shipped"}
+	urgent := Term{Facet: FacetPriority, ID: "10401", Label: "Urgent"}
+
+	first := Terms{ada, shipped, urgent}.Clause()
+	second := Terms{urgent, shipped, ada}.Clause()
+	if first != second {
+		t.Errorf("two orders of the same three terms ask two questions:\n%q\n%q", first, second)
+	}
+}
+
+func TestTerms_ToggleAddsAValueAndTakesItOffAgain(t *testing.T) {
+	t.Parallel()
+
+	ada := Term{Facet: FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"}
+	// The same account under the other name an endpoint gave it. An id is the
+	// identity, so this must come off rather than be added a second time.
+	adaAgain := Term{Facet: FacetAssignee, ID: "acct-ada", Label: "A. Lovelace"}
+
+	on := Terms(nil).Toggle(ada)
+	if len(on) != 1 || !on.Has(ada) {
+		t.Fatalf("toggling a value on left %+v", on)
+	}
+	if off := on.Toggle(adaAgain); len(off) != 0 {
+		t.Errorf("toggling the same account under another name left %+v", off)
+	}
+}
+
+// Toggle answers with a new slice, so a picker holding the old one never sees
+// the list's copy move under it.
+func TestTerms_ToggleDoesNotWriteThroughToWhatItWasGiven(t *testing.T) {
+	t.Parallel()
+
+	held := Terms{{Facet: FacetStatus, ID: "10201", Label: "Triage"}}
+	next := held.Toggle(Term{Facet: FacetStatus, ID: "10203", Label: "Shipped"})
+
+	if len(held) != 1 {
+		t.Fatalf("the slice it was given now holds %d terms", len(held))
+	}
+	if len(next) != 2 {
+		t.Fatalf("the answer holds %d terms, want 2", len(next))
+	}
+	next[0] = Term{Facet: FacetLabel, ID: "elsewhere"}
+	if held[0].ID != "10201" {
+		t.Errorf("writing to the answer changed what it was given: %+v", held[0])
+	}
+}
+
+func TestTerms_WithoutDropsOneFacetsWholeClause(t *testing.T) {
+	t.Parallel()
+
+	held := Terms{
+		{Facet: FacetAssignee, ID: "acct-ada", Label: "Ada Lovelace"},
+		{Facet: FacetAssignee, ID: "acct-grace", Label: "Grace Hopper"},
+		{Facet: FacetStatus, ID: "10201", Label: "Triage"},
+	}
+	got := held.Without(FacetAssignee)
+	if len(got) != 1 || got[0].Facet != FacetStatus {
+		t.Fatalf("Without(assignee) left %+v, want only the status", got)
+	}
+	if len(held) != 3 {
+		t.Errorf("Without wrote through to what it was given: %+v", held)
+	}
+}
+
+func TestTerms_WithoutOfAFacetNotInForceLeavesTheRestAlone(t *testing.T) {
+	t.Parallel()
+
+	held := Terms{{Facet: FacetStatus, ID: "10201", Label: "Triage"}}
+	got := held.Without(FacetPriority)
+	if len(got) != 1 || got[0].Facet != FacetStatus {
+		t.Errorf("Without of a facet not in force left %+v", got)
+	}
+}
+
+func TestTerms_CountIsPerFacet(t *testing.T) {
+	t.Parallel()
+
+	held := Terms{
+		{Facet: FacetAssignee, ID: "acct-ada"},
+		{Facet: FacetAssignee, ID: "acct-grace"},
+		{Facet: FacetStatus, ID: "10201"},
+	}
+	if got := held.Count(FacetAssignee); got != 2 {
+		t.Errorf("two people count as %d", got)
+	}
+	if got := held.Count(FacetStatus); got != 1 {
+		t.Errorf("one status counts as %d", got)
+	}
+	if got := held.Count(FacetLabel); got != 0 {
+		t.Errorf("no labels count as %d", got)
+	}
+}
+
+// Every facet the picker offers has to write a JQL field and a word for the
+// screen, or it is a row that cannot compose a query.
+func TestFacets_AllNameAFieldAndAWord(t *testing.T) {
+	t.Parallel()
+
+	for _, f := range Facets {
+		if f.field() == "" {
+			t.Errorf("facet %d writes no JQL field", f)
+		}
+		if f.Label() == "" {
+			t.Errorf("facet %d has no word for the screen", f)
+		}
+	}
+	if FacetNone.field() != "" || FacetNone.Label() != "" {
+		t.Error("the empty facet names a field or a word, so it could compose a clause")
+	}
+}
+
+// Every facet the picker offers has to round-trip through a stable name too,
+// or Encode would silently drop every term of that facet.
+func TestFacets_AllHaveAStableName(t *testing.T) {
+	t.Parallel()
+
+	for _, f := range Facets {
+		name := f.stableName()
+		if name == "" {
+			t.Errorf("facet %d has no stable name", f)
+			continue
+		}
+		got, ok := facetByName(name)
+		if !ok || got != f {
+			t.Errorf("facetByName(%q) = %v, %v, want %v, true", name, got, ok, f)
+		}
+	}
+	if FacetNone.stableName() != "" {
+		t.Error("the empty facet has a stable name, so it could be written down")
+	}
+}
+
+func TestTerms_EncodeDecodeRoundTripsIncludingQuotesAndCommas(t *testing.T) {
+	t.Parallel()
+
+	terms := Terms{
+		{Facet: FacetAssignee, ID: "acct:with:colons", Label: `Ada "The Enchantress" Lovelace`},
+		{Facet: FacetLabel, ID: "needs-triage, urgent", Label: "needs-triage, urgent"},
+		{Facet: FacetAssignee, Label: "unassigned"},
+		{Facet: FacetStatus, ID: "10203", Label: "In Progress"},
+	}
+
+	enc := terms.Encode()
+	if enc == "" {
+		t.Fatal("Encode of non-empty terms answered the empty string")
+	}
+	got, ok := DecodeTerms(enc)
+	if !ok {
+		t.Fatalf("DecodeTerms(%q) = _, false", enc)
+	}
+	if len(got) != len(terms) {
+		t.Fatalf("got %d terms, want %d: %+v", len(got), len(terms), got)
+	}
+	for i, want := range terms {
+		if got[i] != want {
+			t.Errorf("term %d = %+v, want %+v", i, got[i], want)
+		}
+	}
+}
+
+func TestTerms_EncodeOfNoTermsIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	if got := Terms(nil).Encode(); got != "" {
+		t.Errorf("Encode(nil) = %q, want empty", got)
+	}
+	if got := (Terms{}).Encode(); got != "" {
+		t.Errorf("Encode(empty) = %q, want empty", got)
+	}
+}
+
+func TestDecodeTerms_RejectsWhatEncodeWouldNeverHaveWritten(t *testing.T) {
+	t.Parallel()
+
+	for name, s := range map[string]string{
+		"empty string":                     "",
+		"blank":                            "   ",
+		"not JSON at all":                  "assignee=acct-ada",
+		"a JSON object, not list":          `{"facet":"status","id":"1","label":"Done"}`,
+		"a facet this build does not name": `[{"facet":"sprint","id":"7","label":"Sprint 7"}]`,
+		"an empty list":                    `[]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got, ok := DecodeTerms(s); ok {
+				t.Errorf("DecodeTerms(%q) = %+v, true, want false", s, got)
+			}
+		})
+	}
+}
+
+// One term this build does not recognise must not cost the others: a build
+// downgrade, or a future facet an older client cannot yet name, should still
+// restore whatever it does.
+func TestDecodeTerms_DropsAnUnknownFacetAndKeepsTheRest(t *testing.T) {
+	t.Parallel()
+
+	enc := `[{"facet":"sprint","id":"7","label":"Sprint 7"},{"facet":"status","id":"1","label":"Done"}]`
+	got, ok := DecodeTerms(enc)
+	if !ok {
+		t.Fatalf("DecodeTerms(%q) = _, false", enc)
+	}
+	want := Terms{{Facet: FacetStatus, ID: "1", Label: "Done"}}
+	if len(got) != 1 || got[0] != want[0] {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}

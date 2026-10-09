@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 )
 
 func querySpec(id string, slot int, v *stubView) ViewSpec {
@@ -17,20 +17,20 @@ func querySpec(id string, slot int, v *stubView) ViewSpec {
 	return s
 }
 
-func savedQueries(t *testing.T, in ...app.SavedQuery) app.SavedQueries {
+func savedQueries(t *testing.T, in ...appsearch.SavedQuery) appsearch.SavedQueries {
 	t.Helper()
-	q, err := app.NewSavedQueries(in...)
+	q, err := appsearch.NewSavedQueries(in...)
 	if err != nil {
 		t.Fatalf("NewSavedQueries: %v", err)
 	}
 	return q
 }
 
-func twoQueries(t *testing.T) app.SavedQueries {
+func twoQueries(t *testing.T) appsearch.SavedQueries {
 	t.Helper()
 	return savedQueries(t,
-		app.SavedQuery{Name: "Blockers", JQL: "priority = Highest ORDER BY updated DESC", Slot: 1},
-		app.SavedQuery{Name: "Mine", JQL: "assignee = currentUser() ORDER BY updated DESC", Slot: 3},
+		appsearch.SavedQuery{Name: "Blockers", JQL: "priority = Highest ORDER BY updated DESC", Slot: 1},
+		appsearch.SavedQuery{Name: "Mine", JQL: "assignee = currentUser() ORDER BY updated DESC", Slot: 3},
 	)
 }
 
@@ -341,10 +341,10 @@ func TestBindQuery_TakesTheKeyFromWhateverHeldItAndSaysSo(t *testing.T) {
 	issues := &stubView{id: "issues"}
 	RegisterView(querySpec("issues", 1, issues))
 
-	var written []app.SavedQuery
+	var written []appsearch.SavedQuery
 	d := testDeps()
 	d.Saved = twoQueries(t)
-	d.SaveQueries = func(q app.SavedQueries) error {
+	d.SaveQueries = func(q appsearch.SavedQueries) error {
 		written = q.All()
 		return nil
 	}
@@ -382,7 +382,7 @@ func TestBindQuery_TakesTheKeyFromWhateverHeldItAndSaysSo(t *testing.T) {
 
 func TestBindQuery_ReportsWhatWentWrongWithoutTakingTheKeyAway(t *testing.T) {
 	tests := map[string]struct {
-		save    func(app.SavedQueries) error
+		save    func(appsearch.SavedQueries) error
 		bind    BindQueryMsg
 		want    string
 		bound   bool
@@ -394,7 +394,7 @@ func TestBindQuery_ReportsWhatWentWrongWithoutTakingTheKeyAway(t *testing.T) {
 			bound: true,
 		},
 		"a failed write is reported, not swallowed": {
-			save:    func(app.SavedQueries) error { return errors.New("the config file is read-only") },
+			save:    func(appsearch.SavedQueries) error { return errors.New("the config file is read-only") },
 			bind:    BindQueryMsg{Name: "Shipped", JQL: `status = "Shipped"`, Slot: 2},
 			want:    "the config file is read-only",
 			bound:   true,

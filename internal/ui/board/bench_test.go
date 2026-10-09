@@ -9,7 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appboard "github.com/varijkapil13/saral/internal/app/board"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -98,7 +99,7 @@ func BenchmarkBoardView20(b *testing.B) {
 // the bar under the grid and keeps the grid itself worth scrolling.
 func BenchmarkBoardView10kTermed(b *testing.B) {
 	m := marked(b, 4, 10000, 120, 40)
-	m.terms = filter.Terms{{Facet: filter.FacetStatus, ID: "9000", Label: "Column 0"}}
+	m.terms = appterm.Terms{{Facet: appterm.FacetStatus, ID: "9000", Label: "Column 0"}}
 	m.place()
 	if m.gridRows() == 0 {
 		b.Fatal("the term left no cards to scroll through, so this benchmark proves nothing")
@@ -227,7 +228,7 @@ func BenchmarkBoardRank5k(b *testing.B) {
 		if i%2 == 1 {
 			anchor, after = m.issueAt(0, 6).Key, true
 		}
-		m.issues = shiftIssue(m.issues, m.indexOf(key), anchor, after)
+		m.issues = appboard.ShiftIssue(m.issues, m.indexOf(key), anchor, after)
 		m.place()
 		m.forget()
 		m.restore(key)
@@ -261,7 +262,7 @@ func lanedBoard(tb testing.TB, cards int) *Model {
 		u := jira.User{AccountID: "acct-" + strconv.Itoa(i%8), DisplayName: "Person " + strconv.Itoa(i%8)}
 		m.issues[i].Assignee = &u
 	}
-	m.laneFor, m.laneKnown, m.laneMode = m.plan.boardID, true, lanesByAssignee
+	m.laneFor, m.laneKnown, m.laneMode = m.plan.BoardID, true, lanesByAssignee
 	m.place()
 	m.forget()
 	if len(m.lanes) != 8 || !strings.Contains(m.View(), "Person 0") {
@@ -399,7 +400,7 @@ func lanedCards5k(tb testing.TB, look card.Look) *Model {
 		u := jira.User{AccountID: "acct-" + strconv.Itoa(i%8), DisplayName: "Person " + strconv.Itoa(i%8)}
 		m.issues[i].Assignee = &u
 	}
-	m.laneFor, m.laneKnown, m.laneMode = m.plan.boardID, true, lanesByAssignee
+	m.laneFor, m.laneKnown, m.laneMode = m.plan.BoardID, true, lanesByAssignee
 	m.place()
 	m.forget()
 	if len(m.lanes) != 8 || !strings.Contains(m.View(), "Person 0") {

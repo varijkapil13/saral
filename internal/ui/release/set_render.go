@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
@@ -78,9 +79,9 @@ func (m *Model) setSummaryLine(key summaryKey) string {
 			m.zones.Mark(sortZone, m.styles.accent.Render("sort: "+m.sort.plainIn(setSortFields, glyphs)))
 	}
 	b.Reset()
-	if key.filter != filterAll {
+	if key.filter != apprelease.FilterAll {
 		b.WriteString(" · ")
-		b.WriteString(key.filter.name())
+		b.WriteString(key.filter.Name())
 	}
 	if key.set.pick != "" {
 		b.WriteString(" · project ")
@@ -96,7 +97,7 @@ func (m *Model) setSummaryLine(key summaryKey) string {
 		b.WriteString(" of ")
 	}
 	b.WriteString(plural(key.versions, "version", "versions"))
-	if key.shown == key.versions && key.filter == filterAll && key.released > 0 {
+	if key.shown == key.versions && key.filter == apprelease.FilterAll && key.released > 0 {
 		b.WriteString(" · ")
 		b.WriteString(strconv.Itoa(key.released))
 		b.WriteString(" released")
@@ -203,8 +204,8 @@ func (m *Model) findPrompt() string {
 // appendNarrowed says that the filters in force leave nothing, and names each one with the key that undoes it.
 func (m *Model) appendNarrowed(lines []string, room int, more []string) []string {
 	var parts []string
-	if m.filter != filterAll {
-		parts = append(parts, "state "+m.filter.name()+" ("+filterHint+")")
+	if m.filter != apprelease.FilterAll {
+		parts = append(parts, "state "+m.filter.Name()+" ("+filterHint+")")
 	}
 	if m.find.rawNeedle != "" {
 		parts = append(parts, "text "+strconv.Quote(m.find.rawNeedle)+" ("+findHint+")")
@@ -250,7 +251,7 @@ var setSortFields = func() []sortField {
 		out = append(out, f)
 		if i == 0 {
 			out = append(out, sortField{id: "owner", label: "project", compare: func(a, b sortable) int {
-				return strings.Compare(strings.ToLower(a.owner), strings.ToLower(b.owner))
+				return apprelease.CompareNames(a.owner, b.owner)
 			}})
 		}
 	}

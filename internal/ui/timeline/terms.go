@@ -1,14 +1,12 @@
 package timeline
 
 import (
-	"slices"
-
 	tea "charm.land/bubbletea/v2"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
-	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 // OpenFilterMsg opens the picker over the chart on screen. It is exported so
@@ -30,10 +28,8 @@ func (m *Model) openFilterPicker() tea.Cmd {
 
 // applyFilterTerm puts a value in force or takes it off again, and rebuilds
 // the chart's rows from what is already loaded rather than asking the site
-// again — the same locally-applied narrowing board.terms and backlog.terms
-// use, and for the same reason: this chart's own read is already whole in
-// memory.
-func (m *Model) applyFilterTerm(term filter.Term) tea.Cmd {
+// again: this chart's own read is already whole in memory.
+func (m *Model) applyFilterTerm(term appterm.Term) tea.Cmd {
 	return m.setTerms(m.terms.Toggle(term))
 }
 
@@ -47,11 +43,11 @@ func (m *Model) clearFilter() tea.Cmd {
 	return m.setTerms(nil)
 }
 
-func (m *Model) recallTerms() (filter.Terms, bool) { return filterbar.Recall(m.deps, ViewID) }
+func (m *Model) recallTerms() (appterm.Terms, bool) { return filterbar.Recall(m.deps, ViewID) }
 
 func (m *Model) rememberTerms() { filterbar.Keep(m.deps, ViewID, m.terms) }
 
-func (m *Model) setTerms(next filter.Terms) tea.Cmd {
+func (m *Model) setTerms(next appterm.Terms) tea.Cmd {
 	m.terms, m.termsGen = next, m.termsGen+1
 	m.rememberTerms()
 	m.take(m.res, m.issues, false)
@@ -69,66 +65,8 @@ func (m *Model) clickTerm(msg tea.MouseClickMsg) (tea.Cmd, bool) {
 	if !ok {
 		return nil, false
 	}
-	if facet != filter.FacetNone {
+	if facet != appterm.FacetNone {
 		return m.setTerms(m.terms.Without(facet)), true
 	}
 	return m.setTerms(m.terms.Toggle(value)), true
-}
-
-// matchesTerms reports whether an issue passes every facet currently in
-// force: AND across facets, OR within one facet's own values — the same
-// semantics board.matchesTerms evaluates locally for the same reason: what is
-// held is already whole in memory.
-func matchesTerms(iss *jira.Issue, terms filter.Terms) bool {
-	if len(terms) == 0 {
-		return true
-	}
-	byFacet := make(map[filter.Facet][]filter.Term, len(terms))
-	for _, t := range terms {
-		byFacet[t.Facet] = append(byFacet[t.Facet], t)
-	}
-	for facet, want := range byFacet {
-		matched := false
-		for _, t := range want {
-			if matchesFacet(iss, facet, t.ID) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
-	}
-	return true
-}
-
-// matchesFacet reads the same field of an issue that Facet.field names on the
-// JQL side, an empty id meaning the field itself is empty — "unassigned" is a
-// value like any other, the way the picker already treats it.
-func matchesFacet(iss *jira.Issue, facet filter.Facet, id string) bool {
-	switch facet {
-	case filter.FacetAssignee:
-		if id == "" {
-			return iss.Assignee == nil || iss.Assignee.AccountID == ""
-		}
-		return iss.Assignee != nil && iss.Assignee.AccountID == id
-	case filter.FacetReporter:
-		if id == "" {
-			return iss.Reporter == nil || iss.Reporter.AccountID == ""
-		}
-		return iss.Reporter != nil && iss.Reporter.AccountID == id
-	case filter.FacetStatus:
-		return iss.Status.ID == id
-	case filter.FacetType:
-		return iss.Type.ID == id
-	case filter.FacetPriority:
-		if id == "" {
-			return iss.Priority == nil
-		}
-		return iss.Priority != nil && iss.Priority.ID == id
-	case filter.FacetLabel:
-		return slices.Contains(iss.Labels, id)
-	case filter.FacetNone:
-	}
-	return false
 }

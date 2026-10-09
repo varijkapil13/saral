@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appplan "github.com/varijkapil13/saral/internal/app/plan"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/release"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -25,15 +26,26 @@ const (
 
 // releasesOf files what a read brought back, with the two lines the plan says
 // about it built once rather than on every reflow.
-func releasesOf(local bool, msg *releasesMsg) releases {
+func releasesOf(local bool, got *appplan.Releases) releases {
 	held := releases{
-		read: true, versions: msg.versions, owners: msg.owners, refused: msg.refused,
-		names: msg.names, boards: msg.boards, refs: msg.read,
-		detail: msg.detail, detailErr: msg.detailErr,
+		read: true, versions: got.Versions, owners: got.Owners, refused: refusalsOf(got.Refused),
+		names: got.Names, boards: got.Boards, refs: got.Read,
+		detail: got.Detail, detailErr: got.DetailErr,
 	}
 	held.head = headWords(local, &held)
 	held.cross, held.crossWarn = crossWords(local, &held)
 	return held
+}
+
+func refusalsOf(in []appplan.Refusal) []refusal {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]refusal, 0, len(in))
+	for _, r := range in {
+		out = append(out, refusal{kind: string(r.Kind), ref: r.Ref, reason: refusedReason(r.Err)})
+	}
+	return out
 }
 
 func ownerLabel(local bool, held *releases, ref string) string {
@@ -63,23 +75,6 @@ func headWords(local bool, held *releases) string {
 	return n + " across " + ownerList(local, held)
 }
 
-func excludedIn(held *releases) int {
-	if held.detail == nil || len(held.detail.ExcludedVersionIDs) == 0 {
-		return 0
-	}
-	ids := make(map[string]bool, len(held.detail.ExcludedVersionIDs))
-	for _, id := range held.detail.ExcludedVersionIDs {
-		ids[id] = true
-	}
-	n := 0
-	for i := range held.versions {
-		if ids[held.versions[i].ID] {
-			n++
-		}
-	}
-	return n
-}
-
 func crossWords(local bool, held *releases) (text string, warn bool) {
 	switch {
 	case local:
@@ -88,7 +83,7 @@ func crossWords(local bool, held *releases) (text string, warn bool) {
 		reason, _ := jira.Reason(held.detailErr)
 		return "cross-space releases not read, so the browser arranges by project: " + reason, true
 	}
-	cross, excluded := 0, excludedIn(held)
+	cross, excluded := 0, appplan.ExcludedCount(held.versions, held.detail)
 	if held.detail != nil {
 		cross = len(held.detail.CrossProjectReleases)
 	}
@@ -136,12 +131,7 @@ func setOf(plan *jira.Plan, held *releases, reload func(context.Context) (releas
 		for _, c := range held.detail.CrossProjectReleases {
 			set.Groups = append(set.Groups, release.Group{Name: c.Name, VersionIDs: c.VersionIDs})
 		}
-		if len(held.detail.ExcludedVersionIDs) > 0 {
-			set.Excluded = make(map[string]bool, len(held.detail.ExcludedVersionIDs))
-			for _, id := range held.detail.ExcludedVersionIDs {
-				set.Excluded[id] = true
-			}
-		}
+		set.Excluded = appplan.Excluded(held.detail)
 	}
 	row := planRow{plan: *plan}
 	for i := range held.refused {
@@ -150,13 +140,13 @@ func setOf(plan *jira.Plan, held *releases, reload func(context.Context) (releas
 	return set
 }
 
-func reloadOf(reader releaseReader, plan jira.Plan, known map[string]string) func(context.Context) (release.Set, error) {
+func reloadOf(reader appplan.Reader, plan jira.Plan, known map[string]string) func(context.Context) (release.Set, error) {
 	return func(ctx context.Context) (release.Set, error) {
-		msg, err := collectReleases(ctx, reader, plan, known)
+		got, err := appplan.ReadReleases(ctx, reader, plan, known)
 		if err != nil {
 			return release.Set{}, err
 		}
-		fresh := releasesOf(plan.Local, &msg)
+		fresh := releasesOf(plan.Local, &got)
 		if len(fresh.versions) == 0 {
 			return release.Set{}, errors.New("the site answered no releases for this plan")
 		}
@@ -181,7 +171,7 @@ func (m *Model) browse(at int) tea.Cmd {
 	case !ok || !held.read || held.err != nil || len(held.versions) == 0:
 		return kernel.Status("this plan has no releases to browse")
 	}
-	reader := releaseReader(m.deps.Jira)
+	reader := appplan.Reader(m.deps.Jira)
 	reload := reloadOf(reader, plan, maps.Clone(held.names))
 	set := setOf(&plan, &held, reload)
 	return kernel.Push(release.SetViewID, "Releases in "+plan.Name, release.NewSet(m.deps, set))

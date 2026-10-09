@@ -108,8 +108,8 @@ func (m *Model) progress() string {
 
 func (m *Model) sprintDone() (done, total float64, unit string) {
 	last := -1
-	for c := len(m.plan.columns) - 1; c >= 0; c-- {
-		if len(m.plan.columns[c].statuses) > 0 {
+	for c := len(m.plan.Columns) - 1; c >= 0; c-- {
+		if len(m.plan.Columns[c].Statuses) > 0 {
 			last = c
 			break
 		}
@@ -117,7 +117,7 @@ func (m *Model) sprintDone() (done, total float64, unit string) {
 	var cards, doneCards int
 	var points, donePoints float64
 	for i := range m.issues {
-		at, mapped := m.plan.columnOf(m.issues[i].Status.ID)
+		at, mapped := m.plan.ColumnOf(m.issues[i].Status.ID)
 		if !mapped {
 			continue
 		}
@@ -125,10 +125,10 @@ func (m *Model) sprintDone() (done, total float64, unit string) {
 		if at == last {
 			doneCards++
 		}
-		if !m.plan.estimates {
+		if !m.plan.Estimates {
 			continue
 		}
-		if n, ok := m.issues[i].Fields.Number(m.plan.estimate); ok {
+		if n, ok := m.issues[i].Fields.Number(m.plan.Estimate); ok {
 			points += n
 			if at == last {
 				donePoints += n
@@ -136,7 +136,7 @@ func (m *Model) sprintDone() (done, total float64, unit string) {
 		}
 	}
 	if points > 0 {
-		unit = strings.TrimSpace(widget.Sanitize(m.plan.estimate.Name))
+		unit = strings.TrimSpace(widget.Sanitize(m.plan.Estimate.Name))
 		if unit == "" {
 			unit = "estimated"
 		}

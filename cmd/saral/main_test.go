@@ -11,7 +11,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/store"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -693,7 +694,7 @@ func TestBuild_ThePollFlagIsOffUnlessItIsGiven(t *testing.T) {
 }
 
 // TestFirstPaint_GatesAViewOnWhatTheLastRunLearnt runs the capability half of
-// that same path: bbolt on disk, through app.CapsCache, onto kernel.Deps, into
+// that same path: bbolt on disk, through cache.CapsCache, onto kernel.Deps, into
 // whether a gated view is on the first frame at all. It is here rather than in
 // the kernel's own tests because the type assertion the kernel makes on
 // Deps.Cache is only true of what this file builds.
@@ -706,7 +707,7 @@ func TestFirstPaint_GatesAViewOnWhatTheLastRunLearnt(t *testing.T) {
 		t.Fatalf("build: %v", err)
 	}
 	defer releaseCache()
-	held, ok := deps.Cache.(app.CapsCache)
+	held, ok := deps.Cache.(appcache.CapsCache)
 	if !ok {
 		t.Fatalf("the cache this build opens is a %T, which the kernel cannot ask about capabilities", deps.Cache)
 	}
@@ -736,7 +737,7 @@ func TestFirstPaint_GatesAViewOnWhatTheLastRunLearnt(t *testing.T) {
 }
 
 // TestFirstPaint_DrawsRowsOutOfTheRealCacheFile is the one test that runs the
-// whole path: bbolt on disk, through app.Cache, onto kernel.Deps, into the list's
+// whole path: bbolt on disk, through cache.Cache, onto kernel.Deps, into the list's
 // constructor, and out as a frame. Everything above the store is otherwise tested
 // against a cache in a map, because internal/ui may not import internal/store.
 func TestFirstPaint_DrawsRowsOutOfTheRealCacheFile(t *testing.T) {
@@ -758,7 +759,7 @@ func TestFirstPaint_DrawsRowsOutOfTheRealCacheFile(t *testing.T) {
 	}
 
 	rows := jiratest.Gen(5)
-	mask := jira.NewFieldMask(app.ListProjection().IDs)
+	mask := jira.NewFieldMask(appquery.ListProjection().IDs)
 	for i := range rows {
 		rows[i].Requested = mask
 	}

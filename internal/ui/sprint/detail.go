@@ -93,11 +93,11 @@ func (m *Model) detailLines() []string {
 func (m *Model) standing(sp jira.Sprint) string {
 	p, ok := m.progress[sp.ID]
 	switch {
-	case ok && p.err != nil:
-		reason, _ := jira.Reason(p.err)
+	case ok && p.Err != nil:
+		reason, _ := jira.Reason(p.Err)
 		return "The issues in it could not be counted: " + reason
 	case ok:
-		return p.words()
+		return progressWords(p.Progress)
 	case m.counting:
 		return "Counting the issues in it" + m.deps.Theme.Glyphs.Ellipsis
 	}

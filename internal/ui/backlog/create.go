@@ -8,7 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appboard "github.com/varijkapil13/saral/internal/app/board"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
@@ -110,29 +111,15 @@ func (m *Model) created(msg form.CreatedMsg) tea.Cmd {
 
 // settle runs on a context of its own: a re-read of the board cancels the read
 // in flight, and the move into the sprint is what the user asked for.
-func settle(mover jira.SprintManager, reader jira.IssueReader, search *app.Search, fields []string,
-	want app.Projection, board int64, key string, sp jira.Sprint,
+func settle(mover jira.SprintManager, reader jira.IssueReader, search *appquery.Search, fields []string,
+	want appquery.Projection, board int64, key string, sp jira.Sprint,
 ) tea.Cmd {
 	return func() tea.Msg {
-		ctx := context.Background()
-		out := createdMsg{board: board, key: key, sprint: sp}
-		if sp.ID != 0 {
-			out.moveErr = mover.MoveToSprint(ctx, sp.ID, []string{key})
+		got := appboard.Settle(context.Background(), mover, reader, search, fields, want, key, sp.ID)
+		return createdMsg{
+			board: board, key: key, sprint: sp,
+			moveErr: got.MoveErr, read: got.Read, issue: got.Issue, readErr: got.ReadErr,
 		}
-		if reader == nil {
-			return out
-		}
-		out.read = true
-		if len(fields) == 0 && search != nil {
-			wanted, err := search.Resolve(ctx, want)
-			if err != nil {
-				out.readErr = err
-				return out
-			}
-			fields = wanted.IDs
-		}
-		out.issue, out.readErr = reader.IssueFields(ctx, key, fields)
-		return out
 	}
 }
 
