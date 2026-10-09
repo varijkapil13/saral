@@ -146,6 +146,12 @@ A second test reads the table itself, because a rule can be wrong in a way that 
 green: a duplicated name, a missing `why`, an exemption that no package the rule covers could match,
 or one broad enough to swallow the rule's whole scope.
 
+`internal/arch/contexts_test.go` holds the bounded contexts inside `internal/app` apart: a context
+imports no other context, the shared kernel imports no context and not the root, and the root imports
+no context. The root's non-test files are a closed list that fails on a file added and on a file
+gone. Both tests fail outright when they find nothing to scan, and the predicate has a table of its
+own, one row per rule and per near miss.
+
 The rules only see imports within this module. "No IO libs in `internal/app`" is a convention nobody
 can check this way — a `net/http` import there is invisible to the walk.
 

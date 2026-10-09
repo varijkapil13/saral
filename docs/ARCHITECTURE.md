@@ -24,7 +24,9 @@ Three constraints drive every decision below:
 │    richtext/          ADF to styled lines, memoized         │
 ├─────────────────────────────────────────────────────────────┤
 │  internal/app         use cases — orchestration, no IO libs │
-│                       cache policy: kinds, TTLs, the codec  │
+│    board/ issue/ ...  bounded contexts, one per concern      │
+│    cache/ match/ ...  shared kernel, a closed list          │
+│    (root)             legacy: cache policy, dates, search   │
 ├─────────────────────────────────────────────────────────────┤
 │  internal/store       bbolt: the file, buckets, records     │
 ├─────────────────────────────────────────────────────────────┤
@@ -44,13 +46,70 @@ import `pkg/jira`, because the document library does not know about issues; `int
 never import `internal/ui`, because the cache is written to and read by the layers above it and never
 renders anything; and `internal/ui` must never import `internal/store`, because a view takes what it
 needs as an interface declared above the store and can then be driven by a fake. All seven are
-enforced in CI by an import-boundary test (see `docs/TESTING.md`).
+enforced in CI by an import-boundary test (see `docs/TESTING.md`). Inside `internal/app` a context
+imports only the shared kernel and, while it migrates, the legacy root; that has a test of its own,
+described under [Bounded contexts in `internal/app`](#bounded-contexts-in-internalapp).
 
 The "no IO libs" on `internal/app` is the one line above that no test can hold you to: the
 import-boundary test only sees imports within this module, so a `net/http` in a use case is invisible
 to it. Treat it as a rule a reviewer enforces. It means a use case does not open sockets or files
 itself, not that it may not reach the layer below: `internal/app` holds the cache policy and so imports
 `internal/store`, which is downward and deliberate. bbolt is named in exactly one package.
+
+## Bounded contexts in `internal/app`
+
+Jira owns the domain model. What Saral owns is the client side of it: an edit shown before the site
+accepts it, a conflict between what was read and what is there now, duplicate requests coalesced, a
+draft kept, the cache, a bulk plan, a date resolved from whichever field the site has, a filter term.
+Much of that still lives in the views under `internal/ui`, which decide as well as draw. It moves
+into `internal/app`, split by the concern it serves, until a view only renders and calls a use case
+and the terminal is one front end among several that could be written.
+
+This is DDD without the ceremony: no aggregates, no repositories. `pkg/jira` stays the port and is
+the anti-corruption layer; a context takes the narrow `jira.*` interfaces it needs and speaks in the
+port's types.
+
+| Context | Holds | Drains |
+|---|---|---|
+| `board` | board and backlog: the three-step load and paging, column and lane grouping, quick filters, backlog grouping by sprint, rank | `ui/board`, `ui/backlog` |
+| `issue` | read, edit and the conflict check, field coercion, create, drafts, links, watchers, worklogs, the children sort | `ui/issue`, `ui/form`, root `issue.go` |
+| `comment` | comment create, edit and delete, drafts | `ui/comment`, `ui/mention` |
+| `attach` | upload, download and delete | `ui/attach` (path completion stays in the view) |
+| `sprint` | create, start, complete with a destination, progress | `ui/sprint` |
+| `release` | versions, facets, the release flow, bulk fixVersion | `ui/release` |
+| `move` | the bulk-move plan and task progress | `ui/move` |
+| `search` | the search runner, saved queries, list paging, refresh and polling, the local index, palette frecency | `ui/list`, `ui/search`, `ui/palette`, root `search.go`, `index.go` |
+| `timeline` | date resolution | `ui/timeline`, root `dates.go` |
+| `plan` | plans and local plans | `ui/plan` |
+| `connect` | the onboarding probe, capabilities, profile and session switch, settings field mapping | `ui/onboarding`, `ui/settings`, the kernel's caps probe |
+
+The **shared kernel** is a closed list, `sharedKernel` in `internal/arch/contexts_test.go`: `cache`
+(the disk cache, its kinds, TTLs and codec, and the only package here that imports `internal/store`),
+`match` (the fuzzy pattern), `term` (the filter-term model, out of `ui/filter`) and `issueref` (issue
+key and URL parsing). Adding to it is a decision with a reason, not a convenience.
+
+The rules, the first three enforced by `internal/arch/contexts_test.go`:
+
+- **A context imports `pkg/*`, the shared kernel and, while it migrates, the legacy root.** Never
+  another context: contexts are drained and changed in parallel, and what two of them need belongs
+  in the shared kernel.
+- **The shared kernel imports no context and not the root.**
+- **The root imports no context, and only shrinks.** It may import the shared kernel, which is
+  what lets `cache` and `match` leave it before `index.go` and `search.go` do. Its non-test files are
+  a closed list, `legacyRootFiles`; a file not on it fails, so new code goes into a context, and a
+  listed file that is gone fails too, so the list stays true. The migration ends with the root empty.
+- **A context has no Bubble Tea in it.** It exposes plain types and functions. The view keeps timing
+  (debounce ticks, wrapping a call in a `tea.Cmd`), focus, the cursor, layout and its messages, and
+  decides nothing a second front end would have to decide again.
+- **Long-running work is something a caller drains.** Polling, task progress and a bulk assign are
+  exposed as, say, a function returning the next event or a channel; the view turns each event into
+  a message.
+- **A view imports a context as `app<context>`**, as in `appboard "…/internal/app/board"`, always and
+  not only where the name collides with the view's own package, so a call site says which side of
+  the line it is on.
+
+The migration is Batch 13 in `docs/ROADMAP.md`. `board` is first, holding the rank state machine
+the board and the backlog share.
 
 ## Ports and adapters
 

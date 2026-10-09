@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/issue"
@@ -169,7 +170,7 @@ type Model struct {
 	card   *held
 	moving bool
 
-	rank app.Ranking[struct{}]
+	rank appboard.Ranking[struct{}]
 
 	// me is the account this session is signed in as, asked for the first
 	// time only-my-issues is toggled.
