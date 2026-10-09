@@ -169,9 +169,7 @@ type Model struct {
 	card   *held
 	moving bool
 
-	rank     *ranking
-	rankGen  int
-	rankStop context.CancelFunc
+	rank app.Ranking[struct{}]
 
 	// me is the account this session is signed in as, asked for the first
 	// time only-my-issues is toggled.
@@ -558,7 +556,7 @@ func (m *Model) Close() {
 	m.stop()
 	m.stopQuickFilters()
 	m.stopMove()
-	m.stopRank()
+	m.rank.Stop()
 	m.stopLanding()
 	if m.bulk != nil {
 		m.bulk.stopAsking()
@@ -752,7 +750,7 @@ func (m *Model) reproject(project string) tea.Cmd {
 	m.terms, said = filterbar.Reproject(m.deps, ViewID, was, m.terms)
 	m.abandon()
 	m.stopMove()
-	m.dropRank()
+	m.rank.Drop()
 	m.letGoOfBoard()
 	m.needle, m.finding = "", false
 	m.all, m.at, m.ready = nil, 0, false
@@ -1109,7 +1107,7 @@ func (m *Model) nextBoard() tea.Cmd {
 	m.at = (m.at + 1) % len(m.all)
 	m.abandon()
 	m.stopMove()
-	m.dropRank()
+	m.rank.Drop()
 	m.letGoOfBoard()
 	m.forgetSprints()
 	m.ready, m.issues, m.cols, m.unmapped, m.stale = false, nil, nil, 0, false
@@ -1946,7 +1944,7 @@ func (m *Model) nextSprint() tea.Cmd {
 	at := slices.IndexFunc(m.sprints, func(sp jira.Sprint) bool { return sp.ID == m.sprint.ID })
 	m.sprint = m.sprints[(at+1)%len(m.sprints)]
 	kernel.Keep(m.deps, ViewID, sprintMemoryKey(m.plan.boardID), strconv.FormatInt(m.sprint.ID, 10))
-	m.dropRank()
+	m.rank.Drop()
 	m.letGoOfBoard()
 	m.issues, m.more = nil, false
 	m.curRow = 0

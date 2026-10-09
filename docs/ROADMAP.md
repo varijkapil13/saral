@@ -1916,6 +1916,13 @@ record of what was built, what was left and why.
   pane put `issue.ShareBindings` there. A right-click selects the row or card under the pointer first,
   so the entries act on the clicked issue. No footer changes: every row is byte-identical to 0.9.0.
 
+- [x] **P11.10 — One rank state machine for the board and the backlog** · **owns** `internal/app/{rank.go,rank_test.go}`, `internal/ui/{board,backlog}/rank.go`, the rank fields in `internal/ui/{board/board.go,backlog/backlog.go}`, `docs/ROADMAP.md`
+  `app.Ranking[S]` holds the one issue ranked ahead of the site: the step, the coalesced resend, the
+  generation guard and the cancel, with `S` the snapshot a refusal restores (nothing on the board,
+  the rank field's value in the backlog). `app.RankOne` reads a partial answer naming the key as
+  success; `app.RankBeside`, `app.ShiftIssue` and `app.PutBack` are the shared list arithmetic. The
+  views keep the refusal reasons, the cursor, the regrouping and the status lines. No visible change.
+
 ## Batch 12 — Full-text search
 
 Search the site for what an issue says, from the keyboard anywhere. A packet ticks its own box with

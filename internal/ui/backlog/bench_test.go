@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/varijkapil13/saral/internal/app"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
@@ -259,7 +260,7 @@ func BenchmarkBacklogRank5k(b *testing.B) {
 		from, to := m.byKey[key], m.issues[anchor].Key
 		value, has := m.issues[anchor].Fields.Get(ref)
 		m.setRank(from, value, has)
-		m.issues = shiftIssue(m.issues, from, to, after)
+		m.issues = app.ShiftIssue(m.issues, from, to, after)
 		m.reindex()
 		m.regroup()
 		_ = m.View()
