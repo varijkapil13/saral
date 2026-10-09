@@ -1984,7 +1984,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
   Comment create, edit and delete, and drafts. Empty for `ui/comment`:
   `AddComment|Comments|DeleteComment|EditComment`; for `ui/mention`: `FindPeople`.
 
-- [ ] **P13.6 — `attach`** · after P13.2 · **owns** `internal/app/attach/**`, `internal/ui/attach/**`
+- [x] **P13.6 — `attach`** · after P13.2 · **owns** `internal/app/attach/**`, `internal/ui/attach/**`
   Upload, download and delete, with progress drained as events. Shell-style path completion stays in
   the view. Empty for `ui/attach`: `Attachments|DeleteAttachment|Download|Upload`.
 

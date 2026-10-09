@@ -13,6 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appattach "github.com/varijkapil13/saral/internal/app/attach"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -98,7 +99,7 @@ func (t tools) cached(site string, att jira.Attachment) (string, bool) {
 // rather than kept to resume from: nothing here can prove a file left behind is a
 // prefix of this attachment and of nothing else.
 func (t tools) save(ctx context.Context, reader jira.AttachmentReader, site string,
-	att jira.Attachment, progress func(int64),
+	att jira.Attachment, progress *appattach.Progress,
 ) (string, error) {
 	final := t.path(site, att)
 	if final == "" {
@@ -119,7 +120,7 @@ func (t tools) save(ctx context.Context, reader jira.AttachmentReader, site stri
 		_ = tmp.Close()
 		return "", err
 	}
-	if err := reader.Download(ctx, att.ID, tmp, jira.DownloadOptions{Progress: progress}); err != nil {
+	if err := appattach.Fetch(ctx, reader, att.ID, tmp, progress); err != nil {
 		_ = tmp.Close()
 		return "", err
 	}

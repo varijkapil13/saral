@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appattach "github.com/varijkapil13/saral/internal/app/attach"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -227,7 +228,7 @@ func TestPane_ACancelledDownloadLeavesNoFileBehind(t *testing.T) {
 	f.Delay(2 * time.Second)
 
 	att := dr.m.files[0]
-	steps := make(chan int64, 1)
+	steps := appattach.NewProgress()
 	ctx, gen := dr.m.begin()
 	dr.m.asked = att.ID
 	cmd := download(ctx, f, dr.m.tools, dr.m.deps.Site, att, previewIntent, gen, steps)
@@ -520,9 +521,9 @@ func TestPane_ADownloadInFlightSaysHowManyBytesHaveArrived(t *testing.T) {
 	mustContain(t, dr.view(), "Fetching screenshot.png", "1.0 KB of 2.0 KB")
 }
 
-func closedSteps() chan int64 {
-	steps := make(chan int64, 1)
-	close(steps)
+func closedSteps() *appattach.Progress {
+	steps := appattach.NewProgress()
+	steps.Close()
 	return steps
 }
 
