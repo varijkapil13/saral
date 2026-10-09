@@ -10,7 +10,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	appboard "github.com/varijkapil13/saral/internal/app/board"
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -114,7 +114,7 @@ func BenchmarkBacklogSteadyScroll20(b *testing.B) { scroll(b, stocked(b, 20, 120
 // force that still leaves rows on screen, which draws the bar under them.
 func BenchmarkBacklogSteadyScrollTermed10k(b *testing.B) {
 	m := stocked(b, 10000, 120, 40)
-	m.terms = filter.Terms{{Facet: filter.FacetType, ID: "10301", Label: "Story"}}
+	m.terms = appterm.Terms{{Facet: appterm.FacetType, ID: "10301", Label: "Story"}}
 	m.termsGen++
 	m.regroup()
 	if len(m.rows) == 0 {

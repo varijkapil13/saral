@@ -8,7 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -334,7 +334,7 @@ func TestMine_OToggleIsAnAssigneeTermTheBarNames(t *testing.T) {
 	dr := newDriver(t, testDeps(fake), 120, 20)
 
 	dr.key("M")
-	want := filter.Term{Facet: filter.FacetAssignee, ID: ada.AccountID, Label: ada.DisplayName}
+	want := appterm.Term{Facet: appterm.FacetAssignee, ID: ada.AccountID, Label: ada.DisplayName}
 	if !dr.m.terms.Has(want) || len(dr.m.terms) != 1 {
 		t.Fatalf("o put %v in force, want only %v", dr.m.terms, want)
 	}
@@ -360,12 +360,12 @@ func TestMine_OToggleIsAnAssigneeTermTheBarNames(t *testing.T) {
 // other facets alone.
 func TestMine_ReplacesOtherAssigneesAndKeepsOtherFacets(t *testing.T) {
 	t.Parallel()
-	grace := filter.Term{Facet: filter.FacetAssignee, ID: "acct-grace", Label: "Grace Hopper"}
-	bug := filter.Term{Facet: filter.FacetType, ID: "10004", Label: "Bug"}
-	got := mineToggled(filter.Terms{grace, bug}, ada)
-	mine := filter.Term{Facet: filter.FacetAssignee, ID: ada.AccountID}
+	grace := appterm.Term{Facet: appterm.FacetAssignee, ID: "acct-grace", Label: "Grace Hopper"}
+	bug := appterm.Term{Facet: appterm.FacetType, ID: "10004", Label: "Bug"}
+	got := mineToggled(appterm.Terms{grace, bug}, ada)
+	mine := appterm.Term{Facet: appterm.FacetAssignee, ID: ada.AccountID}
 	if !got.Has(mine) || got.Has(grace) || !got.Has(bug) || len(got) != 2 {
-		t.Errorf("only mine over %v gave %v", filter.Terms{grace, bug}, got)
+		t.Errorf("only mine over %v gave %v", appterm.Terms{grace, bug}, got)
 	}
 }
 

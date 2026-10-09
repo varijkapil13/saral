@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/comment"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -209,7 +210,7 @@ type Model struct {
 	inactive bool
 
 	search *app.Search
-	cache  app.Cache
+	cache  appcache.Cache
 	gen    int
 	cancel context.CancelFunc
 
@@ -323,7 +324,7 @@ func (m *Model) fromCache() {
 	if m.issue.Key == "" || m.issue.Requested.Wide() {
 		return
 	}
-	held, ok := m.cache.(app.IssueCache)
+	held, ok := m.cache.(appcache.IssueCache)
 	if !ok || held == nil {
 		return
 	}
@@ -331,7 +332,7 @@ func (m *Model) fromCache() {
 	if !ok {
 		return
 	}
-	m.issue = app.MergeIssue(snap.Issue, m.issue)
+	m.issue = appcache.MergeIssue(snap.Issue, m.issue)
 }
 
 // keepIssue stores a freshly read issue so this pane's next open draws it
@@ -339,7 +340,7 @@ func (m *Model) fromCache() {
 // rows do, so a field this pane never asked about — one a list row or a board
 // card happened to carry — is left as it was.
 func (m *Model) keepIssue(iss jira.Issue) tea.Cmd {
-	held, ok := m.cache.(app.IssueCache)
+	held, ok := m.cache.(appcache.IssueCache)
 	if !ok || held == nil {
 		return nil
 	}

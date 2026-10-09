@@ -9,7 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/uitest"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -56,24 +56,24 @@ func TestList_ClickingACellAsksTheSiteForThatValueAndClickingItAgainDropsIt(t *t
 	for name, tc := range map[string]struct {
 		zone  func(string) string
 		key   string
-		kind  filter.Facet
+		kind  appterm.Facet
 		label string
 		jql   string
 	}{
 		"a status chip": {
-			zone: statusZone, key: "PROJ-2", kind: filter.FacetStatus, label: "Shipped",
+			zone: statusZone, key: "PROJ-2", kind: appterm.FacetStatus, label: "Shipped",
 			jql: `project = "PROJ" AND status = "10203" ORDER BY updated DESC`,
 		},
 		"a type chip": {
-			zone: typeZone, key: "PROJ-2", kind: filter.FacetType, label: "Chore",
+			zone: typeZone, key: "PROJ-2", kind: appterm.FacetType, label: "Chore",
 			jql: `project = "PROJ" AND issuetype = "10303" ORDER BY updated DESC`,
 		},
 		"an assignee": {
-			zone: whoZone, key: "PROJ-2", kind: filter.FacetAssignee, label: "Alan Turing",
+			zone: whoZone, key: "PROJ-2", kind: appterm.FacetAssignee, label: "Alan Turing",
 			jql: `project = "PROJ" AND assignee = "acct-alan" ORDER BY updated DESC`,
 		},
 		"nobody at all": {
-			zone: whoZone, key: "PROJ-4", kind: filter.FacetAssignee, label: unassigned,
+			zone: whoZone, key: "PROJ-4", kind: appterm.FacetAssignee, label: unassigned,
 			jql: `project = "PROJ" AND assignee IS EMPTY ORDER BY updated DESC`,
 		},
 	} {
@@ -308,7 +308,7 @@ func TestList_ThePaletteNarrowsToTheRowUnderTheCursor(t *testing.T) {
 	dr.key("j", "j")
 	want := dr.m.selectedIssue().Status.ID
 
-	dr.send(FacetMsg{Kind: filter.FacetStatus})
+	dr.send(FacetMsg{Kind: appterm.FacetStatus})
 
 	if len(dr.m.terms) != 1 || dr.m.terms[0].ID != want {
 		t.Fatalf("the palette put %+v in force, want the status %q of the row under the cursor", dr.m.terms, want)
@@ -329,7 +329,7 @@ func TestList_ThePaletteSaysSoWhenThereIsNoRowToNarrowBy(t *testing.T) {
 	d := testDeps(newFake(0))
 	dr := openAll(t, d, 120, 30)
 
-	dr.send(FacetMsg{Kind: filter.FacetStatus})
+	dr.send(FacetMsg{Kind: appterm.FacetStatus})
 
 	if len(dr.m.terms) != 0 {
 		t.Fatal("an empty list narrowed itself to a row that does not exist")

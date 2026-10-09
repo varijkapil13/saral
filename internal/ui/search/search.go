@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appissueref "github.com/varijkapil13/saral/internal/app/issueref"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -334,10 +335,10 @@ func (m *Model) clear() {
 }
 
 func (m *Model) keyOf(text string) (string, bool) {
-	if key, ok := app.ParseKey(text); ok {
+	if key, ok := appissueref.ParseKey(text); ok {
 		return key, true
 	}
-	key, host, ok := app.ParseIssueURL(text)
+	key, host, ok := appissueref.ParseIssueURL(text)
 	if !ok {
 		return "", false
 	}

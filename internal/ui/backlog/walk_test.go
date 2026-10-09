@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -21,9 +21,9 @@ type pageWrite struct {
 	keys  []string
 }
 
-var _ app.BacklogPageCache = (*pageCache)(nil)
+var _ appcache.BacklogPageCache = (*pageCache)(nil)
 
-func (c *pageCache) PutBacklogPage(boardID int64, page app.BacklogSnapshot, first bool) error {
+func (c *pageCache) PutBacklogPage(boardID int64, page appcache.BacklogSnapshot, first bool) error {
 	w := pageWrite{first: first}
 	for i := range page.Issues {
 		w.keys = append(w.keys, page.Issues[i].Key)

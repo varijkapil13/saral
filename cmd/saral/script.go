@@ -12,7 +12,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissueref "github.com/varijkapil13/saral/internal/app/issueref"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -188,10 +188,10 @@ func siteError(err error) error { return withCode(siteFailure(err), err) }
 
 // A link to another site is refused: the same key here may be somebody else's issue.
 func issueArg(arg, site string) (string, error) {
-	if key, ok := app.ParseKey(arg); ok {
+	if key, ok := appissueref.ParseKey(arg); ok {
 		return key, nil
 	}
-	if key, host, ok := app.ParseIssueURL(arg); ok {
+	if key, host, ok := appissueref.ParseIssueURL(arg); ok {
 		here, err := config.NormalizeSite(site)
 		if err == nil && !strings.EqualFold(here, host) {
 			return "", usageErrorf("%s is on %s and this profile is on %s", key, host, here)

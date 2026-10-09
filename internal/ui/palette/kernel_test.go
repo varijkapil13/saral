@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/list"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -140,7 +140,7 @@ type session struct {
 
 func boot(t *testing.T, w, h int) *session { return bootWith(t, nil, w, h) }
 
-func bootWith(t *testing.T, cache app.Cache, w, h int) *session {
+func bootWith(t *testing.T, cache appcache.Cache, w, h int) *session {
 	t.Helper()
 	d := paletteDeps()
 	d.Caps = fullCaps()

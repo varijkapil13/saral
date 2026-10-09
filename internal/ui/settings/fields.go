@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -149,7 +150,7 @@ type fieldsFailedMsg struct{ err error }
 // its own to narrow live the way a search does.
 //
 // Reusing filter.Model itself was the first thing tried: its picker is wired
-// to filter.Facet — a fixed enum of assignee/reporter/status/type/priority/
+// to term.Facet — a fixed enum of assignee/reporter/status/type/priority/
 // label, each fetched as JQL vocabulary — and a field catalogue is neither a
 // facet nor a vocabulary of values for one; offering it would mean adding a
 // seventh facet and a new fetch to a package this packet does not own. This
@@ -402,13 +403,13 @@ func (m *fieldPickerModel) wheel(msg tea.MouseWheelMsg) {
 	m.clampScroll()
 }
 
-// refilter recomputes what the typed pattern leaves, ranked by app.Pattern's
+// refilter recomputes what the typed pattern leaves, ranked by match.Pattern's
 // score alone the way the generic options picker already is: these lists are
 // switched between rarely, so there is no habit worth weighing a tie by.
 func (m *fieldPickerModel) refilter() {
 	under := m.underCursor()
 	m.shown = m.shown[:0]
-	pattern := app.NewPattern(strings.TrimSpace(m.query))
+	pattern := appmatch.NewPattern(strings.TrimSpace(m.query))
 	type ranked struct{ at, score int }
 	ranks := make([]ranked, 0, len(m.rows))
 	for i, r := range m.rows {

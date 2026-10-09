@@ -17,6 +17,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -475,7 +476,7 @@ func (m Model) unprobedWant() string {
 // Init revalidates unconditionally either way, so a stored answer is at most one
 // round trip old on screen.
 func (m *Model) restoreCaps() {
-	held, ok := m.deps.Cache.(app.CapsCache)
+	held, ok := m.deps.Cache.(appcache.CapsCache)
 	if !ok || held == nil {
 		return
 	}
@@ -1523,7 +1524,7 @@ func (m Model) settle(seq int, caps jira.Capabilities) (tea.Model, tea.Cmd) {
 // applied but not stored: onboarding probes the site being set up, which is not
 // necessarily the one this profile's cache is scoped to.
 func (m Model) keepCaps(caps jira.Capabilities) tea.Cmd {
-	held, ok := m.deps.Cache.(app.CapsCache)
+	held, ok := m.deps.Cache.(appcache.CapsCache)
 	if !ok || held == nil {
 		return nil
 	}

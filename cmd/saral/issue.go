@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appissueref "github.com/varijkapil13/saral/internal/app/issueref"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -143,7 +144,7 @@ func runIssueCreate(inv *invocation, args []string) error {
 	var in jira.IssueInput
 	in.Summary = c.summary
 	if c.parent != "" {
-		parent, ok := app.ParseKey(c.parent)
+		parent, ok := appissueref.ParseKey(c.parent)
 		if !ok {
 			return usageErrorf("--parent %q is not an issue key", c.parent)
 		}

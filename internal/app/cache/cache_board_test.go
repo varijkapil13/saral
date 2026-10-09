@@ -1,4 +1,4 @@
-package app
+package cache
 
 import (
 	"slices"
@@ -29,7 +29,7 @@ func testQuickFilters(id int64) []jira.QuickFilter {
 // ListProjection plus reporter and labels, and a mask saying so — the same
 // shape board.plan.projection asks for.
 func boardIssues(n int) []jira.Issue {
-	mask := jira.NewFieldMask(ListProjection().With("reporter", "labels").IDs)
+	mask := jira.NewFieldMask(append(slices.Clone(listFields), "reporter", "labels"))
 	out := jiratest.Gen(n)
 	for i := range out {
 		out[i].Requested = mask
@@ -389,7 +389,7 @@ func TestKindTTL_CoversBoardAndBacklog(t *testing.T) {
 
 // corrupt overwrites a record with bytes that cannot decode as the shape its
 // kind promises, the way a value truncated under a crash would.
-func corrupt(t *testing.T, cache *DiskCache, kind Kind, key string) {
+func corrupt(t *testing.T, cache *Disk, kind Kind, key string) {
 	t.Helper()
 	if err := cache.db.Put(testScope, string(kind), store.Record{
 		Key: key, Value: []byte("not json"), StoredAt: testNow,

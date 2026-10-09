@@ -5,12 +5,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
-func (m *Model) versionsCache() (app.VersionsCache, bool) {
-	held, ok := m.deps.Cache.(app.VersionsCache)
+func (m *Model) versionsCache() (appcache.VersionsCache, bool) {
+	held, ok := m.deps.Cache.(appcache.VersionsCache)
 	return held, ok && held != nil
 }
 

@@ -10,7 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
@@ -32,7 +32,7 @@ var (
 // options — everything a scheme, or any future setting whose values do not
 // come from the site, needs. It is not palette.projectModel's shape borrowed
 // wholesale: there is no site to read and nothing to rank by frecency, so a
-// plain fuzzy filter over Options is the whole of it, and app.Pattern is the
+// plain fuzzy filter over Options is the whole of it, and match.Pattern is the
 // one piece of that machinery worth reusing rather than rewriting.
 func openOptionsPicker(d kernel.Deps, title string, opts []kernel.SettingOption, current string, apply func(kernel.Deps, string) tea.Cmd) tea.Cmd {
 	return kernel.Push(pickerViewID, title, newPicker(d, opts, current, apply))
@@ -203,12 +203,12 @@ func (m *pickerModel) wheel(msg tea.MouseWheelMsg) {
 	m.clampScroll()
 }
 
-// refilter recomputes what the filter leaves, ranked by app.Pattern's score
+// refilter recomputes what the filter leaves, ranked by match.Pattern's score
 // alone: there is no habit to weigh a tie by, since these lists are short and
 // switched between rarely, so the registered order breaks one.
 func (m *pickerModel) refilter() {
 	m.shown = m.shown[:0]
-	pattern := app.NewPattern(strings.TrimSpace(m.query))
+	pattern := appmatch.NewPattern(strings.TrimSpace(m.query))
 	type ranked struct {
 		at    int
 		score int

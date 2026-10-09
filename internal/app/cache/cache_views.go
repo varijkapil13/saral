@@ -1,4 +1,4 @@
-package app
+package cache
 
 import (
 	"encoding/json"
@@ -66,7 +66,7 @@ func projectKey(project string) (string, bool) {
 }
 
 // Sprints implements SprintsCache.
-func (c *DiskCache) Sprints(project string) (SprintsSnapshot, bool) {
+func (c *Disk) Sprints(project string) (SprintsSnapshot, bool) {
 	key, ok := projectKey(project)
 	if c == nil || c.db == nil || !ok {
 		return SprintsSnapshot{}, false
@@ -86,7 +86,7 @@ func (c *DiskCache) Sprints(project string) (SprintsSnapshot, bool) {
 }
 
 // PutSprints implements SprintsCache.
-func (c *DiskCache) PutSprints(project string, snap SprintsSnapshot) error {
+func (c *Disk) PutSprints(project string, snap SprintsSnapshot) error {
 	key, ok := projectKey(project)
 	if c == nil || c.db == nil || !ok {
 		return nil
@@ -99,12 +99,12 @@ func (c *DiskCache) PutSprints(project string, snap SprintsSnapshot) error {
 }
 
 // ForgetSprints implements SprintsCache.
-func (c *DiskCache) ForgetSprints(project string) error {
+func (c *Disk) ForgetSprints(project string) error {
 	return c.forgetOne(KindSprints, project)
 }
 
 // Versions implements VersionsCache.
-func (c *DiskCache) Versions(project string) (VersionsSnapshot, bool) {
+func (c *Disk) Versions(project string) (VersionsSnapshot, bool) {
 	key, ok := projectKey(project)
 	if c == nil || c.db == nil || !ok {
 		return VersionsSnapshot{}, false
@@ -127,7 +127,7 @@ func (c *DiskCache) Versions(project string) (VersionsSnapshot, bool) {
 }
 
 // PutVersions implements VersionsCache.
-func (c *DiskCache) PutVersions(project string, versions []jira.Version) error {
+func (c *Disk) PutVersions(project string, versions []jira.Version) error {
 	key, ok := projectKey(project)
 	if c == nil || c.db == nil || !ok {
 		return nil
@@ -145,11 +145,11 @@ func (c *DiskCache) PutVersions(project string, versions []jira.Version) error {
 }
 
 // ForgetVersions implements VersionsCache.
-func (c *DiskCache) ForgetVersions(project string) error {
+func (c *Disk) ForgetVersions(project string) error {
 	return c.forgetOne(KindVersions, project)
 }
 
-func (c *DiskCache) putOne(kind Kind, key string, value []byte) error {
+func (c *Disk) putOne(kind Kind, key string, value []byte) error {
 	if err := c.db.Put(c.scope, string(kind), store.Record{Key: key, Value: value, StoredAt: c.now()}); err != nil {
 		return fmt.Errorf("writing %s %s: %w", kind, key, err)
 	}
@@ -160,7 +160,7 @@ func (c *DiskCache) putOne(kind Kind, key string, value []byte) error {
 	return nil
 }
 
-func (c *DiskCache) forgetOne(kind Kind, project string) error {
+func (c *Disk) forgetOne(kind Kind, project string) error {
 	key, ok := projectKey(project)
 	if c == nil || c.db == nil || !ok {
 		return nil

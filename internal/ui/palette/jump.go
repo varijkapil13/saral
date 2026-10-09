@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissueref "github.com/varijkapil13/saral/internal/app/issueref"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
@@ -25,10 +25,10 @@ const jumpLabel = "not cached — opens with a fetch"
 // A URL for another site is named as the mistake it is, in the same words the
 // CLI argument answers with, rather than read against this profile's site.
 func (m *Model) jumpHit(text string) (h *hit, warn tea.Cmd) {
-	if key, ok := app.ParseKey(text); ok {
+	if key, ok := appissueref.ParseKey(text); ok {
 		return &hit{key: key, text: key + "  " + jumpLabel}, nil
 	}
-	key, host, ok := app.ParseIssueURL(text)
+	key, host, ok := appissueref.ParseIssueURL(text)
 	if !ok {
 		return nil, nil
 	}

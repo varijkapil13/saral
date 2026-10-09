@@ -1,4 +1,4 @@
-package app
+package cache
 
 import (
 	"testing"
@@ -182,7 +182,7 @@ func TestCaps_AProjectNeverProbedHasNoAnswer(t *testing.T) {
 func TestCaps_ANilCacheAnswersNothingRatherThanCrashing(t *testing.T) {
 	t.Parallel()
 
-	var cache *DiskCache
+	var cache *Disk
 	if _, ok := cache.Caps("PROJ"); ok {
 		t.Error("a cache that is not there answered")
 	}

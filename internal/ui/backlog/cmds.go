@@ -175,7 +175,7 @@ func read(ctx context.Context, s site, search *app.Search, project string, at in
 // projectionOf is what one read of a board's backlog asks for. The rank field is
 // named by the board configuration, by id, so it is added to the projection
 // rather than looked up by a name. Reporter and labels join it for the same
-// reason board.plan.projection widens it: filter.FacetReporter and FacetLabel
+// reason board.plan.projection widens it: term.FacetReporter and FacetLabel
 // match against this read's own issues, and ListProjection alone leaves both
 // fields unread. The project is what an issue created from a section is made in,
 // and a roomy card adds the fields it draws beyond a row.

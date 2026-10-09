@@ -7,6 +7,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -132,7 +133,7 @@ type Deps struct {
 	// Cache is what this session has already read from the site, or nil when it
 	// has nowhere to keep one. Every view has to draw without it: a first run has
 	// nothing on disk, and another copy of Saral may be holding the file.
-	Cache app.Cache
+	Cache appcache.Cache
 	// Site is what the profile calls the site this session is talking to. It is
 	// drawn in the header and it is what IssueURL builds a browse link from, so
 	// it is not display-only — but nothing after onboarding checks its shape, so

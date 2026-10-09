@@ -4,12 +4,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 // notePenalty is what finding a value by its second column rather than by its
-// name costs. It is app.Pattern's ranking step nine times over, which is the
+// name costs. It is match.Pattern's ranking step nine times over, which is the
 // calibration the command palette already uses: a name match has to beat a
 // prefix of something the row only mentions, and an email or a workflow's issue
 // type is exactly that.
@@ -29,7 +30,7 @@ const (
 
 // value is one thing on offer in the picker's second state.
 type value struct {
-	term Term
+	term appterm.Term
 	// note is the second column: what tells two values of one name apart, and
 	// what is worth knowing about a row beyond what it is called. It is a
 	// status's issue types, an account's email, or the badge that says an
@@ -43,7 +44,7 @@ type value struct {
 // match is the best of the two ways a value can be found. The name answers
 // first, so that a person is never found only through an email nobody can see
 // on the row.
-func (v *value) match(p app.Pattern) (int, bool) {
+func (v *value) match(p appmatch.Pattern) (int, bool) {
 	best, ok := p.Score(v.term.Label)
 	if score, hit := p.Score(v.note); hit && (!ok || score-notePenalty > best) {
 		best, ok = score-notePenalty, true
@@ -62,7 +63,7 @@ type ranked struct {
 // presented as a ranking and a site's priority order is never re-alphabetised.
 //
 // Both slices are reused so that a keystroke costs no allocation of its own.
-func rank(all []value, p app.Pattern, shown []int, ranks []ranked) ([]int, []ranked) {
+func rank(all []value, p appmatch.Pattern, shown []int, ranks []ranked) ([]int, []ranked) {
 	for i := range all {
 		score, ok := all[i].match(p)
 		if !ok {
@@ -83,9 +84,9 @@ func rank(all []value, p app.Pattern, shown []int, ranks []ranked) ([]int, []ran
 }
 
 // personValue is one account as the picker offers it, held by its account id.
-func personValue(f Facet, u jira.User) value {
+func personValue(f appterm.Facet, u jira.User) value {
 	return value{
-		term: Term{Facet: f, ID: u.AccountID, Label: u.DisplayName},
+		term: appterm.Term{Facet: f, ID: u.AccountID, Label: u.DisplayName},
 		note: personNote(u),
 		sink: personSink(u),
 	}
@@ -124,7 +125,7 @@ func personSink(u jira.User) int {
 // assignee facet like any other, held as the empty id, which is what makes it
 // compose with the rest rather than needing a filter of its own.
 func unassignedValue() value {
-	return value{term: Term{Facet: FacetAssignee, Label: "unassigned"}, note: "nobody is on it", sink: sinkEmpty}
+	return value{term: appterm.Term{Facet: appterm.FacetAssignee, Label: "unassigned"}, note: "nobody is on it", sink: sinkEmpty}
 }
 
 // sortPeople puts the accounts in the order they are offered in before anything
@@ -158,7 +159,7 @@ func statusValues(in []jira.IssueTypeStatuses) []value {
 			if !seen {
 				i = len(out)
 				at[s.ID] = i
-				out = append(out, value{term: Term{Facet: FacetStatus, ID: s.ID, Label: s.Name}})
+				out = append(out, value{term: appterm.Term{Facet: appterm.FacetStatus, ID: s.ID, Label: s.Name}})
 				types = append(types, nil)
 			}
 			types[i] = append(types[i], its.Type.Name)
@@ -183,7 +184,7 @@ func typeValues(in []jira.IssueTypeStatuses) []value {
 		if its.Type.Subtask {
 			note = "subtask"
 		}
-		out = append(out, value{term: Term{Facet: FacetType, ID: its.Type.ID, Label: its.Type.Name}, note: note})
+		out = append(out, value{term: appterm.Term{Facet: appterm.FacetType, ID: its.Type.ID, Label: its.Type.Name}, note: note})
 	}
 	return out
 }
@@ -193,7 +194,7 @@ func typeValues(in []jira.IssueTypeStatuses) []value {
 func priorityValues(in []jira.Priority) []value {
 	out := make([]value, 0, len(in))
 	for _, p := range in {
-		out = append(out, value{term: Term{Facet: FacetPriority, ID: p.ID, Label: p.Name}})
+		out = append(out, value{term: appterm.Term{Facet: appterm.FacetPriority, ID: p.ID, Label: p.Name}})
 	}
 	return out
 }
@@ -206,7 +207,7 @@ func labelValues(in []string) []value {
 		if label == "" {
 			continue
 		}
-		out = append(out, value{term: Term{Facet: FacetLabel, ID: label, Label: label}})
+		out = append(out, value{term: appterm.Term{Facet: appterm.FacetLabel, ID: label, Label: label}})
 	}
 	return out
 }

@@ -18,13 +18,9 @@ const appDir = "internal/app"
 var sharedKernel = []string{"cache", "issueref", "match", "term"}
 
 var legacyRootFiles = []string{
-	"cache.go",
-	"cache_views.go",
 	"dates.go",
 	"index.go",
 	"issue.go",
-	"issuekey.go",
-	"match.go",
 	"search.go",
 }
 
@@ -270,7 +266,7 @@ func TestBrokenContextRules_MatchTheOffendingImportsAndNothingElse(t *testing.T)
 		{"the shared kernel importing itself", "internal/app/cache", "internal/app/match", nil},
 		{"the legacy root importing a context", "internal/app", "internal/app/board", []string{"the-legacy-root-imports-no-context"}},
 		{"the legacy root importing the shared kernel", "internal/app", "internal/app/cache", nil},
-		{"the legacy root taking the store", "internal/app", "internal/store", nil},
+		{"the legacy root taking the port", "internal/app", "pkg/jira", nil},
 		{"a view driving a context", "internal/ui/board", "internal/app/board", nil},
 		{"a view driving the legacy root", "internal/ui/board", "internal/app", nil},
 		{"a package whose name merely starts with internal/app", "internal/apps/x", "internal/app/board", nil},

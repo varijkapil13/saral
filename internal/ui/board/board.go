@@ -14,6 +14,8 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	appboard "github.com/varijkapil13/saral/internal/app/board"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/issue"
@@ -62,7 +64,7 @@ type held struct {
 type Model struct {
 	deps   kernel.Deps
 	search *app.Search
-	cache  app.Cache
+	cache  appcache.Cache
 	styles *styles
 	cards  *cardCache
 	look   card.Look
@@ -104,7 +106,7 @@ type Model struct {
 	// terms is this program's own narrowing — a person, a status, a type, a
 	// priority or a label — applied locally against what is already loaded; see
 	// terms.go for why this is never sent to the site the way a quick filter is.
-	terms filter.Terms
+	terms appterm.Terms
 	// bar draws the chip line naming the terms in force, the same widget list and
 	// backlog draw one through.
 	bar *filterbar.Bar
@@ -310,9 +312,9 @@ func New(d kernel.Deps) kernel.View {
 // boardCache is the cache's optional board-shaped half, absent whenever the
 // session has nowhere to keep one or the cache in force is only rows and
 // issues — the same additive-interface pattern kernel.restoreCaps uses for
-// app.CapsCache.
-func (m *Model) boardCache() (app.BoardCache, bool) {
-	held, ok := m.cache.(app.BoardCache)
+// cache.CapsCache.
+func (m *Model) boardCache() (appcache.BoardCache, bool) {
+	held, ok := m.cache.(appcache.BoardCache)
 	return held, ok && held != nil
 }
 
@@ -347,7 +349,7 @@ func (m *Model) fromCache() {
 // touching which boards this project has or which of them is selected: New and
 // a project switch know only the one board a snapshot names, while nextBoard
 // already holds the site's own list and must not collapse it down to one.
-func (m *Model) applyBoardSnapshot(snap app.BoardSnapshot) {
+func (m *Model) applyBoardSnapshot(snap appcache.BoardSnapshot) {
 	m.rawConfig = snap.Config
 	m.plan, m.ready = newPlan(snap.Config), true
 	m.quickFilters = snap.QuickFilters
@@ -879,12 +881,12 @@ func (m *Model) putShape(items []jira.Issue, first bool, w walk) func() error {
 	if !m.ready {
 		return nil
 	}
-	snap := app.BoardSnapshot{
+	snap := appcache.BoardSnapshot{
 		Config: m.rawConfig, QuickFilters: slices.Clone(m.quickFilters), More: w.more,
 		Sprints: slices.Clone(w.sprints), Sprint: w.sprint.ID, NoSprints: w.noSprints,
 	}
 	boardID := m.plan.boardID
-	if paged, ok := m.cache.(app.BoardPageCache); ok && paged != nil {
+	if paged, ok := m.cache.(appcache.BoardPageCache); ok && paged != nil {
 		snap.Issues = slices.Clone(items)
 		return m.writes.put(m.gen, first, func() error { return paged.PutBoardPage(boardID, snap, first) })
 	}
@@ -1971,5 +1973,5 @@ func (m *Model) noActiveSprint() bool {
 }
 
 func (m *Model) aged() bool {
-	return m.loaded && !m.checked.IsZero() && m.now().Sub(m.checked) > app.KindBoard.TTL()
+	return m.loaded && !m.checked.IsZero() && m.now().Sub(m.checked) > appcache.KindBoard.TTL()
 }

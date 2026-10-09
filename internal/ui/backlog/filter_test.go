@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
 )
@@ -98,12 +99,12 @@ func TestBacklog_ClickingTheBarDropsAFacetOrAValue(t *testing.T) {
 		t.Fatal("no generated issue carries an assignee, so this case proves nothing")
 	}
 	lbl := firstLabel(dr, t)
-	label := filter.Term{Facet: filter.FacetLabel, ID: lbl, Label: lbl}
+	label := appterm.Term{Facet: appterm.FacetLabel, ID: lbl, Label: lbl}
 	dr.send(filter.ChosenMsg{Term: assignee})
 	dr.send(filter.ChosenMsg{Term: label})
 
-	pressOn(t, d, dr, filterbar.FacetZone(filter.FacetLabel))
-	if got := dr.m.terms; len(got) != 1 || got[0].Facet != filter.FacetAssignee {
+	pressOn(t, d, dr, filterbar.FacetZone(appterm.FacetLabel))
+	if got := dr.m.terms; len(got) != 1 || got[0].Facet != appterm.FacetAssignee {
 		t.Fatalf("clicking the label chip's x left %v, want only the assignee term", got)
 	}
 
@@ -138,7 +139,7 @@ func TestBacklogRender_FilterBarGolden(t *testing.T) {
 			dr.send(filter.ChosenMsg{Term: term})
 			if tc.twoTerms {
 				lbl := firstLabel(dr, t)
-				dr.send(filter.ChosenMsg{Term: filter.Term{Facet: filter.FacetLabel, ID: lbl, Label: lbl}})
+				dr.send(filter.ChosenMsg{Term: appterm.Term{Facet: appterm.FacetLabel, ID: lbl, Label: lbl}})
 			}
 			golden(t, tc.golden, dr.view())
 		})
@@ -153,13 +154,13 @@ func rowsShown(dr *driver) int {
 	return n
 }
 
-func firstAssignee(dr *driver) (filter.Term, bool) {
+func firstAssignee(dr *driver) (appterm.Term, bool) {
 	for i := range dr.m.issues {
 		if a := dr.m.issues[i].Assignee; a != nil && a.AccountID != "" {
-			return filter.Term{Facet: filter.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}, true
+			return appterm.Term{Facet: appterm.FacetAssignee, ID: a.AccountID, Label: a.DisplayName}, true
 		}
 	}
-	return filter.Term{}, false
+	return appterm.Term{}, false
 }
 
 func firstLabel(dr *driver, t *testing.T) string {

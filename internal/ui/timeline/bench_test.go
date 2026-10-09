@@ -10,7 +10,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -138,7 +138,7 @@ func BenchmarkTimelineSteadyScroll20(b *testing.B) { steadyScroll(b, 20, 3650) }
 // force that still matches every row, which draws the bar under the chart.
 func BenchmarkTimelineSteadyScrollTermed10k(b *testing.B) {
 	m := stocked(b, 10000, 3650, 120, 40)
-	m.terms = filter.Terms{{Facet: filter.FacetType, ID: "10301", Label: "Story"}}
+	m.terms = appterm.Terms{{Facet: appterm.FacetType, ID: "10301", Label: "Story"}}
 	m.termsGen++
 	m.take(m.res, m.issues, false)
 	if len(m.rows) == 0 {

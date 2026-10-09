@@ -7,7 +7,11 @@ import (
 	"testing"
 	"time"
 
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	"github.com/varijkapil13/saral/internal/app/cache/cachetest"
+	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
+	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
 var indexStored = time.Date(2026, time.March, 1, 8, 30, 0, 0, time.UTC)
@@ -303,7 +307,7 @@ func TestIndex_ReportsAnIssueItCouldNotReadWithoutRetryingItEveryKeystroke(t *te
 func TestIndex_FindsNothingAndSaysNothingWithNowhereToCache(t *testing.T) {
 	t.Parallel()
 
-	var absent Cache
+	var absent appcache.Cache
 	for _, tc := range []struct {
 		name string
 		ix   *Index
@@ -424,12 +428,12 @@ func TestIndex_HandsBackASliceTheCallerKeeps(t *testing.T) {
 }
 
 // The stub above is a slice. This one is the cache a session actually holds:
-// bbolt keys the issues, DiskCache decodes them, and the generation moves
+// bbolt keys the issues, cache.Disk decodes them, and the generation moves
 // because rows were written.
 func TestIndex_SearchesTheIssuesTheDiskCacheHolds(t *testing.T) {
 	t.Parallel()
 
-	cache, _ := newTestCache(t)
+	cache := cachetest.Open(t)
 	rows := listRows(30)
 	if err := cache.PutRows(cacheJQL, rows, false); err != nil {
 		t.Fatalf("storing rows: %v", err)
@@ -565,4 +569,18 @@ func BenchmarkIndexRebuild10k(b *testing.B) {
 			b.Fatalf("Refresh: %v", err)
 		}
 	}
+}
+
+const cacheJQL = `project = "PROJ" ORDER BY key`
+
+// listRows is what the list view stores: the six fields of ListProjection and a
+// mask saying so.
+func listRows(n int) []jira.Issue {
+	mask := jira.NewFieldMask(ListProjection().IDs)
+	out := jiratest.Gen(n)
+	for i := range out {
+		out[i].Requested = mask
+		out[i].Description = adf.Doc{}
+	}
+	return out
 }

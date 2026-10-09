@@ -9,7 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -199,7 +199,7 @@ func TestMine_OToggleIsAnAssigneeTermTheBarNames(t *testing.T) {
 	dr := newDriver(t, testDeps(fake), 120, 24)
 
 	dr.key("M")
-	want := filter.Term{Facet: filter.FacetAssignee, ID: ada.AccountID}
+	want := appterm.Term{Facet: appterm.FacetAssignee, ID: ada.AccountID}
 	if !dr.m.terms.Has(want) || len(dr.m.terms) != 1 {
 		t.Fatalf("o put %v in force, want only Ada", dr.m.terms)
 	}

@@ -1,4 +1,4 @@
-package app
+package issueref
 
 import (
 	"net/url"

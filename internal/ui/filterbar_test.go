@@ -7,12 +7,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
 // filterSweepTerm is what the sweep below puts in force. Any facet does.
-var filterSweepTerm = filter.Term{Facet: filter.FacetStatus, ID: "1", Label: "Triage"}
+var filterSweepTerm = appterm.Term{Facet: appterm.FacetStatus, ID: "1", Label: "Triage"}
 
 // TestFilterBar_EveryViewThatFiltersDrawsIt walks the registry rather than
 // naming views: kernel.ViewSpec.Filters is how a view declares it handles
@@ -25,7 +26,7 @@ var filterSweepTerm = filter.Term{Facet: filter.FacetStatus, ID: "1", Label: "Tr
 // reason TestDestinations_NameEveryViewThatClaimedADigit and
 // TestLiveKeys_EveryViewWhoseKeysMoveReportsThem live here too.
 //
-// board once held a filter.Terms and rendered none of it for a whole packet —
+// board once held a term.Terms and rendered none of it for a whole packet —
 // this sweep is what makes that specific silence fail the build the next time
 // it happens to some other view, rather than only to the one this packet
 // happened to be reviewing by hand.

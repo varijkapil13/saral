@@ -15,6 +15,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -53,7 +56,7 @@ var _ kernel.BackClaimer = (*Model)(nil)
 type Model struct {
 	deps     kernel.Deps
 	search   *app.Search
-	cache    app.Cache
+	cache    appcache.Cache
 	normal   map[string]action
 	inFilter map[string]action
 	inAsk    map[string]action
@@ -111,7 +114,7 @@ type Model struct {
 	//
 	// termsGen counts the changes to them, because a slice cannot be part of the
 	// comparable key the line naming them is memoized on.
-	terms    filter.Terms
+	terms    appterm.Terms
 	termsGen int
 	bar      *filterbar.Bar
 
@@ -271,17 +274,17 @@ func New(d kernel.Deps) kernel.View {
 }
 
 // termsMemoryKey is where this view keeps the terms in force, under its own
-// ViewID, so kernel.Deps.Memory never has to know a filter.Term from a sort.
+// ViewID, so kernel.Deps.Memory never has to know a term.Term from a sort.
 const termsMemoryKey = "terms"
 
 // recallTerms is what the last session on this profile left the search on
 // screen narrowed by, and whether it ever narrowed one at all.
-func (m *Model) recallTerms() (filter.Terms, bool) {
+func (m *Model) recallTerms() (appterm.Terms, bool) {
 	enc, ok := kernel.Recall(m.deps, ViewID, termsMemoryKey)
 	if !ok {
 		return nil, false
 	}
-	return filter.DecodeTerms(enc)
+	return appterm.DecodeTerms(enc)
 }
 
 // rememberTerms keeps the terms now in force, so the next session opens on
@@ -988,7 +991,7 @@ func (m *Model) refilterTyped() {
 // are the model's own, so a keystroke over ten thousand rows allocates nothing.
 func (m *Model) rankRows() {
 	m.view, m.ranks = m.view[:0], m.ranks[:0]
-	pattern := app.NewPattern(strings.TrimSpace(m.query))
+	pattern := appmatch.NewPattern(strings.TrimSpace(m.query))
 	if pattern.Empty() {
 		for i := range m.issues {
 			m.view = append(m.view, i)
@@ -1020,7 +1023,7 @@ type ranked struct {
 }
 
 // fieldPenalty is what finding a row by something other than its key or its
-// summary costs: app.Pattern's ranking step nine times over, the calibration the
+// summary costs: match.Pattern's ranking step nine times over, the calibration the
 // palette and the value picker already use.
 const fieldPenalty = 9 * 256
 
@@ -1028,7 +1031,7 @@ const fieldPenalty = 9 * 256
 // answer for themselves and the rest of the row pays the penalty. Each field is
 // scored on its own because one concatenated haystack matches across the
 // boundaries between them, so "flowdone" would find a login flow that is Done.
-func score(iss *jira.Issue, p app.Pattern) (int, bool) {
+func score(iss *jira.Issue, p appmatch.Pattern) (int, bool) {
 	best, ok := p.Score(iss.Key)
 	if other, hit := p.Score(iss.Summary); hit && (!ok || other > best) {
 		best, ok = other, true

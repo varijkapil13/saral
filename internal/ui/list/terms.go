@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -17,7 +18,7 @@ import (
 // second implementation of it: an empty Value means the row under the cursor,
 // which is the only row a command with no pointer can mean.
 type FacetMsg struct {
-	Kind  filter.Facet
+	Kind  appterm.Facet
 	Value string
 }
 
@@ -34,26 +35,26 @@ const unassigned = "unassigned"
 // the site's own and the name is only ever drawn — a status name is localised,
 // two statuses on one project can share one, and one account answered to two
 // names on two endpoints in a minute.
-func termOf(iss *jira.Issue, kind filter.Facet) (filter.Term, bool) {
+func termOf(iss *jira.Issue, kind appterm.Facet) (appterm.Term, bool) {
 	switch kind {
-	case filter.FacetStatus:
+	case appterm.FacetStatus:
 		if iss.Status.ID == "" {
-			return filter.Term{}, false
+			return appterm.Term{}, false
 		}
-		return filter.Term{Facet: kind, ID: iss.Status.ID, Label: iss.Status.Name}, true
-	case filter.FacetType:
+		return appterm.Term{Facet: kind, ID: iss.Status.ID, Label: iss.Status.Name}, true
+	case appterm.FacetType:
 		if iss.Type.ID == "" {
-			return filter.Term{}, false
+			return appterm.Term{}, false
 		}
-		return filter.Term{Facet: kind, ID: iss.Type.ID, Label: iss.Type.Name}, true
-	case filter.FacetAssignee:
+		return appterm.Term{Facet: kind, ID: iss.Type.ID, Label: iss.Type.Name}, true
+	case appterm.FacetAssignee:
 		if iss.Assignee == nil || iss.Assignee.AccountID == "" {
-			return filter.Term{Facet: kind, Label: unassigned}, true
+			return appterm.Term{Facet: kind, Label: unassigned}, true
 		}
-		return filter.Term{Facet: kind, ID: iss.Assignee.AccountID, Label: assigneeName(iss, unassigned)}, true
-	case filter.FacetNone, filter.FacetReporter, filter.FacetPriority, filter.FacetLabel:
+		return appterm.Term{Facet: kind, ID: iss.Assignee.AccountID, Label: assigneeName(iss, unassigned)}, true
+	case appterm.FacetNone, appterm.FacetReporter, appterm.FacetPriority, appterm.FacetLabel:
 	}
-	return filter.Term{}, false
+	return appterm.Term{}, false
 }
 
 // The zones a row carries, one per clickable cell per issue. They are stable
@@ -71,11 +72,11 @@ func whoZone(key string) string    { return "who:" + key }
 // rather than narrowing the rows already loaded. Narrowing locally could not
 // reach an issue that had not been fetched, and it matched on a display name,
 // which is neither unique nor stable.
-func (m *Model) applyTerm(term filter.Term) tea.Cmd {
+func (m *Model) applyTerm(term appterm.Term) tea.Cmd {
 	return m.applyTerms(m.terms.Toggle(term))
 }
 
-func (m *Model) applyTerms(next filter.Terms) tea.Cmd {
+func (m *Model) applyTerms(next appterm.Terms) tea.Cmd {
 	jql, title := termQuery(m.deps.Project, next)
 	cmd := m.setQuery(jql, title, false)
 	// setQuery clears the terms as part of retargeting the search, and its own
@@ -89,7 +90,7 @@ func (m *Model) applyTerms(next filter.Terms) tea.Cmd {
 // termQuery composes what the terms ask the site for. With no terms it is
 // exactly the search a is bound to, which is why there is no second way to
 // clear a filter: dropping the last term lands on it.
-func termQuery(project string, terms filter.Terms) (jql, title string) {
+func termQuery(project string, terms appterm.Terms) (jql, title string) {
 	if len(terms) == 0 {
 		return everyIssue.at(project)
 	}
@@ -104,7 +105,7 @@ func termQuery(project string, terms filter.Terms) (jql, title string) {
 // facetMsg answers the palette. It toggles the row under the cursor the way a
 // click on that cell does, and an empty Kind drops every term at once.
 func (m *Model) facetMsg(msg FacetMsg) tea.Cmd {
-	if msg.Kind == filter.FacetNone {
+	if msg.Kind == appterm.FacetNone {
 		if len(m.terms) == 0 {
 			return nil
 		}
@@ -127,11 +128,11 @@ func (m *Model) facetMsg(msg FacetMsg) tea.Cmd {
 func (m *Model) clickFacet(msg tea.MouseClickMsg, iss *jira.Issue) (tea.Cmd, bool) {
 	for _, cell := range [...]struct {
 		zone string
-		kind filter.Facet
+		kind appterm.Facet
 	}{
-		{statusZone(iss.Key), filter.FacetStatus},
-		{typeZone(iss.Key), filter.FacetType},
-		{whoZone(iss.Key), filter.FacetAssignee},
+		{statusZone(iss.Key), appterm.FacetStatus},
+		{typeZone(iss.Key), appterm.FacetType},
+		{whoZone(iss.Key), appterm.FacetAssignee},
 	} {
 		if !m.zones.Hit(cell.zone, msg) {
 			continue
@@ -156,7 +157,7 @@ func (m *Model) clickTerm(msg tea.MouseClickMsg) (tea.Cmd, bool) {
 	if !ok {
 		return nil, false
 	}
-	if facet != filter.FacetNone {
+	if facet != appterm.FacetNone {
 		return m.applyTerms(m.terms.Without(facet)), true
 	}
 	return m.applyTerm(value), true

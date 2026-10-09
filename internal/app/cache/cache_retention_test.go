@@ -1,4 +1,4 @@
-package app
+package cache
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
-func heldKeys(t testing.TB, cache *DiskCache) []string {
+func heldKeys(t testing.TB, cache *Disk) []string {
 	t.Helper()
 	var held []string
 	if _, err := cache.EachIssue(func(iss jira.Issue, _ time.Time) bool {
@@ -203,9 +203,9 @@ func TestClear_EmptiesThisProfileAndLeavesAnotherAlone(t *testing.T) {
 
 	db := openDB(t)
 	clk := &clock{at: testNow}
-	mine := NewCache(db, testScope, WithClock(clk.now))
-	theirs := NewCache(db, store.Scope{Site: testScope.Site, Account: "someone.else@example.com"}, WithClock(clk.now))
-	for _, c := range []*DiskCache{mine, theirs} {
+	mine := New(db, testScope, WithClock(clk.now))
+	theirs := New(db, store.Scope{Site: testScope.Site, Account: "someone.else@example.com"}, WithClock(clk.now))
+	for _, c := range []*Disk{mine, theirs} {
 		if err := c.PutRows(cacheJQL, listRows(3), false); err != nil {
 			t.Fatal(err)
 		}

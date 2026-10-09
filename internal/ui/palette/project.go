@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -75,7 +76,7 @@ const suggestionLimit = 50
 const zoneProject = "proj:"
 
 // namePenalty is what finding a project by its name rather than by its key
-// costs: app.Pattern's step nine times over, the calibration the palette and the
+// costs: match.Pattern's step nine times over, the calibration the palette and the
 // value picker already use.
 const namePenalty = 9 * scoreTier
 
@@ -117,7 +118,7 @@ type projectRow struct {
 }
 
 // match is the best of the two ways a project can be found.
-func (r *projectRow) match(p app.Pattern) (int, bool) {
+func (r *projectRow) match(p appmatch.Pattern) (int, bool) {
 	best, ok := p.Score(r.label)
 	if score, hit := p.Score(r.note); hit && (!ok || score-namePenalty > best) {
 		best, ok = score-namePenalty, true
@@ -445,7 +446,7 @@ func (m *projectModel) wheel(msg tea.MouseWheelMsg) {
 // so a keystroke allocates nothing.
 func (m *projectModel) refilter() {
 	m.shown, m.ranks = m.shown[:0], m.ranks[:0]
-	pattern := app.NewPattern(strings.TrimSpace(m.query))
+	pattern := appmatch.NewPattern(strings.TrimSpace(m.query))
 	now := m.deps.Now()
 	for i := range m.rows {
 		score, ok := m.rows[i].match(pattern)

@@ -12,40 +12,41 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
 
-// fakeCache is an app.Cache in a map. The real one is bbolt-backed and lives
+// fakeCache is a cache.Cache in a map. The real one is bbolt-backed and lives
 // below internal/app, which a view may not import — which is the whole point of
 // the interface being where it is.
 type fakeCache struct {
 	mu      sync.Mutex
-	rows    map[string]app.Snapshot
+	rows    map[string]appcache.Snapshot
 	issues  map[string]jira.Issue
 	gen     uint64
 	forgot  []string
 	putFail error
 }
 
-var _ app.Cache = (*fakeCache)(nil)
+var _ appcache.Cache = (*fakeCache)(nil)
 
 func newFakeCache() *fakeCache {
-	return &fakeCache{rows: map[string]app.Snapshot{}, issues: map[string]jira.Issue{}}
+	return &fakeCache{rows: map[string]appcache.Snapshot{}, issues: map[string]jira.Issue{}}
 }
 
 // hold puts rows in as though a previous session had left them there.
 func (c *fakeCache) hold(jql string, issues []jira.Issue, stale, more bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.rows[jql] = app.Snapshot{Issues: slices.Clone(issues), StoredAt: cacheStoredAt, Stale: stale, More: more}
+	c.rows[jql] = appcache.Snapshot{Issues: slices.Clone(issues), StoredAt: cacheStoredAt, Stale: stale, More: more}
 	for i := range issues {
 		c.issues[issues[i].Key] = issues[i]
 	}
 }
 
-func (c *fakeCache) Rows(jql string) (app.Snapshot, bool) {
+func (c *fakeCache) Rows(jql string) (appcache.Snapshot, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	snap, ok := c.rows[strings.TrimSpace(jql)]
@@ -59,9 +60,9 @@ func (c *fakeCache) PutRows(jql string, issues []jira.Issue, more bool) error {
 		return c.putFail
 	}
 	c.gen++
-	c.rows[strings.TrimSpace(jql)] = app.Snapshot{Issues: slices.Clone(issues), StoredAt: cacheStoredAt, More: more}
+	c.rows[strings.TrimSpace(jql)] = appcache.Snapshot{Issues: slices.Clone(issues), StoredAt: cacheStoredAt, More: more}
 	for i := range issues {
-		c.issues[issues[i].Key] = app.MergeIssue(c.issues[issues[i].Key], issues[i])
+		c.issues[issues[i].Key] = appcache.MergeIssue(c.issues[issues[i].Key], issues[i])
 	}
 	return nil
 }
@@ -105,7 +106,7 @@ func storedRows(n int) []jira.Issue {
 	return out
 }
 
-func withCache(d kernel.Deps, c app.Cache) kernel.Deps {
+func withCache(d kernel.Deps, c appcache.Cache) kernel.Deps {
 	d.Cache = c
 	return d
 }

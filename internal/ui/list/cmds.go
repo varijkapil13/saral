@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -84,7 +85,7 @@ func request(jql string, proj app.Projection) app.Request {
 // The error travels back with the rows rather than replacing them: the fetch
 // worked, and a cache that could not be written is worth a line in the status
 // bar and nothing more.
-func keep(cache app.Cache, jql string, issues []jira.Issue, more bool) error {
+func keep(cache appcache.Cache, jql string, issues []jira.Issue, more bool) error {
 	if cache == nil {
 		return nil
 	}
@@ -104,7 +105,7 @@ func notStored(err error) tea.Cmd {
 // off the update loop: a revalidated row changes what is on screen
 // synchronously, and the write that keeps the stored copy in step runs as a
 // command like every other write to this cache does.
-func storeRows(cache app.Cache, jql string, issues []jira.Issue, more bool) tea.Cmd {
+func storeRows(cache appcache.Cache, jql string, issues []jira.Issue, more bool) tea.Cmd {
 	return func() tea.Msg {
 		if cmd := notStored(keep(cache, jql, issues, more)); cmd != nil {
 			return cmd()
@@ -114,7 +115,7 @@ func storeRows(cache app.Cache, jql string, issues []jira.Issue, more bool) tea.
 }
 
 // load fetches the first page of a query.
-func load(ctx context.Context, search *app.Search, cache app.Cache, jql string, proj app.Projection, gen int, w why) tea.Cmd {
+func load(ctx context.Context, search *app.Search, cache appcache.Cache, jql string, proj app.Projection, gen int, w why) tea.Cmd {
 	return func() tea.Msg {
 		res, err := search.Run(ctx, request(jql, proj))
 		if err != nil {
@@ -130,7 +131,7 @@ func load(ctx context.Context, search *app.Search, cache app.Cache, jql string, 
 // more fetches the page after the one in hand. The rows already on screen come
 // with it so that what is stored is the whole of what the user has scrolled
 // through, not just its last page.
-func more(ctx context.Context, cache app.Cache, jql string, have []jira.Issue, page jira.Page[jira.Issue], gen int) tea.Cmd {
+func more(ctx context.Context, cache appcache.Cache, jql string, have []jira.Issue, page jira.Page[jira.Issue], gen int) tea.Cmd {
 	return func() tea.Msg {
 		next, err := page.Next(ctx)
 		if err != nil {
@@ -145,7 +146,7 @@ func more(ctx context.Context, cache app.Cache, jql string, have []jira.Issue, p
 // reload re-reads the rows the list already has, walking as many pages as it
 // took to get them. It exists so that a refresh can patch rows in place rather
 // than throw the user's position away and start again at row one.
-func reload(ctx context.Context, search *app.Search, cache app.Cache, jql string, proj app.Projection, want, gen int, w why) tea.Cmd {
+func reload(ctx context.Context, search *app.Search, cache appcache.Cache, jql string, proj app.Projection, want, gen int, w why) tea.Cmd {
 	return func() tea.Msg {
 		res, err := search.Run(ctx, request(jql, proj))
 		if err != nil {

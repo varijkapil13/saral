@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -43,7 +44,7 @@ func TestLiveKeys_FollowWhatThePickerIsDoing(t *testing.T) {
 		state keyState
 	}{
 		{"choosing what to filter by", func() {}, keysFacets},
-		{"typing for a value", func() { dr.pick(FacetPriority) }, keysValues},
+		{"typing for a value", func() { dr.pick(appterm.FacetPriority) }, keysValues},
 		{"nothing on offer", func() { dr.typeText("nothing like this") }, keysNothing},
 	} {
 		tc.enter()
@@ -69,7 +70,7 @@ func TestLiveKeys_OpeningAFacetChangesWhatIsAdvertised(t *testing.T) {
 
 	dr := newDriver(t, testDeps(newFake(20)), 120, 30)
 	before, _ := dr.m.LiveKeys()
-	dr.pick(FacetPriority)
+	dr.pick(appterm.FacetPriority)
 	after, gen := dr.m.LiveKeys()
 
 	if gen != int(keysValues) {

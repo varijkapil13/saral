@@ -3,16 +3,16 @@ package filterbar
 import (
 	"testing"
 
-	"github.com/varijkapil13/saral/internal/ui/filter"
+	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
 var (
-	oneFacet = filter.Terms{ada, ben}
+	oneFacet = appterm.Terms{ada, ben}
 	// threeFacets keeps two values on the first facet, so the golden also
 	// proves the grouping holds once there is more than one thing on the line.
-	threeFacets = filter.Terms{ada, ben, prog, bug}
+	threeFacets = appterm.Terms{ada, ben, prog, bug}
 )
 
 // TestBar_Golden is docs/FILTERS.md's own definition of done: a golden at 80
@@ -24,7 +24,7 @@ func TestBar_Golden(t *testing.T) {
 	for name, tc := range map[string]struct {
 		width  int
 		glyphs kernel.Glyphs
-		terms  filter.Terms
+		terms  appterm.Terms
 		golden string
 	}{
 		"one facet, 80 columns, nerd":      {80, kernel.NerdGlyphs(), oneFacet, "one_facet_80_nerd.golden"},

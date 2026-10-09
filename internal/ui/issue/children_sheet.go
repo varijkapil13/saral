@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/internal/ui/widget/sortpick"
@@ -318,7 +319,7 @@ func (k *childrenKind) startPriority(s *sheet, iss *jira.Issue) tea.Cmd {
 }
 
 func (k *childrenKind) changed(s *sheet, text string) tea.Cmd {
-	p := app.NewPattern(text)
+	p := appmatch.NewPattern(text)
 	s.cands = s.cands[:0]
 	switch k.op {
 	case opAssign:
@@ -362,7 +363,7 @@ func (k *childrenKind) changed(s *sheet, text string) tea.Cmd {
 	return nil
 }
 
-func (k *childrenKind) assignSeeds(into []sheetRow, p app.Pattern) []sheetRow {
+func (k *childrenKind) assignSeeds(into []sheetRow, p appmatch.Pattern) []sheetRow {
 	for _, seed := range [...]sheetRow{{text: "Me", key: "me"}, {text: "Unassigned", key: "unassigned"}} {
 		if _, ok := p.Score(seed.text); ok {
 			into = append(into, seed)

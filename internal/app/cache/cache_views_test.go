@@ -1,4 +1,4 @@
-package app
+package cache
 
 import (
 	"reflect"
@@ -105,7 +105,7 @@ func TestVersions_ComeBackWithoutACountAndAgeIntoStale(t *testing.T) {
 func TestSprintsAndVersions_ANilOrUnscopedCacheHoldsNothing(t *testing.T) {
 	t.Parallel()
 
-	var nothing *DiskCache
+	var nothing *Disk
 	if err := nothing.PutSprints("PROJ", testSprints()); err != nil {
 		t.Errorf("a nil cache refused a write: %v", err)
 	}

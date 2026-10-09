@@ -67,6 +67,13 @@ var importRules = []importRule{
 		forbid: "internal/store",
 		why:    "a view takes what it needs as an interface declared above the store, so it can be driven by a fake",
 	},
+	{
+		name:   "only-the-cache-imports-the-store",
+		from:   "",
+		forbid: "internal/store",
+		except: []string{"cmd", "internal/store", "internal/app/cache"},
+		why:    "the cache's kinds, TTLs and codec are the policy over the file, so reaching the store around them skips it",
+	},
 }
 
 func underPath(p, prefix string) bool {
@@ -218,7 +225,7 @@ func TestBrokenRules_MatchTheOffendingPackagesAndNothingElse(t *testing.T) {
 			name:    "the port reaching into the application",
 			pkgDir:  "pkg/jira",
 			imports: "internal/store",
-			want:    []string{"pkg-must-not-import-internal"},
+			want:    []string{"pkg-must-not-import-internal", "only-the-cache-imports-the-store"},
 		},
 		{
 			name:    "an adapter reaching into the application",
@@ -317,7 +324,7 @@ func TestBrokenRules_MatchTheOffendingPackagesAndNothingElse(t *testing.T) {
 			name:    "a view reaching down into the store",
 			pkgDir:  "internal/ui/list",
 			imports: "internal/store",
-			want:    []string{"ui-must-not-import-the-store"},
+			want:    []string{"ui-must-not-import-the-store", "only-the-cache-imports-the-store"},
 		},
 		{
 			name:    "the composition root wiring the store into a view",
@@ -326,12 +333,34 @@ func TestBrokenRules_MatchTheOffendingPackagesAndNothingElse(t *testing.T) {
 			want:    nil,
 		},
 		{
-			// The cache policy — kinds, TTLs, the codec — is a use case over the
-			// file, so this direction is deliberate rather than tolerated.
-			name:    "a use case reaching down into the store",
-			pkgDir:  "internal/app",
+			name:    "the cache reaching down into the store",
+			pkgDir:  "internal/app/cache",
 			imports: "internal/store",
 			want:    nil,
+		},
+		{
+			name:    "the cache's test support opening the store",
+			pkgDir:  "internal/app/cache/cachetest",
+			imports: "internal/store",
+			want:    nil,
+		},
+		{
+			name:    "the legacy root reaching down into the store",
+			pkgDir:  "internal/app",
+			imports: "internal/store",
+			want:    []string{"only-the-cache-imports-the-store"},
+		},
+		{
+			name:    "a context reaching down into the store",
+			pkgDir:  "internal/app/board",
+			imports: "internal/store",
+			want:    []string{"only-the-cache-imports-the-store"},
+		},
+		{
+			name:    "a package whose name merely starts with the cache",
+			pkgDir:  "internal/app/cachex",
+			imports: "internal/store",
+			want:    []string{"only-the-cache-imports-the-store"},
 		},
 		{
 			name:    "a package whose name merely starts with an exempt one",

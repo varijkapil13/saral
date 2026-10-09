@@ -8,26 +8,26 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 // memCache is the versions half of the cache and nothing else. The embedded
-// app.Cache is nil: this view never reaches for rows, and a call that did would
+// cache.Cache is nil: this view never reaches for rows, and a call that did would
 // panic rather than pass.
 type memCache struct {
-	app.Cache
+	appcache.Cache
 	mu      sync.Mutex
-	held    map[string]app.VersionsSnapshot
+	held    map[string]appcache.VersionsSnapshot
 	puts    int
 	forgets int
 	fail    error
 }
 
-func newMemCache() *memCache { return &memCache{held: make(map[string]app.VersionsSnapshot)} }
+func newMemCache() *memCache { return &memCache{held: make(map[string]appcache.VersionsSnapshot)} }
 
-func (c *memCache) Versions(project string) (app.VersionsSnapshot, bool) {
+func (c *memCache) Versions(project string) (appcache.VersionsSnapshot, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	snap, ok := c.held[project]
@@ -41,7 +41,7 @@ func (c *memCache) PutVersions(project string, versions []jira.Version) error {
 	if c.fail != nil {
 		return c.fail
 	}
-	c.held[project] = app.VersionsSnapshot{Versions: append([]jira.Version(nil), versions...)}
+	c.held[project] = appcache.VersionsSnapshot{Versions: append([]jira.Version(nil), versions...)}
 	return nil
 }
 
@@ -53,8 +53,8 @@ func (c *memCache) ForgetVersions(project string) error {
 	return nil
 }
 
-func storedVersions(stale bool) app.VersionsSnapshot {
-	return app.VersionsSnapshot{
+func storedVersions(stale bool) appcache.VersionsSnapshot {
+	return appcache.VersionsSnapshot{
 		Versions: []jira.Version{{ID: "70001", Name: "stored-1"}, {ID: "70002", Name: "stored-2"}},
 		StoredAt: time.Date(2026, time.March, 5, 8, 30, 0, 0, time.UTC),
 		Stale:    stale,

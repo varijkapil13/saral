@@ -1,4 +1,4 @@
-package app
+package cache
 
 import (
 	"encoding/json"
@@ -90,7 +90,7 @@ type Retention struct {
 const retentionAge = 30 * 24 * time.Hour
 
 // Retention is this kind's bound. The issue count is DefaultIssueBound unless a
-// DiskCache was built with another; the rest are per-entry counts sized well
+// Disk was built with another; the rest are per-entry counts sized well
 // past what a person opens between two sweeps.
 func (k Kind) Retention() Retention {
 	switch k {
@@ -321,8 +321,8 @@ type BacklogPageCache interface {
 	PutBacklogPage(boardID int64, page BacklogSnapshot, first bool) error
 }
 
-// CacheClearer empties everything one profile keeps on disk.
-type CacheClearer interface {
+// Clearer empties everything one profile keeps on disk.
+type Clearer interface {
 	// Clear drops every kind this profile has stored — issues, searches,
 	// boards, backlogs, probe answers and last-board pointers — and leaves
 	// every other profile's alone.
@@ -354,8 +354,8 @@ type IssueCache interface {
 // grow the file without limit.
 const DefaultIssueBound = 5000
 
-// DiskCache is the bbolt-backed Cache, scoped to one site and account.
-type DiskCache struct {
+// Disk is the bbolt-backed Cache, scoped to one site and account.
+type Disk struct {
 	db    *store.DB
 	scope store.Scope
 	now   func() time.Time
@@ -365,26 +365,26 @@ type DiskCache struct {
 }
 
 var (
-	_ Cache        = (*DiskCache)(nil)
-	_ CapsCache    = (*DiskCache)(nil)
-	_ BoardCache   = (*DiskCache)(nil)
-	_ BacklogCache = (*DiskCache)(nil)
-	_ IssueCache   = (*DiskCache)(nil)
+	_ Cache        = (*Disk)(nil)
+	_ CapsCache    = (*Disk)(nil)
+	_ BoardCache   = (*Disk)(nil)
+	_ BacklogCache = (*Disk)(nil)
+	_ IssueCache   = (*Disk)(nil)
 
-	_ BoardPageCache   = (*DiskCache)(nil)
-	_ BacklogPageCache = (*DiskCache)(nil)
-	_ CacheClearer     = (*DiskCache)(nil)
-	_ SprintsCache     = (*DiskCache)(nil)
-	_ VersionsCache    = (*DiskCache)(nil)
+	_ BoardPageCache   = (*Disk)(nil)
+	_ BacklogPageCache = (*Disk)(nil)
+	_ Clearer          = (*Disk)(nil)
+	_ SprintsCache     = (*Disk)(nil)
+	_ VersionsCache    = (*Disk)(nil)
 )
 
-// CacheOption adjusts a DiskCache at construction.
-type CacheOption func(*DiskCache)
+// Option adjusts a Disk at construction.
+type Option func(*Disk)
 
 // WithClock replaces the clock the TTLs are measured against, which is what lets
 // an expiry be tested without waiting for one.
-func WithClock(now func() time.Time) CacheOption {
-	return func(c *DiskCache) {
+func WithClock(now func() time.Time) Option {
+	return func(c *Disk) {
 		if now != nil {
 			c.now = now
 		}
@@ -392,19 +392,19 @@ func WithClock(now func() time.Time) CacheOption {
 }
 
 // WithIssueBound sets how many issues are kept. Zero or less leaves the default.
-func WithIssueBound(n int) CacheOption {
-	return func(c *DiskCache) {
+func WithIssueBound(n int) Option {
+	return func(c *Disk) {
 		if n > 0 {
 			c.bound = n
 		}
 	}
 }
 
-// NewCache builds the cache over an open database. The scope is whose cache it
+// New builds the cache over an open database. The scope is whose cache it
 // is: two accounts on one site, and one account on two sites, never see each
 // other's rows.
-func NewCache(db *store.DB, scope store.Scope, opts ...CacheOption) *DiskCache {
-	c := &DiskCache{db: db, scope: scope, now: time.Now, bound: DefaultIssueBound}
+func New(db *store.DB, scope store.Scope, opts ...Option) *Disk {
+	c := &Disk{db: db, scope: scope, now: time.Now, bound: DefaultIssueBound}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(c)
@@ -414,7 +414,7 @@ func NewCache(db *store.DB, scope store.Scope, opts ...CacheOption) *DiskCache {
 }
 
 // Rows implements Cache.
-func (c *DiskCache) Rows(jql string) (Snapshot, bool) {
+func (c *Disk) Rows(jql string) (Snapshot, bool) {
 	key := rowsKey(jql)
 	if c == nil || c.db == nil || key == "" {
 		return Snapshot{}, false
@@ -451,7 +451,7 @@ func (c *DiskCache) Rows(jql string) (Snapshot, bool) {
 }
 
 // PutRows implements Cache.
-func (c *DiskCache) PutRows(jql string, issues []jira.Issue, more bool) error {
+func (c *Disk) PutRows(jql string, issues []jira.Issue, more bool) error {
 	key := rowsKey(jql)
 	if c == nil || c.db == nil || key == "" {
 		return nil
@@ -470,7 +470,7 @@ func (c *DiskCache) PutRows(jql string, issues []jira.Issue, more bool) error {
 
 // merged is each issue written over the copy already held, keeping every field
 // the fresh read did not ask about, as the records to store.
-func (c *DiskCache) merged(issues []jira.Issue, keys []string) ([]store.Record, error) {
+func (c *Disk) merged(issues []jira.Issue, keys []string) ([]store.Record, error) {
 	if len(issues) == 0 {
 		return nil, nil
 	}
@@ -505,7 +505,7 @@ func (c *DiskCache) merged(issues []jira.Issue, keys []string) ([]store.Record, 
 // commit stores an entry of one kind together with the issues it names, in one
 // transaction so that no reader sees an order naming issues not yet written,
 // and then brings both kinds back within their bounds.
-func (c *DiskCache) commit(kind Kind, key string, value []byte, issues []store.Record) error {
+func (c *Disk) commit(kind Kind, key string, value []byte, issues []store.Record) error {
 	if err := c.db.PutAll(c.scope,
 		store.Write{Kind: string(KindIssue), Records: issues},
 		store.Write{Kind: string(kind), Records: []store.Record{{Key: key, Value: value, StoredAt: c.now()}}},
@@ -523,7 +523,7 @@ func (c *DiskCache) commit(kind Kind, key string, value []byte, issues []store.R
 }
 
 // keepOf is a kind's count bound, the issue bound being this cache's own.
-func (c *DiskCache) keepOf(k Kind) int {
+func (c *Disk) keepOf(k Kind) int {
 	if k == KindIssue {
 		return c.bound
 	}
@@ -533,7 +533,7 @@ func (c *DiskCache) keepOf(k Kind) int {
 // enforce brings a kind back under its count once a write has taken it over,
 // and then a tenth further, so that a cache sitting at its bound walks the
 // bucket once every tenth of it rather than on every write.
-func (c *DiskCache) enforce(k Kind) error {
+func (c *Disk) enforce(k Kind) error {
 	keep := c.keepOf(k)
 	n, err := c.db.Len(c.scope, string(k))
 	if err != nil || n <= keep {
@@ -549,7 +549,7 @@ func (c *DiskCache) enforce(k Kind) error {
 // Sweep drops what this profile keeps past each kind's Retention: every entry
 // older than its age, then the oldest of whatever is still over its count. It is
 // meant to run once as a session opens, and reports how many entries went.
-func (c *DiskCache) Sweep() (int, error) {
+func (c *Disk) Sweep() (int, error) {
 	if c == nil || c.db == nil {
 		return 0, nil
 	}
@@ -572,8 +572,8 @@ func (c *DiskCache) Sweep() (int, error) {
 	return removed, nil
 }
 
-// Clear implements CacheClearer.
-func (c *DiskCache) Clear() error {
+// Clear implements Clearer.
+func (c *Disk) Clear() error {
 	if c == nil || c.db == nil {
 		return nil
 	}
@@ -585,7 +585,7 @@ func (c *DiskCache) Clear() error {
 }
 
 // Forget implements Cache.
-func (c *DiskCache) Forget(jql string) error {
+func (c *Disk) Forget(jql string) error {
 	key := rowsKey(jql)
 	if c == nil || c.db == nil || key == "" {
 		return nil
@@ -598,7 +598,7 @@ func (c *DiskCache) Forget(jql string) error {
 }
 
 // EachIssue implements Cache.
-func (c *DiskCache) EachIssue(fn func(jira.Issue, time.Time) bool) (int, error) {
+func (c *Disk) EachIssue(fn func(jira.Issue, time.Time) bool) (int, error) {
 	if c == nil || c.db == nil || fn == nil {
 		return 0, nil
 	}
@@ -623,7 +623,7 @@ func (c *DiskCache) EachIssue(fn func(jira.Issue, time.Time) bool) (int, error) 
 // prune drops the records a walk could not read. Nothing is lost that was not
 // already unreadable, and a record left in place would be counted again on every
 // walk for the rest of the file's life.
-func (c *DiskCache) prune(keys []string) error {
+func (c *Disk) prune(keys []string) error {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -635,7 +635,7 @@ func (c *DiskCache) prune(keys []string) error {
 }
 
 // Generation implements Cache.
-func (c *DiskCache) Generation() uint64 {
+func (c *Disk) Generation() uint64 {
 	if c == nil {
 		return 0
 	}
@@ -643,7 +643,7 @@ func (c *DiskCache) Generation() uint64 {
 }
 
 // Caps implements CapsCache.
-func (c *DiskCache) Caps(project string) (CapsSnapshot, bool) {
+func (c *Disk) Caps(project string) (CapsSnapshot, bool) {
 	if c == nil || c.db == nil {
 		return CapsSnapshot{}, false
 	}
@@ -663,7 +663,7 @@ func (c *DiskCache) Caps(project string) (CapsSnapshot, bool) {
 }
 
 // PutCaps implements CapsCache.
-func (c *DiskCache) PutCaps(project string, caps jira.Capabilities) error {
+func (c *Disk) PutCaps(project string, caps jira.Capabilities) error {
 	if c == nil || c.db == nil {
 		return nil
 	}
@@ -684,7 +684,7 @@ func (c *DiskCache) PutCaps(project string, caps jira.Capabilities) error {
 }
 
 // Board implements BoardCache.
-func (c *DiskCache) Board(boardID int64) (BoardSnapshot, bool) {
+func (c *Disk) Board(boardID int64) (BoardSnapshot, bool) {
 	if c == nil || c.db == nil {
 		return BoardSnapshot{}, false
 	}
@@ -714,7 +714,7 @@ func (c *DiskCache) Board(boardID int64) (BoardSnapshot, bool) {
 }
 
 // PutBoard implements BoardCache.
-func (c *DiskCache) PutBoard(boardID int64, snap BoardSnapshot) error {
+func (c *Disk) PutBoard(boardID int64, snap BoardSnapshot) error {
 	if c == nil || c.db == nil {
 		return nil
 	}
@@ -734,7 +734,7 @@ func (c *DiskCache) PutBoard(boardID int64, snap BoardSnapshot) error {
 }
 
 // ForgetBoard implements BoardCache.
-func (c *DiskCache) ForgetBoard(boardID int64) error {
+func (c *Disk) ForgetBoard(boardID int64) error {
 	if c == nil || c.db == nil {
 		return nil
 	}
@@ -746,7 +746,7 @@ func (c *DiskCache) ForgetBoard(boardID int64) error {
 }
 
 // PutBoardPage implements BoardPageCache.
-func (c *DiskCache) PutBoardPage(boardID int64, page BoardSnapshot, first bool) error {
+func (c *Disk) PutBoardPage(boardID int64, page BoardSnapshot, first bool) error {
 	if c == nil || c.db == nil {
 		return nil
 	}
@@ -774,7 +774,7 @@ func (c *DiskCache) PutBoardPage(boardID int64, page BoardSnapshot, first bool) 
 }
 
 // PutBacklogPage implements BacklogPageCache.
-func (c *DiskCache) PutBacklogPage(boardID int64, page BacklogSnapshot, first bool) error {
+func (c *Disk) PutBacklogPage(boardID int64, page BacklogSnapshot, first bool) error {
 	if c == nil || c.db == nil {
 		return nil
 	}
@@ -833,17 +833,17 @@ func appendNew(held, fresh []string) []string {
 }
 
 // LastBoard implements BoardCache.
-func (c *DiskCache) LastBoard(project string) (int64, bool) {
+func (c *Disk) LastBoard(project string) (int64, bool) {
 	return c.lastBoard(lastBoardScope, project)
 }
 
 // PutLastBoard implements BoardCache.
-func (c *DiskCache) PutLastBoard(project string, boardID int64) error {
+func (c *Disk) PutLastBoard(project string, boardID int64) error {
 	return c.putLastBoard(lastBoardScope, project, boardID)
 }
 
 // Backlog implements BacklogCache.
-func (c *DiskCache) Backlog(boardID int64) (BacklogSnapshot, bool) {
+func (c *Disk) Backlog(boardID int64) (BacklogSnapshot, bool) {
 	if c == nil || c.db == nil {
 		return BacklogSnapshot{}, false
 	}
@@ -873,7 +873,7 @@ func (c *DiskCache) Backlog(boardID int64) (BacklogSnapshot, bool) {
 }
 
 // PutBacklog implements BacklogCache.
-func (c *DiskCache) PutBacklog(boardID int64, snap BacklogSnapshot) error {
+func (c *Disk) PutBacklog(boardID int64, snap BacklogSnapshot) error {
 	if c == nil || c.db == nil {
 		return nil
 	}
@@ -893,7 +893,7 @@ func (c *DiskCache) PutBacklog(boardID int64, snap BacklogSnapshot) error {
 }
 
 // ForgetBacklog implements BacklogCache.
-func (c *DiskCache) ForgetBacklog(boardID int64) error {
+func (c *Disk) ForgetBacklog(boardID int64) error {
 	if c == nil || c.db == nil {
 		return nil
 	}
@@ -905,12 +905,12 @@ func (c *DiskCache) ForgetBacklog(boardID int64) error {
 }
 
 // LastBacklogBoard implements BacklogCache.
-func (c *DiskCache) LastBacklogBoard(project string) (int64, bool) {
+func (c *Disk) LastBacklogBoard(project string) (int64, bool) {
 	return c.lastBoard(lastBacklogScope, project)
 }
 
 // PutLastBacklogBoard implements BacklogCache.
-func (c *DiskCache) PutLastBacklogBoard(project string, boardID int64) error {
+func (c *Disk) PutLastBacklogBoard(project string, boardID int64) error {
 	return c.putLastBoard(lastBacklogScope, project, boardID)
 }
 
@@ -922,7 +922,7 @@ const (
 	lastBacklogScope = "backlog"
 )
 
-func (c *DiskCache) lastBoard(scope, project string) (int64, bool) {
+func (c *Disk) lastBoard(scope, project string) (int64, bool) {
 	if c == nil || c.db == nil {
 		return 0, false
 	}
@@ -937,7 +937,7 @@ func (c *DiskCache) lastBoard(scope, project string) (int64, bool) {
 	return id, true
 }
 
-func (c *DiskCache) putLastBoard(scope, project string, boardID int64) error {
+func (c *Disk) putLastBoard(scope, project string, boardID int64) error {
 	if c == nil || c.db == nil {
 		return nil
 	}
@@ -985,7 +985,7 @@ type wireBacklog struct {
 }
 
 // Issue implements IssueCache.
-func (c *DiskCache) Issue(key string) (IssueSnapshot, bool) {
+func (c *Disk) Issue(key string) (IssueSnapshot, bool) {
 	key = strings.TrimSpace(key)
 	if c == nil || c.db == nil || key == "" {
 		return IssueSnapshot{}, false
@@ -1002,7 +1002,7 @@ func (c *DiskCache) Issue(key string) (IssueSnapshot, bool) {
 }
 
 // PutIssue implements IssueCache.
-func (c *DiskCache) PutIssue(iss jira.Issue) error {
+func (c *Disk) PutIssue(iss jira.Issue) error {
 	if c == nil || c.db == nil || iss.Key == "" {
 		return nil
 	}

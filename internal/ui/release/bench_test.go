@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -243,7 +243,7 @@ func BenchmarkFlowSteadyScroll20(b *testing.B)   { flowScrollOver(b, 20) }
 // from it, with nothing behind the view to ask.
 func BenchmarkReleasesFirstPaintFromCache(b *testing.B) {
 	cache := newMemCache()
-	cache.held["PROJ"] = app.VersionsSnapshot{Versions: benchVersions(200)}
+	cache.held["PROJ"] = appcache.VersionsSnapshot{Versions: benchVersions(200)}
 	d := kernel.Deps{
 		Caps:    fullCaps(),
 		Project: "PROJ",

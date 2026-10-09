@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appmatch "github.com/varijkapil13/saral/internal/app/match"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -33,7 +35,7 @@ type IssueCorpus interface {
 
 // A Cache is a corpus: the index a session searches is built from the cache
 // that session already holds, and nothing else has to be passed around for it.
-var _ IssueCorpus = Cache(nil)
+var _ IssueCorpus = appcache.Cache(nil)
 
 // Hit is one issue a pattern matched, and how well.
 type Hit struct {
@@ -195,7 +197,7 @@ func (ix *Index) Search(text string, limit int) ([]Hit, error) {
 	}
 	_, err := ix.Refresh()
 
-	pattern := NewPattern(text)
+	pattern := appmatch.NewPattern(text)
 	ix.hits = ix.hits[:0]
 	for i := range ix.rows {
 		row := &ix.rows[i]
