@@ -1,9 +1,10 @@
 package plan
 
 import (
+	"errors"
+	"strconv"
 	"strings"
 
-	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -35,11 +36,11 @@ type Defined struct {
 	End      []string `toml:"end"`
 }
 
-// sources are the plan's issue sources, in the same shape the site answers
+// Sources are the plan's issue sources, in the same shape the site answers
 // with. A project is named by its key here, where the site names it by an id
 // nothing can turn back into a key, and Plan.Local is what says which of the
 // two a row is holding.
-func (d Defined) sources() []jira.PlanSource {
+func (d Defined) Sources() []jira.PlanSource {
 	out := make([]jira.PlanSource, 0, len(d.Projects)+len(d.Filters))
 	for _, key := range trimmed(d.Projects) {
 		out = append(out, jira.PlanSource{Type: jira.PlanSourceProject, Value: key})
@@ -50,10 +51,18 @@ func (d Defined) sources() []jira.PlanSource {
 	return out
 }
 
-// clause is the JQL this plan renders to, and the problem that stops it being
+// ErrNothingToDraw is a plan that names no project, no filter and no JQL.
+var ErrNothingToDraw = errors.New("plan names no project, no filter and no JQL")
+
+// FilterIDError is a filter named by something other than its numeric id.
+type FilterIDError struct{ Filter string }
+
+func (e *FilterIDError) Error() string { return "filter " + Quote(e.Filter) + " is not a numeric id" }
+
+// Clause is the JQL this plan renders to, and the problem that stops it being
 // one. Sources are joined with OR — a plan is the union of what it draws from —
 // and the extra narrowing is ANDed over the lot.
-func (d Defined) clause() (jql, problem string) {
+func (d Defined) Clause() (string, error) {
 	var parts []string
 	if keys := trimmed(d.Projects); len(keys) > 0 {
 		parts = append(parts, in("project", keys))
@@ -61,7 +70,7 @@ func (d Defined) clause() (jql, problem string) {
 	ids := trimmed(d.Filters)
 	for _, id := range ids {
 		if !digits(id) {
-			return "", "a filter is named by its numeric id, and " + quote(id) + " is not one"
+			return "", &FilterIDError{Filter: id}
 		}
 	}
 	if len(ids) > 0 {
@@ -73,55 +82,55 @@ func (d Defined) clause() (jql, problem string) {
 	extra := strings.TrimSpace(d.JQL)
 	switch {
 	case len(parts) == 0 && extra == "":
-		return "", "this plan names no project, no filter and no JQL, so there is nothing to draw"
+		return "", ErrNothingToDraw
 	case len(parts) == 0:
-		return extra, ""
+		return extra, nil
 	}
-	jql = strings.Join(parts, " OR ")
+	jql := strings.Join(parts, " OR ")
 	if len(parts) > 1 {
 		jql = "(" + jql + ")"
 	}
 	if extra != "" {
 		jql += " AND (" + extra + ")"
 	}
-	return jql, ""
+	return jql, nil
 }
 
-// dates says where this plan's bars would take their start and end from, and
-// the empty string when it leaves that to the profile's own mapping.
-func (d Defined) dates() string {
-	start, end := trimmed(d.Start), trimmed(d.End)
-	if len(start) == 0 && len(end) == 0 {
-		return ""
+// Fields are the field names the plan's bars take their start and end from,
+// each empty where the plan leaves it to the profile's own mapping.
+func (d Defined) Fields() (start, end []string) {
+	return trimmed(d.Start), trimmed(d.End)
+}
+
+// Plan is the defined plan as the site's plans are held, at its index in the
+// profile. The index keeps two plans of one name apart.
+func (d Defined) Plan(index int) jira.Plan {
+	name := strings.TrimSpace(d.Name)
+	if name == "" {
+		name = "unnamed plan"
 	}
-	return field(start) + " " + arrow + " " + field(end)
-}
-
-func field(names []string) string {
-	if len(names) == 0 {
-		return "the profile's mapping"
+	return jira.Plan{
+		ID:      "local:" + strconv.Itoa(index) + ":" + name,
+		Name:    name,
+		Sources: d.Sources(),
+		Local:   true,
 	}
-	return strings.Join(names, " or ")
 }
-
-// arrow is written out rather than taken from the theme because it is part of a
-// sentence the plan rows carry, and the glyph set is not known here.
-const arrow = "->"
 
 func in(field string, values []string) string {
 	if len(values) == 1 {
-		return field + " = " + quote(values[0])
+		return field + " = " + Quote(values[0])
 	}
 	quoted := make([]string, 0, len(values))
 	for _, v := range values {
-		quoted = append(quoted, quote(v))
+		quoted = append(quoted, Quote(v))
 	}
 	return field + " IN (" + strings.Join(quoted, ", ") + ")"
 }
 
-// quote spells a value as a JQL string literal. A project key is upper-case and
+// Quote spells a value as a JQL string literal. A project key is upper-case and
 // dull, but this also carries whatever anybody typed into the file.
-func quote(s string) string {
+func Quote(s string) string {
 	var b strings.Builder
 	b.Grow(len(s) + 2)
 	b.WriteByte('"')
@@ -157,33 +166,25 @@ func trimmed(in []string) []string {
 	return out
 }
 
-// derive is what stands in for the profile's plans until it has any: the
+// Query is a saved query a plan can be derived from.
+type Query struct {
+	Name string
+	JQL  string
+}
+
+// Derive is what stands in for the profile's plans until it has any: the
 // project this session is scoped to, and one plan per saved query. An empty
-// first screen reads as a broken program, and both of these are already in
-// Deps.
-func derive(project string, saved appsearch.SavedQueries) []Defined {
+// first screen reads as a broken program.
+func Derive(project string, saved []Query) []Defined {
 	var out []Defined
 	if key := strings.TrimSpace(project); key != "" {
 		out = append(out, Defined{Name: key, Projects: []string{key}})
 	}
-	for _, q := range saved.All() {
+	for _, q := range saved {
 		if strings.TrimSpace(q.JQL) == "" {
 			continue
 		}
 		out = append(out, Defined{Name: q.Name, JQL: q.JQL})
 	}
 	return out
-}
-
-// origin says where a plan on screen came from, which is the difference a user
-// cannot act on unless the screen names it.
-func originOf(d Defined, derived bool) string {
-	switch {
-	case !derived:
-		return "defined in this profile"
-	case len(d.Projects) > 0:
-		return "this session's project"
-	default:
-		return "a saved query"
-	}
 }

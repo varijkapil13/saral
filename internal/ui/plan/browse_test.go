@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	appplan "github.com/varijkapil13/saral/internal/app/plan"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/release"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -103,12 +104,13 @@ func TestPlans_TheReleasesCollapseToASummary(t *testing.T) {
 	}}})
 	dr.key("enter")
 	versions, owners := manyVersions(476, []string{"10000", "10001", "10002"})
-	dr.send(releasesMsg{
-		gen: dr.m.gen, plan: "42", versions: versions, owners: owners,
-		names:  map[string]string{"10000": "EX", "10001": "OPS", "10002": "WEB"},
-		read:   []string{"10000", "10001", "10002"},
-		detail: &jira.PlanDetail{},
-	})
+	dr.send(releasesMsg{gen: dr.m.gen, plan: "42", got: appplan.Releases{
+		Versions: versions,
+		Owners:   owners,
+		Names:    map[string]string{"10000": "EX", "10001": "OPS", "10002": "WEB"},
+		Read:     []string{"10000", "10001", "10002"},
+		Detail:   &jira.PlanDetail{},
+	}})
 
 	frame := dr.view()
 	mustContain(t, frame, "476 across EX, OPS, WEB - enter browses", "no cross-space releases")
@@ -149,18 +151,17 @@ func TestPlans_EnterOnTheSummaryPushesTheBrowserWithEveryVersionAndItsProject(t 
 	dr, plan := sitePlan(t, f, 120, 20)
 	dr.send(plansMsg{gen: dr.m.gen, plans: []jira.Plan{{ID: "plan-1", Name: "Delivery", Sources: plan.Sources}}})
 	dr.key("enter")
-	dr.send(releasesMsg{
-		gen: dr.m.gen, plan: "plan-1",
-		versions: []jira.Version{{ID: ids[0], Name: "1.0"}, {ID: "77", Name: "ops-1"}},
-		owners:   []string{"10000", "10001"},
-		names:    map[string]string{"10000": "EX"},
-		refused:  []refusal{{kind: "project", ref: "10002", reason: browseRefusal}},
-		read:     []string{"10000", "10001"},
-		detail: &jira.PlanDetail{
+	dr.send(releasesMsg{gen: dr.m.gen, plan: "plan-1", got: appplan.Releases{
+		Versions: []jira.Version{{ID: ids[0], Name: "1.0"}, {ID: "77", Name: "ops-1"}},
+		Owners:   []string{"10000", "10001"},
+		Names:    map[string]string{"10000": "EX"},
+		Refused:  []appplan.Refusal{{Kind: appplan.RefusedProject, Ref: "10002", Err: &jira.ValidationError{Messages: []string{browseRefusal}}}},
+		Read:     []string{"10000", "10001"},
+		Detail: &jira.PlanDetail{
 			CrossProjectReleases: []jira.CrossProjectRelease{{Name: "Spring launch", VersionIDs: []string{ids[0], "77"}}},
 			ExcludedVersionIDs:   []string{"77"},
 		},
-	})
+	}})
 	dr.m.moveTo(rowOfKind(t, dr, rowReleases))
 	if set, _ := dr.m.LiveKeys(); len(set.Acts) == 0 || !strings.Contains(actsOf(set), "browse") {
 		t.Errorf("the summary row advertises %q, want browse", actsOf(set))

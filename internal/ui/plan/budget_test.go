@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	appplan "github.com/varijkapil13/saral/internal/app/plan"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -105,7 +106,7 @@ func openedWith(t *testing.T, versions int) (m *Model, allocs float64) {
 		owners = append(owners, "PROJ")
 	}
 	m.open[id] = true
-	m.rel[id] = releasesOf(true, &releasesMsg{versions: list, owners: owners, read: []string{"PROJ"}})
+	m.rel[id] = releasesOf(true, &appplan.Releases{Versions: list, Owners: owners, Read: []string{"PROJ"}})
 	m.reflow()
 	return m, testing.AllocsPerRun(50, m.reflow)
 }

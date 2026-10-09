@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appplan "github.com/varijkapil13/saral/internal/app/plan"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -186,7 +187,7 @@ func (m *Model) appendDetail(rows []viewRow, at int) []viewRow {
 
 func (m *Model) appendReleases(rows []viewRow, at int) []viewRow {
 	row := &m.plans[at]
-	if !hasReleaseSources(row) {
+	if !appplan.HasReleaseSources(&row.plan) {
 		return append(rows, viewRow{plan: at, kind: rowWarn,
 			text: line("releases", "this plan names no project or board, so there is none to read releases from")})
 	}
@@ -253,7 +254,7 @@ func projectLabel(row *planRow, held *releases, ref string) string {
 func projectWords(row *planRow, held *releases) string {
 	refs := held.refs
 	if len(refs) == 0 {
-		refs = projectRefs(row)
+		refs = appplan.ProjectRefs(&row.plan)
 	}
 	words := make([]string, 0, len(refs))
 	for _, ref := range refs {
