@@ -16,10 +16,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	appsprint "github.com/varijkapil13/saral/internal/app/sprint"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -81,13 +81,13 @@ type pending struct {
 	op     op
 	sprint jira.Sprint
 	board  string
-	dests  []destination
+	dests  []appsprint.Destination
 	at     int
 }
 
-func (p pending) dest() destination {
+func (p pending) dest() appsprint.Destination {
 	if p.at < 0 || p.at >= len(p.dests) {
-		return destination{kind: destBacklog}
+		return appsprint.Destination{Kind: appsprint.DestBacklog}
 	}
 	return p.dests[p.at]
 }
@@ -128,7 +128,7 @@ type Model struct {
 	// progress is each running sprint's count, read on its own context so a
 	// write does not cut it short. pver moves whenever it does, which is what
 	// the memoized detail repaints on.
-	progress map[int64]progress
+	progress map[int64]appsprint.Count
 	counting bool
 	pver     int
 	pgen     int
@@ -162,7 +162,7 @@ func New(d kernel.Deps) kernel.View {
 	m.clicks = widget.NewClicks(d.Now)
 	m.form = newForm()
 	m.lay = planLayout(m.width, 1)
-	m.progress = make(map[int64]progress)
+	m.progress = make(map[int64]appsprint.Count)
 	m.fromCache()
 	return m
 }
@@ -307,7 +307,7 @@ func (m *Model) forget() {
 	m.boards, m.sprints, m.more = nil, nil, 0
 	m.cursor, m.top = 0, 0
 	m.loaded, m.stale = false, false
-	m.progress = make(map[int64]progress)
+	m.progress = make(map[int64]appsprint.Count)
 	m.pver++
 	m.state = browsing
 	m.memo.Reset()
@@ -324,21 +324,12 @@ func (m *Model) refresh(purge bool) tea.Cmd {
 
 // --- reading ----------------------------------------------------------------
 
-// states is what the list is narrowed to. The closed ones are asked for only
-// when they are wanted, because they are the ones there are hundreds of.
-func (m *Model) states() []jira.SprintState {
-	if m.showAll {
-		return []jira.SprintState{jira.SprintActive, jira.SprintFuture, jira.SprintClosed}
-	}
-	return []jira.SprintState{jira.SprintActive, jira.SprintFuture}
-}
-
 func (m *Model) load() tea.Cmd {
 	if m.deps.Jira == nil {
 		return nil
 	}
 	ctx, gen := m.begin()
-	return m.reply(load(ctx, m.deps.Jira, m.deps.Project, m.states(), boardCap, sprintCap, gen))
+	return m.reply(load(ctx, m.deps.Jira, m.deps.Project, appsprint.States(m.showAll), boardCap, sprintCap, gen))
 }
 
 // begin cancels whatever is in flight and opens a context for its replacement.
@@ -383,7 +374,7 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 	m.loading, m.loaded, m.failure, m.stale = false, true, nil, false
 	under := m.underCursor()
 	m.boards, m.more = msg.boards, msg.more
-	m.sprints = sortSprints(msg.sprints)
+	m.sprints = appsprint.Sort(msg.sprints)
 	m.lay = planLayout(m.width, len(m.boards))
 	m.memo.Reset()
 	m.chrome = [2]string{}
@@ -396,12 +387,7 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 // running asks nothing.
 func (m *Model) readProgress() tea.Cmd {
 	m.stopProgress()
-	running := make([]jira.Sprint, 0, 2)
-	for i := range m.sprints {
-		if m.sprints[i].State == jira.SprintActive {
-			running = append(running, m.sprints[i])
-		}
-	}
+	running := appsprint.Running(m.sprints)
 	if len(running) == 0 || m.deps.Jira == nil {
 		return nil
 	}
@@ -438,13 +424,7 @@ func (m *Model) wrote(msg wroteMsg) tea.Cmd {
 		return nil
 	}
 	m.inflight, m.loading, m.failure = opNone, false, nil
-	at := slices.IndexFunc(m.sprints, func(sp jira.Sprint) bool { return sp.ID == msg.sprint.ID })
-	if at < 0 {
-		m.sprints = append(m.sprints, msg.sprint)
-	} else {
-		m.sprints[at] = msg.sprint
-	}
-	m.sprints = sortSprints(m.sprints)
+	m.sprints = appsprint.Put(m.sprints, msg.sprint)
 	m.memo.Reset()
 	m.chrome = [2]string{}
 	m.state = browsing
@@ -457,38 +437,28 @@ func (m *Model) wrote(msg wroteMsg) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// put replaces a sprint by id or adds it, and keeps the list in order.
-func (m *Model) put(sp jira.Sprint) {
-	at := slices.IndexFunc(m.sprints, func(held jira.Sprint) bool { return held.ID == sp.ID })
-	if at < 0 {
-		m.sprints = append(m.sprints, sp)
-	} else {
-		m.sprints[at] = sp
-	}
-	m.sprints = sortSprints(m.sprints)
-}
-
 // completed is a sprint closed after its open issues moved into another one.
 func (m *Model) completed(msg completedMsg) tea.Cmd {
 	if msg.gen != m.gen {
 		return nil
 	}
 	m.inflight, m.loading, m.failure = opNone, false, nil
-	m.put(msg.target)
-	m.put(msg.sprint)
+	done := msg.done
+	m.sprints = appsprint.Put(m.sprints, done.Target)
+	m.sprints = appsprint.Put(m.sprints, done.Sprint)
 	m.memo.Reset()
 	m.chrome = [2]string{}
-	m.restore(msg.sprint.ID)
-	words := named(msg.sprint) + " is closed"
-	switch msg.moved {
+	m.restore(done.Sprint.ID)
+	words := named(done.Sprint) + " is closed"
+	switch done.Moved {
 	case 0:
 		words += ", and nothing in it was left open"
 	case 1:
-		words += ", and its 1 open issue moved into " + named(msg.target)
+		words += ", and its 1 open issue moved into " + named(done.Target)
 	default:
-		words += ", and its " + strconv.Itoa(msg.moved) + " open issues moved into " + named(msg.target)
+		words += ", and its " + strconv.Itoa(done.Moved) + " open issues moved into " + named(done.Target)
 	}
-	if msg.created {
+	if done.Created {
 		words += ", which is new and planned"
 	}
 	return tea.Batch(kernel.Status(words), m.keep(), m.readProgress())
@@ -502,9 +472,9 @@ func (m *Model) completeFailed(msg completeFailedMsg) tea.Cmd {
 		return nil
 	}
 	m.loading, m.inflight = false, opNone
-	if msg.err.created {
-		m.put(msg.err.target)
-		m.restore(msg.err.sprint.ID)
+	if msg.err.Created {
+		m.sprints = appsprint.Put(m.sprints, msg.err.Target)
+		m.restore(msg.err.Sprint.ID)
 	}
 	m.failure, m.failedOp = msg.err, opComplete
 	m.memo.Reset()
@@ -563,62 +533,6 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 }
 
 // --- the list ---------------------------------------------------------------
-
-// sortSprints puts the sprint a team is in first, then the ones it is going to
-// be in, then the ones it has finished, newest first. It sorts by state and by
-// date and never by name: a name is whatever anybody typed.
-func sortSprints(in []jira.Sprint) []jira.Sprint {
-	slices.SortStableFunc(in, func(a, b jira.Sprint) int {
-		if r := rankState(a.State) - rankState(b.State); r != 0 {
-			return r
-		}
-		if rankState(a.State) == rankClosed {
-			return compareTimes(b.End, a.End)
-		}
-		return compareTimes(a.Start, b.Start)
-	})
-	return in
-}
-
-const (
-	rankActive = 0
-	rankFuture = 1
-	rankClosed = 2
-	rankOther  = 3
-)
-
-// rankState orders the states without switching exhaustively on them: the type
-// is an open string and a site can report a value none of the three constants
-// covers.
-func rankState(s jira.SprintState) int {
-	switch s {
-	case jira.SprintActive:
-		return rankActive
-	case jira.SprintFuture:
-		return rankFuture
-	case jira.SprintClosed:
-		return rankClosed
-	}
-	return rankOther
-}
-
-// compareTimes sorts a sprint with no date after one that has one: a date that
-// is not set is not a date at the beginning of time.
-func compareTimes(a, b *time.Time) int {
-	switch {
-	case a == nil && b == nil:
-		return 0
-	case a == nil:
-		return 1
-	case b == nil:
-		return -1
-	case a.Before(*b):
-		return -1
-	case b.Before(*a):
-		return 1
-	}
-	return 0
-}
 
 func (m *Model) rowCount() int { return len(m.sprints) }
 
@@ -775,9 +689,7 @@ func (m *Model) toggleClosed() tea.Cmd {
 		// The closed ones are dropped rather than kept and hidden, so that what
 		// is on screen is what was asked for.
 		under := m.underCursor()
-		m.sprints = slices.DeleteFunc(m.sprints, func(sp jira.Sprint) bool {
-			return rankState(sp.State) == rankClosed
-		})
+		m.sprints = appsprint.DropClosed(m.sprints)
 		m.memo.Reset()
 		m.restore(under)
 		return kernel.Status("showing the active and planned sprints")
@@ -800,7 +712,7 @@ func (m *Model) ask(o op) tea.Cmd {
 	}
 	m.state, m.pending = confirming, pending{op: o, sprint: sp, board: m.boardOf(sp)}
 	if o == opComplete {
-		m.pending.dests = m.destinations(sp)
+		m.pending.dests = appsprint.Destinations(m.sprints, sp)
 	}
 	m.chrome = [2]string{}
 	m.clicks.Forget()
@@ -811,24 +723,26 @@ func (m *Model) ask(o op) tea.Cmd {
 // out before anything is asked of the site. The port refuses the same thing;
 // this is what keeps the key off the row it would be refused on.
 func refusal(o op, sp jira.Sprint) string {
+	var why appsprint.Block
 	switch o {
 	case opStart:
-		if sp.State != jira.SprintFuture {
-			return "only a planned sprint can be started, and " + named(sp) + " is " + stateWord(sp.State)
-		}
-		switch {
-		case sp.Start == nil && sp.End == nil:
-			return named(sp) + " has no dates yet, and a sprint cannot start without both"
-		case sp.Start == nil:
-			return named(sp) + " has no start date yet, and a sprint cannot start without one"
-		case sp.End == nil:
-			return named(sp) + " has no end date yet, and a sprint cannot start without one"
-		}
+		why = appsprint.CanStart(sp)
 	case opComplete:
-		if sp.State != jira.SprintActive {
-			return "only a running sprint can be completed, and " + named(sp) + " is " + stateWord(sp.State)
-		}
+		why = appsprint.CanComplete(sp)
 	case opNone, opRead, opCreate, opUpdate:
+	}
+	switch why {
+	case appsprint.NotPlanned:
+		return "only a planned sprint can be started, and " + named(sp) + " is " + stateWord(sp.State)
+	case appsprint.NotRunning:
+		return "only a running sprint can be completed, and " + named(sp) + " is " + stateWord(sp.State)
+	case appsprint.NoDates:
+		return named(sp) + " has no dates yet, and a sprint cannot start without both"
+	case appsprint.NoStartDate:
+		return named(sp) + " has no start date yet, and a sprint cannot start without one"
+	case appsprint.NoEndDate:
+		return named(sp) + " has no end date yet, and a sprint cannot start without one"
+	case appsprint.Clear:
 	}
 	return ""
 }
@@ -882,7 +796,7 @@ func (m *Model) goAhead() tea.Cmd {
 	case opStart:
 		return m.reply(startSprint(ctx, m.deps.Jira, sp.ID, gen))
 	case opComplete:
-		if d.kind == destBacklog {
+		if d.Kind == appsprint.DestBacklog {
 			return m.reply(completeSprint(ctx, m.deps.Jira, sp.ID, gen))
 		}
 		return m.reply(completeInto(ctx, m.deps.Jira, sp, d, gen))

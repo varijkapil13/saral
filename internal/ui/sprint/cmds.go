@@ -2,10 +2,10 @@ package sprint
 
 import (
 	"context"
-	"errors"
 
 	tea "charm.land/bubbletea/v2"
 
+	appsprint "github.com/varijkapil13/saral/internal/app/sprint"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -39,15 +39,6 @@ func (o op) word() string {
 	return "asking the site"
 }
 
-// reader is the pair of reads one paint needs. They are one role because they
-// are one question — which sprints are there — and splitting them into two
-// commands would need a context each, so the first one's would be released
-// while the second still wanted it.
-type reader interface {
-	jira.BoardReader
-	jira.SprintReader
-}
-
 // loadedMsg is the boards a project has and the sprints on them. more is the
 // boards past the cap, which the head names rather than walks.
 type loadedMsg struct {
@@ -77,104 +68,38 @@ type failedMsg struct {
 
 // load reads the project's boards and then each board's sprints in the states
 // asked for.
-//
-// The states are never omitted: a board with years of history has hundreds of
-// closed sprints, and the endpoint is the only thing that can narrow them.
-func load(ctx context.Context, r reader, project string, states []jira.SprintState, boardCap, sprintCap, gen int) tea.Cmd {
+func load(ctx context.Context, r appsprint.Reader, project string, states []jira.SprintState, boardCap, sprintCap, gen int) tea.Cmd {
 	return func() tea.Msg {
-		boards, err := r.Boards(ctx, project)
+		l, err := appsprint.List(ctx, r, project, states, boardCap, sprintCap)
 		if err != nil {
 			return failedMsg{gen: gen, op: opRead, err: err}
 		}
-		more := 0
-		if len(boards) > boardCap {
-			more, boards = len(boards)-boardCap, boards[:boardCap]
-		}
-		out := make([]jira.Sprint, 0, len(boards)*8)
-		for i := range boards {
-			held, err := walkSprints(ctx, r, boards[i].ID, states, sprintCap)
-			// A board with no sprints — a Kanban board — answers this read with a
-			// 400 and its own sentence. That is the board answering, not refusing:
-			// it contributes nothing and the view goes on. Anything else the site
-			// says is still a refusal to read, and docs/API-NOTES.md says why the
-			// board's type is not what decides this.
-			var invalid *jira.ValidationError
-			if errors.As(err, &invalid) {
-				continue
-			}
-			if err != nil {
-				return failedMsg{gen: gen, op: opRead, err: err}
-			}
-			out = append(out, held...)
-		}
-		return loadedMsg{gen: gen, boards: boards, more: more, sprints: out}
+		return loadedMsg{gen: gen, boards: l.Boards, more: l.More, sprints: l.Sprints}
 	}
-}
-
-// walkSprints reads as many of a board's sprints as the view will offer. The
-// walk is bounded because the closed ones go back to the board's first day, and
-// a truncated list is drawn as truncated rather than as the whole of it.
-func walkSprints(ctx context.Context, r jira.SprintReader, boardID int64, states []jira.SprintState, limit int) ([]jira.Sprint, error) {
-	page, err := r.Sprints(ctx, boardID, states...)
-	if err != nil {
-		return nil, err
-	}
-	out := append([]jira.Sprint(nil), page.Items...)
-	for page.HasMore() && len(out) < limit {
-		page, err = page.Next(ctx)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, page.Items...)
-	}
-	if len(out) > limit {
-		out = out[:limit]
-	}
-	return out, nil
 }
 
 func createSprint(ctx context.Context, w jira.SprintManager, in jira.SprintInput, gen int) tea.Cmd {
-	return func() tea.Msg {
-		sp, err := w.CreateSprint(ctx, in)
-		if err != nil {
-			return failedMsg{gen: gen, op: opCreate, err: err}
-		}
-		return wroteMsg{gen: gen, op: opCreate, sprint: sp}
-	}
+	return written(gen, opCreate, func() (jira.Sprint, error) { return appsprint.Create(ctx, w, in) })
 }
 
-// updateSprint sends the fields the patch names and no others: the endpoint
-// underneath is a full replace, which is why every field of the patch is a
-// pointer and why one this view did not touch is left nil.
 func updateSprint(ctx context.Context, w jira.SprintManager, id int64, patch jira.SprintPatch, gen int) tea.Cmd {
-	return func() tea.Msg {
-		sp, err := w.UpdateSprint(ctx, id, patch)
-		if err != nil {
-			return failedMsg{gen: gen, op: opUpdate, err: err}
-		}
-		return wroteMsg{gen: gen, op: opUpdate, sprint: sp}
-	}
+	return written(gen, opUpdate, func() (jira.Sprint, error) { return appsprint.Update(ctx, w, id, patch) })
 }
 
-// startSprint moves a future sprint to active. The port refuses a sprint with
-// no dates without a round trip, so the refusal arrives as a
-// *jira.ValidationError naming the date that is missing.
 func startSprint(ctx context.Context, w jira.SprintManager, id int64, gen int) tea.Cmd {
-	return func() tea.Msg {
-		sp, err := w.StartSprint(ctx, id)
-		if err != nil {
-			return failedMsg{gen: gen, op: opStart, err: err}
-		}
-		return wroteMsg{gen: gen, op: opStart, sprint: sp}
-	}
+	return written(gen, opStart, func() (jira.Sprint, error) { return appsprint.Start(ctx, w, id) })
 }
 
 func completeSprint(ctx context.Context, w jira.SprintManager, id int64, gen int) tea.Cmd {
+	return written(gen, opComplete, func() (jira.Sprint, error) { return appsprint.Complete(ctx, w, id) })
+}
+
+func written(gen int, o op, call func() (jira.Sprint, error)) tea.Cmd {
 	return func() tea.Msg {
-		sp, err := w.CompleteSprint(ctx, id)
+		sp, err := call()
 		if err != nil {
-			return failedMsg{gen: gen, op: opComplete, err: err}
+			return failedMsg{gen: gen, op: o, err: err}
 		}
-		return wroteMsg{gen: gen, op: opComplete, sprint: sp}
+		return wroteMsg{gen: gen, op: o, sprint: sp}
 	}
 }

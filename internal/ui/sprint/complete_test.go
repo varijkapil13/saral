@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	appsprint "github.com/varijkapil13/saral/internal/app/sprint"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -134,12 +135,12 @@ func TestSprints_CompletingSendsTheOpenIssuesWhereverTheReaderChose(t *testing.T
 		t.Parallel()
 		f := newFake()
 		dr := seeded(t, f, f, "PROJ-1", "PROJ-3")
-		open := slices.Clone(dr.m.progress[dr.m.selected().ID].open)
+		open := slices.Clone(dr.m.progress[dr.m.selected().ID].Open)
 		if len(open) == 0 {
 			t.Fatal("the seeded sprint has nothing open, so this proves nothing")
 		}
 		dr.key("!", "tab")
-		if d := dr.m.pending.dest(); d.kind != destNext || d.sprint.Name != "Sprint 3" {
+		if d := dr.m.pending.dest(); d.Kind != appsprint.DestNext || d.Sprint.Name != "Sprint 3" {
 			t.Fatalf("tab chose %+v, want the next planned sprint", d)
 		}
 		dr.key("y")
@@ -160,9 +161,9 @@ func TestSprints_CompletingSendsTheOpenIssuesWhereverTheReaderChose(t *testing.T
 		t.Parallel()
 		f := newFake()
 		dr := seeded(t, f, f, "PROJ-1", "PROJ-3")
-		open := slices.Clone(dr.m.progress[dr.m.selected().ID].open)
+		open := slices.Clone(dr.m.progress[dr.m.selected().ID].Open)
 		dr.key("!", "tab", "tab")
-		if d := dr.m.pending.dest(); d.kind != destNew || d.name != "Sprint 4" {
+		if d := dr.m.pending.dest(); d.Kind != appsprint.DestNew || d.Name != "Sprint 4" {
 			t.Fatalf("two tabs chose %+v, want a new sprint called Sprint 4", d)
 		}
 		dr.key("y")
@@ -182,7 +183,7 @@ func TestSprints_CompletingSendsTheOpenIssuesWhereverTheReaderChose(t *testing.T
 		f := newFake()
 		dr := seeded(t, f, f, "PROJ-1")
 		dr.key("!", "shift+tab")
-		if d := dr.m.pending.dest(); d.kind != destNew {
+		if d := dr.m.pending.dest(); d.Kind != appsprint.DestNew {
 			t.Errorf("shift+tab from the first choice chose %+v, want the last", d)
 		}
 	})
@@ -284,31 +285,6 @@ func TestSprints_ANewSprintAFailedMoveMadeStaysOnTheList(t *testing.T) {
 	}
 }
 
-func TestSuccessorName_CountsOnPastWhatTheBoardAlreadyHas(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name  string
-		board []string
-		want  string
-	}{
-		{"Sprint 7", nil, "Sprint 8"},
-		{"Sprint 7", []string{"Sprint 8", "Sprint 9"}, "Sprint 10"},
-		{"Team 12", []string{"Team 13"}, "Team 14"},
-		{"Autumn push", nil, "Autumn push 2"},
-		{"Sprint 9", []string{"Sprint 10"}, "Sprint 11"},
-	} {
-		m := &Model{}
-		for i, name := range append([]string{tc.name}, tc.board...) {
-			m.sprints = append(m.sprints, jira.Sprint{ID: int64(i + 1), BoardID: 1, Name: name})
-		}
-		m.sprints = append(m.sprints, jira.Sprint{ID: 99, BoardID: 2, Name: tc.want})
-		if got := m.successorName(m.sprints[0]); got != tc.want {
-			t.Errorf("after %q with %v on the board: %q, want %q", tc.name, tc.board, got, tc.want)
-		}
-	}
-}
-
 func TestDaysLeft_CountsCalendarDaysInTheAccountsZone(t *testing.T) {
 	t.Parallel()
 
@@ -343,28 +319,18 @@ func TestSprints_ProgressCountsByTheBoardsLastColumnAndItsEstimationField(t *tes
 	f := newFake()
 	dr := seeded(t, f, f, "PROJ-1", "PROJ-2", "PROJ-3", "PROJ-4", "PROJ-5", "PROJ-6")
 	sp := dr.m.selected()
-	cfg, err := f.BoardConfig(t.Context(), sp.BoardID)
+	want, err := appsprint.ReadProgress(t.Context(), f, sp.BoardID, sp.ID)
 	if err != nil {
-		t.Fatalf("BoardConfig: %v", err)
-	}
-	done := doneStatuses(cfg)
-	page, err := f.SprintIssues(t.Context(), sp.BoardID, sp.ID, jira.BoardQuery{Fields: []string{"status", cfg.Estimation.Field.ID}})
-	if err != nil {
-		t.Fatalf("SprintIssues: %v", err)
-	}
-	var want progress
-	want.estimated = true
-	for i := range page.Items {
-		want.count(&page.Items[i], done, cfg.Estimation.Field)
+		t.Fatalf("ReadProgress: %v", err)
 	}
 	got := dr.m.progress[sp.ID]
-	if got.total != 6 || got.done != want.done || got.points != want.points || got.donePoints != want.donePoints {
+	if got.Total != 6 || got.Done != want.Done || got.Points != want.Points || got.DonePoints != want.DonePoints {
 		t.Errorf("progress is %+v, want %+v", got, want)
 	}
-	if want.done == 0 || want.done == want.total {
-		t.Fatalf("the seed has %d of %d done, so this proves nothing about which column counts", want.done, want.total)
+	if want.Done == 0 || want.Done == want.Total {
+		t.Fatalf("the seed has %d of %d done, so this proves nothing about which column counts", want.Done, want.Total)
 	}
-	mustContain(t, dr.view(), want.words())
+	mustContain(t, dr.view(), progressWords(want))
 }
 
 func TestSprints_ProgressThatCannotBeReadSaysSoAndLeavesTheListAlone(t *testing.T) {
