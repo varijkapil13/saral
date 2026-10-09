@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appattach "github.com/varijkapil13/saral/internal/app/attach"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -48,22 +49,22 @@ type downloadedMsg struct {
 	path string
 }
 
-// progressMsg is the running total of a download. It carries the channel it came
-// from so that taking one arms the wait for the next without the model holding a
-// channel of its own.
+// progressMsg is the running total of a download. It carries the progress it
+// came from so that taking one arms the wait for the next without the model
+// holding one of its own.
 type progressMsg struct {
 	gen     int
 	id      string
 	written int64
-	steps   chan int64
+	steps   *appattach.Progress
 }
 
-// sentMsg is the running total of an upload, carrying its channel for the same
+// sentMsg is the running total of an upload, carrying its progress for the same
 // reason progressMsg does.
 type sentMsg struct {
 	gen   int
 	sent  int64
-	steps chan int64
+	steps *appattach.Progress
 }
 
 type previewMsg struct {
@@ -97,7 +98,7 @@ type failedMsg struct {
 
 func list(ctx context.Context, reader jira.AttachmentReader, key string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		files, err := reader.Attachments(ctx, key)
+		files, err := appattach.List(ctx, reader, key)
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
@@ -112,13 +113,11 @@ func list(ctx context.Context, reader jira.AttachmentReader, key string, gen int
 // cancelled download must not leave a truncated file where a whole one is
 // expected, and only the side that knows the path can arrange that.
 func download(ctx context.Context, reader jira.AttachmentReader, t tools, site string,
-	att jira.Attachment, why intent, gen int, steps chan int64,
+	att jira.Attachment, why intent, gen int, steps *appattach.Progress,
 ) tea.Cmd {
 	return func() tea.Msg {
-		defer close(steps)
-		path, err := t.save(ctx, reader, site, att, func(written int64) {
-			latest(steps, written)
-		})
+		defer steps.Close()
+		path, err := t.save(ctx, reader, site, att, steps)
 		if err != nil {
 			return failedMsg{gen: gen, why: why, err: err}
 		}
@@ -126,23 +125,9 @@ func download(ctx context.Context, reader jira.AttachmentReader, t tools, site s
 	}
 }
 
-// latest puts a running total in a one-slot channel. The newest total is the
-// only one worth waiting for, so a step that finds the slot full replaces what is
-// in it rather than holding a transfer up on a frame.
-func latest(steps chan int64, n int64) {
-	select {
-	case <-steps:
-	default:
-	}
-	select {
-	case steps <- n:
-	default:
-	}
-}
-
-func awaitSent(steps chan int64, gen int) tea.Cmd {
+func awaitSent(steps *appattach.Progress, gen int) tea.Cmd {
 	return func() tea.Msg {
-		sent, open := <-steps
+		sent, open := steps.Next()
 		if !open {
 			return nil
 		}
@@ -150,12 +135,11 @@ func awaitSent(steps chan int64, gen int) tea.Cmd {
 	}
 }
 
-// awaitProgress waits for one running total. It ends on a closed channel, which
-// is what the download does when it is finished or cancelled, so nothing here
-// outlives the request it is reporting on.
-func awaitProgress(steps chan int64, id string, gen int) tea.Cmd {
+// awaitProgress waits for one running total. It ends when the download does,
+// finished or cancelled, so nothing here outlives the request it is reporting on.
+func awaitProgress(steps *appattach.Progress, id string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		written, open := <-steps
+		written, open := steps.Next()
 		if !open {
 			return nil
 		}
@@ -171,27 +155,12 @@ func render(ctx context.Context, t tools, att jira.Attachment, path string, box 
 	}
 }
 
-// upload sends one file and reports how much of it has gone. The port reports
-// every write, so a step is passed on only when it moves the percentage: a large
-// file would otherwise put a message per buffer into the program.
+// upload sends one file and reports how much of it has gone.
 func upload(ctx context.Context, a jira.Attacher, key string, file jira.FileRef, gen int,
-	steps chan int64,
+	steps *appattach.Progress,
 ) tea.Cmd {
 	return func() tea.Msg {
-		defer close(steps)
-		last := int64(-1)
-		file.Progress = func(sent int64) {
-			if file.Size <= 0 {
-				return
-			}
-			pct := min(sent, file.Size) * 100 / file.Size
-			if pct == last {
-				return
-			}
-			last = pct
-			latest(steps, sent)
-		}
-		added, err := a.Upload(ctx, key, []jira.FileRef{file})
+		added, err := appattach.Send(ctx, a, key, file, steps)
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
@@ -201,7 +170,7 @@ func upload(ctx context.Context, a jira.Attacher, key string, file jira.FileRef,
 
 func remove(ctx context.Context, a jira.Attacher, id, name string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		if err := a.DeleteAttachment(ctx, id); err != nil {
+		if err := appattach.Remove(ctx, a, id); err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
 		return deletedMsg{gen: gen, id: id, name: name}
