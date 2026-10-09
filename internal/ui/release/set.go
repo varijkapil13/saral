@@ -2,10 +2,10 @@ package release
 
 import (
 	"context"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -178,7 +178,7 @@ func (m *Model) decorate() {
 	s.projects, m.find.folds = s.projects[:0], m.find.folds[:0]
 	for i := range m.cells {
 		s.projects = append(s.projects, widget.Sanitize(s.owners[i].Label))
-		m.find.folds = append(m.find.folds, strings.ToLower(m.cells[i].name+"\x00"+named[i]))
+		m.find.folds = append(m.find.folds, apprelease.Fold(m.cells[i].name, named[i]))
 	}
 	m.regroup()
 }

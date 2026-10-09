@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -51,14 +52,20 @@ const (
 // thing a release decision turns on.
 const unknownOpen = "?"
 
-// The four states a version is in, as words. They are derived from the port's
-// own booleans and dates and never from anything the site can rename.
+// The four states a version is in, as words.
 const (
 	stateReleased   = "released"
 	stateArchived   = "archived"
 	stateOverdue    = "overdue"
 	stateUnreleased = "unreleased"
 )
+
+var stateWords = [...]string{
+	apprelease.Overdue:    stateOverdue,
+	apprelease.Unreleased: stateUnreleased,
+	apprelease.Released:   stateReleased,
+	apprelease.Archived:   stateArchived,
+}
 
 // styles are the list's own, built once per theme generation because
 // constructing a lipgloss.Style is the expensive half of drawing a row.
@@ -194,7 +201,7 @@ func (lay layout) caption(st *styles, ell string) string {
 type rowCells struct {
 	id          string
 	name        string
-	state       string
+	state       apprelease.State
 	open        string
 	start       string
 	release     string
@@ -216,7 +223,7 @@ func rowZone(id string) string { return "version:" + id }
 // cellsOf is one version's row, drawn out once.
 func cellsOf(v jira.Version, today jira.Date) rowCells {
 	return rowCells{
-		id: v.ID, name: widget.Sanitize(v.Name), state: versionState(v, today), open: openLabel(v),
+		id: v.ID, name: widget.Sanitize(v.Name), state: apprelease.StateOf(v, today), open: openLabel(v),
 		start: v.StartDate.String(), release: v.ReleaseDate.String(), description: widget.Sanitize(v.Description),
 	}
 }
@@ -236,7 +243,7 @@ func (m *Model) rebuildCells() {
 	} else {
 		m.find.folds = m.find.folds[:0]
 		for i := range m.cells {
-			m.find.folds = append(m.find.folds, strings.ToLower(m.cells[i].name))
+			m.find.folds = append(m.find.folds, apprelease.Fold(m.cells[i].name))
 		}
 	}
 	m.reorder()
@@ -288,21 +295,7 @@ func (m *Model) today() jira.Date {
 	return jira.DateOf(now.In(m.deps.Caps.Location()))
 }
 
-// versionState is which of the four states a version is in. Archived beats
-// released because an archived version is out of the way whatever else is true
-// of it, and overdue is a release date in the past on something unreleased.
-func versionState(v jira.Version, today jira.Date) string {
-	switch {
-	case v.Archived:
-		return stateArchived
-	case v.Released:
-		return stateReleased
-	case !v.ReleaseDate.IsZero() && !today.IsZero() && v.ReleaseDate.Before(today):
-		return stateOverdue
-	default:
-		return stateUnreleased
-	}
-}
+func stateWord(s apprelease.State) string { return stateWords[s] }
 
 // openLabel is the count of what is still open, or the mark that says nobody has
 // asked. Version.Unresolved is nil until something counts it, and nil is not
@@ -347,7 +340,7 @@ func drawRow(k rowKey, project string, excluded bool, st *styles, t *kernel.Them
 			b.WriteString(st.muted.Render(cell))
 		}
 	}
-	state := widget.PadTruncate(k.cells.state, k.lay.state, ell)
+	state := widget.PadTruncate(stateWord(k.cells.state), k.lay.state, ell)
 	b.WriteString(strings.Repeat(" ", gap))
 	if k.selected {
 		b.WriteString(state)
@@ -381,17 +374,17 @@ func drawRow(k rowKey, project string, excluded bool, st *styles, t *kernel.Them
 	return line
 }
 
-func stateStyle(state string, st *styles) lipgloss.Style {
+func stateStyle(state apprelease.State, st *styles) lipgloss.Style {
 	switch state {
-	case stateReleased:
+	case apprelease.Released:
 		return st.success
-	case stateOverdue:
+	case apprelease.Overdue:
 		return st.warning
-	case stateArchived:
+	case apprelease.Archived:
 		return st.muted
-	default:
-		return st.name
+	case apprelease.Unreleased:
 	}
+	return st.name
 }
 
 // summaryKey is everything the summary line is built from, so that the line is
@@ -402,7 +395,7 @@ type summaryKey struct {
 	versions   int
 	shown      int
 	released   int
-	filter     stateFilter
+	filter     apprelease.Filter
 	sortField  string
 	sortDesc   bool
 	loading    bool
@@ -460,9 +453,9 @@ func (m *Model) summaryLine() string {
 		b.WriteString(key.project)
 		b.WriteString(" ")
 	}
-	if key.filter != filterAll || key.needle != "" {
-		if key.filter != filterAll {
-			b.WriteString(key.filter.name())
+	if key.filter != apprelease.FilterAll || key.needle != "" {
+		if key.filter != apprelease.FilterAll {
+			b.WriteString(key.filter.Name())
 			b.WriteString(" · ")
 		}
 		if key.needle != "" {
@@ -565,8 +558,8 @@ func (m *Model) appendEmpty(lines []string, h int) []string {
 		lines = m.appendNarrowed(lines, room, nil)
 	case len(m.versions) > 0:
 		lines = append(lines,
-			m.styles.muted.Render(ansi.Truncate("  "+m.deps.Project+" has no "+m.filter.name()+" versions.", room, ell)),
-			m.styles.muted.Render(ansi.Truncate("  "+filterHint+" shows "+m.filter.next().shows()+".", room, ell)))
+			m.styles.muted.Render(ansi.Truncate("  "+m.deps.Project+" has no "+m.filter.Name()+" versions.", room, ell)),
+			m.styles.muted.Render(ansi.Truncate("  "+filterHint+" shows "+shows(m.filter.Next())+".", room, ell)))
 	default:
 		lines = append(lines,
 			m.styles.muted.Render(ansi.Truncate("  "+m.deps.Project+" has no versions yet.", room, ell)),

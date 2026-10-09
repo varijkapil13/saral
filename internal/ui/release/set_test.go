@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -590,16 +591,16 @@ func TestSet_SortAndArrangementAreKeptApartFromTheProjectList(t *testing.T) {
 	if _, kept := mem.Recall(ViewID, arrangeMemoryKey); kept {
 		t.Error("the project list was given an arrangement")
 	}
-	if got := recallFilter(d, ViewID); got != filterAll {
-		t.Errorf("the project list inherited the set's state filter %q", got.name())
+	if got := recallFilter(d, ViewID); got != apprelease.FilterAll {
+		t.Errorf("the project list inherited the set's state filter %q", got.Name())
 	}
-	if got := recallFilter(d, SetViewID); got != filterUnreleased {
-		t.Errorf("the set did not keep its state filter: %q", got.name())
+	if got := recallFilter(d, SetViewID); got != apprelease.FilterUnreleased {
+		t.Errorf("the set did not keep its state filter: %q", got.Name())
 	}
 
 	again := setOf(t, d, planSet(), 120, 30).list()
-	if again.set.arrange != arrProject || again.filter != filterUnreleased || again.sort.fieldID() != "name" {
-		t.Errorf("a set opened again looks at its versions as %v, %q, %q", again.set.arrange, again.filter.name(), again.sort.fieldID())
+	if again.set.arrange != arrProject || again.filter != apprelease.FilterUnreleased || again.sort.fieldID() != "name" {
+		t.Errorf("a set opened again looks at its versions as %v, %q, %q", again.set.arrange, again.filter.Name(), again.sort.fieldID())
 	}
 	_ = m
 }
@@ -766,8 +767,8 @@ func TestSet_FOpensStateAndProjectTogetherAndEscKeepsThem(t *testing.T) {
 	mustContain(t, dr.view(), "filter by:", "[state all]", "project all")
 
 	dr.key("l")
-	if m.filter != filterUnreleased {
-		t.Errorf("l moved the state to %q, want unreleased", m.filter.name())
+	if m.filter != apprelease.FilterUnreleased {
+		t.Errorf("l moved the state to %q, want unreleased", m.filter.Name())
 	}
 	dr.key("tab", "h")
 	if m.set.pick != "10400" {
@@ -776,7 +777,7 @@ func TestSet_FOpensStateAndProjectTogetherAndEscKeepsThem(t *testing.T) {
 	mustContain(t, dr.view(), "[project")
 
 	dr.key("esc")
-	if m.mode != browsing || m.filter != filterUnreleased || m.set.pick != "10400" {
-		t.Errorf("esc left mode %v, state %q, project %q, want both kept", m.mode, m.filter.name(), m.set.pick)
+	if m.mode != browsing || m.filter != apprelease.FilterUnreleased || m.set.pick != "10400" {
+		t.Errorf("esc left mode %v, state %q, project %q, want both kept", m.mode, m.filter.Name(), m.set.pick)
 	}
 }

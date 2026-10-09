@@ -35,7 +35,7 @@ func (m *Model) stepFacet(dir int) {
 		m.sum = ""
 		m.reorder()
 	} else {
-		m.filter = (m.filter + stateFilter(int(filterCount)+dir)) % filterCount
+		m.filter = m.filter.Step(dir)
 		m.sum = ""
 		m.rememberFilter()
 		m.reorder()
@@ -63,7 +63,7 @@ func (s *setView) stepPick(dir int) {
 
 func (m *Model) facetsPrompt() string {
 	s := m.set
-	state := "state " + m.filter.name()
+	state := "state " + m.filter.Name()
 	project := "project all"
 	if s.pick != "" {
 		project = "project " + s.pickLabel()

@@ -5,25 +5,18 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	apprelease "github.com/varijkapil13/saral/internal/app/release"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
-func (m *Model) versionsCache() (appcache.VersionsCache, bool) {
-	held, ok := m.deps.Cache.(appcache.VersionsCache)
-	return held, ok && held != nil
-}
+func (m *Model) versionsCache() apprelease.Cache { return apprelease.NewCache(m.deps.Cache) }
 
 // fromCache draws the versions this project last had before anything is asked
 // of the site. It runs in the constructor because kernel.FirstPaint renders a
 // frame without calling Init. The open counts are never stored, so every row
 // drawn from here says nobody has counted.
 func (m *Model) fromCache() {
-	held, ok := m.versionsCache()
-	if !ok {
-		return
-	}
-	snap, ok := held.Versions(m.deps.Project)
+	snap, ok := m.versionsCache().Recall(m.deps.Project)
 	if !ok {
 		return
 	}
@@ -36,11 +29,11 @@ func (m *Model) keep() tea.Cmd {
 	if m.set != nil {
 		return nil
 	}
-	held, ok := m.versionsCache()
-	if !ok || !m.loaded {
+	held := m.versionsCache()
+	if !held.Held() || !m.loaded {
 		return nil
 	}
-	if err := held.PutVersions(m.deps.Project, m.versions); err != nil {
+	if err := held.Keep(m.deps.Project, m.versions); err != nil {
 		return kernel.Warn("these versions could not be stored for next time: " + err.Error())
 	}
 	return nil
@@ -53,11 +46,11 @@ func (m *Model) refresh(purge bool) tea.Cmd {
 	if !purge {
 		return m.load()
 	}
-	held, ok := m.versionsCache()
-	if !ok {
+	held := m.versionsCache()
+	if !held.Held() {
 		return m.load()
 	}
-	if err := held.ForgetVersions(m.deps.Project); err != nil {
+	if err := held.Forget(m.deps.Project); err != nil {
 		return tea.Batch(kernel.Warn("the stored copy of these versions could not be dropped: "+err.Error()), m.load())
 	}
 	return m.load()

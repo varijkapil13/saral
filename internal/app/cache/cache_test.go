@@ -48,7 +48,7 @@ func newTestCache(t testing.TB, opts ...Option) (*Disk, *clock) {
 	return New(openDB(t), testScope, append([]Option{WithClock(c.now)}, opts...)...), c
 }
 
-// listFields mirrors app.ListProjection, which the shared kernel cannot import.
+// listFields mirrors appquery.ListProjection, which the shared kernel cannot import.
 var listFields = []string{"summary", "status", "assignee", "priority", "updated", "issuetype"}
 
 // listRows is what the list view stores: the six fields of ListProjection and a

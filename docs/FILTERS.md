@@ -47,7 +47,7 @@ Taken rather than derived, so they are written down once:
    discarding the order that makes it that view. Neither gets a sort control, and this sentence is
    why. The version list sorts and filters by state locally, over the one unfiltered list it reads in
    the project's own sequence, and uses neither `term.Terms` nor the filter bar: a version has no
-   facets, only the four states `versionState` derives.
+   facets, only the four states `release.StateOf` derives in `internal/app/release`.
 2. **A Nerd Font may be assumed, as a tier and not as a floor.** This reverses the rule stated in
    `kernel/theme.go` — *"Nothing here may assume a Nerd Font"* — deliberately and on request. Three
    tiers now: `nerd` → `unicode` → `ascii`, all three switchable from the
