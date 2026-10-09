@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	appplan "github.com/varijkapil13/saral/internal/app/plan"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
@@ -71,22 +72,21 @@ func TestPlans_BoardSourcesGolden(t *testing.T) {
 				},
 			}}})
 			dr.key("enter")
-			dr.send(releasesMsg{
-				gen: dr.m.gen, plan: "42",
-				versions: []jira.Version{{ID: "1", Name: "1.0", Released: true}, {ID: "2", Name: "2.0"}},
-				owners:   []string{"10000", "10001"},
-				refused: []refusal{
-					{kind: "board", ref: "18", reason: "the site named no project behind it, which is also what it answers for a board you cannot view"},
-					{kind: "board", ref: "19", reason: "The requested board cannot be viewed because it either does not exist or you do not have permission to view it."},
+			dr.send(releasesMsg{gen: dr.m.gen, plan: "42", got: appplan.Releases{
+				Versions: []jira.Version{{ID: "1", Name: "1.0", Released: true}, {ID: "2", Name: "2.0"}},
+				Owners:   []string{"10000", "10001"},
+				Refused: []appplan.Refusal{
+					{Kind: appplan.RefusedBoard, Ref: "18", Err: appplan.ErrBoardEmpty},
+					{Kind: appplan.RefusedBoard, Ref: "19", Err: &jira.NotFoundError{Kind: "board", ID: "19", Detail: "The requested board cannot be viewed because it either does not exist or you do not have permission to view it."}},
 				},
-				names:  map[string]string{"10000": "EX", "10001": "OPS"},
-				boards: map[string][]string{"17": {"EX", "OPS"}},
-				read:   []string{"10000", "10001"},
-				detail: &jira.PlanDetail{
+				Names:  map[string]string{"10000": "EX", "10001": "OPS"},
+				Boards: map[string][]string{"17": {"EX", "OPS"}},
+				Read:   []string{"10000", "10001"},
+				Detail: &jira.PlanDetail{
 					CrossProjectReleases: []jira.CrossProjectRelease{{Name: "Spring launch", VersionIDs: []string{"1", "2"}}},
 					ExcludedVersionIDs:   []string{"2"},
 				},
-			})
+			}})
 			golden(t, tc.golden, dr.view())
 		})
 	}
@@ -105,19 +105,19 @@ func TestPlans_CrossSpaceGolden(t *testing.T) {
 		{ID: "1", Name: "2.4.0"}, {ID: "2", Name: "2.5.0"}, {ID: "3", Name: "ops-2026.3"},
 		{ID: "4", Name: "ops-2026.4"}, {ID: "5", Name: "web-9"}, {ID: "6", Name: "1.9.x-hotfix"},
 	}
-	dr.send(releasesMsg{
-		gen: dr.m.gen, plan: "42", versions: versions,
-		owners: []string{"10000", "10000", "10001", "10001", "10002", "10002"},
-		names:  map[string]string{"10000": "EX", "10001": "OPS", "10002": "WEB"},
-		read:   []string{"10000", "10001", "10002"},
-		detail: &jira.PlanDetail{
+	dr.send(releasesMsg{gen: dr.m.gen, plan: "42", got: appplan.Releases{
+		Versions: versions,
+		Owners:   []string{"10000", "10000", "10001", "10001", "10002", "10002"},
+		Names:    map[string]string{"10000": "EX", "10001": "OPS", "10002": "WEB"},
+		Read:     []string{"10000", "10001", "10002"},
+		Detail: &jira.PlanDetail{
 			CrossProjectReleases: []jira.CrossProjectRelease{
 				{Name: "Spring launch", VersionIDs: []string{"1", "3", "5"}},
 				{Name: "Summer launch", VersionIDs: []string{"2", "4"}},
 			},
 			ExcludedVersionIDs: []string{"6", "99"},
 		},
-	})
+	}})
 	golden(t, "open_cross_space_120x20.golden", dr.view())
 }
 

@@ -1172,7 +1172,7 @@ are guesses.
   Both halves have landed, and the fake's project-key divergence with them: it sends the numeric id
   the schema documents, so `TestPlans_BothAdaptersAnswerTheSameWay` is green and the row in
   [`docs/API-NOTES.md`](API-NOTES.md) records the correction. What a locally defined plan is *not* yet
-  is a profile section — `plan.Defined` carries the TOML tags for `[[profiles.x.plans]]` and
+  is a profile section — `Defined` in `internal/app/plan` carries the TOML tags for `[[profiles.x.plans]]` and
   `plan.WithDefined` is the seam, but nothing in `internal/config` reads one, so the view stands in
   with the session's project and one plan per saved query, and says on each row which of the two it
   is.
@@ -2009,7 +2009,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
 - [x] **P13.11 — `timeline`** · after P13.2 · **owns** `internal/app/timeline/**`, `internal/ui/timeline/**`, `internal/app/dates.go` and its tests (retired)
   Date resolution. Empty for `ui/timeline`: `Boards|Fields|Sprints|Versions`.
 
-- [ ] **P13.12 — `plan`** · after P13.2 · **owns** `internal/app/plan/**`, `internal/ui/plan/**`
+- [x] **P13.12 — `plan`** · after P13.2 · **owns** `internal/app/plan/**`, `internal/ui/plan/**`
   Plans and local plans. Empty for `ui/plan`: `BoardProjects|PlanDetail|Plans|Project|Versions`.
 
 - [ ] **P13.13 — `connect`** · after P13.2 · **owns** `internal/app/connect/**`, `internal/ui/{onboarding,settings}/**`, the caps probe in `internal/ui/kernel`

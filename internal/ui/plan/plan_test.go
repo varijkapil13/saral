@@ -518,7 +518,8 @@ func TestPlans_TheClauseAPlanRendersTo(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			jql, problem := tc.in.clause()
+			jql, err := tc.in.Clause()
+			problem := problemWords(err)
 			if jql != tc.jql {
 				t.Errorf("jql = %q, want %q", jql, tc.jql)
 			}
@@ -567,7 +568,7 @@ func TestPlans_TheFakeAnswersAProjectSourceTheWayTheSiteDoes(t *testing.T) {
 				continue
 			}
 			sources++
-			if !digits(source.Value) {
+			if _, err := strconv.ParseUint(source.Value, 10, 64); err != nil {
 				t.Errorf("jiratest answers a project source with %q, which is a project key; "+
 					"pkg/jira/cloud maps this field from a numeric project id, which only "+
 					"Project turns into a key, so a view tested only against this meets a shape no "+

@@ -11,13 +11,13 @@ package plan
 
 import (
 	"context"
-	"errors"
 	"maps"
 	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
+	appplan "github.com/varijkapil13/saral/internal/app/plan"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -184,24 +184,13 @@ func (m *Model) takeProfilePlans() {
 	m.plans = m.plans[:0]
 	for i := range m.defined {
 		d := &m.defined[i]
-		jql, problem := d.clause()
-		name := strings.TrimSpace(d.Name)
-		if name == "" {
-			name = "unnamed plan"
-		}
+		jql, err := d.Clause()
 		m.plans = append(m.plans, planRow{
-			plan: jira.Plan{
-				// The index keeps two plans of one name apart, which their
-				// memo keys and their mouse zones both need.
-				ID:      "local:" + strconv.Itoa(i) + ":" + name,
-				Name:    name,
-				Sources: d.sources(),
-				Local:   true,
-			},
-			origin:  originOf(*d, m.derived),
+			plan:    d.Plan(i),
+			origin:  originOf(d, m.derived),
 			jql:     jql,
-			problem: problem,
-			dates:   d.dates(),
+			problem: problemWords(err),
+			dates:   datesWords(d),
 		})
 	}
 	m.loaded, m.loading, m.failure = true, false, nil
@@ -444,18 +433,13 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	return kernel.Fail(msg.err)
 }
 
-// plansRefused reports the refusal that names CapPlans, in the site's own
-// words. It is matched by capability and never by status code: a 403 from
-// somewhere else in the chain is not a statement about the Plans API.
+// plansRefused is the refusal that names CapPlans, in the site's own words
+// wherever it gave any.
 func plansRefused(err error) (reason string, refused bool) {
-	var capErr *jira.CapabilityError
-	if !errors.As(err, &capErr) || capErr.Capability != jira.CapPlans {
-		return "", false
-	}
-	if reason = strings.TrimSpace(capErr.Reason); reason == "" {
+	if reason, refused = appplan.PlansRefused(err); refused && reason == "" {
 		reason = "the Plans API needs Administer Jira, which this token does not have"
 	}
-	return reason, true
+	return reason, refused
 }
 
 func (m *Model) tookReleaseFailure(msg failedMsg) {
@@ -471,8 +455,8 @@ func (m *Model) tookReleases(msg releasesMsg) {
 	if msg.gen != m.gen {
 		return
 	}
-	m.rel[msg.plan] = releasesOf(m.localPlan(msg.plan), &msg)
-	maps.Copy(m.known, msg.names)
+	m.rel[msg.plan] = releasesOf(m.localPlan(msg.plan), &msg.got)
+	maps.Copy(m.known, msg.got.Names)
 	m.relOf = ""
 	m.reflow()
 	m.head = ""
@@ -481,7 +465,7 @@ func (m *Model) tookReleases(msg releasesMsg) {
 // releasesFor asks for the versions of every project this plan draws from.
 func (m *Model) releasesFor(at int) tea.Cmd {
 	row := &m.plans[at]
-	if !hasReleaseSources(row) || m.deps.Jira == nil {
+	if !appplan.HasReleaseSources(&row.plan) || m.deps.Jira == nil {
 		return nil
 	}
 	if held, ok := m.rel[row.plan.ID]; ok && (held.read || held.loading) {
@@ -492,27 +476,6 @@ func (m *Model) releasesFor(at int) tea.Cmd {
 	m.relOf = row.plan.ID
 	m.head = ""
 	return m.reply(readReleases(ctx, m.deps.Jira, row.plan, maps.Clone(m.known), gen))
-}
-
-// projectRefs are the projects a plan draws from, as a version read takes them:
-// a key where the profile defined the plan, a numeric id where the site did.
-func projectRefs(row *planRow) []string {
-	var out []string
-	for _, s := range row.plan.Sources {
-		if s.Type == jira.PlanSourceProject && strings.TrimSpace(s.Value) != "" {
-			out = append(out, s.Value)
-		}
-	}
-	return out
-}
-
-func hasReleaseSources(row *planRow) bool {
-	for _, s := range row.plan.Sources {
-		if (s.Type == jira.PlanSourceProject || s.Type == jira.PlanSourceBoard) && strings.TrimSpace(s.Value) != "" {
-			return true
-		}
-	}
-	return false
 }
 
 // --- keys and selection -----------------------------------------------------
