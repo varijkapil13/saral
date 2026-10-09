@@ -1988,7 +1988,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
   Upload, download and delete, with progress drained as events. Shell-style path completion stays in
   the view. Empty for `ui/attach`: `Attachments|DeleteAttachment|Download|Upload`.
 
-- [ ] **P13.7 — `sprint`** · after P13.2 · **owns** `internal/app/sprint/**`, `internal/ui/sprint/**`
+- [x] **P13.7 — `sprint`** · after P13.2 · **owns** `internal/app/sprint/**`, `internal/ui/sprint/**`
   Create, start, complete with a destination, progress. Empty for `ui/sprint`:
   `BoardConfig|Boards|CompleteSprint|CreateSprint|MoveToSprint|Sprint|SprintIssues|Sprints|StartSprint|UpdateSprint`.
 

@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appsprint "github.com/varijkapil13/saral/internal/app/sprint"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -47,7 +48,7 @@ func many(n int) []jira.Sprint {
 		}
 		out = append(out, sp)
 	}
-	return sortSprints(out)
+	return appsprint.Sort(out)
 }
 
 func itoa(n int) string {
