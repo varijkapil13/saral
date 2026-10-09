@@ -779,7 +779,7 @@ stale field catalogue does not.
 interface over the same file rather than more methods on `Cache`, because each is optional in both
 directions: a session with nowhere to keep one draws from a live read alone, and a `Cache` that is
 only a map of rows stays a `Cache`. A view asks for the one it needs with a type assertion and works
-without it, the way the kernel already does for `CapsCache`.
+without it, the way `connect.NewCaps` does for `CapsCache` on the kernel's behalf.
 
 A board's and a backlog's own snapshot hold their column configuration (or their sprints), their own
 quick filters, and only the *keys* of the cards or issues that landed in them — the values live once

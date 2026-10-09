@@ -2012,7 +2012,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
 - [x] **P13.12 — `plan`** · after P13.2 · **owns** `internal/app/plan/**`, `internal/ui/plan/**`
   Plans and local plans. Empty for `ui/plan`: `BoardProjects|PlanDetail|Plans|Project|Versions`.
 
-- [ ] **P13.13 — `connect`** · after P13.2 · **owns** `internal/app/connect/**`, `internal/ui/{onboarding,settings}/**`, the caps probe in `internal/ui/kernel`
+- [x] **P13.13 — `connect`** · after P13.2 · **owns** `internal/app/connect/**`, `internal/ui/{onboarding,settings}/**`, the caps probe in `internal/ui/kernel`
   The onboarding probe, capabilities, profile and session switch, settings field mapping. Empty for
   `ui/onboarding`: `Capabilities|Fields|Me|ServerInfo`; for `ui/settings`: `Fields`; for
   `ui/kernel`: `Capabilities`.

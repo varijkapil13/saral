@@ -203,7 +203,7 @@ func TestFieldPicker_TypingFiltersByName(t *testing.T) {
 	p := flyField(t, fieldDeps(sampleFields(), "example.atlassian.net"), 60, 12)
 
 	p.typeText("bravo")
-	if len(p.m.shown) != 1 || p.m.rows[p.m.shown[0]].label != "Bravo" {
+	if len(p.m.shown) != 1 || p.m.rows[p.m.shown[0]].Label != "Bravo" {
 		t.Fatalf("filtering for bravo left %v", p.m.shown)
 	}
 }
