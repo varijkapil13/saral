@@ -1,4 +1,4 @@
-package app
+package issue
 
 import (
 	"context"
@@ -9,14 +9,36 @@ import (
 	"strings"
 	"time"
 
+	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// IssueEditor is what a checked write runs on.
-type IssueEditor interface {
+// Editor is what a checked write runs on.
+type Editor interface {
 	jira.IssueReader
 	jira.IssueWriter
+}
+
+// ReadFields reads only the named fields of one issue.
+func ReadFields(ctx context.Context, reader jira.IssueReader, key string, ids []string) (jira.Issue, error) {
+	return reader.IssueFields(ctx, key, ids)
+}
+
+// EditScreen is which fields are on an issue's edit screen right now.
+func EditScreen(ctx context.Context, reader jira.SchemaReader, key string) (jira.EditMeta, error) {
+	return reader.EditMeta(ctx, key)
+}
+
+// Account is this session's own account.
+func Account(ctx context.Context, ident jira.Identifier) (jira.User, error) {
+	return ident.Me(ctx)
+}
+
+// Assignable searches the accounts that can be assigned in a project, which is
+// what drops the app accounts.
+func Assignable(ctx context.Context, finder jira.PeopleFinder, project, match string, limit int) ([]jira.User, error) {
+	return finder.FindPeople(ctx, jira.PeopleQuery{Match: match, Project: project, Limit: limit})
 }
 
 // EditBase is what a pending edit was made against: Jira Cloud answers a plain
@@ -101,11 +123,47 @@ func CheckBase(ctx context.Context, reader jira.IssueReader, key string, base Ed
 	return nil
 }
 
-// SaveIssue checks then writes: two requests, so a change landing between them
-// is still overwritten.
-func SaveIssue(ctx context.Context, c IssueEditor, key string, base EditBase, patch jira.IssuePatch) error {
+// Save checks then writes: two requests, so a change landing between them is
+// still overwritten.
+func Save(ctx context.Context, c Editor, key string, base EditBase, patch jira.IssuePatch) error {
 	if err := CheckBase(ctx, c, key, base); err != nil {
 		return err
 	}
 	return c.UpdateIssue(ctx, key, patch)
+}
+
+// Moves are the transitions this issue can make right now. They are never
+// cached: which exist depends on the status the issue is in at the moment of
+// asking, and on conditions the workflow evaluates against this issue.
+func Moves(ctx context.Context, mover jira.Mover, key string) ([]jira.Transition, error) {
+	return mover.Transitions(ctx, key)
+}
+
+// Mover is what a checked transition runs on.
+type Mover interface {
+	jira.IssueReader
+	jira.Mover
+}
+
+// Move checks the base, then transitions.
+func Move(ctx context.Context, c Mover, key, transitionID string, base EditBase, patch jira.IssuePatch) error {
+	if err := CheckBase(ctx, c, key, base); err != nil {
+		return err
+	}
+	return c.Transition(ctx, key, transitionID, patch)
+}
+
+// FromCache is seed with what the cache holds for it merged underneath, and
+// false when the cache holds nothing for it.
+func FromCache(held appcache.IssueCache, seed jira.Issue) (jira.Issue, bool) {
+	snap, ok := held.Issue(seed.Key)
+	if !ok {
+		return seed, false
+	}
+	return appcache.MergeIssue(snap.Issue, seed), true
+}
+
+// Keep stores a freshly read issue in the cache.
+func Keep(held appcache.IssueCache, iss jira.Issue) error {
+	return held.PutIssue(iss)
 }

@@ -12,7 +12,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/adf"
@@ -175,8 +175,8 @@ func (m *Model) dirtyCount() int {
 
 // edits is what the user has changed, in the form a draft keeps it, with the
 // base each edit was made against.
-func (m *Model) edits() draft {
-	out := draft{Key: m.issue.Key, Site: m.deps.Site, Values: map[string]string{}}
+func (m *Model) edits() appissue.Draft {
+	out := appissue.Draft{Key: m.issue.Key, Site: m.deps.Site, Values: map[string]string{}}
 	out.Base.Updated = m.baseAt
 	for i := range m.rows {
 		row := &m.rows[i]
@@ -215,38 +215,38 @@ func (m *Model) edits() draft {
 			}
 		case rkChoice, rkPerson:
 			if out.Choices == nil {
-				out.Choices = map[string]namedID{}
+				out.Choices = map[string]appissue.NamedID{}
 			}
-			out.Choices[row.id] = namedID{ID: row.chosenID, Label: row.value}
+			out.Choices[row.id] = appissue.NamedID{ID: row.chosenID, Label: row.value}
 		case rkField:
 			m.customEdit(&out, row)
 		default:
 			out.Values[row.id] = row.value
 		}
 	}
-	out = withHeld(out, m.held)
+	out = appissue.WithHeld(out, m.held)
 	if len(out.Values) == 0 {
 		out.Values = nil
 	}
 	return out
 }
 
-func (m *Model) customEdit(out *draft, row *fieldRow) {
+func (m *Model) customEdit(out *appissue.Draft, row *fieldRow) {
 	switch {
-	case row.custom == ckDoc && row.cleared:
+	case row.custom == appissue.CustomDoc && row.cleared:
 		out.Values[row.id] = ""
-	case row.custom == ckDoc:
+	case row.custom == appissue.CustomDoc:
 		if body, err := adf.Marshal(*row.edited); err == nil {
 			out.Docs = setIn(out.Docs, row.id, json.RawMessage(body))
 		}
-	case row.custom.chooses():
-		out.Picks = setIn(out.Picks, row.id, toDraftOptions(row.picked))
+	case row.custom.Chooses():
+		out.Picks = setIn(out.Picks, row.id, appissue.ToDraftOptions(row.picked))
 	default:
 		out.Values[row.id] = row.value
 	}
 }
 
-func (m *Model) editBase() app.EditBase {
+func (m *Model) editBase() appissue.EditBase {
 	return m.edits().Base
 }
 
@@ -255,13 +255,13 @@ func (m *Model) editBase() app.EditBase {
 // the read that rebuilt these rows is not the one that produced it. Each edit
 // keeps the base it was made against; a draft written before bases were kept
 // takes the fresh read's.
-func (m *Model) applyEdits(d draft) {
+func (m *Model) applyEdits(d appissue.Draft) {
 	rebase := func(row *fieldRow) {
 		if was, ok := d.Base.Fields[row.id]; ok && was != "" {
 			row.base = was
 		}
 	}
-	m.held = withHeld(m.heldFor(d), m.held)
+	m.held = appissue.WithHeld(m.heldFor(d), m.held)
 	for id, value := range d.Values {
 		row := m.rowByID(id)
 		if row == nil || !row.fetched {
@@ -291,7 +291,7 @@ func (m *Model) applyEdits(d draft) {
 			continue
 		}
 		rebase(row)
-		row.picked = fromDraftOptions(picks)
+		row.picked = appissue.FromDraftOptions(picks)
 		row.value = pickedText(row.picked)
 	}
 	for id, body := range d.Docs {
@@ -347,7 +347,7 @@ func (m *Model) rebaseRows() {
 		}
 	}
 	m.rows = m.buildRows()
-	m.held = draft{}
+	m.held = appissue.Draft{}
 	m.applyEdits(kept)
 	for i := range m.rows {
 		if m.rows[i].dirty() {
@@ -356,7 +356,7 @@ func (m *Model) rebaseRows() {
 	}
 	if !m.anyDirty() && !m.anyPending() {
 		m.baseAt = m.issue.Updated
-		if d, ok, err := m.drafts.load(m.deps.Site, m.issue.Key); err == nil && ok {
+		if d, ok, err := m.drafts.Load(m.deps.Site, m.issue.Key); err == nil && ok {
 			m.applyEdits(d)
 			m.draftRestored = true
 		}
@@ -376,7 +376,7 @@ func (m *Model) flagMoved() int {
 		if !row.dirty() || row.kind == rkLabels {
 			continue
 		}
-		now := app.Fingerprint(m.issue, row.id)
+		now := appissue.Fingerprint(m.issue, row.id)
 		if row.base == now {
 			continue
 		}
@@ -428,7 +428,7 @@ func (m *Model) relist() {
 }
 
 func (m *Model) keepDraft() tea.Cmd {
-	if err := m.drafts.save(m.edits()); err != nil {
+	if err := m.drafts.Save(m.edits()); err != nil {
 		return kernel.Warn(err.Error())
 	}
 	return nil
@@ -437,9 +437,9 @@ func (m *Model) keepDraft() tea.Cmd {
 // discardAll puts every row back to what the site holds and removes the draft.
 func (m *Model) discardAll() tea.Cmd {
 	m.rows = m.buildRows()
-	m.held = draft{}
+	m.held = appissue.Draft{}
 	m.draftRestored, m.moved = false, 0
-	if err := m.drafts.discard(m.deps.Site, m.issue.Key); err != nil {
+	if err := m.drafts.Discard(m.deps.Site, m.issue.Key); err != nil {
 		return kernel.Warn(err.Error())
 	}
 	return nil
@@ -524,7 +524,7 @@ func (m *Model) saveResult(msg savedMsg) tea.Cmd {
 // discardCmd drops the draft of a write that landed. Description text still
 // open in the inline editor was never part of that write, so it stays.
 func (m *Model) discardCmd() tea.Cmd {
-	left := withHeld(draft{Key: m.issue.Key, Site: m.deps.Site}, m.held)
+	left := appissue.WithHeld(appissue.Draft{Key: m.issue.Key, Site: m.deps.Site}, m.held)
 	for i := range m.rows {
 		row := &m.rows[i]
 		if row.pending == nil {
@@ -537,7 +537,7 @@ func (m *Model) discardCmd() tea.Cmd {
 			left.Pending = setIn(left.Pending, row.id, text)
 		}
 	}
-	if err := m.drafts.save(left); err != nil {
+	if err := m.drafts.Save(left); err != nil {
 		return kernel.Warn(err.Error())
 	}
 	return nil

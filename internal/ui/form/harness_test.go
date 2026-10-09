@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/testsupport"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -78,7 +79,7 @@ type driver struct {
 func newDriver(t *testing.T, d kernel.Deps, w, h int) *driver {
 	t.Helper()
 
-	dr := &driver{t: t, m: newWith(d, newSchemaCache(schemaTTL, time.Now))}
+	dr := &driver{t: t, m: newWith(d, appissue.NewSchemas(appissue.SchemaTTL, time.Now))}
 	dr.send(kernel.SizeMsg{Width: w, Height: h})
 	dr.send(kernel.FocusMsg{Focused: true})
 	dr.run(dr.m.Init())

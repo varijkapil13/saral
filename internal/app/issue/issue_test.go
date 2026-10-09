@@ -1,4 +1,4 @@
-package app
+package issue
 
 import (
 	"errors"
@@ -8,7 +8,25 @@ import (
 
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
+	"github.com/varijkapil13/saral/pkg/jira/jiratest"
 )
+
+func testFake(issues int) *jiratest.Fake {
+	return jiratest.New(
+		jiratest.WithProject("PROJ", jiratest.Scrum),
+		jiratest.WithIssues(jiratest.Gen(issues)),
+	)
+}
+
+func callsTo(f *jiratest.Fake, method string) int {
+	n := 0
+	for _, call := range f.Calls() {
+		if call == method {
+			n++
+		}
+	}
+	return n
+}
 
 func TestFingerprint_ChangesOnlyWithTheValue(t *testing.T) {
 	t.Parallel()
@@ -93,7 +111,7 @@ func TestCheckBase(t *testing.T) {
 	})
 }
 
-func TestSaveIssue_WritesOnlyOverWhatItWasMadeAgainst(t *testing.T) {
+func TestSave_WritesOnlyOverWhatItWasMadeAgainst(t *testing.T) {
 	t.Parallel()
 	mine := "mine"
 	for _, tc := range []struct {
@@ -117,7 +135,7 @@ func TestSaveIssue_WritesOnlyOverWhatItWasMadeAgainst(t *testing.T) {
 			f := testFake(2)
 			iss, _ := f.Issue(t.Context(), "PROJ-1")
 			tc.setup(t, f)
-			err := SaveIssue(t.Context(), f, "PROJ-1", BaseOf(iss, "summary"), jira.IssuePatch{Summary: &mine})
+			err := Save(t.Context(), f, "PROJ-1", BaseOf(iss, "summary"), jira.IssuePatch{Summary: &mine})
 			if (err != nil) != tc.fails {
 				t.Fatalf("err = %v, want failure %v", err, tc.fails)
 			}
@@ -133,10 +151,18 @@ func TestSaveIssue_WritesOnlyOverWhatItWasMadeAgainst(t *testing.T) {
 		iss, _ := f.Issue(t.Context(), "PROJ-1")
 		other := "theirs"
 		_ = f.UpdateIssue(t.Context(), "PROJ-1", jira.IssuePatch{Summary: &other})
-		err := SaveIssue(t.Context(), f, "PROJ-1", BaseOf(iss, "summary"), jira.IssuePatch{Summary: &mine})
+		err := Save(t.Context(), f, "PROJ-1", BaseOf(iss, "summary"), jira.IssuePatch{Summary: &mine})
 		var conflict *jira.ConflictError
 		if !errors.As(err, &conflict) || callsTo(f, "UpdateIssue") != 1 {
 			t.Fatalf("err = %v, calls %v; want a conflict and no write", err, f.Calls())
 		}
 	})
+}
+
+func failures() map[string]error {
+	return map[string]error{
+		"403":       &jira.CapabilityError{Reason: "no Browse projects permission"},
+		"429":       &jira.RateLimitError{RetryAfter: 30 * time.Second},
+		"transport": &jira.TransportError{Op: "issue", Err: errors.New("connection reset by peer")},
+	}
 }

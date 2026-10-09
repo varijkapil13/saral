@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -49,9 +49,9 @@ type savedMsg struct {
 }
 
 // saveDirtyPatch sends the whole dirty set as one request.
-func saveDirtyPatch(ctx context.Context, client app.IssueEditor, key string, base app.EditBase, patch jira.IssuePatch, gen int) tea.Cmd {
+func saveDirtyPatch(ctx context.Context, client appissue.Editor, key string, base appissue.EditBase, patch jira.IssuePatch, gen int) tea.Cmd {
 	return func() tea.Msg {
-		if err := app.SaveIssue(ctx, client, key, base, patch); err != nil {
+		if err := appissue.Save(ctx, client, key, base, patch); err != nil {
 			return savedMsg{gen: gen, err: err}
 		}
 		return savedMsg{gen: gen}
@@ -69,7 +69,7 @@ func saveDirtyPatch(ctx context.Context, client app.IssueEditor, key string, bas
 // result already means to this pane's Update loop.
 func loadEditMeta(ctx context.Context, reader jira.SchemaReader, key string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		meta, err := reader.EditMeta(ctx, key)
+		meta, err := appissue.EditScreen(ctx, reader, key)
 		if err != nil {
 			return nil
 		}

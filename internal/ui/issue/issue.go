@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/comment"
@@ -173,14 +174,14 @@ type Model struct {
 	mention mention.State
 
 	// held is a draft's edits for custom rows the screen has not listed yet.
-	held draft
+	held appissue.Draft
 
 	// editGen counts every keystroke a typing row or the description textarea
 	// takes, which is what tells the sidebar's own memo a frame has to be
 	// rebuilt when neither the cursor nor the stage has moved.
 	editGen int
 
-	drafts     draftStore
+	drafts     appissue.Drafts
 	launch     editorLauncher
 	after      func(time.Duration, func() tea.Msg) tea.Cmd
 	saveGen    int
@@ -244,7 +245,7 @@ func tickAfter(d time.Duration, fn func() tea.Msg) tea.Cmd {
 }
 
 // withDrafts replaces where drafts are kept.
-func withDrafts(s draftStore) modelOption {
+func withDrafts(s appissue.Drafts) modelOption {
 	return func(m *Model) { m.drafts = s }
 }
 
@@ -328,11 +329,9 @@ func (m *Model) fromCache() {
 	if !ok || held == nil {
 		return
 	}
-	snap, ok := held.Issue(m.issue.Key)
-	if !ok {
-		return
+	if merged, ok := appissue.FromCache(held, m.issue); ok {
+		m.issue = merged
 	}
-	m.issue = appcache.MergeIssue(snap.Issue, m.issue)
 }
 
 // keepIssue stores a freshly read issue so this pane's next open draws it
@@ -344,7 +343,7 @@ func (m *Model) keepIssue(iss jira.Issue) tea.Cmd {
 	if !ok || held == nil {
 		return nil
 	}
-	if err := held.PutIssue(iss); err != nil {
+	if err := appissue.Keep(held, iss); err != nil {
 		return kernel.Warn("this issue could not be stored for next time: " + err.Error())
 	}
 	return nil

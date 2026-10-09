@@ -7,12 +7,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 const (
-	childrenPage   = 50
 	childrenInline = 8
 	childrenGroup  = "Children"
 	moreRowID      = "children:more"
@@ -22,7 +22,7 @@ type childrenMsg struct {
 	gen      int
 	page     jira.Page[jira.Issue]
 	err      error
-	order    childOrder
+	order    appissue.ChildOrder
 	haveRank bool
 	restRead bool
 	warn     string
@@ -32,17 +32,6 @@ type childPatchedMsg struct {
 	gen   int
 	issue jira.Issue
 	err   error
-}
-
-func childrenJQL(key string) string { return "parent = " + key + " ORDER BY created ASC" }
-
-func rollup(children []jira.Issue) (n, done int) {
-	for i := range children {
-		if children[i].Status.Category == jira.CategoryDone {
-			done++
-		}
-	}
-	return len(children), done
 }
 
 func projectOfKey(key string) string {
@@ -59,20 +48,20 @@ func (m *Model) wantsChildren() bool {
 		m.search != nil && m.deps.Jira != nil
 }
 
-func loadChildren(ctx context.Context, in childRead, gen int) tea.Cmd {
+func loadChildren(ctx context.Context, in appissue.ChildRead, gen int) tea.Cmd {
 	return func() tea.Msg {
-		d := in.run(ctx)
+		d := in.Run(ctx)
 		return childrenMsg{
-			gen: gen, page: d.page, err: d.err, order: d.order,
-			haveRank: d.haveRank, restRead: d.restRead, warn: d.warn,
+			gen: gen, page: d.Page, err: d.Err, order: d.Order,
+			haveRank: d.HaveRank, restRead: d.RestRead, warn: priorityWarning(d.PriorityErr),
 		}
 	}
 }
 
-func (m *Model) childRequest() childRead {
-	return childRead{
-		key: m.issue.Key, search: m.search, vocab: m.deps.Jira, choice: currentChildSort(),
-		order: m.childOrd, bound: childrenSortBound,
+func (m *Model) childRequest() appissue.ChildRead {
+	return appissue.ChildRead{
+		Key: m.issue.Key, Search: m.search, Vocab: m.deps.Jira, Choice: appissue.ChildSort(currentChildSort()),
+		Order: m.childOrd.ChildOrder, Bound: appissue.ChildrenSortBound,
 	}
 }
 
@@ -99,8 +88,8 @@ func (m *Model) resortChildren() tea.Cmd {
 	}
 	m.childGen++
 	in := m.childRequest()
-	in.page, in.loaded, in.haveRank, in.restRead = m.childPage, true, m.childRank, m.childRest
-	in.page.Items = m.children
+	in.Page, in.Loaded, in.HaveRank, in.RestRead = m.childPage, true, m.childRank, m.childRest
+	in.Page.Items = m.children
 	return kernel.Reply(loadChildren(m.childContext(), in, m.childGen), m.addr)
 }
 
@@ -111,7 +100,7 @@ func (m *Model) reorderChildren() {
 
 func (m *Model) rankID() string {
 	if m.childRank {
-		return m.childOrd.rankID
+		return m.childOrd.RankID
 	}
 	return ""
 }
@@ -131,10 +120,8 @@ func (m *Model) childrenArrived(msg childrenMsg) tea.Cmd {
 	var cmd tea.Cmd
 	if msg.err == nil {
 		m.children, m.childPage = msg.page.Items, msg.page
-		warned := m.childOrd.prioWarned
-		m.childOrd, m.childRank, m.childRest = msg.order, msg.haveRank, msg.restRead
-		m.childOrd.prioWarned = m.childOrd.prioWarned || warned
-		if msg.warn != "" && !warned {
+		m.childOrd.ChildOrder, m.childRank, m.childRest = msg.order, msg.haveRank, msg.restRead
+		if msg.warn != "" && !m.childOrd.prioWarned {
 			m.childOrd.prioWarned = true
 			cmd = kernel.Warn(msg.warn)
 		}
@@ -153,9 +140,9 @@ func (m *Model) childChanged(key string) tea.Cmd {
 	if m.deps.Jira == nil || !m.hasChild(key) {
 		return nil
 	}
-	ctx, gen, reader, ids := m.childContext(), m.childGen, m.deps.Jira, childProjection(m.rankID()).IDs
+	ctx, gen, reader, ids := m.childContext(), m.childGen, m.deps.Jira, appissue.ChildProjection(m.rankID()).IDs
 	return kernel.Reply(func() tea.Msg {
-		iss, err := reader.IssueFields(ctx, key, ids)
+		iss, err := appissue.ReadFields(ctx, reader, key, ids)
 		return childPatchedMsg{gen: gen, issue: iss, err: err}
 	}, m.addr)
 }
@@ -189,7 +176,7 @@ func (m *Model) childGroup() (refGroup, bool) {
 	case len(m.children) == 0:
 		return refGroup{}, false
 	}
-	n, done := rollup(m.children)
+	n, done := appissue.Rollup(m.children)
 	more := m.childPage.HasMore()
 	title := childrenGroup + " · " + strconv.Itoa(n) + " · " + strconv.Itoa(done) + " done"
 	if more {
@@ -248,7 +235,7 @@ func (m *Model) showChildrenInList() tea.Cmd {
 	}
 	for _, spec := range kernel.Views() {
 		if spec.RunsQueries {
-			return kernel.OpenThen(spec.ID, kernel.RunQueryMsg{JQL: childrenJQL(m.issue.Key), Title: m.issue.Key + " children"})
+			return kernel.OpenThen(spec.ID, kernel.RunQueryMsg{JQL: appissue.ChildrenJQL(m.issue.Key), Title: m.issue.Key + " children"})
 		}
 	}
 	return kernel.Warn("there is no issue list to show them in")

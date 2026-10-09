@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -40,12 +40,9 @@ type movesLoadedMsg struct {
 // moveDoneMsg is a transition that landed.
 type moveDoneMsg struct{ gen int }
 
-// loadMoves reads the transitions this issue can make right now. They are never
-// cached: which ones exist depends on the status the issue is in at the moment
-// of asking, and on conditions the workflow evaluates against this issue.
 func loadMoves(ctx context.Context, client jira.Mover, key string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		moves, err := client.Transitions(ctx, key)
+		moves, err := appissue.Moves(ctx, client, key)
 		if err != nil {
 			return editFailedMsg{gen: gen, err: err}
 		}
@@ -53,17 +50,9 @@ func loadMoves(ctx context.Context, client jira.Mover, key string, gen int) tea.
 	}
 }
 
-type moveClient interface {
-	jira.IssueReader
-	jira.Mover
-}
-
-func applyMove(ctx context.Context, client moveClient, key, transitionID string, base app.EditBase, patch jira.IssuePatch, gen int) tea.Cmd {
+func applyMove(ctx context.Context, client appissue.Mover, key, transitionID string, base appissue.EditBase, patch jira.IssuePatch, gen int) tea.Cmd {
 	return func() tea.Msg {
-		if err := app.CheckBase(ctx, client, key, base); err != nil {
-			return editFailedMsg{gen: gen, err: err}
-		}
-		if err := client.Transition(ctx, key, transitionID, patch); err != nil {
+		if err := appissue.Move(ctx, client, key, transitionID, base, patch); err != nil {
 			return editFailedMsg{gen: gen, err: err}
 		}
 		return moveDoneMsg{gen: gen}

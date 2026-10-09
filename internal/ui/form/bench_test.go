@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -53,7 +54,7 @@ func built(tb testing.TB, fields, w, h int) *Model {
 		Theme:     kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs()),
 		Now:       func() time.Time { return time.Date(2026, time.March, 5, 9, 0, 0, 0, time.UTC) },
 	}
-	m := newWith(d, newSchemaCache(schemaTTL, time.Now))
+	m := newWith(d, appissue.NewSchemas(appissue.SchemaTTL, time.Now))
 	next, _ := m.Update(kernel.SizeMsg{Width: w, Height: h})
 	m, _ = next.(*Model)
 	next, _ = m.Update(schemaLoadedMsg{gen: m.gen, schema: wideScreen(fields)})

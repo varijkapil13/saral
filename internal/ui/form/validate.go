@@ -3,135 +3,42 @@ package form
 import (
 	"errors"
 	"fmt"
-	"math"
-	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-// dateTimeLayouts are what a date-and-time field accepts, in the order they are
-// tried. The first two carry their own offset; the rest are read in the account
-// timezone, because a time typed with no offset is the one on the user's clock.
-var dateTimeLayouts = []string{
-	"2006-01-02T15:04:05.000-0700",
-	time.RFC3339,
-	"2006-01-02 15:04:05",
-	"2006-01-02 15:04",
-	"2006-01-02T15:04:05",
-	"2006-01-02T15:04",
-}
-
-// issueKey is the shape every Jira issue key has: a project key, a hyphen and a
-// number. It is not a list of the site's projects, which no endpoint on the
-// port answers.
-var issueKey = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*-\d+$`)
-
-func parseDateTime(text string, loc *time.Location) (time.Time, error) {
-	if loc == nil {
-		loc = time.UTC
-	}
-	trimmed := strings.TrimSpace(text)
-	for i, layout := range dateTimeLayouts {
-		var (
-			at  time.Time
-			err error
-		)
-		if i < 2 {
-			at, err = time.Parse(layout, trimmed)
-		} else {
-			at, err = time.ParseInLocation(layout, trimmed, loc)
-		}
-		if err == nil {
-			return at, nil
-		}
-	}
-	return time.Time{}, fmt.Errorf("form: %q is not a date and time", trimmed)
-}
-
 // validate answers what is wrong with this field's value, and "" when nothing
-// is. Every rule comes from what the site said about the field: whether it is
-// required, what it holds, and which values it allows.
+// is.
 func (f *field) validate() string {
-	if f.empty() {
-		if f.meta.Required && !f.meta.HasDefault {
-			return "this field is required"
-		}
-		return ""
-	}
-	text := strings.TrimSpace(f.text)
-	switch f.kind {
-	case kindNumber:
-		if _, err := parseNumber(text); err != nil {
-			return strconv.Quote(text) + " is not a number"
-		}
-	case kindDate:
-		if _, err := jira.ParseDate(text); err != nil {
-			return strconv.Quote(text) + " is not a date; write it as 2026-03-27"
-		}
-	case kindDateTime:
-		if _, err := parseDateTime(text, f.loc); err != nil {
-			return strconv.Quote(text) + " is not a date and time; write it as 2026-03-27 09:30"
-		}
-	case kindIssueKey:
-		if !issueKey.MatchString(text) {
-			return strconv.Quote(text) + " is not an issue key; write it as PROJ-142"
-		}
-	case kindDoc:
-		if _, err := f.document(); err != nil {
-			return docProblem(err)
-		}
-	case kindUser, kindUsers:
-		for _, option := range f.picked {
-			if option.ID == "" {
-				return strconv.Quote(option.Label) + " has no account id, so Jira cannot be told who it is"
-			}
-		}
-		return f.outsideAllowed()
-	case kindSelect, kindMultiSelect, kindCascade:
-		return f.outsideAllowed()
-	case kindText, kindLabels, kindOther:
-	}
-	return ""
+	e := f.entry()
+	return problemText(e.Check())
 }
 
-// outsideAllowed reports a chosen value the site does not allow for this field.
-// A picker only ever offers what the schema stated, so this catches a value
-// that arrived some other way — a restored draft against a screen that has
-// since changed, or a person picker with no list to check against.
-func (f *field) outsideAllowed() string {
-	if len(f.meta.AllowedValues) == 0 {
+func problemText(p appissue.Problem) string {
+	switch p.Kind {
+	case appissue.ProblemRequired:
+		return "this field is required"
+	case appissue.ProblemNotNumber:
+		return strconv.Quote(p.Text) + " is not a number"
+	case appissue.ProblemNotDate:
+		return strconv.Quote(p.Text) + " is not a date; write it as 2026-03-27"
+	case appissue.ProblemNotDateTime:
+		return strconv.Quote(p.Text) + " is not a date and time; write it as 2026-03-27 09:30"
+	case appissue.ProblemNotIssueKey:
+		return strconv.Quote(p.Text) + " is not an issue key; write it as PROJ-142"
+	case appissue.ProblemDocument:
+		return docProblem(p.Err)
+	case appissue.ProblemNoAccount:
+		return strconv.Quote(p.Option.Label) + " has no account id, so Jira cannot be told who it is"
+	case appissue.ProblemNotAllowed:
+		return strconv.Quote(cascadeLabel(p.Option)) + " is not one of the values this field allows"
+	default:
 		return ""
 	}
-	for _, option := range f.picked {
-		if !allows(f.meta.AllowedValues, option) {
-			return strconv.Quote(cascadeLabel(option)) + " is not one of the values this field allows"
-		}
-	}
-	return ""
-}
-
-// allows reports whether one chosen value is among those stated, following the
-// second level of a cascading select.
-func allows(allowed []jira.Option, option jira.Option) bool {
-	for _, candidate := range allowed {
-		if candidate.ID != option.ID {
-			continue
-		}
-		if len(option.Children) == 0 {
-			return true
-		}
-		for _, child := range candidate.Children {
-			if child.ID == option.Children[0].ID {
-				return true
-			}
-		}
-		return false
-	}
-	return false
 }
 
 // docProblem words a markdown the parser will not turn into a document, at the
@@ -210,18 +117,4 @@ func (m *Model) fieldFor(name string) *field {
 		}
 	}
 	return nil
-}
-
-var errNotFinite = errors.New("not a finite number")
-
-// ParseFloat also takes NaN and Inf, which JSON cannot carry.
-func parseNumber(text string) (float64, error) {
-	number, err := strconv.ParseFloat(text, 64)
-	if err != nil {
-		return 0, err
-	}
-	if math.IsNaN(number) || math.IsInf(number, 0) {
-		return 0, errNotFinite
-	}
-	return number, nil
 }

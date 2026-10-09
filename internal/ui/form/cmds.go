@@ -2,20 +2,13 @@ package form
 
 import (
 	"context"
-	"strconv"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
-
-// typeSample is how many issues are read to find out which issue types this
-// project actually uses. It is one page, not a walk: the port has no endpoint
-// that lists a project's issue types, so the answer comes from the issues the
-// account can see, the same way onboarding finds a project key.
-const typeSample = 50
 
 // typesFoundMsg carries the issue types a create form can offer.
 type typesFoundMsg struct {
@@ -32,7 +25,7 @@ type typesFailedMsg struct {
 // schemaLoadedMsg carries one issue type's create screen.
 type schemaLoadedMsg struct {
 	gen    int
-	screen screen
+	screen appissue.Screen
 	schema jira.Schema
 }
 
@@ -65,45 +58,20 @@ type createFailedMsg struct {
 // loadTypes reads the issue types in use in one project.
 func loadTypes(ctx context.Context, search *appquery.Search, project string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		result, err := search.Run(ctx, appquery.Request{
-			JQL:        "project = " + quote(project) + " ORDER BY created DESC",
-			Projection: appquery.Projection{Name: "issue type picker", IDs: []string{"issuetype"}},
-			MaxResults: typeSample,
-		})
+		types, err := appissue.Types(ctx, search, project)
 		if err != nil {
 			return typesFailedMsg{gen: gen, err: err}
 		}
-		return typesFoundMsg{gen: gen, types: distinctTypes(result.Page.Items)}
+		return typesFoundMsg{gen: gen, types: types}
 	}
 }
 
-// distinctTypes keeps the order the issues came back in, which is newest first
-// and therefore the order worth offering.
-func distinctTypes(issues []jira.Issue) []jira.IssueType {
-	seen := make(map[string]bool, len(issues))
-	out := make([]jira.IssueType, 0, 6)
-	for i := range issues {
-		typ := issues[i].Type
-		if typ.ID == "" || seen[typ.ID] {
-			continue
-		}
-		seen[typ.ID] = true
-		out = append(out, typ)
-	}
-	return out
-}
-
-// loadSchema reads a create screen, from the cache when it is still fresh.
-func loadSchema(ctx context.Context, client jira.SchemaReader, cache *schemaCache, key screen, gen int) tea.Cmd {
+func loadSchema(ctx context.Context, client jira.SchemaReader, cache *appissue.Schemas, key appissue.Screen, gen int) tea.Cmd {
 	return func() tea.Msg {
-		if schema, ok := cache.get(key); ok {
-			return schemaLoadedMsg{gen: gen, screen: key, schema: schema}
-		}
-		schema, err := client.CreateMeta(ctx, key.project, key.issueType)
+		schema, err := appissue.CreateScreen(ctx, client, cache, key)
 		if err != nil {
 			return schemaFailedMsg{gen: gen, err: err}
 		}
-		cache.put(key, schema)
 		return schemaLoadedMsg{gen: gen, screen: key, schema: schema}
 	}
 }
@@ -112,7 +80,7 @@ func loadSchema(ctx context.Context, client jira.SchemaReader, cache *schemaCach
 // costs a person picker one candidate, and there is nothing the user can do.
 func loadAccount(ctx context.Context, client jira.Identifier, gen int) tea.Cmd {
 	return func() tea.Msg {
-		user, err := client.Me(ctx)
+		user, err := appissue.Account(ctx, client)
 		if err != nil {
 			return nil
 		}
@@ -120,10 +88,9 @@ func loadAccount(ctx context.Context, client jira.Identifier, gen int) tea.Cmd {
 	}
 }
 
-// create asks Jira to store the issue.
 func create(ctx context.Context, client jira.IssueWriter, in jira.IssueInput, gen int) tea.Cmd {
 	return func() tea.Msg {
-		issue, err := client.CreateIssue(ctx, in)
+		issue, err := appissue.Create(ctx, client, in)
 		if err != nil {
 			return createFailedMsg{gen: gen, err: err}
 		}
@@ -137,10 +104,4 @@ func withCancel(cancel context.CancelFunc, cmd tea.Cmd) tea.Cmd {
 		defer cancel()
 		return cmd()
 	}
-}
-
-// quote writes a project key as JQL takes it. The key is whatever the session
-// was opened against and nothing about it is written down here.
-func quote(s string) string {
-	return strconv.Quote(strings.ReplaceAll(s, `"`, ""))
 }

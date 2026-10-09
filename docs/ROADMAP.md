@@ -1975,7 +1975,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
   sprint. Empty for `ui/board`: `BoardConfig|BoardIssues|Boards|FindPeople|IssueFields|Me|MoveToSprint|QuickFilters|SprintIssues|Sprints|Transition|Transitions`;
   for `ui/backlog`: `BoardConfig|BoardIssues|Boards|Fields|IssueFields|Me|MoveToBacklog|MoveToSprint|Sprints`.
 
-- [ ] **P13.4 — `issue`** · after P13.2 · **owns** `internal/app/issue/**`, `internal/ui/{issue,form}/**`, `internal/app/{issue.go,issue_test.go}` (retired)
+- [x] **P13.4 — `issue`** · after P13.2 · **owns** `internal/app/issue/**`, `internal/ui/{issue,form}/**`, `internal/app/{issue.go,issue_test.go}` (retired)
   Read, edit and the conflict check, field coercion, create, drafts, links, watchers, worklogs, the
   children sort. Empty for `ui/issue`: `AddWorklog|CreateIssue|CreateMeta|DeleteLink|EditMeta|Fields|FindPeople|Issue|IssueFields|IssueLinkTypes|LinkIssues|Me|Priorities|Search|Transition|Transitions|Unwatch|Watch|Watchers|Worklogs`;
   for `ui/form`: `CreateIssue|CreateMeta|FindPeople|Me`.

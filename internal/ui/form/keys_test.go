@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
 
@@ -38,7 +39,7 @@ func TestLiveKeys_EveryStateGolden(t *testing.T) {
 
 func TestLiveKeys_FollowWhatTheFormIsShowing(t *testing.T) {
 	t.Parallel()
-	m := newWith(testDeps(t, nil), newSchemaCache(schemaTTL, time.Now))
+	m := newWith(testDeps(t, nil), appissue.NewSchemas(appissue.SchemaTTL, time.Now))
 	seen := map[int]string{}
 	for _, tc := range []struct {
 		name  string
@@ -101,7 +102,7 @@ func wholeOf(set kernel.KeySet) string {
 // AllocsPerRun measures the whole process, so this one cannot run beside
 // anything else.
 func TestLiveKeys_CostNothingToAskFor(t *testing.T) {
-	m := newWith(testDeps(t, nil), newSchemaCache(schemaTTL, time.Now))
+	m := newWith(testDeps(t, nil), appissue.NewSchemas(appissue.SchemaTTL, time.Now))
 	if got := testing.AllocsPerRun(100, func() { _, _ = m.LiveKeys() }); got != 0 {
 		t.Errorf("asking for the live keys allocates %.0f times; chromeFor asks on every frame, so the sets must be stored", got)
 	}

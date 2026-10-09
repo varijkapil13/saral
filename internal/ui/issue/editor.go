@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/mattn/go-shellwords"
 
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/adf"
 )
@@ -97,7 +98,7 @@ func handOffToEditor(launch editorLauncher, addr kernel.Addr, gen int, key strin
 }
 
 func writeHandoff(key, rendered string) (string, error) {
-	file, err := os.CreateTemp("", "saral-"+safeName(key)+"-*.md")
+	file, err := os.CreateTemp("", "saral-"+appissue.SafeName(key)+"-*.md")
 	if err != nil {
 		return "", fmt.Errorf("making a file for the editor: %w", err)
 	}

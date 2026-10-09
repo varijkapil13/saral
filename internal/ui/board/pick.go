@@ -10,8 +10,8 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
 	appboard "github.com/varijkapil13/saral/internal/app/board"
+	appissue "github.com/varijkapil13/saral/internal/app/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -589,9 +589,9 @@ func (j bulkJob) run(ctx context.Context, client jira.SessionClient, gen int) te
 		switch j.kind {
 		case bulkAssign:
 			who := j.who
-			out.err = app.SaveIssue(ctx, client, key, app.BaseOf(j.issue, "assignee"), jira.IssuePatch{Assignee: &who})
+			out.err = appissue.Save(ctx, client, key, appissue.BaseOf(j.issue, "assignee"), jira.IssuePatch{Assignee: &who})
 		case bulkLabel:
-			out.err = app.SaveIssue(ctx, client, key, app.EditBase{}, jira.IssuePatch{AddLabels: []string{j.label}})
+			out.err = appissue.Save(ctx, client, key, appissue.EditBase{}, jira.IssuePatch{AddLabels: []string{j.label}})
 		case bulkMoveTo:
 			out.status, out.moved, out.err = j.transition(ctx, client)
 		}
