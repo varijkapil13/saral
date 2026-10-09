@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -356,19 +357,6 @@ func TestMine_OToggleIsAnAssigneeTermTheBarNames(t *testing.T) {
 	}
 }
 
-// Only mine replaces whoever else the assignee facet names, and leaves the
-// other facets alone.
-func TestMine_ReplacesOtherAssigneesAndKeepsOtherFacets(t *testing.T) {
-	t.Parallel()
-	grace := appterm.Term{Facet: appterm.FacetAssignee, ID: "acct-grace", Label: "Grace Hopper"}
-	bug := appterm.Term{Facet: appterm.FacetType, ID: "10004", Label: "Bug"}
-	got := mineToggled(appterm.Terms{grace, bug}, ada)
-	mine := appterm.Term{Facet: appterm.FacetAssignee, ID: ada.AccountID}
-	if !got.Has(mine) || got.Has(grace) || !got.Has(bug) || len(got) != 2 {
-		t.Errorf("only mine over %v gave %v", appterm.Terms{grace, bug}, got)
-	}
-}
-
 func TestMine_ASiteThatWillNotSayWhoThisIsIsReported(t *testing.T) {
 	t.Parallel()
 	for name, err := range refusals() {
@@ -409,7 +397,7 @@ func TestFind_TypingMovesTheCursorAndNWalksTheMatches(t *testing.T) {
 		t.Fatal("the search prompt does not take the keyboard, so the kernel would spend its digits")
 	}
 	typeInto(dr, "proj-1")
-	if got := dr.m.selectedKey(); !containsFold(got, "proj-1") {
+	if got := dr.m.selectedKey(); !appboard.ContainsFold(got, "proj-1") {
 		t.Fatalf("typing proj-1 left the cursor on %s", got)
 	}
 	golden(t, "find_120x20.golden", dr.view())
@@ -422,14 +410,14 @@ func TestFind_TypingMovesTheCursorAndNWalksTheMatches(t *testing.T) {
 	for range 20 {
 		dr.key("n")
 		key := dr.m.selectedKey()
-		if !containsFold(key, "proj-1") {
+		if !appboard.ContainsFold(key, "proj-1") {
 			t.Fatalf("n landed on %s, which does not match", key)
 		}
 		seen[key] = true
 	}
 	var want int
 	for i := range dr.m.issues {
-		if matchesNeedle(&dr.m.issues[i], "proj-1") {
+		if appboard.MatchesNeedle(&dr.m.issues[i], "proj-1") {
 			want++
 		}
 	}
@@ -465,25 +453,6 @@ func TestFind_EscGoesBackAndANeedleNothingMatchesSaysSo(t *testing.T) {
 	}
 	dr.key("n")
 	mustContain(t, dr.lastStatus().Text, "nothing is being searched for")
-}
-
-func TestContainsFold(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		s, sub string
-		want   bool
-	}{
-		{"PROJ-12", "proj-1", true},
-		{"Fix the Search index", "SEARCH", true},
-		{"Déjà vu", "DÉJÀ", true},
-		{"short", "longer than it", false},
-		{"anything", "", true},
-		{"PROJ-2", "proj-3", false},
-	} {
-		if got := containsFold(tc.s, tc.sub); got != tc.want {
-			t.Errorf("containsFold(%q, %q) = %v, want %v", tc.s, tc.sub, got, tc.want)
-		}
-	}
 }
 
 func TestSprintLine_DaysLeftAndProgress(t *testing.T) {

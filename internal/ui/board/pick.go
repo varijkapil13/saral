@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -129,15 +130,6 @@ type bulkStepMsg struct {
 	moved  bool
 	err    error
 }
-
-// errNoMove is a card no workflow move takes into the column the set is going
-// to; errScreen is one whose move needs a field only the issue pane can fill;
-// errNoMoveTo is one with no move to the status the set was sent to.
-var (
-	errNoMove   = errors.New("no workflow move takes it into that column")
-	errScreen   = errors.New("its move needs a field filled in, which the issue pane asks for")
-	errNoMoveTo = errors.New("no workflow move takes it to that status")
-)
 
 // --- picking ------------------------------------------------------------------
 
@@ -323,7 +315,7 @@ func (m *Model) pickUpSet() tea.Cmd {
 	if why := m.bulkRefused(); why != "" {
 		return kernel.Warn(why)
 	}
-	if len(m.plan.columns) < 2 {
+	if len(m.plan.Columns) < 2 {
 		return kernel.Warn("this board has one column, so there is nowhere to move these cards to")
 	}
 	iss := m.issueAt(m.curCol, m.curRow)
@@ -344,9 +336,9 @@ func (m *Model) dropSet() tea.Cmd {
 	if len(keys) == 0 {
 		return nil
 	}
-	m.bulk = &bulk{kind: bulkMoveTo, stage: stageConfirm, keys: keys, col: target, name: m.plan.columns[target].name}
+	m.bulk = &bulk{kind: bulkMoveTo, stage: stageConfirm, keys: keys, col: target, name: m.plan.Columns[target].Name}
 	m.forget()
-	if len(m.plan.columns[target].statuses) < 2 || m.deps.Jira == nil {
+	if len(m.plan.Columns[target].Statuses) < 2 || m.deps.Jira == nil {
 		return nil
 	}
 	return m.askTarget(m.bulk)
@@ -425,7 +417,7 @@ func (m *Model) findPeople(needle string) tea.Cmd {
 	b.askStop, b.searching = cancel, true
 	finder, project, gen := m.deps.Jira, m.deps.Project, b.askGen
 	return kernel.Reply(withCancel(cancel, func() tea.Msg {
-		people, err := finder.FindPeople(ctx, jira.PeopleQuery{Match: needle, Project: project, Limit: peopleLimit})
+		people, err := appboard.FindAssignees(ctx, finder, needle, project, peopleLimit)
 		return peopleMsg{gen: gen, people: people, err: err}
 	}), m.addr)
 }
@@ -560,7 +552,7 @@ func (m *Model) bulkNext() tea.Cmd {
 			continue
 		}
 		if b.kind == bulkMoveTo {
-			if at, mapped := m.plan.columnOf(iss.Status.ID); mapped && at == b.col {
+			if at, mapped := m.plan.ColumnOf(iss.Status.ID); mapped && at == b.col {
 				b.already = append(b.already, key)
 				b.next++
 				continue
@@ -586,7 +578,7 @@ type bulkJob struct {
 	col    int
 	status string
 	label  string
-	plan   plan
+	plan   appboard.Plan
 	issue  jira.Issue
 }
 
@@ -608,29 +600,8 @@ func (j bulkJob) run(ctx context.Context, client jira.SessionClient, gen int) te
 }
 
 func (j bulkJob) transition(ctx context.Context, mover jira.Mover) (jira.Status, bool, error) {
-	list, err := mover.Transitions(ctx, j.issue.Key)
-	if err != nil {
-		return jira.Status{}, false, err
-	}
-	for _, tr := range list {
-		if at, mapped := j.plan.columnOf(tr.To.ID); !mapped || at != j.col {
-			continue
-		}
-		if j.status != "" && tr.To.ID != j.status {
-			continue
-		}
-		if needsScreen(tr) {
-			return jira.Status{}, false, errScreen
-		}
-		if err := mover.Transition(ctx, j.issue.Key, tr.ID, jira.IssuePatch{}); err != nil {
-			return jira.Status{}, false, err
-		}
-		return tr.To, true, nil
-	}
-	if j.status != "" {
-		return jira.Status{}, false, errNoMoveTo
-	}
-	return jira.Status{}, false, errNoMove
+	status, err := appboard.IntoColumn(ctx, mover, j.plan, j.issue.Key, j.col, j.status)
+	return status, err == nil, err
 }
 
 func (m *Model) bulkStepped(msg bulkStepMsg) tea.Cmd {

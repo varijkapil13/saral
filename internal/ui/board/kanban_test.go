@@ -59,7 +59,7 @@ func TestBoard_AKanbanBoardLoadsWithItsOwnRuleAboutResolvedIssues(t *testing.T) 
 	))
 	dr := newDriver(t, testDeps(spy), 120, 20)
 
-	if dr.m.plan.subQuery == "" {
+	if dr.m.plan.SubQuery == "" {
 		t.Fatal("this board is a Kanban board and its configuration carries no sub-query")
 	}
 	if dr.m.failure != nil {
@@ -69,11 +69,11 @@ func TestBoard_AKanbanBoardLoadsWithItsOwnRuleAboutResolvedIssues(t *testing.T) 
 		t.Fatal("a Kanban board drew no cards")
 	}
 	query, boardID := spy.last()
-	if query.SubQuery != dr.m.plan.subQuery {
-		t.Errorf("the read carried the sub-query %q, want the board's own %q", query.SubQuery, dr.m.plan.subQuery)
+	if query.SubQuery != dr.m.plan.SubQuery {
+		t.Errorf("the read carried the sub-query %q, want the board's own %q", query.SubQuery, dr.m.plan.SubQuery)
 	}
-	if boardID != dr.m.plan.boardID {
-		t.Errorf("the read asked board %d, want the one on screen, %d", boardID, dr.m.plan.boardID)
+	if boardID != dr.m.plan.BoardID {
+		t.Errorf("the read asked board %d, want the one on screen, %d", boardID, dr.m.plan.BoardID)
 	}
 	// The rule hides work resolved long ago, and every resolved issue the
 	// generator makes was resolved a year before the fake's clock.
@@ -104,7 +104,7 @@ func TestBoard_TheReadNamesTheFieldsACardDrawsAndNoWildcard(t *testing.T) {
 	if !slices.Contains(query.Fields, "summary") || !slices.Contains(query.Fields, "status") {
 		t.Errorf("the read asks for %v, which is missing what a card is drawn from", query.Fields)
 	}
-	if dr.m.plan.estimates && !slices.Contains(query.Fields, dr.m.plan.estimate.ID) {
-		t.Errorf("the board estimates in %s and the read asks for %v", dr.m.plan.estimate.ID, query.Fields)
+	if dr.m.plan.Estimates && !slices.Contains(query.Fields, dr.m.plan.Estimate.ID) {
+		t.Errorf("the board estimates in %s and the read asks for %v", dr.m.plan.Estimate.ID, query.Fields)
 	}
 }

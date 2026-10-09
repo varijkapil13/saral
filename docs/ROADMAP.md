@@ -1970,7 +1970,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
   `internal/app/cache`), which could not exist before its exemption directory did. The budget rows
   in `docs/PERFORMANCE.md` follow their tests.
 
-- [ ] **P13.3 — `board`** · after P13.2 · **owns** `internal/app/board/**`, `internal/ui/{board,backlog}/**`
+- [x] **P13.3 — `board`** · after P13.2 · **owns** `internal/app/board/**`, `internal/ui/{board,backlog}/**`
   The three-step load and paging, column and lane grouping, quick filters, backlog grouping by
   sprint. Empty for `ui/board`: `BoardConfig|BoardIssues|Boards|FindPeople|IssueFields|Me|MoveToSprint|QuickFilters|SprintIssues|Sprints|Transition|Transitions`;
   for `ui/backlog`: `BoardConfig|BoardIssues|Boards|Fields|IssueFields|Me|MoveToBacklog|MoveToSprint|Sprints`.

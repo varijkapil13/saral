@@ -75,7 +75,7 @@ func TestBoard_EachPageIsStoredOnItsOwnAndOffTheUpdateLoop(t *testing.T) {
 	if last := cardWrites[len(cardWrites)-1]; last.more {
 		t.Error("the last page was stored as though there were more to come")
 	}
-	snap, ok := cache.Board(dr.m.plan.boardID)
+	snap, ok := cache.Board(dr.m.plan.BoardID)
 	if !ok || len(snap.Issues) != 24 || snap.Sprint != dr.m.sprint.ID {
 		t.Errorf("the stored board holds %d cards on sprint %d, want 24 on %d", len(snap.Issues), snap.Sprint, dr.m.sprint.ID)
 	}

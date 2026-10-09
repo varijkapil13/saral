@@ -2,10 +2,10 @@ package board
 
 import (
 	"context"
-	"errors"
 
 	tea "charm.land/bubbletea/v2"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
@@ -18,24 +18,14 @@ const pageSize = 100
 
 const sprintLimit = 50
 
-type site interface {
-	jira.BoardReader
-	jira.SprintReader
-	jira.SprintIssueReader
-}
-
-// step is which of the three reads the board is waiting on. A board is three
-// questions — which boards, what this one looks like, what is on it — and an
-// empty pane that cannot say which of them is outstanding is a pane that looks
-// like a hang.
-type step uint8
+type step = appboard.Step
 
 const (
-	stepIdle step = iota
-	stepBoards
-	stepConfig
-	stepSprints
-	stepIssues
+	stepIdle    = appboard.StepIdle
+	stepBoards  = appboard.StepBoards
+	stepConfig  = appboard.StepConfig
+	stepSprints = appboard.StepSprints
+	stepIssues  = appboard.StepIssues
 )
 
 // boardsMsg carries the boards that draw on this project. An empty list is an
@@ -130,7 +120,7 @@ type failedMsg struct {
 
 func boards(ctx context.Context, reader jira.BoardReader, project string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		found, err := reader.Boards(ctx, project)
+		found, err := appboard.ListBoards(ctx, reader, project)
 		if err != nil {
 			return failedMsg{gen: gen, step: stepBoards, err: err}
 		}
@@ -140,7 +130,7 @@ func boards(ctx context.Context, reader jira.BoardReader, project string, gen in
 
 func config(ctx context.Context, reader jira.BoardReader, boardID int64, gen int) tea.Cmd {
 	return func() tea.Msg {
-		cfg, err := reader.BoardConfig(ctx, boardID)
+		cfg, err := appboard.Config(ctx, reader, boardID)
 		if err != nil {
 			return failedMsg{gen: gen, step: stepConfig, err: err}
 		}
@@ -149,7 +139,7 @@ func config(ctx context.Context, reader jira.BoardReader, boardID int64, gen int
 }
 
 type cardsQuery struct {
-	plan         plan
+	plan         appboard.Plan
 	quickFilters []string
 	probe        bool
 	sprints      []jira.Sprint
@@ -158,101 +148,30 @@ type cardsQuery struct {
 	look         card.Look
 }
 
-// cards fills the board, through the read that applies the board's own saved
-// filter and column mapping at the site. Nothing here composes a query: the
-// filter behind a board is JQL only the site can run, and a board rebuilt out of
-// its statuses is a different board.
-//
-// A board that runs sprints shows its active sprint and nothing else, so its
-// cards are that sprint's; whether it runs them is the sprint read's answer and
-// never the board's type, which docs/API-NOTES.md says nothing may branch on.
-//
-// It asks for the narrow field set a card draws plus the board's own estimation
-// field, never for a wildcard, and it carries the board's sub-query and
-// whichever of the board's own quick filters are toggled on, which are the two
-// parts of a board the endpoint leaves to the caller.
-func cards(ctx context.Context, reader site, search *appquery.Search, q cardsQuery, gen int) tea.Cmd {
+// cards fills the board with the narrow field set a card draws plus the
+// board's own estimation field; appboard.ReadCards says what it asks.
+func cards(ctx context.Context, reader appboard.Site, search *appquery.Search, q cardsQuery, gen int) tea.Cmd {
 	return func() tea.Msg {
-		wanted, err := search.Resolve(ctx, q.plan.projectionFor(q.look))
+		got, failed, err := appboard.ReadCards(ctx, reader, search, appboard.CardsQuery{
+			Plan: q.plan, Projection: projectionFor(q.plan, q.look), QuickFilters: q.quickFilters,
+			PageSize: pageSize, SprintLimit: sprintLimit,
+			Probe: q.probe, Sprints: q.sprints, NoSprints: q.noSprints, Sprint: q.sprint,
+		})
 		if err != nil {
-			return failedMsg{gen: gen, step: stepIssues, err: err}
+			return failedMsg{gen: gen, step: failed, err: err}
 		}
-		out := issuesMsg{
-			gen: gen, missing: wanted.Missing, first: true, fields: wanted.IDs,
-			sprints: q.sprints, noSprints: q.noSprints,
-		}
-		if q.probe {
-			out.sprints, out.noSprints, err = activeSprints(ctx, reader, q.plan.boardID)
-			if err != nil {
-				return failedMsg{gen: gen, step: stepSprints, err: err}
-			}
-		}
-		query := jira.BoardQuery{
-			Fields:       wanted.IDs,
-			SubQuery:     q.plan.subQuery,
-			QuickFilters: q.quickFilters,
-			MaxResults:   pageSize,
-		}
-		var page jira.Page[jira.Issue]
-		switch {
-		case out.noSprints:
-			page, err = reader.BoardIssues(ctx, q.plan.boardID, query)
-		case len(out.sprints) == 0:
-			return out
-		default:
-			out.sprint = pickSprint(out.sprints, q.sprint)
-			page, err = reader.SprintIssues(ctx, q.plan.boardID, out.sprint.ID, query)
-		}
-		if err != nil {
-			return failedMsg{gen: gen, step: stepIssues, err: err}
-		}
-		out.page = page
-		return out
-	}
-}
-
-// activeSprints reads a 400 as a board that runs no sprints, the way
-// backlog.openSprints does.
-func activeSprints(ctx context.Context, r jira.SprintReader, boardID int64) (sprints []jira.Sprint, noSprints bool, err error) {
-	page, err := r.Sprints(ctx, boardID, jira.SprintActive)
-	var invalid *jira.ValidationError
-	if errors.As(err, &invalid) {
-		return nil, true, nil
-	}
-	if err != nil {
-		return nil, false, err
-	}
-	all, err := jira.Collect(ctx, page, sprintLimit)
-	if err != nil {
-		return nil, false, err
-	}
-	out := make([]jira.Sprint, 0, len(all))
-	for _, sp := range all {
-		if sp.State == jira.SprintActive {
-			out = append(out, sp)
+		return issuesMsg{
+			gen: gen, page: got.Page, missing: got.Missing, first: true, fields: got.Fields,
+			sprints: got.Sprints, sprint: got.Sprint, noSprints: got.NoSprints,
 		}
 	}
-	return out, false, nil
-}
-
-func pickSprint(sprints []jira.Sprint, want int64) jira.Sprint {
-	for _, sp := range sprints {
-		if sp.ID == want {
-			return sp
-		}
-	}
-	return sprints[0]
 }
 
 // moreCards writes the page in hand before reading the next, so a walk's pages
 // reach the cache in order.
 func moreCards(ctx context.Context, page jira.Page[jira.Issue], gen int, put func() error) tea.Cmd {
 	return func() tea.Msg {
-		var stored error
-		if put != nil {
-			stored = put()
-		}
-		next, err := page.Next(ctx)
+		next, stored, err := appboard.NextPage(ctx, page, put)
 		if err != nil {
 			return moreFailedMsg{gen: gen, err: err}
 		}
@@ -264,7 +183,7 @@ func moreCards(ctx context.Context, page jira.Page[jira.Issue], gen int, put fun
 // dropped on is reached by a transition this token may actually make.
 func moves(ctx context.Context, mover jira.Mover, key string, column, gen int) tea.Cmd {
 	return func() tea.Msg {
-		found, err := mover.Transitions(ctx, key)
+		found, err := appboard.MovesOf(ctx, mover, key)
 		if err != nil {
 			return moveFailedMsg{gen: gen, key: key, err: err}
 		}
@@ -272,22 +191,18 @@ func moves(ctx context.Context, mover jira.Mover, key string, column, gen int) t
 	}
 }
 
-// apply moves an issue by transition id. A status is not writable on Jira, so a
-// column change is a workflow move and never a field set — and the transition is
-// named by the id the site gave it, never by the status it lands on.
 func apply(ctx context.Context, mover jira.Mover, key string, tr jira.Transition, to, from string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		if err := mover.Transition(ctx, key, tr.ID, jira.IssuePatch{}); err != nil {
+		if err := appboard.Apply(ctx, mover, key, tr.ID); err != nil {
 			return moveFailedMsg{gen: gen, key: key, err: err}
 		}
 		return movedMsg{gen: gen, key: key, to: to, from: from, status: tr.To}
 	}
 }
 
-// reread does not search: the index trails a write.
 func reread(ctx context.Context, reader jira.IssueReader, key string, fields []string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		iss, err := reader.IssueFields(ctx, key, fields)
+		iss, err := appboard.Reread(ctx, reader, key, fields)
 		return rereadMsg{gen: gen, key: key, issue: iss, err: err}
 	}
 }
@@ -296,7 +211,7 @@ func reread(ctx context.Context, reader jira.IssueReader, key string, fields []s
 // write against it landed somewhere other than this board.
 func revalidate(ctx context.Context, reader jira.IssueReader, key string, fields []string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		iss, err := reader.IssueFields(ctx, key, fields)
+		iss, err := appboard.Reread(ctx, reader, key, fields)
 		return revalidatedMsg{gen: gen, key: key, issue: iss, err: err}
 	}
 }
@@ -322,16 +237,4 @@ func withCancel(cancel context.CancelFunc, cmd tea.Cmd) tea.Cmd {
 		defer cancel()
 		return cmd()
 	}
-}
-
-// needsScreen reports whether a transition insists on a field this view cannot
-// fill. Only a required field counts: a screen of optional ones is a move that
-// can be made without answering any of them.
-func needsScreen(tr jira.Transition) bool {
-	for i := range tr.Fields {
-		if tr.Fields[i].Required {
-			return true
-		}
-	}
-	return false
 }

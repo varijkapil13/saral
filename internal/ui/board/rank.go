@@ -27,7 +27,7 @@ func (m *Model) rankRefused() string {
 	switch {
 	case m.deps.Jira == nil:
 		return "there is no Jira connection in this session"
-	case m.plan.ordering != jira.OrderRank:
+	case m.plan.Ordering != jira.OrderRank:
 		return "this board is ordered by its filter, so its cards have no rank to change"
 	}
 	return ""
@@ -44,7 +44,7 @@ func (m *Model) reorder(where rankWhere) tea.Cmd {
 	}
 	col, row := m.curCol, m.curRow
 	lo, hi := m.laneSpan(col, row)
-	name := m.plan.columns[col].name
+	name := m.plan.Columns[col].Name
 	if m.lanesOn() {
 		name += " in this lane"
 	}
@@ -216,7 +216,7 @@ func (m *Model) shiftCard(by int) tea.Cmd {
 		return nil
 	}
 	to := m.curCol + by
-	if to < 0 || to >= len(m.plan.columns) {
+	if to < 0 || to >= len(m.plan.Columns) {
 		side := "last"
 		if by < 0 {
 			side = "first"

@@ -262,7 +262,7 @@ func lanedBoard(tb testing.TB, cards int) *Model {
 		u := jira.User{AccountID: "acct-" + strconv.Itoa(i%8), DisplayName: "Person " + strconv.Itoa(i%8)}
 		m.issues[i].Assignee = &u
 	}
-	m.laneFor, m.laneKnown, m.laneMode = m.plan.boardID, true, lanesByAssignee
+	m.laneFor, m.laneKnown, m.laneMode = m.plan.BoardID, true, lanesByAssignee
 	m.place()
 	m.forget()
 	if len(m.lanes) != 8 || !strings.Contains(m.View(), "Person 0") {
@@ -400,7 +400,7 @@ func lanedCards5k(tb testing.TB, look card.Look) *Model {
 		u := jira.User{AccountID: "acct-" + strconv.Itoa(i%8), DisplayName: "Person " + strconv.Itoa(i%8)}
 		m.issues[i].Assignee = &u
 	}
-	m.laneFor, m.laneKnown, m.laneMode = m.plan.boardID, true, lanesByAssignee
+	m.laneFor, m.laneKnown, m.laneMode = m.plan.BoardID, true, lanesByAssignee
 	m.place()
 	m.forget()
 	if len(m.lanes) != 8 || !strings.Contains(m.View(), "Person 0") {

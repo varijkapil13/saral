@@ -97,15 +97,15 @@ func TestCreate_TheNewIssueLandsInTheColumnItWasMadeIn(t *testing.T) {
 			if got := dr.m.selectedKey(); got != iss.Key {
 				t.Errorf("the cursor is on %s, want it on the new card", got)
 			}
-			mustContain(t, dr.lastStatus().Text, iss.Key+" created in "+dr.m.plan.columns[col].name)
+			mustContain(t, dr.lastStatus().Text, iss.Key+" created in "+dr.m.plan.Columns[col].Name)
 			stored, err := fake.Issue(context.Background(), iss.Key)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if at, _ := dr.m.plan.columnOf(stored.Status.ID); at != col {
+			if at, _ := dr.m.plan.ColumnOf(stored.Status.ID); at != col {
 				t.Errorf("the site has %s in %s, want it in column %d", iss.Key, stored.Status.Name, col)
 			}
-			page, err := fake.SprintIssues(context.Background(), dr.m.plan.boardID, dr.m.sprint.ID, jira.BoardQuery{Fields: []string{"summary"}})
+			page, err := fake.SprintIssues(context.Background(), dr.m.plan.BoardID, dr.m.sprint.ID, jira.BoardQuery{Fields: []string{"summary"}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -144,14 +144,14 @@ func TestCreate_AColumnNoMoveReachesIsExplained(t *testing.T) {
 	dr.moveTo(1, 0)
 	dr.key("c")
 	iss := made(t, fake)
-	dr.m.plan.columns[1].statuses = []string{"99999"}
-	dr.m.plan.byStatus = map[string]int{"10201": 0, "99999": 1, "10203": 2}
+	dr.m.plan.Columns[1].Statuses = []string{"99999"}
+	dr.m.plan.ByStatus = map[string]int{"10201": 0, "99999": 1, "10203": 2}
 	dr.send(form.CreatedMsg{Issue: iss, Sprint: dr.m.sprint})
 	got := dr.lastStatus()
 	if got.Level != kernel.LevelWarn || !strings.Contains(got.Text, "no workflow move takes it") {
 		t.Errorf("the status line says %+v, want the move that does not exist named", got)
 	}
-	mustContain(t, got.Text, iss.Key+" was created in "+dr.m.plan.columns[0].name)
+	mustContain(t, got.Text, iss.Key+" was created in "+dr.m.plan.Columns[0].Name)
 }
 
 func TestCreate_EachFailureSaysHowFarTheIssueGot(t *testing.T) {
@@ -233,7 +233,7 @@ func TestCreate_AReportForABoardNoLongerOnScreenDrawsNothing(t *testing.T) {
 	dr := newDriver(t, testDeps(fake), 120, 20)
 	dr.key("c")
 	iss := made(t, fake)
-	dr.m.plan.boardID = 777
+	dr.m.plan.BoardID = 777
 	dr.send(form.CreatedMsg{Issue: iss, Sprint: dr.m.sprint})
 	if dr.m.indexOf(iss.Key) >= 0 {
 		t.Errorf("%s was drawn on a board it was not made from", iss.Key)
