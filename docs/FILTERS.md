@@ -14,11 +14,11 @@ Checkable against the tree as of `de099eb`, except the release row, which is cur
 | View | Can filter | Draws what is in force | Can sort |
 |---|---|---|---|
 | issues (`list`) | yes, `f` | yes — a clickable chip line, `list/terms.go` | no |
-| board | yes, `f` | **no** — it holds `filter.Terms` and renders none of it | no |
+| board | yes, `f` | **no** — it holds `term.Terms` and renders none of it | no |
 | backlog | no | — | no |
 | timeline | no | — | no |
 | plan, sprint | no | — | no |
-| release | by state only, `f`, locally — no `filter.Terms` | yes — `unreleased · 4 of 12` in the summary | yes, `s`, locally |
+| release | by state only, `f`, locally — no `term.Terms` | yes — `unreleased · 4 of 12` in the summary | yes, `s`, locally |
 
 **Nothing sorts.** Order is baked into each saved search's JQL — `ORDER BY updated DESC` in
 `list/search.go` — and no view offers to change it.
@@ -27,12 +27,12 @@ Checkable against the tree as of `de099eb`, except the release row, which is cur
 screen is a `filteredOut` count. Applying a filter and then not knowing what is in force is the
 everyday complaint, and it is a rendering gap rather than a model one.
 
-**Multi-select is already modelled and not reachable.** `filter.Terms` is documented as *"two facets
+**Multi-select is already modelled and not reachable.** `term.Terms` is documented as *"two facets
 narrow together; two values of one facet widen it"*, and `Terms.Toggle` maintains it. But
 `filter.chooseValue` ends with `tea.Sequence(kernel.Pop(), kernel.Broadcast(ChosenMsg{Term:…}))` — the
 picker closes on the first value, so a second assignee costs a fresh trip through the facet menu.
 
-**Issue type is already a facet.** `FacetType` is in `filter.Facets` and the picker offers it. "Type
+**Issue type is already a facet.** `FacetType` is in `term.Facets` and the picker offers it. "Type
 in every filter" is not a new facet; it is the four views that cannot filter at all.
 
 **Type is drawn as text.** `list/render.go` writes `iss.Type.Name` padded into a column. Nothing
@@ -46,7 +46,7 @@ Taken rather than derived, so they are written down once:
    ordered by column and by rank inside it, and a timeline by date; sorting either would mean
    discarding the order that makes it that view. Neither gets a sort control, and this sentence is
    why. The version list sorts and filters by state locally, over the one unfiltered list it reads in
-   the project's own sequence, and uses neither `filter.Terms` nor the filter bar: a version has no
+   the project's own sequence, and uses neither `term.Terms` nor the filter bar: a version has no
    facets, only the four states `versionState` derives.
 2. **A Nerd Font may be assumed, as a tier and not as a floor.** This reverses the rule stated in
    `kernel/theme.go` — *"Nothing here may assume a Nerd Font"* — deliberately and on request. Three
@@ -69,7 +69,7 @@ One widget, `internal/ui/widget/filterbar`, drawn under the rows by whichever vi
 ```
 
 - **One chip per facet, listing its values.** Not one chip per value: the grouping is what
-  `filter.Terms` already promises, and a facet with three assignees on it is one narrowing, not three.
+  `term.Terms` already promises, and a facet with three assignees on it is one narrowing, not three.
 - **`×` removes a facet's whole clause**, through the new `Terms.Without`; clicking a value name inside
   a chip removes that value, through `Terms.Toggle`, the same one the keyboard uses — so the keyboard,
   the chips and the picker cannot disagree. `×` is drawn from the glyph tier (`Glyphs.Cross`) rather
@@ -149,7 +149,7 @@ else — its own doc comment says so: *"there is deliberately no further narrowi
 Widening it needs a port amendment, which is out of scope here and belongs to whoever next needs Agile
 ordering. The issue list's own sort re-runs the query exactly as designed, ORDER BY and all; the
 backlog's reorders the issues a section already holds, locally, the same way its own rank order and
-`filter.Terms` narrowing already work against what one read brought back rather than against the site.
+`term.Terms` narrowing already work against what one read brought back rather than against the site.
 The two are visibly the same gesture — `s`, a field, a direction, `sort: field ↓` in the header — and
 differ only in what answers a page.
 
@@ -180,9 +180,9 @@ answers for another's, not even a second account on the same site.
 `Keep(view, key, value string)` / `Forget()` interface, nil-safe throughout, because a session with
 nowhere to write — no profile yet — remembers nothing and says nothing about it. The kernel package
 cannot import `internal/ui/filter` (`docs/ARCHITECTURE.md`'s layering), so everything kept through it
-is opaque text a view encodes and decodes for itself: `filter.Terms.Encode()` writes a small JSON
+is opaque text a view encodes and decodes for itself: `term.Terms.Encode()` writes a small JSON
 array, each facet spelled by `stableName()` rather than its own `iota` — a number a later build
-reordered would otherwise be read back as the wrong facet entirely — and `filter.DecodeTerms` drops
+reordered would otherwise be read back as the wrong facet entirely — and `term.DecodeTerms` drops
 anything it does not recognise (an older or newer build's word, hand-edited text) rather than reading
 it as `FacetNone`. `internal/config` gains `RememberedState` / `RememberState` / `ForgetRemembered`
 alongside `Split`/`SaveSplit` and `Sort`/`SaveSort`, and `cmd/saral`'s `profileMemory` is the only
@@ -234,7 +234,7 @@ belongs beside them rather than guessed at from a single view's `terms.go`.
 | `s` sorts in `list` and `backlog` | each view's own `keys.go`, `sort.go` and key golden; `internal/ui`'s footer, `?` overlay, right-click menu and `keyOwners` sweep; `internal/ui/palette`'s session golden |
 | `config.UIState` gains `Sorts` | `internal/config/uistate.go` and its tests only — every reader goes through `Sort`/`SaveSort`, never the map |
 | `kernel.Deps` gains `Memory` | `cmd/saral` (`profileMemory`, wired alongside `openCache`); `list`, `board`, `backlog`, `timeline` (`recallTerms`/`rememberTerms` in each `terms.go`); `board`'s `quickfilter.go` besides |
-| `filter.Terms` gains `Encode`/`DecodeTerms` | every one of the above; nothing else composes `filter.Term` from stored text |
+| `term.Terms` gains `Encode`/`DecodeTerms` | every one of the above; nothing else composes `term.Term` from stored text |
 | `kernel.startView` prefers the recalled root | `kernel.New`, `open`, `openWhenNothingCould` — every place a root is put on the stack now also remembers it |
 
 **"`s` moves to `S`" turned out to be two views' worth of key-golden fallout, not one.** `list`'s own
@@ -256,7 +256,7 @@ type but never reporter or labels — and the timeline's own projection carried 
 values for was never asked of the site in the first place. The board's own earlier packet had already
 found this for itself (`plan.projection` widens `ListProjection` with `"reporter", "labels"`); the
 backlog's and the timeline's reads now do the same, and the timeline's needed all four widened rather
-than two. Anything that narrows locally against `filter.Terms` — a fifth view, or a widened facet list
+than two. Anything that narrows locally against `term.Terms` — a fifth view, or a widened facet list
 on one of these four — has to ask this same question of its own projection before trusting a local
 match.
 

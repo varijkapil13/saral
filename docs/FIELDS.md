@@ -121,7 +121,7 @@ pinned = ["customfield_13401", "duedate", "customfield_13402"]
 - Pinned fields draw first, in the order they were pinned, under their own heading; everything else
   follows as it does now.
 - Editing the list is a settings row, `issue.pinned` under a new Issue section. **`filter.Model`'s
-  multi-select picker (commit bc75989) was not reused**: it is wired to `filter.Facet`, a fixed enum of
+  multi-select picker (commit bc75989) was not reused**: it is wired to `term.Facet`, a fixed enum of
   assignee/reporter/status/type/priority/label, each fetched as JQL vocabulary through a package this
   packet does not own — a field catalogue is neither a facet nor a vocabulary of *values* for one, and
   offering it would mean adding a seventh facet and a new fetch to `internal/ui/filter`.

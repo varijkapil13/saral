@@ -108,7 +108,7 @@ The mechanisms that make familiarity pay off, in the order a user meets them:
 | First week | Frecency: the palette's commands and the project picker reorder so your usual choices are first. Assignees, versions and labels do **not** yet — a value picker ranks with the same subsequence scorer the palette filters by, and nothing counts what you pick. |
 | | Hints: after you reach an action through the palette three times, the status line notes its key. Built in P3.1 ([#12](https://github.com/varijkapil13/saral/issues/12)) rather than with the footer: the count, the call site and the frecency table are one piece of data, and P3.1 already owns it. `kernel.CommandRanMsg{ID, Keys}` is the signal it hangs on, and `Command.Keys` is the key it names — a command nothing binds is never given one, and the line is said once rather than on every run after the third. |
 | Ongoing | Saved queries bound to `1`–`9` and kept in the profile, validated by `app.SavedQueries` so a file and a keypress cannot disagree. **JQL history is not built** — `e` shows the search on screen and runs an edited one, and nothing keeps the ones run before it. |
-| | Local fuzzy index — typing a key or a few words of a summary finds it with no round trip. Reached from the palette: `ctrl+k` and a few letters offers the issues already on disk beside the commands, ranked by `app.Index` over `app.Cache`. |
+| | Local fuzzy index — typing a key or a few words of a summary finds it with no round trip. Reached from the palette: `ctrl+k` and a few letters offers the issues already on disk beside the commands, ranked by `app.Index` over `cache.Cache`. |
 | | **Session resume is partly built.** A restart lands on the root view the last session had open, and `list`, `board`, `backlog` and `timeline` reopen with the same filter terms in force (`board` its active quick filters too) — scoped by site and account (`docs/FILTERS.md`), so this is what a *token* remembers rather than what a machine does. The rows themselves still come out of the cache and badged for age, and the pane split out of `ui.toml`; the cursor and the scroll offset are still not written anywhere. |
 | Fluent | `saral PROJ-142` and `saral https://…/browse/PROJ-142` open that issue; `saral board` opens a view by name; `--project` scopes the session. An argument that is none of those is named as the mistake it is rather than silently opening the default view. Scripts use the non-interactive subcommands instead (`saral search`, `saral issue view --json` and the rest; see [CLI.md](CLI.md)). |
 
@@ -508,7 +508,7 @@ key. Not `k` or `j`: the destinations overlay this same prefix opens already spe
 same way as it is typed, whether or not the issue has ever been cached: a key already on disk is
 found by the fuzzy index as before, and a key or a URL that parses but is not cached is offered
 anyway, seeded with nothing but its key, so opening it fetches it fresh the way the CLI argument
-does. `app.ParseKey` and `app.ParseIssueURL` are what all three routes read with, and the parse is a
+does. `issueref.ParseKey` and `issueref.ParseIssueURL` are what all three routes read with, and the parse is a
 **shape** and never a claim the issue exists — the project key charset is per-instance — so what is
 not there comes back from the site, in the site's words.
 
@@ -653,7 +653,7 @@ narrow what they already hold, in memory, the way `board.terms` did since the bo
 filtering — a board, a backlog and a timeline are already a whole read's worth of issues on screen,
 and asking the site the same question again would be a second answer to compare against the one
 already drawn. `ctrl+g` clears every term at once in all four, and the bar under what each view draws
-is the same widget (`internal/ui/widget/filterbar`) reading the same `filter.Terms`, so the chips, the
+is the same widget (`internal/ui/widget/filterbar`) reading the same `term.Terms`, so the chips, the
 key and the picker never disagree about what a term means.
 
 **Version, component and sprint are not offered.** Not an oversight: none of the three can be read
