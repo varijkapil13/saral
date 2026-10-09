@@ -136,7 +136,7 @@ func TestBoardCards_ABoardWithNoStoredLookIsRoomy(t *testing.T) {
 	if m.look != card.Roomy {
 		t.Fatalf("a fresh board is drawn %s, want roomy", m.look.Word())
 	}
-	asked := m.plan.projectionFor(m.look).IDs
+	asked := projectionFor(m.plan, m.look).IDs
 	for _, id := range card.RoomyFields {
 		if !slices.Contains(asked, id) {
 			t.Errorf("a roomy board asks for %v, without %s", asked, id)
@@ -146,7 +146,7 @@ func TestBoardCards_ABoardWithNoStoredLookIsRoomy(t *testing.T) {
 		t.Errorf("a roomy board asks for a field twice: %v", asked)
 	}
 	for _, look := range []card.Look{card.Compact, card.Lines} {
-		if got := m.plan.projectionFor(look).IDs; slices.Contains(got, "duedate") {
+		if got := projectionFor(m.plan, look).IDs; slices.Contains(got, "duedate") {
 			t.Errorf("a %s board asks for %v, which is what only a roomy card draws", look.Word(), got)
 		}
 	}

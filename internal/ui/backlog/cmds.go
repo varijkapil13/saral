@@ -2,14 +2,13 @@ package backlog
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"slices"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	appquery "github.com/varijkapil13/saral/internal/app/query"
+	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -79,7 +78,7 @@ type revalidatedMsg struct {
 // write against it landed somewhere other than this backlog.
 func revalidate(ctx context.Context, reader jira.IssueReader, key string, fields []string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		iss, err := reader.IssueFields(ctx, key, fields)
+		iss, err := appboard.Reread(ctx, reader, key, fields)
 		return revalidatedMsg{gen: gen, key: key, issue: iss, err: err}
 	}
 }
@@ -96,79 +95,23 @@ func withCancel(cancel context.CancelFunc, cmd tea.Cmd) tea.Cmd {
 	}
 }
 
-// sprintFieldName is the name Jira gives the sprint field whatever language the
-// site is in: jira.ResolveField compares UntranslatedName first, and that one
-// does not move with the locale. Nothing here writes down a customfield id.
-const sprintFieldName = "Sprint"
-
-// read is one whole load of a backlog: which boards the project has, the
-// configuration of the one on screen, its open sprints, and the issues in its
-// backlog.
-//
-// The issues come from the read that asks the site what this board holds rather
-// than from a query composed here: a board's saved filter is JQL only the site
-// can run, so a set rebuilt out of the statuses its columns map is a different
-// board. Which of them are unscheduled is still worked out here, from the sprint
-// value on each issue, because the port answers what a board holds and what a
-// board's backlog is and nothing about one sprint — and a section that listed
-// only the backlog would have to say "0 issues" about a sprint holding twenty.
-//
-// It is one command because each step decides the next: the rank field comes out
-// of the board configuration and the projection comes out of that, so a fan-out
-// would only be four requests waiting on each other anyway.
-//
-// wantID is a board id this view already believes it is drawing — from a
-// stored snapshot or a board a project switch carried over — resolved against
-// the boards this read answers with so a revalidation lands on the same board
-// rather than always the first one the site lists. Zero means nothing was
-// hinted, and at is used as it always was.
+// read is one whole load of a backlog; appboard.LoadBacklog says what it asks
+// and why.
 func read(ctx context.Context, s site, search *appquery.Search, project string, at int, wantID int64, roomy bool, gen int) tea.Cmd {
 	return func() tea.Msg {
-		boards, err := s.Boards(ctx, project)
-		if err != nil {
-			return failedMsg{gen: gen, err: err}
-		}
-		if len(boards) == 0 {
-			return loadedMsg{gen: gen}
-		}
-		if wantID != 0 {
-			if idx, found := indexOfBoard(boards, wantID); found {
-				at = idx
-			}
-		}
-		at = min(max(at, 0), len(boards)-1)
-		config, err := s.BoardConfig(ctx, boards[at].ID)
-		if err != nil {
-			return failedMsg{gen: gen, err: err}
-		}
-		sprints, noSprints, err := openSprints(ctx, s, boards[at].ID)
-		if err != nil {
-			return failedMsg{gen: gen, err: err}
-		}
-		catalogue, err := search.Fields(ctx)
-		if err != nil {
-			return failedMsg{gen: gen, err: err}
-		}
-		out := loadedMsg{gen: gen, boards: boards, boardAt: at, config: config, sprints: sprints, noSprints: noSprints}
-		field, err := jira.ResolveField(catalogue, sprintFieldName)
-		if err != nil {
-			return out
-		}
-		out.field = field.Ref()
-		wanted, err := search.Resolve(ctx, projectionOf(out.field, config, roomy))
-		if err != nil {
-			return failedMsg{gen: gen, err: err}
-		}
-		page, err := s.BoardIssues(ctx, boards[at].ID, jira.BoardQuery{
-			Fields:     wanted.IDs,
-			SubQuery:   config.SubQuery,
-			MaxResults: pageSize,
+		got, err := appboard.LoadBacklog(ctx, s, search, appboard.BacklogQuery{
+			Project: project, At: at, WantID: wantID, PageSize: pageSize, SprintLimit: sprintLimit,
+			Projection: func(sprint jira.FieldRef, config jira.BoardConfig) appquery.Projection {
+				return projectionOf(sprint, config, roomy)
+			},
 		})
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
-		out.page, out.missing, out.fields = page, wanted.Missing, wanted.IDs
-		return out
+		return loadedMsg{
+			gen: gen, boards: got.Boards, boardAt: got.BoardAt, config: got.Config, sprints: got.Sprints,
+			field: got.Field, page: got.Page, missing: got.Missing, fields: got.Fields, noSprints: got.NoSprints,
+		}
 	}
 }
 
@@ -191,30 +134,15 @@ func projectionOf(sprint jira.FieldRef, config jira.BoardConfig, roomy bool) app
 	if config.RankFieldID != "" {
 		projection = projection.With(config.RankFieldID)
 	}
-	if est := estimateOf(config); est.ID != "" {
+	if est := appboard.EstimateOf(config); est.ID != "" {
 		projection = projection.With(est.ID)
 	}
 	return projection
 }
 
-// indexOfBoard is the position of a board id in a list the site just answered
-// with.
-func indexOfBoard(boards []jira.Board, id int64) (int, bool) {
-	for i := range boards {
-		if boards[i].ID == id {
-			return i, true
-		}
-	}
-	return 0, false
-}
-
 func nextPage(ctx context.Context, page jira.Page[jira.Issue], gen int, put func() error) tea.Cmd {
 	return func() tea.Msg {
-		var stored error
-		if put != nil {
-			stored = put()
-		}
-		next, err := page.Next(ctx)
+		next, stored, err := appboard.NextPage(ctx, page, put)
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
@@ -226,83 +154,21 @@ func nextPage(ctx context.Context, page jira.Page[jira.Issue], gen int, put func
 // endpoint rather than a sprint with no number.
 func moveInto(ctx context.Context, mgr jira.SprintManager, sprintID int64, keys []string, at, gen int) tea.Cmd {
 	return func() tea.Msg {
-		var err error
-		if sprintID == 0 {
-			err = mgr.MoveToBacklog(ctx, keys)
-		} else {
-			err = mgr.MoveToSprint(ctx, sprintID, keys)
-		}
-		if err != nil {
+		if err := appboard.MoveInto(ctx, mgr, sprintID, keys); err != nil {
 			return moveFailedMsg{gen: gen, at: at, err: err}
 		}
 		return movedMsg{gen: gen, at: at, moved: len(keys)}
 	}
 }
 
-// openSprints is the sprints a backlog can move issues into: the active ones
-// first, then the future ones. The states are asked for and checked again, since
-// a board with years of history behind it is a walk nothing on this path should
-// be doing and an adapter that ignored the filter would hand back all of it.
-// openSprints reads the sprints a board can plan into. A board that has none
-// at all — a Kanban board — does not fail to answer; the site answers the read
-// with a 400 and its own sentence, "The board does not support sprints", and
-// that is reported as the second value rather than as an error, so the backlog
-// behind it is still read. Anything else the site says — a refusal, a rate
-// limit, a board that is not there, a transport failure — is still an error,
-// because each of those means the board could not be read, and this cannot.
-//
-// A 400 and not the board's type decides it: docs/API-NOTES.md says why nothing
-// here may branch on kanban or scrum, and a team-managed board reports neither.
-func openSprints(ctx context.Context, r jira.SprintReader, boardID int64) (sprints []jira.Sprint, noSprints string, err error) {
-	page, err := r.Sprints(ctx, boardID, jira.SprintActive, jira.SprintFuture)
-	var invalid *jira.ValidationError
-	if errors.As(err, &invalid) {
-		reason, _ := jira.Reason(err)
-		return nil, reason, nil
-	}
-	if err != nil {
-		return nil, "", err
-	}
-	all, err := jira.Collect(ctx, page, sprintLimit)
-	if err != nil {
-		return nil, "", err
-	}
-	out := make([]jira.Sprint, 0, len(all))
-	for _, sp := range all {
-		if sp.State == jira.SprintActive || sp.State == jira.SprintFuture {
-			out = append(out, sp)
-		}
-	}
-	slices.SortStableFunc(out, func(a, b jira.Sprint) int {
-		return stateOrder(a.State) - stateOrder(b.State)
-	})
-	return out, "", nil
-}
-
-func stateOrder(s jira.SprintState) int {
-	if s == jira.SprintActive {
-		return 0
-	}
-	return 1
-}
-
-// sprintIDsIn reads the ids out of the json shape of a sprint value.
-func sprintIDsIn(text string) []int64 {
-	trimmed := strings.TrimSpace(text)
-	if !strings.HasPrefix(trimmed, "[") {
+func stored(put func() error) tea.Cmd {
+	if put == nil {
 		return nil
 	}
-	var wire []struct {
-		ID int64 `json:"id"`
-	}
-	if err := json.Unmarshal([]byte(trimmed), &wire); err != nil {
+	return func() tea.Msg {
+		if err := put(); err != nil {
+			return kernel.Warn("this backlog could not be stored for next time: " + err.Error())()
+		}
 		return nil
 	}
-	out := make([]int64, 0, len(wire))
-	for _, one := range wire {
-		if one.ID != 0 {
-			out = append(out, one.ID)
-		}
-	}
-	return out
 }

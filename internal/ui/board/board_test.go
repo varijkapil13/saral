@@ -28,7 +28,7 @@ func TestBoard_DrawsTheColumnsTheBoardsOwnConfigurationDefines(t *testing.T) {
 	if !dr.m.ready {
 		t.Fatalf("the board never read its configuration: %v", dr.m.failure)
 	}
-	if got := len(dr.m.plan.columns); got != 3 {
+	if got := len(dr.m.plan.Columns); got != 3 {
 		t.Fatalf("the board drew %d columns, want the three its configuration maps", got)
 	}
 	total := 0
@@ -36,7 +36,7 @@ func TestBoard_DrawsTheColumnsTheBoardsOwnConfigurationDefines(t *testing.T) {
 		total += dr.m.columnLen(col)
 		for row := range dr.m.columnLen(col) {
 			iss := dr.m.issueAt(col, row)
-			at, mapped := dr.m.plan.columnOf(iss.Status.ID)
+			at, mapped := dr.m.plan.ColumnOf(iss.Status.ID)
 			if !mapped || at != col {
 				t.Errorf("%s is in status %s and was drawn in column %d", iss.Key, iss.Status.ID, col)
 			}
@@ -52,7 +52,7 @@ func TestBoard_DrawsTheColumnsTheBoardsOwnConfigurationDefines(t *testing.T) {
 	for col := range dr.m.cols {
 		if dr.m.columnLen(col) == 0 {
 			t.Errorf("column %d (%s) is empty; every status this board maps has issues in it",
-				col, dr.m.plan.columns[col].name)
+				col, dr.m.plan.Columns[col].Name)
 		}
 	}
 }
@@ -406,14 +406,14 @@ func TestBoard_AsksForTheBoardsOwnEstimationFieldAndNeverAWildcard(t *testing.T)
 	fake := newFake(9)
 	dr := newDriver(t, testDeps(fake), 120, 20)
 
-	if !dr.m.plan.estimates {
+	if !dr.m.plan.Estimates {
 		t.Fatal("this board estimates in a field and the plan says it does not")
 	}
-	if !strings.HasPrefix(dr.m.plan.estimate.ID, "customfield_") {
-		t.Fatalf("the estimation field is %q, want the site's own custom field id", dr.m.plan.estimate.ID)
+	if !strings.HasPrefix(dr.m.plan.Estimate.ID, "customfield_") {
+		t.Fatalf("the estimation field is %q, want the site's own custom field id", dr.m.plan.Estimate.ID)
 	}
-	asked := dr.m.plan.projection().IDs
-	if !slices.Contains(asked, dr.m.plan.estimate.ID) {
+	asked := dr.m.plan.Projection().IDs
+	if !slices.Contains(asked, dr.m.plan.Estimate.ID) {
 		t.Errorf("the projection asks for %v, without the field the board estimates in", asked)
 	}
 	for _, wildcard := range []string{jira.FieldsAll, jira.FieldsNavigable} {

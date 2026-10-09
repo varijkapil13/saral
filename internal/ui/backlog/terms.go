@@ -1,15 +1,12 @@
 package backlog
 
 import (
-	"slices"
-
 	tea "charm.land/bubbletea/v2"
 
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/filterbar"
-	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 // OpenFilterMsg opens the picker over the backlog on screen. It is exported so
@@ -75,62 +72,4 @@ func (m *Model) clickTerm(msg tea.MouseClickMsg) (tea.Cmd, bool) {
 		return m.setTerms(m.terms.Without(facet)), true
 	}
 	return m.setTerms(m.terms.Toggle(value)), true
-}
-
-// matchesTerms reports whether an issue passes every facet currently in
-// force: AND across facets, OR within one facet's own values — the same
-// semantics board.matchesTerms evaluates locally for the same reason: what is
-// held is already whole in memory.
-func matchesTerms(iss *jira.Issue, terms appterm.Terms) bool {
-	if len(terms) == 0 {
-		return true
-	}
-	byFacet := make(map[appterm.Facet][]appterm.Term, len(terms))
-	for _, t := range terms {
-		byFacet[t.Facet] = append(byFacet[t.Facet], t)
-	}
-	for facet, want := range byFacet {
-		matched := false
-		for _, t := range want {
-			if matchesFacet(iss, facet, t.ID) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
-	}
-	return true
-}
-
-// matchesFacet reads the same field of an issue that Facet.field names on the
-// JQL side, an empty id meaning the field itself is empty — "unassigned" is a
-// value like any other, the way the picker already treats it.
-func matchesFacet(iss *jira.Issue, facet appterm.Facet, id string) bool {
-	switch facet {
-	case appterm.FacetAssignee:
-		if id == "" {
-			return iss.Assignee == nil || iss.Assignee.AccountID == ""
-		}
-		return iss.Assignee != nil && iss.Assignee.AccountID == id
-	case appterm.FacetReporter:
-		if id == "" {
-			return iss.Reporter == nil || iss.Reporter.AccountID == ""
-		}
-		return iss.Reporter != nil && iss.Reporter.AccountID == id
-	case appterm.FacetStatus:
-		return iss.Status.ID == id
-	case appterm.FacetType:
-		return iss.Type.ID == id
-	case appterm.FacetPriority:
-		if id == "" {
-			return iss.Priority == nil
-		}
-		return iss.Priority != nil && iss.Priority.ID == id
-	case appterm.FacetLabel:
-		return slices.Contains(iss.Labels, id)
-	case appterm.FacetNone:
-	}
-	return false
 }

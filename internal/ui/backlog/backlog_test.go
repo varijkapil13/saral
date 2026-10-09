@@ -1,7 +1,6 @@
 package backlog
 
 import (
-	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -598,43 +597,6 @@ func TestBacklog_ABoardWithoutSprintsStillLoadsItsBacklog(t *testing.T) {
 	got := dr.view()
 	if !strings.Contains(got, "no sprints on this board") || strings.Contains(got, "could not be read") || strings.Contains(got, "no board") {
 		t.Errorf("the view does not say what kind of board this is:\n%s", got)
-	}
-}
-
-// stubSprints answers a sprint read with one error, so the decision in
-// openSprints can be held to each kind the site can give.
-type stubSprints struct{ err error }
-
-func (s stubSprints) Sprints(context.Context, int64, ...jira.SprintState) (jira.Page[jira.Sprint], error) {
-	return jira.Page[jira.Sprint]{}, s.err
-}
-
-func (s stubSprints) Sprint(context.Context, int64) (jira.Sprint, error) { return jira.Sprint{}, s.err }
-
-// Only a 400 means "this board has no sprints". Every other way the read can
-// fail means the board could not be read, and has to stay a failure — reading a
-// refusal or a rate limit as "no sprints" would draw a backlog that is not
-// this board's.
-func TestOpenSprints_OnlyAValidationErrorMeansNoSprints(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		name      string
-		err       error
-		noSprints bool
-	}{
-		{"the site's own 400", &jira.ValidationError{Messages: []string{"The board does not support sprints"}}, true},
-		{"a refusal", &jira.CapabilityError{Reason: "no"}, false},
-		{"a rate limit", &jira.RateLimitError{}, false},
-		{"a board that is not there", &jira.NotFoundError{Kind: "board", ID: "9"}, false},
-		{"a transport failure", &jira.TransportError{Op: "GET /board/9/sprint", Status: 502, Err: errors.New("bad gateway")}, false},
-	} {
-		sprints, reason, err := openSprints(context.Background(), stubSprints{tc.err}, 9)
-		switch {
-		case tc.noSprints && (err != nil || reason == "" || sprints != nil):
-			t.Errorf("%s: got (%v, %q, %v), want no sprints with the site's reason and no error", tc.name, sprints, reason, err)
-		case !tc.noSprints && (err == nil || reason != ""):
-			t.Errorf("%s: got (%v, %q, %v), want the error kept and no reason", tc.name, sprints, reason, err)
-		}
 	}
 }
 

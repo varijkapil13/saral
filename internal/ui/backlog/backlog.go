@@ -123,7 +123,7 @@ type Model struct {
 	search *appquery.Search
 	site   site
 	mover  jira.SprintManager
-	cache  appcache.Cache
+	shelf  *appboard.Shelf[appcache.BacklogSnapshot]
 	addr   kernel.Addr
 
 	styles  *styles
@@ -208,7 +208,6 @@ type Model struct {
 	pickAfterRead bool
 	pendingGroup  int64
 
-	writes *writer
 	// pendingPut rides on the next page's read, so pages are written in order.
 	pendingPut func() error
 
@@ -282,10 +281,9 @@ func New(d kernel.Deps) kernel.View {
 	m := &Model{
 		deps:   d,
 		addr:   kernel.NewAddr(),
-		cache:  d.Cache,
+		shelf:  appboard.NewBacklogShelf(d.Cache),
 		picked: make(map[string]bool),
 		byKey:  make(map[string]int),
-		writes: &writer{},
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
@@ -312,15 +310,6 @@ func New(d kernel.Deps) kernel.View {
 	return m
 }
 
-// backlogCache is the cache's optional backlog-shaped half, absent whenever
-// the session has nowhere to keep one or the cache in force is only rows and
-// issues — the same additive-interface pattern kernel.restoreCaps uses for
-// cache.CapsCache.
-func (m *Model) backlogCache() (appcache.BacklogCache, bool) {
-	held, ok := m.cache.(appcache.BacklogCache)
-	return held, ok && held != nil
-}
-
 // fromCache draws the backlog this project was last showing, before anything
 // is asked of the site. Which boards a project has is itself an answer nobody
 // has yet, so the one board a snapshot names stands in for the whole list
@@ -330,15 +319,7 @@ func (m *Model) backlogCache() (appcache.BacklogCache, bool) {
 // happens: kernel.FirstPaint builds the view and renders one frame without
 // ever calling Init, which is the thing docs/PERFORMANCE.md budgets.
 func (m *Model) fromCache() {
-	held, ok := m.backlogCache()
-	if !ok {
-		return
-	}
-	boardID, ok := held.LastBacklogBoard(m.deps.Project)
-	if !ok {
-		return
-	}
-	snap, ok := held.Backlog(boardID)
+	boardID, snap, ok := m.shelf.Last(m.deps.Project)
 	if !ok {
 		return
 	}
@@ -353,7 +334,7 @@ func (m *Model) fromCache() {
 // switch know only the one board a snapshot names, while nextBoard already
 // holds the site's own list and must not collapse it down to one.
 func (m *Model) applyBacklogSnapshot(snap appcache.BacklogSnapshot) {
-	m.config, m.done, m.estimate = snap.Config, doneStatuses(snap.Config), estimateOf(snap.Config)
+	m.config, m.done, m.estimate = snap.Config, appboard.DoneStatuses(snap.Config), appboard.EstimateOf(snap.Config)
 	m.sprints, m.field, m.noSprints = snap.Sprints, snap.Field, snap.NoSprints
 	m.issues, m.page, m.missing = snap.Issues, jira.Page[jira.Issue]{}, nil
 	// A snapshot stored part way through a walk carries no cursor to page on
@@ -703,11 +684,7 @@ func (m *Model) refresh(purge bool) tea.Cmd {
 // one and if there is a board on screen to name. The issues themselves stay:
 // they are shared with every other read that named them.
 func (m *Model) forgetBacklog() tea.Cmd {
-	held, ok := m.backlogCache()
-	if !ok || m.config.BoardID == 0 {
-		return nil
-	}
-	if err := held.ForgetBacklog(m.config.BoardID); err != nil {
+	if err := m.shelf.Forget(m.config.BoardID); err != nil {
 		return kernel.Warn("the stored copy of this backlog could not be dropped: " + err.Error())
 	}
 	return nil
@@ -769,12 +746,10 @@ func (m *Model) nextBoard() tea.Cmd {
 	boards, boardID := m.boards, m.boards[at].ID
 	m.forget()
 	m.boards, m.boardAt = boards, at
-	if held, ok := m.backlogCache(); ok {
-		if snap, ok := held.Backlog(boardID); ok {
-			m.applyBacklogSnapshot(snap)
-			if !m.stale {
-				return nil
-			}
+	if snap, ok := m.shelf.Get(boardID); ok {
+		m.applyBacklogSnapshot(snap)
+		if !m.stale {
+			return nil
 		}
 	}
 	return m.load()
@@ -787,7 +762,7 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 	m.loading, m.loaded, m.stale, m.boardIDHint = false, true, false, 0
 	under, issues := m.under(), m.carryMade(msg.config.BoardID, msg.page.Items)
 	m.boards, m.boardAt, m.config = msg.boards, msg.boardAt, msg.config
-	m.done, m.estimate = doneStatuses(msg.config), estimateOf(msg.config)
+	m.done, m.estimate = appboard.DoneStatuses(msg.config), appboard.EstimateOf(msg.config)
 	m.sprints, m.field, m.noSprints = msg.sprints, msg.field, msg.noSprints
 	m.issues, m.page, m.missing, m.fieldIDs = issues, msg.page, msg.missing, msg.fields
 	// The rows still index the issues just replaced.
@@ -813,11 +788,10 @@ func (m *Model) took(msg loadedMsg) tea.Cmd {
 // drawing, so a session opening cold knows which board's snapshot to read
 // before the site has said which boards this project has.
 func (m *Model) rememberLastBacklogBoard() tea.Cmd {
-	held, ok := m.backlogCache()
-	if !ok || len(m.boards) == 0 {
+	if len(m.boards) == 0 {
 		return nil
 	}
-	if err := held.PutLastBacklogBoard(m.deps.Project, m.config.BoardID); err != nil {
+	if err := m.shelf.Remember(m.deps.Project, m.config.BoardID); err != nil {
 		return kernel.Warn("this backlog could not be remembered for next time: " + err.Error())
 	}
 	return nil
@@ -829,24 +803,14 @@ func (m *Model) pagePut(items []jira.Issue, first bool) func() error {
 	if len(m.boards) == 0 {
 		return nil
 	}
-	if paged, ok := m.cache.(appcache.BacklogPageCache); ok && paged != nil {
-		snap := m.snapshot(slices.Clone(items))
-		boardID := m.config.BoardID
-		return m.writes.put(m.gen, first, func() error { return paged.PutBacklogPage(boardID, snap, first) })
-	}
-	if !first && m.page.HasMore() {
-		return nil
-	}
-	return m.wholePut()
+	return m.shelf.Write(m.gen, m.config.BoardID, first, m.page.HasMore(), m.snapshotOf(items), m.snapshotOf(m.issues))
 }
 
+// movedPut writes the issues a move changed as a page that neither starts a
+// read nor waits for one to end.
 func (m *Model) movedPut(keys []string) func() error {
 	if len(m.boards) == 0 {
 		return nil
-	}
-	paged, ok := m.cache.(appcache.BacklogPageCache)
-	if !ok || paged == nil {
-		return m.wholePut()
 	}
 	moved := make([]jira.Issue, 0, len(keys))
 	for _, key := range keys {
@@ -854,17 +818,12 @@ func (m *Model) movedPut(keys []string) func() error {
 			moved = append(moved, m.issues[at])
 		}
 	}
-	snap, boardID := m.snapshot(moved), m.config.BoardID
-	return m.writes.put(m.gen, false, func() error { return paged.PutBacklogPage(boardID, snap, false) })
+	return m.shelf.Write(m.gen, m.config.BoardID, false, false, func() appcache.BacklogSnapshot { return m.snapshot(moved) },
+		m.snapshotOf(m.issues))
 }
 
-func (m *Model) wholePut() func() error {
-	held, ok := m.backlogCache()
-	if !ok {
-		return nil
-	}
-	snap, boardID := m.snapshot(slices.Clone(m.issues)), m.config.BoardID
-	return m.writes.put(m.gen, true, func() error { return held.PutBacklog(boardID, snap) })
+func (m *Model) snapshotOf(issues []jira.Issue) func() appcache.BacklogSnapshot {
+	return func() appcache.BacklogSnapshot { return m.snapshot(slices.Clone(issues)) }
 }
 
 func (m *Model) snapshot(issues []jira.Issue) appcache.BacklogSnapshot {
@@ -1014,7 +973,7 @@ func (m *Model) regroup() {
 		if m.finished(&m.issues[i]) {
 			continue
 		}
-		if !matchesTerms(&m.issues[i], m.terms) {
+		if !appboard.MatchesTerms(&m.issues[i], m.terms) {
 			m.filteredOut++
 			continue
 		}
@@ -1043,28 +1002,6 @@ func (m *Model) finished(iss *jira.Issue) bool {
 		return iss.Status.Category == jira.CategoryDone
 	}
 	return m.done[iss.Status.ID]
-}
-
-func estimateOf(cfg jira.BoardConfig) jira.FieldRef {
-	if !cfg.Estimates() {
-		return jira.FieldRef{}
-	}
-	return cfg.Estimation.Field
-}
-
-func doneStatuses(cfg jira.BoardConfig) map[string]bool {
-	for c := len(cfg.Columns) - 1; c >= 0; c-- {
-		ids := cfg.Columns[c].StatusIDs
-		if len(ids) == 0 {
-			continue
-		}
-		out := make(map[string]bool, len(ids))
-		for _, id := range ids {
-			out[strings.TrimSpace(id)] = true
-		}
-		return out
-	}
-	return nil
 }
 
 // rank puts each section in the board's own order, where the board has one.
@@ -1849,29 +1786,7 @@ func (m *Model) siteToday() (int, time.Time) {
 	return y*10000 + int(mo)*100 + d, time.Date(y, mo, d, 0, 0, 0, 0, loc)
 }
 
-// The value arrives in one of two shapes and the field's own type is neither: a
-// read that sent no schema decodes the array as options, and a read that did
-// finds the field declared as an array of json, which nothing here has a slot
-// for, so the bytes are kept as text.
-func (m *Model) sprintsOn(iss *jira.Issue) []int64 {
-	if m.field.ID == "" {
-		return nil
-	}
-	if options, ok := iss.Fields.Options(m.field); ok {
-		out := make([]int64, 0, len(options))
-		for _, option := range options {
-			if id, err := strconv.ParseInt(strings.TrimSpace(option.ID), 10, 64); err == nil {
-				out = append(out, id)
-			}
-		}
-		return out
-	}
-	text, ok := iss.Fields.Text(m.field)
-	if !ok {
-		return nil
-	}
-	return sprintIDsIn(text)
-}
+func (m *Model) sprintsOn(iss *jira.Issue) []int64 { return appboard.SprintsOn(iss, m.field) }
 
 func (m *Model) board() jira.Board {
 	if m.boardAt < 0 || m.boardAt >= len(m.boards) {

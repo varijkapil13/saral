@@ -143,7 +143,7 @@ func refusing(issues int) *jiratest.Fake {
 func primed(t *testing.T, d kernel.Deps) (boardID int64, cfg jira.BoardConfig, qf []jira.QuickFilter, issues []jira.Issue) {
 	t.Helper()
 	dr := newDriver(t, d, 120, 20)
-	return dr.m.plan.boardID, dr.m.rawConfig, dr.m.quickFilters, slices.Clone(dr.m.issues)
+	return dr.m.plan.BoardID, dr.m.rawConfig, dr.m.quickFilters, slices.Clone(dr.m.issues)
 }
 
 // TestBoard_DrawsTheStoredBoardBeforeAnythingIsAskedOfTheSite is the gate on
@@ -238,8 +238,8 @@ func TestBoard_RevalidationLandsOnTheSameBoardTheSnapshotNamed(t *testing.T) {
 
 	dr := newDriver(t, withCache(testDeps(fake), cache), 120, 20)
 
-	if dr.m.plan.boardID != boardID {
-		t.Errorf("the revalidated board is %d, want the stored board %d", dr.m.plan.boardID, boardID)
+	if dr.m.plan.BoardID != boardID {
+		t.Errorf("the revalidated board is %d, want the stored board %d", dr.m.plan.BoardID, boardID)
 	}
 }
 
@@ -334,7 +334,7 @@ func TestBoard_StoresWhatItFetchedSoTheNextSessionDrawsItFirst(t *testing.T) {
 	cache := newFakeCache()
 	dr := newDriver(t, withCache(testDeps(newFake(9)), cache), 120, 20)
 
-	boardID := dr.m.plan.boardID
+	boardID := dr.m.plan.BoardID
 	snap, ok := cache.Board(boardID)
 	if !ok {
 		t.Fatal("a board that loaded stored nothing")
@@ -355,7 +355,7 @@ func TestBoard_APurgingRefreshDropsTheStoredCopyToo(t *testing.T) {
 
 	cache := newFakeCache()
 	dr := newDriver(t, withCache(testDeps(newFake(9)), cache), 120, 20)
-	boardID := dr.m.plan.boardID
+	boardID := dr.m.plan.BoardID
 
 	dr.send(kernel.RefreshMsg{Purge: true})
 

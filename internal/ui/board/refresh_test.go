@@ -455,9 +455,9 @@ func TestRefresh_AMoveThatLandsDuringTheWalkIsKept(t *testing.T) {
 	t.Parallel()
 	dr := newDriver(t, testDeps(newLongFake()), 160, 16)
 	key := dr.readDeep()
-	to := (dr.m.curCol + 1) % len(dr.m.plan.columns)
+	to := (dr.m.curCol + 1) % len(dr.m.plan.Columns)
 	var status jira.Status
-	for id, col := range dr.m.plan.byStatus {
+	for id, col := range dr.m.plan.ByStatus {
 		if col == to {
 			status.ID = id
 		}

@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	appboard "github.com/varijkapil13/saral/internal/app/board"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -350,7 +351,7 @@ func TestRenderCard_RestingMarkAcrossGlyphTiers(t *testing.T) {
 		t.Run(tier.name, func(t *testing.T) {
 			theme := kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
 			st := newStyles(theme)
-			got := ansi.Strip(renderCard(&iss, 30, cardLook{}, st, theme, plan{}))
+			got := ansi.Strip(renderCard(&iss, 30, cardLook{}, st, theme, appboard.Plan{}))
 			golden(t, "card_mark_"+tier.name+".golden", got+"\n")
 		})
 	}
@@ -376,7 +377,7 @@ func TestRenderCard_SubtaskMarkAcrossGlyphTiers(t *testing.T) {
 		t.Run(tier.name, func(t *testing.T) {
 			theme := kernel.NewTheme(kernel.ThemeNoColor, true, tier.glyphs)
 			st := newStyles(theme)
-			got := ansi.Strip(renderCard(&iss, 30, cardLook{}, st, theme, plan{}))
+			got := ansi.Strip(renderCard(&iss, 30, cardLook{}, st, theme, appboard.Plan{}))
 			golden(t, "card_mark_subtask_"+tier.name+".golden", got+"\n")
 		})
 	}
@@ -386,7 +387,7 @@ func TestRenderCard_TheKeyCarriesItsStatusCategorysColourWhileResting(t *testing
 	t.Parallel()
 	th := kernel.NewTheme(kernel.ThemeDark, true, kernel.UnicodeGlyphs())
 	st := newStyles(th)
-	p := plan{}
+	p := appboard.Plan{}
 
 	// Same key and summary, only the category differs, so any difference in
 	// what renderCard answers with is the category's colour and nothing else.
