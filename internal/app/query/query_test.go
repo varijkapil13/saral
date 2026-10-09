@@ -1,4 +1,4 @@
-package app
+package query
 
 import (
 	"context"
@@ -332,7 +332,7 @@ func TestRun_CollapsesIdenticalSearchesThatAreInFlightAtOnce(t *testing.T) {
 	// legitimately begin a second search once this one had finished.
 	wanted := searchKey(jira.Query{JQL: testJQL, Fields: ListProjection().IDs})
 	var joined atomic.Int64
-	s.flight.joined = func(key string) {
+	s.flight.Joined = func(key string) {
 		if key == wanted {
 			joined.Add(1)
 		}
@@ -459,151 +459,6 @@ func TestCount_SurfacesWhatWentWrongWhenTheAdapterCanCountAndDidNot(t *testing.T
 	}
 	if ok {
 		t.Error("a failed count reported that it had an answer")
-	}
-}
-
-func TestSavedQueries_RefusesTheOnesThatCouldNotBeRun(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name  string
-		query SavedQuery
-	}{
-		{name: "no name to reach it by", query: SavedQuery{Name: "  ", JQL: testJQL}},
-		{name: "nothing to run", query: SavedQuery{Name: "Mine", JQL: "   "}},
-		{name: "a key that is not on the keyboard row", query: SavedQuery{Name: "Mine", JQL: testJQL, Slot: MaxSavedSlot + 1}},
-		{name: "a negative key", query: SavedQuery{Name: "Mine", JQL: testJQL, Slot: -1}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			if _, err := NewSavedQueries(tt.query); err == nil {
-				t.Fatalf("%+v was accepted", tt.query)
-			}
-		})
-	}
-}
-
-func TestSavedQueries_KeepsTheOrderAddedAndFindsAQueryByNameOrKey(t *testing.T) {
-	t.Parallel()
-
-	saved, err := NewSavedQueries(
-		SavedQuery{Name: "My open work", JQL: "assignee = currentUser()", Slot: 1},
-		SavedQuery{Name: "Recently updated", JQL: testJQL, Slot: 2},
-	)
-	if err != nil {
-		t.Fatalf("saving: %v", err)
-	}
-
-	if got := saved.All(); len(got) != 2 || got[0].Name != "My open work" {
-		t.Errorf("the saved queries are %+v", got)
-	}
-	if got, ok := saved.ByName("my open WORK"); !ok || got.Slot != 1 {
-		t.Errorf("looking a query up by name gave %+v (%t); a name is not case sensitive", got, ok)
-	}
-	if got, ok := saved.BySlot(2); !ok || got.Name != "Recently updated" {
-		t.Errorf("key 2 runs %+v (%t)", got, ok)
-	}
-	if _, ok := saved.BySlot(0); ok {
-		t.Error("an unbound query was reachable by key zero")
-	}
-	if saved.Remove("My open work").Len() != 1 || saved.Len() != 2 {
-		t.Error("removing a query changed the set it was removed from")
-	}
-}
-
-func TestSavedQueries_ListsTheKeysThatActuallyRunSomething(t *testing.T) {
-	t.Parallel()
-
-	saved, err := NewSavedQueries(
-		SavedQuery{Name: "Third", JQL: testJQL, Slot: 3},
-		SavedQuery{Name: "Unbound", JQL: testJQL},
-		SavedQuery{Name: "First", JQL: testJQL, Slot: 1},
-	)
-	if err != nil {
-		t.Fatalf("saving: %v", err)
-	}
-	if got := saved.Slots(); !slices.Equal(got, []int{1, 3}) {
-		t.Errorf("the bound keys are %v, want [1 3] in that order", got)
-	}
-	if got := (SavedQueries{}).Slots(); len(got) != 0 {
-		t.Errorf("an empty set reports keys %v", got)
-	}
-}
-
-func TestSavedQueries_RebindingAKeyTakesItFromWhicheverQueryHadIt(t *testing.T) {
-	t.Parallel()
-
-	saved, err := NewSavedQueries(
-		SavedQuery{Name: "My open work", JQL: "assignee = currentUser()", Slot: 1},
-		SavedQuery{Name: "Recently updated", JQL: testJQL, Slot: 1},
-	)
-	if err != nil {
-		t.Fatalf("saving: %v", err)
-	}
-
-	got, ok := saved.BySlot(1)
-	if !ok || got.Name != "Recently updated" {
-		t.Errorf("key 1 runs %+v (%t), want the query that took it", got, ok)
-	}
-	previous, ok := saved.ByName("My open work")
-	if !ok || previous.Slot != 0 {
-		t.Errorf("the query that held key 1 is now %+v; it should still be there, unbound", previous)
-	}
-}
-
-func TestSavedQueries_ReplacingAQueryKeepsItsPlaceInTheList(t *testing.T) {
-	t.Parallel()
-
-	saved, err := NewSavedQueries(
-		SavedQuery{Name: "First", JQL: "project = A"},
-		SavedQuery{Name: "Second", JQL: "project = B"},
-	)
-	if err != nil {
-		t.Fatalf("saving: %v", err)
-	}
-	saved, err = saved.Add(SavedQuery{Name: "first", JQL: "project = C"})
-	if err != nil {
-		t.Fatalf("replacing: %v", err)
-	}
-
-	all := saved.All()
-	if len(all) != 2 {
-		t.Fatalf("the set holds %d queries, want 2: a query with a name already there replaces it", len(all))
-	}
-	if all[0].JQL != "project = C" || all[1].Name != "Second" {
-		t.Errorf("the set reads %+v", all)
-	}
-}
-
-func TestRunSaved_RunsTheQueryBehindTheNameAndSaysSoWhenThereIsNone(t *testing.T) {
-	t.Parallel()
-
-	saved, err := NewSavedQueries(SavedQuery{Name: "Everything", JQL: testJQL, Slot: 1})
-	if err != nil {
-		t.Fatalf("saving: %v", err)
-	}
-	f := testFake(5)
-	s := NewSearch(f, WithSavedQueries(saved))
-
-	got, err := s.RunSaved(t.Context(), "everything")
-	if err != nil {
-		t.Fatalf("running a saved query: %v", err)
-	}
-	if len(got.Page.Items) != 5 {
-		t.Errorf("the saved query returned %d issues, want 5", len(got.Page.Items))
-	}
-	if got.Page.Items[0].Summary == "" {
-		t.Error("a saved query with no field set of its own fetched nothing to render")
-	}
-	if s.Saved().Len() != 1 {
-		t.Errorf("the search reports %d saved queries, want 1", s.Saved().Len())
-	}
-
-	if _, err := s.RunSaved(t.Context(), "nothing by this name"); err == nil {
-		t.Error("running a saved query nobody saved succeeded")
 	}
 }
 
@@ -1104,24 +959,6 @@ func TestFieldLabels_LabelOnlyWhatWasAskedForAndCannotBeWrittenThrough(t *testin
 	}
 }
 
-func TestSavedQuery_AFieldSetOfNothingButCustomFieldsIsNotTheListDefault(t *testing.T) {
-	t.Parallel()
-
-	q := SavedQuery{Name: "Estimates", JQL: testJQL, Projection: Projection{Name: "estimates", Custom: true}}
-	got := q.projection()
-	if !got.Custom {
-		t.Error("a saved query asking only for the custom fields fell back to the list field set, which asks for none of them")
-	}
-	if len(got.IDs) != 0 {
-		t.Errorf("the field set grew to %v", got.IDs)
-	}
-
-	empty := SavedQuery{Name: "Anything", JQL: testJQL}.projection()
-	if len(empty.IDs) != len(ListProjection().IDs) || empty.Custom {
-		t.Errorf("a saved query with no field set of its own resolved to %+v, want the list one", empty)
-	}
-}
-
 // configuredSite is a catalogue the size of one a real site answered with: 101
 // fields, 57 of them custom. It is what the detail read's cost has to be
 // measured against, because a site with six custom fields cannot show it.
@@ -1199,5 +1036,34 @@ func BenchmarkResolveDetail(b *testing.B) {
 		if _, err := s.Resolve(ctx, p); err != nil {
 			b.Fatalf("Resolve: %v", err)
 		}
+	}
+}
+
+func TestReadIssue_ReadsThroughTheIssueEndpointWithTheProjection(t *testing.T) {
+	t.Parallel()
+	f := testFake(3)
+	s := NewSearch(f)
+	iss, labels, err := s.ReadIssue(t.Context(), f, "PROJ-2", DetailProjection())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if iss.Key != "PROJ-2" || !iss.Requested.Has("summary") || !iss.Requested.Has("description") {
+		t.Fatalf("read %s with mask %v", iss.Key, iss.Requested.IDs())
+	}
+	if callsTo(f, "Search") != 0 || callsTo(f, "IssueFields") != 1 {
+		t.Errorf("calls %v, want one IssueFields and no Search", f.Calls())
+	}
+	if labels.Len() == 0 {
+		t.Error("the custom fields' names did not come back with the read")
+	}
+}
+
+func TestReadIssue_AnIssueTheSiteLacksIsNotFound(t *testing.T) {
+	t.Parallel()
+	f := testFake(1)
+	_, _, err := NewSearch(f).ReadIssue(t.Context(), f, "PROJ-99", DetailProjection())
+	var nf *jira.NotFoundError
+	if !errors.As(err, &nf) {
+		t.Fatalf("err = %v, want a NotFoundError", err)
 	}
 }

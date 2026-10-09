@@ -15,13 +15,11 @@ import (
 
 const appDir = "internal/app"
 
-var sharedKernel = []string{"cache", "issueref", "match", "term"}
+var sharedKernel = []string{"cache", "issueref", "match", "query", "term"}
 
 var legacyRootFiles = []string{
 	"dates.go",
-	"index.go",
 	"issue.go",
-	"search.go",
 }
 
 type appPart uint8

@@ -12,7 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
@@ -699,7 +699,7 @@ func TestBoard_TheDigitAfterFReachesTheBoardRatherThanRunningASavedQuery(t *test
 		jiratest.WithIssues(append(base, mine)),
 	)
 	scheduleAll(fake, "PROJ", append(keysOf(base), mine.Key))
-	saved, err := app.NewSavedQueries(app.SavedQuery{Name: "everything", JQL: "project = PROJ", Slot: 1})
+	saved, err := appsearch.NewSavedQueries(appsearch.SavedQuery{Name: "everything", JQL: "project = PROJ", Slot: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

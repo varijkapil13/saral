@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -115,13 +115,13 @@ func TestRenderHit_IsExactlyAsWideAsTheLayoutWhateverTheContent(t *testing.T) {
 	st := newStyles(theme)
 
 	hits := map[string]hit{
-		"a plain one":           newHit(app.Hit{Key: "PROJ-142", Summary: "Fix the login flow", HasSummary: true, StoredAt: clockAt.Add(-time.Hour)}, clockAt),
-		"no title stored":       newHit(app.Hit{Key: "PROJ-9", StoredAt: clockAt.Add(-90 * time.Hour)}, clockAt),
-		"a title that is empty": newHit(app.Hit{Key: "PROJ-9", HasSummary: true, StoredAt: clockAt}, clockAt),
-		"no stored time at all": newHit(app.Hit{Key: "PROJ-1", Summary: "x", HasSummary: true}, clockAt),
-		"a very long title":     newHit(app.Hit{Key: "PROJ-4242424242", Summary: strings.Repeat("a long issue summary ", 8), HasSummary: true, StoredAt: clockAt.Add(-3 * time.Minute)}, clockAt),
-		"wide graphemes":        newHit(app.Hit{Key: "会議-7", Summary: "会議のサポート体制", HasSummary: true, StoredAt: clockAt.Add(-2 * time.Second)}, clockAt),
-		"an emoji and a ZWJ":    newHit(app.Hit{Key: "PROJ-8", Summary: "🚀 ship it 👩‍💻 today", HasSummary: true, StoredAt: clockAt.Add(-25 * time.Hour)}, clockAt),
+		"a plain one":           newHit(appsearch.Hit{Key: "PROJ-142", Summary: "Fix the login flow", HasSummary: true, StoredAt: clockAt.Add(-time.Hour)}, clockAt),
+		"no title stored":       newHit(appsearch.Hit{Key: "PROJ-9", StoredAt: clockAt.Add(-90 * time.Hour)}, clockAt),
+		"a title that is empty": newHit(appsearch.Hit{Key: "PROJ-9", HasSummary: true, StoredAt: clockAt}, clockAt),
+		"no stored time at all": newHit(appsearch.Hit{Key: "PROJ-1", Summary: "x", HasSummary: true}, clockAt),
+		"a very long title":     newHit(appsearch.Hit{Key: "PROJ-4242424242", Summary: strings.Repeat("a long issue summary ", 8), HasSummary: true, StoredAt: clockAt.Add(-3 * time.Minute)}, clockAt),
+		"wide graphemes":        newHit(appsearch.Hit{Key: "会議-7", Summary: "会議のサポート体制", HasSummary: true, StoredAt: clockAt.Add(-2 * time.Second)}, clockAt),
+		"an emoji and a ZWJ":    newHit(appsearch.Hit{Key: "PROJ-8", Summary: "🚀 ship it 👩‍💻 today", HasSummary: true, StoredAt: clockAt.Add(-25 * time.Hour)}, clockAt),
 	}
 
 	for _, width := range []int{80, 100, 120, 200} {

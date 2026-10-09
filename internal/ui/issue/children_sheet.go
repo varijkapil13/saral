@@ -12,6 +12,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/internal/ui/widget/sortpick"
@@ -37,7 +38,7 @@ const (
 )
 
 type childrenKind struct {
-	search *app.Search
+	search *appquery.Search
 	seed   *childSeed
 	issues []jira.Issue
 	page   jira.Page[jira.Issue]

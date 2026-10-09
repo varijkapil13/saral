@@ -1,4 +1,4 @@
-package app
+package search
 
 import (
 	"errors"
@@ -9,6 +9,7 @@ import (
 
 	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	"github.com/varijkapil13/saral/internal/app/cache/cachetest"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -47,7 +48,7 @@ func newStubCorpus(issues ...jira.Issue) *stubCorpus {
 func titledIssue(key, summary string) jira.Issue {
 	return jira.Issue{
 		Key: key, Summary: summary,
-		Requested: jira.NewFieldMask(ListProjection().IDs),
+		Requested: jira.NewFieldMask(appquery.ListProjection().IDs),
 	}
 }
 
@@ -576,7 +577,7 @@ const cacheJQL = `project = "PROJ" ORDER BY key`
 // listRows is what the list view stores: the six fields of ListProjection and a
 // mask saying so.
 func listRows(n int) []jira.Issue {
-	mask := jira.NewFieldMask(ListProjection().IDs)
+	mask := jira.NewFieldMask(appquery.ListProjection().IDs)
 	out := jiratest.Gen(n)
 	for i := range out {
 		out[i].Requested = mask

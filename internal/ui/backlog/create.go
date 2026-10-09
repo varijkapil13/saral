@@ -8,7 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/form"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
@@ -110,8 +110,8 @@ func (m *Model) created(msg form.CreatedMsg) tea.Cmd {
 
 // settle runs on a context of its own: a re-read of the board cancels the read
 // in flight, and the move into the sprint is what the user asked for.
-func settle(mover jira.SprintManager, reader jira.IssueReader, search *app.Search, fields []string,
-	want app.Projection, board int64, key string, sp jira.Sprint,
+func settle(mover jira.SprintManager, reader jira.IssueReader, search *appquery.Search, fields []string,
+	want appquery.Projection, board int64, key string, sp jira.Sprint,
 ) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()

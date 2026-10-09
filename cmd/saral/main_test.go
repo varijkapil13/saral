@@ -11,8 +11,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
 	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/store"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -759,7 +759,7 @@ func TestFirstPaint_DrawsRowsOutOfTheRealCacheFile(t *testing.T) {
 	}
 
 	rows := jiratest.Gen(5)
-	mask := jira.NewFieldMask(app.ListProjection().IDs)
+	mask := jira.NewFieldMask(appquery.ListProjection().IDs)
 	for i := range rows {
 		rows[i].Requested = mask
 	}

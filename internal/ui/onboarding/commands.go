@@ -9,7 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -204,7 +204,7 @@ func (m *Model) connected(msg connectedMsg) tea.Cmd {
 	}
 	m.busy, m.last = busyNone, busyNone
 	m.client, m.account = msg.client, msg.account
-	m.search = app.NewSearch(msg.client)
+	m.search = appquery.NewSearch(msg.client)
 	m.probed, m.caps = false, jira.Capabilities{}
 	return tea.Batch(m.goTo(stepStorage), m.suggest())
 }
@@ -277,10 +277,10 @@ const suggestionLimit = 50
 
 // recentProjects reads the projects behind the account's own recent issues,
 // then anything it can see at all. Both queries ask for one field.
-func recentProjects(ctx context.Context, search *app.Search) ([]string, error) {
-	projection := app.Projection{Name: "project picker", IDs: []string{"project"}}
+func recentProjects(ctx context.Context, search *appquery.Search) ([]string, error) {
+	projection := appquery.Projection{Name: "project picker", IDs: []string{"project"}}
 	for _, jql := range []string{"assignee = currentUser() ORDER BY updated DESC", "ORDER BY updated DESC"} {
-		result, err := search.Run(ctx, app.Request{JQL: jql, Projection: projection, MaxResults: suggestionLimit})
+		result, err := search.Run(ctx, appquery.Request{JQL: jql, Projection: projection, MaxResults: suggestionLimit})
 		if err != nil {
 			return nil, err
 		}

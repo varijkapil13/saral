@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -87,7 +87,7 @@ type BindQueryMsg struct {
 
 // SavedQueriesMsg carries the saved queries after one changed, so that a view
 // offering to bind another can say what a key already runs.
-type SavedQueriesMsg struct{ Queries app.SavedQueries }
+type SavedQueriesMsg struct{ Queries appsearch.SavedQueries }
 
 // SizeMsg tells a view the box it has been given. It is not the terminal size:
 // the kernel has already taken the header, status line and footer out of it.

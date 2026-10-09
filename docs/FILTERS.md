@@ -248,7 +248,7 @@ backwards: change what the registry says and everything that renders it must be 
 the golden rather than editing prose into it.
 
 **A local matcher needs the field it matches on to actually be in the read.** Checked against the
-tree while landing the backlog's and the timeline's own `f`: both asked for `app.ListProjection()`
+tree while landing the backlog's and the timeline's own `f`: both asked for `appquery.ListProjection()`
 (or its own narrower equivalent) with nothing added, which carries assignee, status, priority and
 type but never reporter or labels — and the timeline's own projection carried none of the four. A
 `FacetReporter` or `FacetLabel` term against either would have matched every row as "no reporter" or

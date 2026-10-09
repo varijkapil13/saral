@@ -13,8 +13,8 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
 	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/comment"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -60,7 +60,7 @@ type Model struct {
 	styles *styles
 
 	issue       jira.Issue
-	labels      app.FieldLabels
+	labels      appquery.FieldLabels
 	loadedIssue bool
 	loadFailed  bool
 	loadErr     error
@@ -209,7 +209,7 @@ type Model struct {
 	// inactive stops a pane under another view answering a palette broadcast.
 	inactive bool
 
-	search *app.Search
+	search *appquery.Search
 	cache  appcache.Cache
 	gen    int
 	cancel context.CancelFunc
@@ -281,7 +281,7 @@ func New(d kernel.Deps, seed jira.Issue, opts ...modelOption) kernel.View {
 	}
 	m.dividerMark = marker(m.zones, dividerZone)
 	if d.Jira != nil {
-		m.search = app.NewSearch(d.Jira)
+		m.search = appquery.NewSearch(d.Jira)
 	}
 	if store, err := newDraftStore(d); err == nil {
 		m.drafts = store

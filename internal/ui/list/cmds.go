@@ -2,20 +2,14 @@ package list
 
 import (
 	"context"
-	"slices"
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
-	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
-
-// pageSize is how many issues one request asks for. /search/jql caps what it
-// will send anyway; the number that matters is that it is one screen's worth
-// several times over, so paging is invisible while scrolling.
-const pageSize = 50
 
 // loadedMsg carries a first page, replacing whatever the list held.
 type loadedMsg struct {
@@ -64,32 +58,11 @@ type revalidatedMsg struct {
 	err   error
 }
 
-// revalidate re-reads one issue by the fields it was last drawn with, using
-// the issue endpoint rather than the search this list otherwise runs on: the
-// search is eventually consistent, and a read straight after a write has to
-// see it.
-func revalidate(ctx context.Context, reader jira.IssueReader, key string, fields []string, gen int) tea.Cmd {
+func revalidate(ctx context.Context, lister *appsearch.Lister, key string, fields []string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		iss, err := reader.IssueFields(ctx, key, fields)
+		iss, err := lister.Revalidate(ctx, key, fields)
 		return revalidatedMsg{gen: gen, key: key, issue: iss, err: err}
 	}
-}
-
-func request(jql string, proj app.Projection) app.Request {
-	return app.Request{JQL: jql, Projection: proj, MaxResults: pageSize}
-}
-
-// keep stores what a fetch brought back, so that the next session draws these
-// rows before it asks the site anything.
-//
-// The error travels back with the rows rather than replacing them: the fetch
-// worked, and a cache that could not be written is worth a line in the status
-// bar and nothing more.
-func keep(cache appcache.Cache, jql string, issues []jira.Issue, more bool) error {
-	if cache == nil {
-		return nil
-	}
-	return cache.PutRows(jql, issues, more)
 }
 
 // notStored says that rows the user can see were not written to disk. It is a
@@ -105,66 +78,57 @@ func notStored(err error) tea.Cmd {
 // off the update loop: a revalidated row changes what is on screen
 // synchronously, and the write that keeps the stored copy in step runs as a
 // command like every other write to this cache does.
-func storeRows(cache appcache.Cache, jql string, issues []jira.Issue, more bool) tea.Cmd {
+func storeRows(lister *appsearch.Lister, jql string, issues []jira.Issue, more bool) tea.Cmd {
 	return func() tea.Msg {
-		if cmd := notStored(keep(cache, jql, issues, more)); cmd != nil {
+		if cmd := notStored(lister.Store(jql, issues, more)); cmd != nil {
 			return cmd()
 		}
 		return nil
 	}
 }
 
-// load fetches the first page of a query.
-func load(ctx context.Context, search *app.Search, cache appcache.Cache, jql string, proj app.Projection, gen int, w why) tea.Cmd {
+func load(ctx context.Context, lister *appsearch.Lister, jql string, proj appquery.Projection, gen int, w why) tea.Cmd {
 	return func() tea.Msg {
-		res, err := search.Run(ctx, request(jql, proj))
+		got, err := lister.First(ctx, jql, proj)
 		if err != nil {
 			return failedMsg{gen: gen, why: w, err: err}
 		}
-		return loadedMsg{
-			gen: gen, why: w, page: res.Page, missing: res.Missing,
-			stored: keep(cache, jql, res.Page.Items, res.Page.HasMore()),
-		}
+		return loadedMsg{gen: gen, why: w, page: got.Page, missing: got.Missing, stored: got.Stored}
 	}
 }
 
-// more fetches the page after the one in hand. The rows already on screen come
-// with it so that what is stored is the whole of what the user has scrolled
-// through, not just its last page.
-func more(ctx context.Context, cache appcache.Cache, jql string, have []jira.Issue, page jira.Page[jira.Issue], gen int) tea.Cmd {
+func more(ctx context.Context, lister *appsearch.Lister, jql string, have []jira.Issue, page jira.Page[jira.Issue], gen int) tea.Cmd {
 	return func() tea.Msg {
-		next, err := page.Next(ctx)
+		got, err := lister.Next(ctx, jql, have, page)
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
-		whole := make([]jira.Issue, 0, len(have)+len(next.Items))
-		whole = append(append(whole, have...), next.Items...)
-		return pagedMsg{gen: gen, page: next, stored: keep(cache, jql, whole, next.HasMore())}
+		return pagedMsg{gen: gen, page: got.Page, stored: got.Stored}
 	}
 }
 
-// reload re-reads the rows the list already has, walking as many pages as it
-// took to get them. It exists so that a refresh can patch rows in place rather
-// than throw the user's position away and start again at row one.
-func reload(ctx context.Context, search *app.Search, cache appcache.Cache, jql string, proj app.Projection, want, gen int, w why) tea.Cmd {
+// reload re-reads the rows the list already has, so that a refresh can patch
+// rows in place rather than throw the user's position away.
+func reload(ctx context.Context, lister *appsearch.Lister, jql string, proj appquery.Projection, want, gen int, w why) tea.Cmd {
+	return patched(ctx, gen, w, func(ctx context.Context) (appsearch.Fetched, error) {
+		return lister.Reload(ctx, jql, proj, want)
+	})
+}
+
+// pageOn reads the page after rows that came off disk.
+func pageOn(ctx context.Context, lister *appsearch.Lister, jql string, proj appquery.Projection, have, gen int) tea.Cmd {
+	return patched(ctx, gen, whyPage, func(ctx context.Context) (appsearch.Fetched, error) {
+		return lister.PageOn(ctx, jql, proj, have)
+	})
+}
+
+func patched(ctx context.Context, gen int, w why, read func(context.Context) (appsearch.Fetched, error)) tea.Cmd {
 	return func() tea.Msg {
-		res, err := search.Run(ctx, request(jql, proj))
+		got, err := read(ctx)
 		if err != nil {
 			return failedMsg{gen: gen, why: w, err: err}
 		}
-		page := res.Page
-		issues := slices.Clone(page.Items)
-		for len(issues) < want && page.HasMore() {
-			page, err = page.Next(ctx)
-			if err != nil {
-				return failedMsg{gen: gen, why: w, err: err}
-			}
-			issues = append(issues, page.Items...)
-		}
-		return patchedMsg{
-			gen: gen, why: w, issues: issues, page: page,
-			stored: keep(cache, jql, issues, page.HasMore()),
-		}
+		return patchedMsg{gen: gen, why: w, issues: got.Issues, page: got.Page, stored: got.Stored}
 	}
 }
 
@@ -176,16 +140,9 @@ type assignedMsg struct {
 	err error
 }
 
-// probeAssigned runs the opening search unscoped and one row deep. One row is
-// the whole answer — what is asked is whether this is an account work is
-// assigned to, not what that work is — so the projection is the narrow one and
-// the page is the smallest a site will send.
-func probeAssigned(ctx context.Context, search *app.Search, jql string) tea.Cmd {
+func probeAssigned(ctx context.Context, lister *appsearch.Lister, jql string) tea.Cmd {
 	return func() tea.Msg {
-		res, err := search.Run(ctx, app.Request{JQL: jql, Projection: app.ListProjection(), MaxResults: 1})
-		if err != nil {
-			return assignedMsg{err: err}
-		}
-		return assignedMsg{has: len(res.Page.Items) > 0}
+		has, err := lister.HasAssigned(ctx, jql)
+		return assignedMsg{has: has, err: err}
 	}
 }

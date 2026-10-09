@@ -11,7 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/sortpick"
@@ -312,8 +312,8 @@ func lexoRankID(fields []jira.Field) string {
 	return id
 }
 
-func childProjection(rankID string) app.Projection {
-	p := app.ListProjection()
+func childProjection(rankID string) appquery.Projection {
+	p := appquery.ListProjection()
 	p.IDs = append(p.IDs, "created", "duedate")
 	if rankID != "" {
 		p.IDs = append(p.IDs, rankID)
@@ -323,7 +323,7 @@ func childProjection(rankID string) app.Projection {
 
 type childRead struct {
 	key      string
-	search   *app.Search
+	search   *appquery.Search
 	vocab    jira.FilterVocabulary
 	choice   sortpick.Choice
 	order    childOrder
@@ -383,7 +383,7 @@ func (r childRead) run(ctx context.Context) childReadDone {
 		if rankWanted {
 			rankID = d.order.rankID
 		}
-		res, err := r.search.Run(ctx, app.Request{
+		res, err := r.search.Run(ctx, appquery.Request{
 			JQL: childrenJQL(r.key), Projection: childProjection(rankID), MaxResults: childrenPage,
 		})
 		if err != nil {

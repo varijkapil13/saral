@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/config"
 )
 
@@ -130,7 +130,7 @@ func TestBuild_AProfileFromTheEnvironmentAloneReachesTheSiteAndSavesNothing(t *t
 	if got := initialView(opts); got == "onboarding" {
 		t.Error("a complete environment still opened setup")
 	}
-	if err := deps.SaveQueries(app.SavedQueries{}); !errors.Is(err, errEnvProfile) {
+	if err := deps.SaveQueries(appsearch.SavedQueries{}); !errors.Is(err, errEnvProfile) {
 		t.Errorf("saving queries from an environment profile: %v, want errEnvProfile", err)
 	}
 	if _, err := os.Stat(filepath.Join(cfgDir, "config.toml")); !errors.Is(err, os.ErrNotExist) {
@@ -151,7 +151,7 @@ func TestBuild_SARAL_TOKENIsNeverWrittenIntoTheFile(t *testing.T) {
 	if deps.Jira == nil {
 		t.Fatal("SARAL_TOKEN did not produce a client")
 	}
-	saved, err := app.NewSavedQueries(app.SavedQuery{Name: "mine", JQL: "assignee = currentUser()", Slot: 1})
+	saved, err := appsearch.NewSavedQueries(appsearch.SavedQuery{Name: "mine", JQL: "assignee = currentUser()", Slot: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

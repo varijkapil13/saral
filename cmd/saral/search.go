@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -66,7 +66,7 @@ func runSearch(inv *invocation, args []string) error {
 		return usageErrorf("saral search needs a JQL query")
 	}
 	return withSession(inv, opt, func(ctx context.Context, s session) error {
-		search := app.NewSearch(s.client)
+		search := appquery.NewSearch(s.client)
 		ids, labels, err := searchFields(ctx, search, a.fields)
 		if err != nil {
 			return err
@@ -100,7 +100,7 @@ func runSearch(inv *invocation, args []string) error {
 	})
 }
 
-func searchFields(ctx context.Context, search *app.Search, spec string) ([]string, app.FieldLabels, error) {
+func searchFields(ctx context.Context, search *appquery.Search, spec string) ([]string, appquery.FieldLabels, error) {
 	var wanted []string
 	for part := range strings.SplitSeq(spec, ",") {
 		if part = strings.TrimSpace(part); part != "" && !strings.EqualFold(part, "key") {
@@ -108,7 +108,7 @@ func searchFields(ctx context.Context, search *app.Search, spec string) ([]strin
 		}
 	}
 	if len(wanted) == 0 {
-		return slices.Clone(searchColumns), app.FieldLabels{}, nil
+		return slices.Clone(searchColumns), appquery.FieldLabels{}, nil
 	}
 	ids := make([]string, 0, len(wanted))
 	var catalogue []jira.Field
@@ -120,7 +120,7 @@ func searchFields(ctx context.Context, search *app.Search, spec string) ([]strin
 		if catalogue == nil {
 			fields, err := search.Fields(ctx)
 			if err != nil {
-				return nil, app.FieldLabels{}, siteError(err)
+				return nil, appquery.FieldLabels{}, siteError(err)
 			}
 			catalogue = fields
 		}
@@ -132,13 +132,13 @@ func searchFields(ctx context.Context, search *app.Search, spec string) ([]strin
 		if err != nil {
 			var named *jira.FieldNameError
 			if errors.As(err, &named) {
-				return nil, app.FieldLabels{}, usageErrorf("--fields: %v", err)
+				return nil, appquery.FieldLabels{}, usageErrorf("--fields: %v", err)
 			}
-			return nil, app.FieldLabels{}, err
+			return nil, appquery.FieldLabels{}, err
 		}
 		ids = appendNew(ids, field.ID)
 	}
-	return ids, app.NewFieldLabels(catalogue, ids), nil
+	return ids, appquery.NewFieldLabels(catalogue, ids), nil
 }
 
 func appendNew(ids []string, id string) []string {
@@ -148,10 +148,10 @@ func appendNew(ids []string, id string) []string {
 	return append(ids, id)
 }
 
-func collectIssues(ctx context.Context, search *app.Search, jql string, ids []string, limit int) (issues []jira.Issue, more bool, err error) {
-	result, err := search.Run(ctx, app.Request{
+func collectIssues(ctx context.Context, search *appquery.Search, jql string, ids []string, limit int) (issues []jira.Issue, more bool, err error) {
+	result, err := search.Run(ctx, appquery.Request{
 		JQL:        jql,
-		Projection: app.Projection{Name: "search", IDs: ids},
+		Projection: appquery.Projection{Name: "search", IDs: ids},
 		MaxResults: min(limit, searchPageSize),
 	})
 	if err != nil {

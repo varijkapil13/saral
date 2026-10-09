@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 )
 
-func profileWith(queries ...app.SavedQuery) Config {
+func profileWith(queries ...appsearch.SavedQuery) Config {
 	return Config{
 		Active: "work",
 		Mouse:  true,
@@ -43,7 +43,7 @@ func saveAndLoad(t *testing.T, cfg Config) (string, Config) {
 func TestSavedQueries_RoundTripThroughTheFile(t *testing.T) {
 	t.Parallel()
 
-	queries := []app.SavedQuery{
+	queries := []appsearch.SavedQuery{
 		{Name: "Blockers", JQL: "priority = Highest AND resolution = EMPTY ORDER BY updated DESC", Slot: 2},
 		{Name: "Anything I reported", JQL: "reporter = currentUser() ORDER BY created DESC"},
 	}
@@ -134,7 +134,7 @@ func TestSavedQueries_TheFileIsHeldToTheSameRulesAsTheKeyboard(t *testing.T) {
 func TestSavedQueries_ARefusedSetIsNeverWritten(t *testing.T) {
 	t.Parallel()
 
-	cfg := profileWith(app.SavedQuery{Name: "Blockers", JQL: "priority = Highest", Slot: app.MaxSavedSlot + 1})
+	cfg := profileWith(appsearch.SavedQuery{Name: "Blockers", JQL: "priority = Highest", Slot: appsearch.MaxSavedSlot + 1})
 	path := filepath.Join(t.TempDir(), "config.toml")
 	if err := cfg.Save(path); err == nil {
 		t.Fatal("a query on a key that does not exist was written to the file")

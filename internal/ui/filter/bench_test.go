@@ -8,6 +8,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 )
@@ -34,7 +35,7 @@ func stocked(tb testing.TB, n, w, h int) *Model {
 	m, _ = next.(*Model)
 	m.state, m.facet, m.complete = pickValue, appterm.FacetLabel, true
 	_ = m.input.Focus()
-	next, _ = m.Update(vocabularyMsg{gen: m.gen, facet: appterm.FacetLabel, values: labelValues(manyLabels(n))})
+	next, _ = m.Update(vocabularyMsg{gen: m.gen, facet: appterm.FacetLabel, values: appsearch.LabelValues(manyLabels(n))})
 	m, _ = next.(*Model)
 	_ = m.View()
 	return m
@@ -78,13 +79,13 @@ func BenchmarkPickerRedraw200x60(b *testing.B) {
 }
 
 func BenchmarkRankValues(b *testing.B) {
-	all := labelValues(manyLabels(2000))
+	all := appsearch.LabelValues(manyLabels(2000))
 	pattern := appmatch.NewPattern("serv")
-	shown, ranks := make([]int, 0, len(all)), make([]ranked, 0, len(all))
+	shown, ranks := make([]int, 0, len(all)), make([]appsearch.ValueRank, 0, len(all))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		shown, ranks = rank(all, pattern, shown[:0], ranks[:0])
+		shown, ranks = appsearch.RankValues(all, pattern, shown[:0], ranks[:0])
 	}
 	if len(shown) == 0 {
 		b.Fatal("the pattern matched nothing, so this measured a walk and no ranking")

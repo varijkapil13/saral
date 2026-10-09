@@ -14,9 +14,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
-	appcache "github.com/varijkapil13/saral/internal/app/cache"
 	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
@@ -55,8 +55,7 @@ var _ kernel.BackClaimer = (*Model)(nil)
 // Model is the issue list.
 type Model struct {
 	deps     kernel.Deps
-	search   *app.Search
-	cache    appcache.Cache
+	lister   *appsearch.Lister
 	normal   map[string]action
 	inFilter map[string]action
 	inAsk    map[string]action
@@ -129,7 +128,7 @@ type Model struct {
 	// sort is the order this view's search is asked to run in, over and above
 	// whatever it would otherwise name for itself. A zero value is no choice
 	// made, and sorting is the picker that changes it.
-	sort           sortChoice
+	sort           appsearch.SortChoice
 	sorting        bool
 	sortCursor     int
 	sortSaveFailed bool
@@ -159,7 +158,7 @@ type Model struct {
 	// saved is the kernel's set of saved queries, as this view was built and as
 	// the kernel last changed it, kept so that binding a key can name what that
 	// key already runs.
-	saved    app.SavedQueries
+	saved    appsearch.SavedQueries
 	bind     bindStep
 	bindSlot int
 
@@ -198,9 +197,7 @@ type Model struct {
 
 	focused bool
 
-	poll       time.Duration
-	pollArmed  bool
-	pollPaused bool
+	poller appsearch.Poller
 
 	zones  widget.Zoner
 	clicks *widget.Clicks
@@ -240,32 +237,29 @@ func New(d kernel.Deps) kernel.View {
 	m := &Model{
 		deps:   d,
 		addr:   kernel.NewAddr(),
-		cache:  d.Cache,
 		rows:   widget.NewRowCache[rowKey, []string](rowCacheLimit),
 		look:   card.Recall(),
 		filter: newFilterInput(),
 		ask:    newAskInput(),
 		saved:  d.Saved,
-		poll:   PollInterval(),
+		poller: appsearch.NewPoller(PollInterval()),
 	}
 	if m.deps.Theme == nil {
 		m.deps.Theme = kernel.NewTheme(kernel.ThemeAuto, true, kernel.UnicodeGlyphs())
 	}
 	m.styles = newStyles(m.deps.Theme)
-	if d.Jira != nil {
-		m.search = app.NewSearch(d.Jira)
-	}
+	m.lister = appsearch.NewLister(d.Jira, d.Cache, d.Jira)
 	m.zones = widget.NewZoner(d.Zones)
 	m.bar = filterbar.New(m.zones)
 	m.clicks = widget.NewClicks(d.Now)
 	m.normal, m.inFilter, m.inAsk, m.inSort = defaultKeys().tables()
 	m.sort = loadSort(ViewID)
 	m.jql, m.title = defaultQuery(d.Project)
-	m.jql = applySort(m.jql, m.sort)
+	m.jql = appsearch.ApplySort(m.jql, m.sort)
 	m.defaulted = true
 	if terms, ok := m.recallTerms(); ok {
 		jql, title := termQuery(d.Project, terms)
-		m.terms, m.jql, m.title = terms, applySort(jql, m.sort), title
+		m.terms, m.jql, m.title = terms, appsearch.ApplySort(jql, m.sort), title
 		m.defaulted, m.recalledTerms = false, true
 	}
 	m.relayout()
@@ -299,10 +293,7 @@ func (m *Model) rememberTerms() { kernel.Keep(m.deps, ViewID, termsMemoryKey, m.
 // kernel.FirstPaint builds the view and renders one frame without ever calling
 // Init, which is the thing docs/PERFORMANCE.md budgets at 60ms.
 func (m *Model) fromCache() {
-	if m.cache == nil {
-		return
-	}
-	snap, ok := m.cache.Rows(m.jql)
+	snap, ok := m.lister.Stored(m.jql)
 	if !ok || len(snap.Issues) == 0 {
 		return
 	}
@@ -360,16 +351,16 @@ func (m *Model) Init() tea.Cmd {
 // in hand: rows for the default off disk are proof of work, and an unscoped
 // session's own default asks the same question.
 func (m *Model) probeAssignment() tea.Cmd {
-	if m.search == nil || m.asked || m.answered || !m.defaulted || len(m.issues) > 0 {
+	if !m.lister.Live() || m.asked || m.answered || !m.defaulted || len(m.issues) > 0 {
 		return nil
 	}
-	jql := probeQuery()
+	jql := appsearch.ProbeJQL()
 	if jql == m.jql {
 		return nil
 	}
 	m.asked = true
 	ctx, cancel := context.WithCancel(context.Background())
-	return kernel.Reply(withCancel(cancel, probeAssigned(ctx, m.search, jql)), m.addr)
+	return kernel.Reply(withCancel(cancel, probeAssigned(ctx, m.lister, jql)), m.addr)
 }
 
 // revalidate re-reads rows that came off disk, and only once they are past their
@@ -585,12 +576,11 @@ func (m *Model) setLook(l card.Look) tea.Cmd {
 }
 
 // projection is the fields this view's search asks for in the look on screen.
-func (m *Model) projection() app.Projection {
-	p := app.ListProjection()
+func (m *Model) projection() appquery.Projection {
 	if m.look == card.Roomy {
-		p = p.With(card.RoomyFields...)
+		return appsearch.ListProjection(card.RoomyFields...)
 	}
-	return p
+	return appsearch.ListProjection()
 }
 
 // lacksRoomy reports whether any row was read without a field a roomy card
@@ -647,11 +637,11 @@ func (m *Model) current(gen int) bool { return gen == m.gen }
 func (m *Model) load() tea.Cmd { return m.loadFor(whyOpen) }
 
 func (m *Model) loadFor(w why) tea.Cmd {
-	if m.search == nil {
+	if !m.lister.Live() {
 		return nil
 	}
 	ctx, gen := m.begin()
-	return m.reply(load(ctx, m.search, m.cache, m.jql, m.projection(), gen, w))
+	return m.reply(load(ctx, m.lister, m.jql, m.projection(), gen, w))
 }
 
 func (m *Model) refresh(purge bool) tea.Cmd {
@@ -665,23 +655,20 @@ func (m *Model) refresh(purge bool) tea.Cmd {
 // request, because a poll, a revalidation and somebody pressing r all arrive
 // here and only one of them has anybody waiting to be told what came back.
 func (m *Model) refetch(w why) tea.Cmd {
-	if m.search == nil {
+	if !m.lister.Live() {
 		return nil
 	}
 	var said tea.Cmd
 	if w == whyPurge {
-		m.search.Invalidate()
-		if m.cache != nil {
-			if err := m.cache.Forget(m.jql); err != nil {
-				said = kernel.Warn("the stored copy of this search could not be dropped: " + err.Error())
-			}
+		if err := m.lister.Purge(m.jql); err != nil {
+			said = kernel.Warn("the stored copy of this search could not be dropped: " + err.Error())
 		}
 	}
 	if !m.loaded {
 		return tea.Batch(said, m.loadFor(w))
 	}
 	ctx, gen := m.begin()
-	return tea.Batch(said, m.reply(reload(ctx, m.search, m.cache, m.jql, m.projection(), len(m.issues), gen, w)))
+	return tea.Batch(said, m.reply(reload(ctx, m.lister, m.jql, m.projection(), len(m.issues), gen, w)))
 }
 
 func (m *Model) retarget(msg QueryMsg) tea.Cmd {
@@ -721,7 +708,7 @@ func (m *Model) setQuery(jql, title string, byDefault bool) tea.Cmd {
 	if jql == "" {
 		return nil
 	}
-	m.jql, m.defaulted = applySort(jql, m.sort), byDefault
+	m.jql, m.defaulted = appsearch.ApplySort(jql, m.sort), byDefault
 	if title != "" {
 		m.title = title
 	}
@@ -821,7 +808,7 @@ func (m *Model) revalidateOne(key string) tea.Cmd {
 	m.revalGen++
 	ctx, cancel := context.WithCancel(context.Background())
 	m.revalStop = cancel
-	return kernel.Reply(revalidate(ctx, m.deps.Jira, key, fields, m.revalGen), m.addr)
+	return kernel.Reply(revalidate(ctx, m.lister, key, fields, m.revalGen), m.addr)
 }
 
 func (m *Model) revalidated(msg revalidatedMsg) tea.Cmd {
@@ -838,7 +825,7 @@ func (m *Model) revalidated(msg revalidatedMsg) tea.Cmd {
 	}
 	m.issues[at] = msg.issue
 	m.refilter()
-	return storeRows(m.cache, m.jql, slices.Clone(m.issues), m.hasMore())
+	return storeRows(m.lister, m.jql, slices.Clone(m.issues), m.hasMore())
 }
 
 // failed keeps whatever is on screen. Rows that are already drawn are the last
@@ -866,10 +853,7 @@ func (m *Model) failed(msg failedMsg) tea.Cmd {
 	} else {
 		m.failure = msg.err
 	}
-	var limit *jira.RateLimitError
-	if errors.As(msg.err, &limit) {
-		m.pollPaused = true
-	}
+	m.poller.Fail(msg.err)
 	return tea.Batch(failure(msg.why, msg.err), m.pollTick())
 }
 
@@ -906,7 +890,7 @@ func (m *Model) pageAheadIfNeeded() tea.Cmd { return m.pageAheadFrom(m.cursor) }
 // cursor's. The wheel scrolls without moving the selection, so it measures from
 // the bottom of the window, which would otherwise stop at the last loaded row.
 func (m *Model) pageAheadFrom(at int) tea.Cmd {
-	if m.loading || m.search == nil || !m.hasMore() {
+	if m.loading || !m.lister.Live() || !m.hasMore() {
 		return nil
 	}
 	near := at >= len(m.view)-lookahead
@@ -918,9 +902,9 @@ func (m *Model) pageAheadFrom(at int) tea.Cmd {
 	// Rows that came off disk carry no cursor to follow, so the page after them
 	// is reached by asking the search again and walking to where they end.
 	if !m.page.HasMore() {
-		return m.reply(reload(ctx, m.search, m.cache, m.jql, m.projection(), len(m.issues)+pageSize, gen, whyPage))
+		return m.reply(pageOn(ctx, m.lister, m.jql, m.projection(), len(m.issues), gen))
 	}
-	return m.reply(more(ctx, m.cache, m.jql, m.issues, m.page, gen))
+	return m.reply(more(ctx, m.lister, m.jql, m.issues, m.page, gen))
 }
 
 // hasMore reports whether anything is left to fetch, from the live page or from
@@ -1218,8 +1202,8 @@ func (m *Model) bindKey(stroke string) tea.Cmd {
 	m.bind = bindNone
 	switch step {
 	case bindPick:
-		slot, err := strconv.Atoi(stroke)
-		if err != nil || slot < 1 || slot > app.MaxSavedSlot {
+		slot, ok := appsearch.SlotFromKey(stroke)
+		if !ok {
 			m.clampScroll()
 			return nil
 		}
@@ -1253,7 +1237,7 @@ func (m *Model) commitBind(slot int) tea.Cmd {
 // narrow terminal, never the keys that answer.
 func (m *Model) bindPrompt() string {
 	label := "bind " + strconv.Quote(m.title) + " to a key"
-	hint := "  1-" + strconv.Itoa(app.MaxSavedSlot) + ", any other key cancels"
+	hint := "  1-" + strconv.Itoa(appsearch.MaxSavedSlot) + ", any other key cancels"
 	if m.bind == bindConfirm {
 		held, _ := m.saved.BySlot(m.bindSlot)
 		label = strconv.Itoa(m.bindSlot) + " runs " + strconv.Quote(held.Name)
@@ -1287,7 +1271,7 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		m.clicks.Forget()
 		return m.startAsk()
 	}
-	if m.sort.chosen() && m.zones.Hit(sortZone, msg) {
+	if m.sort.Chosen() && m.zones.Hit(sortZone, msg) {
 		m.clicks.Forget()
 		return m.startSort()
 	}
@@ -1486,7 +1470,7 @@ func (m *Model) summaryKey() summaryKey {
 		issues: len(m.issues), visible: len(m.view), more: m.hasMore(),
 		loading: m.loading, loaded: m.loaded, filtered: m.filtered(),
 		stale: m.stale, failed: m.failure != nil, checked: m.checked.UnixNano(),
-		sortField: m.sort.field, sortDesc: m.sort.desc, mouse: m.zones.Enabled(),
+		sortField: m.sort.Field, sortDesc: m.sort.Desc, mouse: m.zones.Enabled(),
 	}
 }
 
@@ -1505,8 +1489,8 @@ func (m *Model) summaryLine() string {
 		badge = m.deps.Theme.StaleBadge.Render(staleLabel)
 	}
 	sort := ""
-	if m.sort.chosen() {
-		sort = m.zones.Mark(sortZone, m.styles.muted.Render(m.sort.label(m.deps.Theme.Glyphs))) + "  "
+	if m.sort.Chosen() {
+		sort = m.zones.Mark(sortZone, m.styles.muted.Render(sortLabel(m.sort, m.deps.Theme.Glyphs))) + "  "
 	}
 	stamp := m.checkedLabel()
 	right := ansi.StringWidth(sort) + ansi.StringWidth(stamp) + ansi.StringWidth(badge) + ansi.StringWidth(count)
@@ -1570,7 +1554,7 @@ func (m *Model) total() string {
 func (m *Model) appendEmpty(lines []string, h int) []string {
 	at := len(lines)
 	switch {
-	case m.search == nil:
+	case !m.lister.Live():
 		lines = append(lines, m.styles.muted.Render("  No Jira connection in this session yet."))
 	case m.loading && !m.loaded:
 		lines = append(lines, m.styles.muted.Render("  Searching"+m.deps.Theme.Glyphs.Ellipsis))

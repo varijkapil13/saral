@@ -7,6 +7,7 @@ import (
 	"time"
 
 	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 )
 
@@ -65,12 +66,12 @@ func TestBudget_PickerFullRedrawAt200x60(t *testing.T) {
 // allocate per candidate: both buffers are reused and match.Pattern folds case
 // without copying either side.
 func TestBudget_RankingReusesItsBuffers(t *testing.T) {
-	all := labelValues(manyLabels(2000))
+	all := appsearch.LabelValues(manyLabels(2000))
 	pattern := appmatch.NewPattern("serv")
-	shown, ranks := make([]int, 0, len(all)), make([]ranked, 0, len(all))
-	shown, ranks = rank(all, pattern, shown, ranks)
+	shown, ranks := make([]int, 0, len(all)), make([]appsearch.ValueRank, 0, len(all))
+	shown, ranks = appsearch.RankValues(all, pattern, shown, ranks)
 	if got := testing.AllocsPerRun(50, func() {
-		shown, ranks = rank(all, pattern, shown[:0], ranks[:0])
+		shown, ranks = appsearch.RankValues(all, pattern, shown[:0], ranks[:0])
 	}); got != 0 {
 		t.Errorf("ranking two thousand values allocates %.1f times, want none", got)
 	}

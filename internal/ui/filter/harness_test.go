@@ -208,7 +208,7 @@ func (d *driver) chosen() (appterm.Term, bool) {
 func (d *driver) labels() []string {
 	out := make([]string, 0, len(d.m.shown))
 	for _, at := range d.m.shown {
-		out = append(out, d.m.all[at].term.Label)
+		out = append(out, d.m.all[at].Term.Label)
 	}
 	return out
 }

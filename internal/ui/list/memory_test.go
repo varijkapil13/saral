@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -87,7 +88,7 @@ func TestNew_RestoresTheFilterBeforeReadingTheCache(t *testing.T) {
 	d := testDeps(nil)
 	d.Memory = mem
 	jql, _ := termQuery(d.Project, appterm.Terms{shipped})
-	jql = applySort(jql, sortChoice{})
+	jql = appsearch.ApplySort(jql, appsearch.SortChoice{})
 
 	cache := newFakeCache()
 	cache.hold(jql, []jira.Issue{{Key: "PROJ-9"}}, false, false)

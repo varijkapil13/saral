@@ -10,7 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -296,7 +296,7 @@ func openChildrenSheet(t *testing.T, f *jiratest.Fake, epic string, opts ...func
 	if err != nil {
 		t.Fatal(err)
 	}
-	kind := &childrenKind{search: app.NewSearch(rec)}
+	kind := &childrenKind{search: appquery.NewSearch(rec)}
 	for _, o := range opts {
 		o(kind)
 	}

@@ -13,8 +13,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
 	appissueref "github.com/varijkapil13/saral/internal/app/issueref"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/issue"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -28,7 +29,6 @@ const ViewID = kernel.SearchViewID
 
 const (
 	settle     = 250 * time.Millisecond
-	pageSize   = 50
 	maxRows    = 200
 	lookahead  = 10
 	rowMemo    = 256
@@ -68,7 +68,7 @@ func tickAfter(d time.Duration, fn func() tea.Msg) tea.Cmd {
 // Model is the search view.
 type Model struct {
 	deps   kernel.Deps
-	search *app.Search
+	search *appsearch.TextSearch
 	addr   kernel.Addr
 	keys   keyMap
 	table  map[string]action
@@ -146,7 +146,7 @@ func New(d kernel.Deps, seed Seed, opts ...Option) *Model {
 	}
 	m.styles = newStyles(m.deps.Theme)
 	if d.Jira != nil {
-		m.search = app.NewSearch(d.Jira)
+		m.search = appsearch.NewTextSearch(appquery.NewSearch(d.Jira), d.Jira)
 	}
 	m.input.Prompt = "search "
 	m.input.Placeholder = "words from a summary, description or comment"
@@ -363,7 +363,7 @@ func (m *Model) run(rerun bool) tea.Cmd {
 		m.ranText = ""
 		return nil
 	}
-	jql, _ := compose(tq, m.scope, m.deps.Project)
+	jql, _ := appsearch.Compose(tq, m.scope == ScopeProject, m.deps.Project)
 	if jql == m.jql && m.failure == nil && !rerun {
 		return nil
 	}
@@ -380,18 +380,11 @@ func (m *Model) run(rerun bool) tea.Cmd {
 	if !keyed || (m.pin != nil && m.pin.iss.Key != key) {
 		m.pin = nil
 	}
-	cmds := []tea.Cmd{m.reply(searchCmd(ctx, m.search, request(jql), gen))}
+	cmds := []tea.Cmd{m.reply(searchCmd(ctx, m.search, jql, gen))}
 	if keyed && m.deps.Jira != nil {
-		fields := listProjection().IDs
-		cmds = append(cmds, m.reply(keyCmd(ctx, m.deps.Jira, key, fields, gen)))
+		cmds = append(cmds, m.reply(keyCmd(ctx, m.search, key, gen)))
 	}
 	return tea.Batch(cmds...)
-}
-
-func listProjection() app.Projection { return app.ListProjection().With("project") }
-
-func request(jql string) app.Request {
-	return app.Request{JQL: jql, Projection: listProjection(), MaxResults: pageSize}
 }
 
 func (m *Model) scopeName() string {
@@ -524,7 +517,7 @@ func (m *Model) pageAhead(at int) tea.Cmd {
 		return nil
 	}
 	m.paging = true
-	return m.reply(pageCmd(m.ctx, m.page, m.gen))
+	return m.reply(pageCmd(m.ctx, m.search, m.page, m.gen))
 }
 
 func (m *Model) refresh(purge bool) tea.Cmd {

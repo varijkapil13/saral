@@ -7,9 +7,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
 	appissueref "github.com/varijkapil13/saral/internal/app/issueref"
 	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -153,7 +153,7 @@ func (k *linksKind) changed(s *sheet, text string) tea.Cmd {
 	if s.deps.Cache == nil || text == "" {
 		return nil
 	}
-	hits, err := app.SharedIndex(s.deps.Cache).Search(text, maxCands)
+	hits, err := appsearch.SharedIndex(s.deps.Cache).Search(text, maxCands)
 	if err != nil {
 		return kernel.Warn("the cache on this machine could not be searched: " + err.Error())
 	}

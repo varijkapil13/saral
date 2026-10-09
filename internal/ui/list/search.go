@@ -8,44 +8,30 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 )
 
-// search is one of the searches this view offers by name: the predicate half,
-// which is empty for every issue there is, and the order to read the answer in.
-// The two are kept apart because a search with no predicate has no AND to hang
-// an ORDER BY off, and "every issue in this project" is exactly that search.
+// search is one of the searches this view offers by name. Its JQL is the
+// context's; what it is called is the view's.
 type search struct {
 	id   string
 	name string
 	// command is what the palette calls it, where that is not the name the view
 	// puts on screen.
 	command string
-	where   string
-	order   string
+	query   appsearch.CannedSearch
 }
 
-// The searches every session offers. Nothing here names a project, a status or
-// a field: the project is whatever the session is scoped to and goes in at run
-// time.
 var (
 	everyIssue = search{
 		id: "issues.all", name: "All issues", command: "Every issue in this project",
-		order: "ORDER BY updated DESC",
+		query: appsearch.EveryIssue,
 	}
-	myIssues = search{
-		id: "issues.mine", name: "My issues",
-		where: "assignee = currentUser()", order: "ORDER BY updated DESC",
-	}
-	iReported = search{
-		id: "issues.reported", name: "Issues I reported",
-		where: "reporter = currentUser()", order: "ORDER BY created DESC",
-	}
-	nobodysIssues = search{
-		id: "issues.unassigned", name: "Unassigned issues",
-		where: "assignee IS EMPTY", order: "ORDER BY created DESC",
-	}
+	myIssues      = search{id: "issues.mine", name: "My issues", query: appsearch.MyIssues}
+	iReported     = search{id: "issues.reported", name: "Issues I reported", query: appsearch.ReportedIssues}
+	nobodysIssues = search{id: "issues.unassigned", name: "Unassigned issues", query: appsearch.UnassignedIssues}
 )
 
 var searches = []search{everyIssue, myIssues, iReported, nobodysIssues}
@@ -61,44 +47,17 @@ func (s search) palette() string {
 // at composes the search for the project the session is on, and names it after
 // what it is about to put on screen.
 func (s search) at(project string) (jql, title string) {
-	jql = strings.TrimSpace(scoped(project, s.where) + " " + s.order)
+	jql = s.query.At(project)
 	if p := strings.TrimSpace(project); p != "" {
 		return jql, s.name + " in " + p
 	}
 	return jql, s.name
 }
 
-// scoped narrows a clause to the session's project when there is one. An empty
-// clause is every issue in that project, so there is nothing to put an AND
-// between. The key is whatever the session was opened against; nothing about it
-// is written down.
-func scoped(project, clause string) string {
-	p, c := strings.TrimSpace(project), strings.TrimSpace(clause)
-	switch {
-	case p == "":
-		return c
-	case c == "":
-		return "project = " + quote(p)
-	}
-	return "project = " + quote(p) + " AND " + c
-}
-
-func quote(s string) string {
-	return strconv.Quote(strings.ReplaceAll(s, `"`, ""))
-}
-
 // defaultQuery is what a session opens on: the account's own work, narrowed to
 // the project the session is scoped to. An account with nothing of its own in
 // that project meets the project itself instead — see widen.
 func defaultQuery(project string) (jql, title string) { return myIssues.at(project) }
-
-// probeQuery asks whether anything anywhere on this site is assigned to the
-// account the credential belongs to. It is the unscoped form of the search a
-// session opens on, so currentUser() is written down once rather than twice.
-func probeQuery() string {
-	jql, _ := myIssues.at("")
-	return jql
-}
 
 // The one fact the probe establishes, spelt for each of the two places that
 // state it. The status line is written over by the next keypress; the pane is
@@ -139,7 +98,7 @@ func (m *Model) widen() tea.Cmd {
 	}
 	// An unscoped session's default is the site-wide question the probe asks, so
 	// this empty page is that answer and no second round trip was made for it.
-	if !m.answered && m.jql == probeQuery() {
+	if !m.answered && m.jql == appsearch.ProbeJQL() {
 		m.answered, m.assignedNowhere = true, true
 	}
 	if m.asked && !m.answered {

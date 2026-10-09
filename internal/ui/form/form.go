@@ -22,7 +22,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/mention"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -72,7 +72,7 @@ type CreateMsg struct{ IssueTypeID string }
 // Model is the create form.
 type Model struct {
 	deps     kernel.Deps
-	search   *app.Search
+	search   *appquery.Search
 	cache    *schemaCache
 	drafts   draftStore
 	styles   *styles
@@ -194,7 +194,7 @@ func newWith(d kernel.Deps, cache *schemaCache) *Model {
 	}
 	m.inList, m.inChoose, m.inLeave = defaultKeys().tables()
 	if d.Jira != nil {
-		m.search = app.NewSearch(d.Jira)
+		m.search = appquery.NewSearch(d.Jira)
 	}
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)

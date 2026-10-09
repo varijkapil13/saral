@@ -118,13 +118,13 @@ table, which is the same thing as writing down that the budget is no longer held
 | `internal/app` | `TestBudget_DateCascadeCostsNoMoreThanTheIssuesItIsGiven` |
 | `internal/app` | `TestBudget_DateCascadeOverATimelineOfIssues` |
 | `internal/app` | `TestBudget_EveryWallClockAssertionSitsInAGuard` |
-| `internal/app` | `TestBudget_IndexRebuildAtTenThousandIssues` |
-| `internal/app` | `TestBudget_IndexSearchAllocatesOnlyTheAnswerItHandsBack` |
-| `internal/app` | `TestBudget_IndexSearchAtTenThousandIssues` |
 | `internal/app` | `TestBudget_NoBudgetDividesOneBenchmarksTimeByAnothers` |
 | `internal/app` | `TestBudget_NoTestOutsideAGuardRunsABenchmark` |
 | `internal/app` | `TestBudget_TheDocumentNamesEveryGuardAndOnlyRealOnes` |
 | `internal/app/cache` | `TestBudget_CacheReadForAViewsFirstPaint` |
+| `internal/app/search` | `TestBudget_IndexRebuildAtTenThousandIssues` |
+| `internal/app/search` | `TestBudget_IndexSearchAllocatesOnlyTheAnswerItHandsBack` |
+| `internal/app/search` | `TestBudget_IndexSearchAtTenThousandIssues` |
 | `internal/ui/attach` | `TestBudget_AttachAMemoLookupCostsNothing` |
 | `internal/ui/attach` | `TestBudget_AttachFullRedrawAt200x60` |
 | `internal/ui/attach` | `TestBudget_AttachKeystrokeToFrame` |

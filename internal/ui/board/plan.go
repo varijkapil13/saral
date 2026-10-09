@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -96,8 +96,8 @@ func (p plan) columnOf(statusID string) (int, bool) {
 // and the project a create lands in, plus the estimation field when the board
 // has one. The id comes from the board configuration, so no customfield is
 // written down and a board that does not estimate asks for nothing extra.
-func (p plan) projection() app.Projection {
-	proj := app.ListProjection().With("reporter", "labels", "parent", "project")
+func (p plan) projection() appquery.Projection {
+	proj := appquery.ListProjection().With("reporter", "labels", "parent", "project")
 	if !p.estimates {
 		return proj
 	}
@@ -106,7 +106,7 @@ func (p plan) projection() app.Projection {
 
 // projectionFor is projection, widened by what a roomy card draws beyond it
 // while the look is roomy. Labels are already in it.
-func (p plan) projectionFor(look card.Look) app.Projection {
+func (p plan) projectionFor(look card.Look) appquery.Projection {
 	proj := p.projection()
 	if look != card.Roomy {
 		return proj

@@ -12,9 +12,9 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
 	appboard "github.com/varijkapil13/saral/internal/app/board"
 	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/form"
@@ -63,7 +63,7 @@ type held struct {
 // Model is the board.
 type Model struct {
 	deps   kernel.Deps
-	search *app.Search
+	search *appquery.Search
 	cache  appcache.Cache
 	styles *styles
 	cards  *cardCache
@@ -300,7 +300,7 @@ func New(d kernel.Deps) kernel.View {
 	m.clicks = widget.NewClicks(d.Now)
 	m.bar = filterbar.New(m.zones)
 	if d.Jira != nil {
-		m.search = app.NewSearch(d.Jira)
+		m.search = appquery.NewSearch(d.Jira)
 	}
 	if terms, ok := m.recallTerms(); ok {
 		m.terms = terms

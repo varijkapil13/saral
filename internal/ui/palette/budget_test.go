@@ -43,8 +43,8 @@ func TestBudget_PaletteOpeningIsOnTheKeystrokeBudget(t *testing.T) {
 	}
 }
 
-// ctrl+k over a cache at its bound shares build's app.Index across opens
-// (app.SharedIndex), so this stays on budget rather than paying for a walk of
+// ctrl+k over a cache at its bound shares build's appsearch.Index across opens
+// (appsearch.SharedIndex), so this stays on budget rather than paying for a walk of
 // the whole cache on every single open.
 func TestBudget_PaletteOpenWithCachedIssuesIsOnTheKeystrokeBudget(t *testing.T) {
 	res := testing.Benchmark(BenchmarkPaletteOpenCached)

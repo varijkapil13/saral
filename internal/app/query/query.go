@@ -1,8 +1,6 @@
-// Package app holds Saral's use cases: the orchestration between a view and the
-// jira.Client port. Nothing in it knows how Jira is reached — it is handed the
-// port, and in tests that is the in-memory fake — and nothing in it knows what a
-// view looks like.
-package app
+// Package query is the coalescing search runner and the projections every
+// context reads with.
+package query
 
 import (
 	"context"
@@ -213,34 +211,16 @@ type Result struct {
 // A Search is safe to share between goroutines.
 type Search struct {
 	client SearchClient
-	saved  SavedQueries
 
-	flight flights
+	flight Flights
 
 	mu        sync.Mutex
 	catalogue []jira.Field
 	loaded    bool
 }
 
-// Option configures a Search at construction.
-type Option func(*Search)
-
-// WithSavedQueries seeds the saved queries, which is how the ones read out of a
-// profile get here.
-func WithSavedQueries(q SavedQueries) Option {
-	return func(s *Search) { s.saved = q }
-}
-
 // NewSearch builds the search use case over a Jira client.
-func NewSearch(client SearchClient, opts ...Option) *Search {
-	s := &Search{client: client}
-	for _, o := range opts {
-		if o != nil {
-			o(s)
-		}
-	}
-	return s
-}
+func NewSearch(client SearchClient) *Search { return &Search{client: client} }
 
 var errNoClient = errors.New("app: this search has no Jira client to run against")
 
@@ -268,7 +248,7 @@ func (s *Search) fields(ctx context.Context) ([]jira.Field, error) {
 	if cached, ok := s.cached(); ok {
 		return cached, nil
 	}
-	fields, err := coalesce(ctx, &s.flight, "fields", func(ctx context.Context) ([]jira.Field, error) {
+	fields, err := Coalesce(ctx, &s.flight, "fields", func(ctx context.Context) ([]jira.Field, error) {
 		got, err := s.client.Fields(ctx)
 		if err != nil {
 			return nil, err
@@ -315,7 +295,7 @@ func (s *Search) cached() ([]jira.Field, bool) {
 func (s *Search) Resolve(ctx context.Context, p Projection) (Resolved, error) {
 	out := Resolved{IDs: make([]string, 0, len(p.IDs)+len(p.Names))}
 	for _, id := range p.IDs {
-		out.IDs = appendUnique(out.IDs, id)
+		out.IDs = AppendUnique(out.IDs, id)
 	}
 	names := trimmed(p.Names)
 	if len(names) == 0 && !p.Custom {
@@ -328,15 +308,15 @@ func (s *Search) Resolve(ctx context.Context, p Projection) (Resolved, error) {
 	for _, name := range names {
 		field, ok := jira.FieldByName(catalogue, name)
 		if !ok {
-			out.Missing = appendUnique(out.Missing, name)
+			out.Missing = AppendUnique(out.Missing, name)
 			continue
 		}
-		out.IDs = appendUnique(out.IDs, field.ID)
+		out.IDs = AppendUnique(out.IDs, field.ID)
 	}
 	if p.Custom {
 		for i := range catalogue {
 			if catalogue[i].Custom {
-				out.IDs = appendUnique(out.IDs, catalogue[i].ID)
+				out.IDs = AppendUnique(out.IDs, catalogue[i].ID)
 			}
 		}
 	}
@@ -364,7 +344,7 @@ func (s *Search) Run(ctx context.Context, r Request) (Result, error) {
 		Fields:     resolved.IDs,
 		MaxResults: r.MaxResults,
 	}
-	page, err := coalesce(ctx, &s.flight, searchKey(query), func(ctx context.Context) (jira.Page[jira.Issue], error) {
+	page, err := Coalesce(ctx, &s.flight, searchKey(query), func(ctx context.Context) (jira.Page[jira.Issue], error) {
 		return s.client.Search(ctx, query)
 	})
 	if err != nil {
@@ -383,25 +363,13 @@ func (s *Search) Count(ctx context.Context, jql string) (count int, counted bool
 		return 0, false, nil
 	}
 	query := strings.TrimSpace(jql)
-	count, err = coalesce(ctx, &s.flight, "count\x00"+query, func(ctx context.Context) (int, error) {
+	count, err = Coalesce(ctx, &s.flight, "count\x00"+query, func(ctx context.Context) (int, error) {
 		return counter.ApproximateCount(ctx, query)
 	})
 	if err != nil {
 		return 0, false, err
 	}
 	return count, true, nil
-}
-
-// Saved returns the saved queries.
-func (s *Search) Saved() SavedQueries { return s.saved }
-
-// RunSaved runs a saved query by name.
-func (s *Search) RunSaved(ctx context.Context, name string) (Result, error) {
-	query, ok := s.saved.ByName(name)
-	if !ok {
-		return Result{}, fmt.Errorf("app: there is no saved query called %q", name)
-	}
-	return s.Run(ctx, Request{JQL: query.JQL, Projection: query.projection()})
 }
 
 // searchKey is what makes two searches the same search. The page token is not
@@ -435,23 +403,23 @@ const coalesceAttempts = 3
 // say on its own.
 var errLeaderLeft = errors.New("app: the caller that started this request left")
 
-// flights is the group identical calls collapse into.
-type flights struct {
+// Flights is the group identical calls collapse into.
+type Flights struct {
 	group singleflight.Group
-	// joined fires on a caller's own goroutine the moment that caller is
+	// Joined fires on a caller's own goroutine the moment that caller is
 	// registered in the group, which is the first instant it is certain to share
 	// a call rather than start one. Nothing outside a test sets it.
-	joined func(key string)
+	Joined func(key string)
 }
 
-// coalesce runs one call for however many callers ask for it at the same
+// Coalesce runs one call for however many callers ask for it at the same
 // moment.
 //
 // The call runs on the context of whichever caller started it, so cancelling
 // the only caller really does cancel the work. When that caller leaves while
 // others are still waiting, one of them starts the call again rather than
 // inheriting a cancellation it did not ask for.
-func coalesce[T any](ctx context.Context, in *flights, key string, fn func(context.Context) (T, error)) (T, error) {
+func Coalesce[T any](ctx context.Context, in *Flights, key string, fn func(context.Context) (T, error)) (T, error) {
 	var zero T
 	for range coalesceAttempts {
 		if err := ctx.Err(); err != nil {
@@ -464,8 +432,8 @@ func coalesce[T any](ctx context.Context, in *flights, key string, fn func(conte
 			}
 			return out, err
 		})
-		if in.joined != nil {
-			in.joined(key)
+		if in.Joined != nil {
+			in.Joined(key)
 		}
 		select {
 		case <-ctx.Done():
@@ -494,7 +462,8 @@ func cloneFields(in []jira.Field) []jira.Field {
 	return out
 }
 
-func appendUnique(out []string, value string) []string {
+// AppendUnique appends value, trimmed, unless it is blank or already there.
+func AppendUnique(out []string, value string) []string {
 	trimmedValue := strings.TrimSpace(value)
 	if trimmedValue == "" || slices.Contains(out, trimmedValue) {
 		return out
@@ -505,141 +474,27 @@ func appendUnique(out []string, value string) []string {
 func trimmed(in []string) []string {
 	out := make([]string, 0, len(in))
 	for _, s := range in {
-		out = appendUnique(out, s)
+		out = AppendUnique(out, s)
 	}
 	return out
 }
 
-// MaxSavedSlot is the highest number key a saved query can be bound to.
-const MaxSavedSlot = 9
-
-// SavedQuery is a query a user keeps, optionally bound to a number key.
-type SavedQuery struct {
-	Name string
-	JQL  string
-	// Slot is the number key that runs this query, 1 to MaxSavedSlot, or zero
-	// when it is only reachable by name.
-	Slot int
-	// Projection is the field set to fetch for it. One that asks for nothing
-	// means the list projection, which is what a saved query is opened into.
-	Projection Projection
-}
-
-func (q SavedQuery) projection() Projection {
-	if len(q.Projection.IDs) == 0 && len(q.Projection.Names) == 0 && !q.Projection.Custom {
-		return ListProjection()
+// ReadIssue reads through the issue endpoint because search's index trails a
+// write by seconds, and the read after a save has to see the save.
+func (s *Search) ReadIssue(ctx context.Context, reader jira.IssueReader, key string, p Projection) (jira.Issue, FieldLabels, error) {
+	if reader == nil {
+		return jira.Issue{}, FieldLabels{}, errNoClient
 	}
-	return q.Projection
-}
-
-// SavedQueries is an ordered set of saved queries.
-//
-// It is immutable the way jira.FieldSet is: Add and Remove return a new set. A
-// set travels by value into the search use case and out to whatever renders the
-// list of them, and a shared slice behind a value type would mean that binding
-// a key in one place rebinds it everywhere.
-type SavedQueries struct {
-	items []SavedQuery
-}
-
-// NewSavedQueries builds a set, adding the queries in order.
-func NewSavedQueries(in ...SavedQuery) (SavedQueries, error) {
-	var out SavedQueries
-	for _, q := range in {
-		var err error
-		if out, err = out.Add(q); err != nil {
-			return SavedQueries{}, err
-		}
+	resolved, err := s.Resolve(ctx, p)
+	if err != nil {
+		return jira.Issue{}, FieldLabels{}, err
 	}
-	return out, nil
-}
-
-// Add returns a copy of the set carrying one more query.
-//
-// A query whose name is already in the set replaces it and keeps its position.
-// A slot already bound elsewhere moves to the new query rather than being
-// refused: binding a key is a user taking it, and answering "that key is taken"
-// would only make them go and unbind the old one first.
-func (q SavedQueries) Add(in SavedQuery) (SavedQueries, error) {
-	in.Name = strings.TrimSpace(in.Name)
-	in.JQL = strings.TrimSpace(in.JQL)
-	switch {
-	case in.Name == "":
-		return q, errors.New("app: a saved query needs a name")
-	case in.JQL == "":
-		return q, fmt.Errorf("app: the saved query %q has no JQL to run", in.Name)
-	case in.Slot < 0 || in.Slot > MaxSavedSlot:
-		return q, fmt.Errorf("app: the saved query %q asks for key %d; the keys are 1 to %d, or 0 for none", in.Name, in.Slot, MaxSavedSlot)
+	if len(resolved.IDs) == 0 {
+		return jira.Issue{}, FieldLabels{}, errors.New("app: the " + projectionName(p) + " field set resolved to no field on this site, so there is nothing to ask for")
 	}
-
-	items := slices.Clone(q.items)
-	for i := range items {
-		if in.Slot > 0 && items[i].Slot == in.Slot {
-			items[i].Slot = 0
-		}
+	iss, err := reader.IssueFields(ctx, key, resolved.IDs)
+	if err != nil {
+		return jira.Issue{}, FieldLabels{}, err
 	}
-	if at := q.indexOf(in.Name); at >= 0 {
-		items[at] = in
-		return SavedQueries{items: items}, nil
-	}
-	return SavedQueries{items: append(items, in)}, nil
-}
-
-// Remove returns a copy of the set without the named query.
-func (q SavedQueries) Remove(name string) SavedQueries {
-	at := q.indexOf(name)
-	if at < 0 {
-		return q
-	}
-	return SavedQueries{items: slices.Delete(slices.Clone(q.items), at, at+1)}
-}
-
-// All returns the queries in the order they were added.
-func (q SavedQueries) All() []SavedQuery { return slices.Clone(q.items) }
-
-// Len reports how many queries are saved.
-func (q SavedQueries) Len() int { return len(q.items) }
-
-// ByName finds a query by name, case-insensitively.
-func (q SavedQueries) ByName(name string) (SavedQuery, bool) {
-	if at := q.indexOf(name); at >= 0 {
-		return q.items[at], true
-	}
-	return SavedQuery{}, false
-}
-
-// Slots lists the number keys that have a query bound, in ascending order. It
-// is what a footer showing only the keys that work right now is built from.
-func (q SavedQueries) Slots() []int {
-	out := make([]int, 0, len(q.items))
-	for _, item := range q.items {
-		if item.Slot > 0 {
-			out = append(out, item.Slot)
-		}
-	}
-	slices.Sort(out)
-	return out
-}
-
-// BySlot finds the query bound to a number key.
-func (q SavedQueries) BySlot(slot int) (SavedQuery, bool) {
-	if slot <= 0 {
-		return SavedQuery{}, false
-	}
-	for _, item := range q.items {
-		if item.Slot == slot {
-			return item, true
-		}
-	}
-	return SavedQuery{}, false
-}
-
-func (q SavedQueries) indexOf(name string) int {
-	wanted := strings.TrimSpace(name)
-	for i := range q.items {
-		if strings.EqualFold(q.items[i].Name, wanted) {
-			return i
-		}
-	}
-	return -1
+	return iss, resolved.Labels, nil
 }

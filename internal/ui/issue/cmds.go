@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -16,7 +17,7 @@ import (
 type loadedMsg struct {
 	gen    int
 	issue  jira.Issue
-	labels app.FieldLabels
+	labels appquery.FieldLabels
 }
 
 type failedMsg struct {
@@ -31,9 +32,9 @@ type editMetaMsg struct {
 	meta jira.EditMeta
 }
 
-func load(ctx context.Context, search *app.Search, reader jira.IssueReader, key string, gen int) tea.Cmd {
+func load(ctx context.Context, search *appquery.Search, reader jira.IssueReader, key string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		iss, labels, err := search.ReadIssue(ctx, reader, key, app.DetailProjection())
+		iss, labels, err := search.ReadIssue(ctx, reader, key, appquery.DetailProjection())
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}

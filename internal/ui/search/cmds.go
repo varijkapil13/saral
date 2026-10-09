@@ -5,13 +5,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
 type searchMsg struct {
 	gen int
-	res app.Result
+	res appquery.Result
 	err error
 }
 
@@ -32,29 +33,29 @@ type settledMsg struct{ gen int }
 // Each command takes a context of its own under the run's: the run's context is
 // cancelled by the next run, and a command that cancelled it when it finished
 // would cut short whichever of its siblings was still out.
-func searchCmd(parent context.Context, s *app.Search, req app.Request, gen int) tea.Cmd {
+func searchCmd(parent context.Context, s *appsearch.TextSearch, jql string, gen int) tea.Cmd {
 	return func() tea.Msg {
 		ctx, done := context.WithCancel(parent)
 		defer done()
-		res, err := s.Run(ctx, req)
+		res, err := s.Run(ctx, jql)
 		return searchMsg{gen: gen, res: res, err: err}
 	}
 }
 
-func keyCmd(parent context.Context, r jira.IssueReader, key string, fields []string, gen int) tea.Cmd {
+func keyCmd(parent context.Context, s *appsearch.TextSearch, key string, gen int) tea.Cmd {
 	return func() tea.Msg {
 		ctx, done := context.WithCancel(parent)
 		defer done()
-		iss, err := r.IssueFields(ctx, key, fields)
+		iss, err := s.Key(ctx, key)
 		return keyMsg{gen: gen, issue: iss, err: err}
 	}
 }
 
-func pageCmd(parent context.Context, page jira.Page[jira.Issue], gen int) tea.Cmd {
+func pageCmd(parent context.Context, s *appsearch.TextSearch, page jira.Page[jira.Issue], gen int) tea.Cmd {
 	return func() tea.Msg {
 		ctx, done := context.WithCancel(parent)
 		defer done()
-		next, err := page.Next(ctx)
+		next, err := s.Next(ctx, page)
 		return pagedMsg{gen: gen, page: next, err: err}
 	}
 }

@@ -3,7 +3,7 @@ package plan
 import (
 	"strings"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -161,7 +161,7 @@ func trimmed(in []string) []string {
 // project this session is scoped to, and one plan per saved query. An empty
 // first screen reads as a broken program, and both of these are already in
 // Deps.
-func derive(project string, saved app.SavedQueries) []Defined {
+func derive(project string, saved appsearch.SavedQueries) []Defined {
 	var out []Defined
 	if key := strings.TrimSpace(project); key != "" {
 		out = append(out, Defined{Name: key, Projects: []string{key}})

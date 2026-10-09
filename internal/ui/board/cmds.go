@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget/card"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -171,7 +171,7 @@ type cardsQuery struct {
 // field, never for a wildcard, and it carries the board's sub-query and
 // whichever of the board's own quick filters are toggled on, which are the two
 // parts of a board the endpoint leaves to the caller.
-func cards(ctx context.Context, reader site, search *app.Search, q cardsQuery, gen int) tea.Cmd {
+func cards(ctx context.Context, reader site, search *appquery.Search, q cardsQuery, gen int) tea.Cmd {
 	return func() tea.Msg {
 		wanted, err := search.Resolve(ctx, q.plan.projectionFor(q.look))
 		if err != nil {
