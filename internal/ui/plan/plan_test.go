@@ -10,7 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -370,7 +370,7 @@ func TestPlans_TheStandInPlansFollowTheSessionUntilTheProfileDefinesItsOwn(t *te
 		t.Fatalf("the plans on screen are %v, want the session's project", got)
 	}
 
-	saved, err := app.NewSavedQueries(app.SavedQuery{Name: "Mine", JQL: "assignee = currentUser()"})
+	saved, err := appsearch.NewSavedQueries(appsearch.SavedQuery{Name: "Mine", JQL: "assignee = currentUser()"})
 	if err != nil {
 		t.Fatal(err)
 	}

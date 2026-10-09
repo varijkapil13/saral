@@ -2000,7 +2000,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
   The bulk-move plan, and the task's progress drained as events. Empty for `ui/move`:
   `BulkMove|CreateMeta|Issue|IssueTypeStatuses|Search|Task`.
 
-- [ ] **P13.10 — `search`** · after P13.2 · **owns** `internal/app/search/**`, `internal/ui/{list,search,palette}/**`, `internal/ui/filter/**` but `term.go`, `internal/app/{search.go,index.go}` and their tests (retired)
+- [x] **P13.10 — `search`** · after P13.2 · **owns** `internal/app/search/**`, `internal/ui/{list,search,palette}/**`, `internal/ui/filter/**` but `term.go`, `internal/app/{search.go,index.go}` and their tests (retired)
   The search runner, saved queries, list paging, refresh and polling, the local index, palette
   frecency, and the value lookups behind the filter picker. Empty for `ui/list` and `ui/search`:
   `IssueFields`; for `ui/palette`: `Search`; for `ui/filter`:

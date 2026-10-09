@@ -130,7 +130,7 @@ func cachedIssues(n int) *fakeCache {
 }
 
 // BenchmarkPaletteOpenCached is ctrl+k itself with a cache behind it, over
-// app.SharedIndex: every iteration but the first pays a generation check
+// appsearch.SharedIndex: every iteration but the first pays a generation check
 // rather than a walk of the whole cache.
 func BenchmarkPaletteOpenCached(b *testing.B) {
 	d := paletteDeps()
@@ -148,7 +148,7 @@ func BenchmarkPaletteOpenCached(b *testing.B) {
 }
 
 // BenchmarkPaletteFirstKeystrokeCached is the keystroke right after ctrl+k,
-// over the same cache: build's app.Index is shared, so only the very first
+// over the same cache: build's appsearch.Index is shared, so only the very first
 // open of the whole run walks it.
 func BenchmarkPaletteFirstKeystrokeCached(b *testing.B) {
 	d := paletteDeps()

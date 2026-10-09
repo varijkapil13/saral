@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -118,11 +119,11 @@ func TestPicker_BadgesAnAccountThatIsNoLongerActive(t *testing.T) {
 	dr := newDriver(t, testDeps(newFake(20)), 120, 30)
 	dr.pick(appterm.FacetReporter)
 
-	at := slices.IndexFunc(dr.m.all, func(v value) bool { return v.term.Label == "Alan Turing" })
+	at := slices.IndexFunc(dr.m.all, func(v appsearch.Value) bool { return v.Term.Label == "Alan Turing" })
 	if at < 0 {
 		t.Fatal("the inactive account is not offered")
 	}
-	if got := dr.m.all[at].note; !strings.Contains(got, "inactive") {
+	if got := dr.m.all[at].Note; !strings.Contains(got, "inactive") {
 		t.Errorf("the inactive account's row says %q, want it to say so", got)
 	}
 }
@@ -157,7 +158,7 @@ func TestPicker_TypingCostsNoRoundTripWhileTheWholeDirectoryIsHeld(t *testing.T)
 func TestPicker_AsksTheSiteAgainOnlyWhenWhatIsHeldRunsThin(t *testing.T) {
 	t.Parallel()
 
-	w := watching(newFake(20, jiratest.WithPeople(crowd(peopleLimit+10))))
+	w := watching(newFake(20, jiratest.WithPeople(crowd(appsearch.PeopleLimit+10))))
 	dr := newDriver(t, testDeps(w), 120, 30)
 	dr.pick(appterm.FacetAssignee)
 	if dr.m.complete {
@@ -198,7 +199,7 @@ func TestPicker_AsksTheSiteAgainOnlyWhenWhatIsHeldRunsThin(t *testing.T) {
 func TestPicker_AsksAgainForANeedleTheSiteRefused(t *testing.T) {
 	t.Parallel()
 
-	f := newFake(20, jiratest.WithPeople(crowd(peopleLimit+10)))
+	f := newFake(20, jiratest.WithPeople(crowd(appsearch.PeopleLimit+10)))
 	w := watching(f)
 	dr := newDriver(t, testDeps(w), 120, 30)
 	dr.pick(appterm.FacetAssignee)
@@ -262,14 +263,14 @@ func TestPicker_DrawsBackAnAccountInForceThatTheSearchDoesNotAnswerWith(t *testi
 	}
 	at := -1
 	for i, v := range dr.m.all {
-		if v.term.ID == robot.ID {
+		if v.Term.ID == robot.ID {
 			at = i
 		}
 	}
 	if at < 0 {
 		t.Fatalf("the account in force is not on offer: %v", dr.labels())
 	}
-	if !dr.m.terms.Has(dr.m.all[at].term) {
+	if !dr.m.terms.Has(dr.m.all[at].Term) {
 		t.Error("the account in force is on offer but not marked as in force")
 	}
 	mustContain(t, dr.view(), "Nightly Runner")
@@ -311,22 +312,22 @@ func TestPicker_StatusesAreTheUnionOfEveryWorkflowAndSayWhichTypesTheyCameFrom(t
 	dr := newDriver(t, testDeps(newFake(20)), 120, 30)
 	dr.pick(appterm.FacetStatus)
 
-	byID := make(map[string]value, len(dr.m.all))
+	byID := make(map[string]appsearch.Value, len(dr.m.all))
 	for _, v := range dr.m.all {
-		if _, dup := byID[v.term.ID]; dup {
-			t.Errorf("status %q is offered twice", v.term.ID)
+		if _, dup := byID[v.Term.ID]; dup {
+			t.Errorf("status %q is offered twice", v.Term.ID)
 		}
-		byID[v.term.ID] = v
+		byID[v.Term.ID] = v
 	}
 	// The fake mints a project-scoped status reusing another's display name,
 	// which is what a team-managed project does. Both have to be on offer, and
 	// the row has to say which workflow each belongs to.
 	first, second := byID["10202"], byID["10204"]
-	if first.term.Label != second.term.Label {
-		t.Fatalf("the two ids that share a name are %q and %q", first.term.Label, second.term.Label)
+	if first.Term.Label != second.Term.Label {
+		t.Fatalf("the two ids that share a name are %q and %q", first.Term.Label, second.Term.Label)
 	}
-	if first.note == second.note || first.note == "" || second.note == "" {
-		t.Errorf("both rows read %q / %q, so nothing on screen tells them apart", first.note, second.note)
+	if first.Note == second.Note || first.Note == "" || second.Note == "" {
+		t.Errorf("both rows read %q / %q, so nothing on screen tells them apart", first.Note, second.Note)
 	}
 }
 
@@ -381,7 +382,7 @@ func TestPicker_ALabelThatIsNotASCIIKeepsTheColumnsWhereTheyAre(t *testing.T) {
 	for i, at := range dr.m.shown {
 		if got := ansi.StringWidth(lines[i]); got != 120 {
 			t.Errorf("the row for %q is %d columns wide, want 120: %q",
-				dr.m.all[at].term.Label, got, lines[i])
+				dr.m.all[at].Term.Label, got, lines[i])
 		}
 	}
 }
@@ -594,7 +595,7 @@ func TestPicker_DropsAnAnswerToAFacetThatIsNoLongerOpen(t *testing.T) {
 	dr.pick(appterm.FacetLabel)
 	labels := len(dr.m.all)
 
-	dr.send(vocabularyMsg{gen: stale, facet: appterm.FacetPriority, values: priorityValues([]jira.Priority{
+	dr.send(vocabularyMsg{gen: stale, facet: appterm.FacetPriority, values: appsearch.PriorityValues([]jira.Priority{
 		{ID: "10401", Name: "Urgent"},
 	})})
 
@@ -608,7 +609,7 @@ func TestPicker_DropsAnAnswerToAFacetThatIsNoLongerOpen(t *testing.T) {
 func TestPicker_DrawsOnlyTheRowsThatFit(t *testing.T) {
 	t.Parallel()
 
-	dr := newDriver(t, testDeps(newFake(20, jiratest.WithPeople(crowd(peopleLimit)))), 120, 12)
+	dr := newDriver(t, testDeps(newFake(20, jiratest.WithPeople(crowd(appsearch.PeopleLimit)))), 120, 12)
 	dr.pick(appterm.FacetReporter)
 
 	lines := strings.Split(dr.m.View(), "\n")
@@ -663,9 +664,9 @@ func TestPicker_AnAnswerThatLandsLateLeavesTheCursorOnTheSameValue(t *testing.T)
 				labels := make([]string, 0, 1+len(m.all))
 				labels = append(labels, "aardvark")
 				for i := range m.all {
-					labels = append(labels, m.all[i].term.ID)
+					labels = append(labels, m.all[i].Term.ID)
 				}
-				return vocabularyMsg{gen: m.gen, facet: appterm.FacetLabel, values: labelValues(labels)}
+				return vocabularyMsg{gen: m.gen, facet: appterm.FacetLabel, values: appsearch.LabelValues(labels)}
 			},
 		},
 	} {
@@ -680,7 +681,7 @@ func TestPicker_AnAnswerThatLandsLateLeavesTheCursorOnTheSameValue(t *testing.T)
 			if sel == nil {
 				t.Fatalf("the %s facet offered no row to stand on", tc.facet.Label())
 			}
-			was := sel.term
+			was := sel.Term
 
 			dr.send(tc.late(dr.m))
 
@@ -688,9 +689,9 @@ func TestPicker_AnAnswerThatLandsLateLeavesTheCursorOnTheSameValue(t *testing.T)
 				t.Fatalf("the answer never reached the list: it offers %v", got)
 			}
 			now := dr.m.selected()
-			if now == nil || now.term != was {
+			if now == nil || now.Term != was {
 				t.Errorf("the highlight moved from %q to %q; enter would filter by the wrong value",
-					was.Label, now.term.Label)
+					was.Label, now.Term.Label)
 			}
 		})
 	}

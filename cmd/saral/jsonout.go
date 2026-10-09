@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/adf"
@@ -271,7 +271,7 @@ func platformFieldByID(id string) (platformField, bool) {
 type issueView struct {
 	issue  *jira.Issue
 	asked  []string
-	labels app.FieldLabels
+	labels appquery.FieldLabels
 	site   string
 }
 

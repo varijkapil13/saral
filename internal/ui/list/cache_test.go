@@ -11,8 +11,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
 	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -98,7 +98,7 @@ var cacheStoredAt = time.Date(2025, time.March, 5, 8, 30, 0, 0, time.UTC)
 // storedRows are what a previous session would have written: the six fields of
 // the list projection, and a mask that says so.
 func storedRows(n int) []jira.Issue {
-	mask := jira.NewFieldMask(app.ListProjection().IDs)
+	mask := jira.NewFieldMask(appquery.ListProjection().IDs)
 	out := jiratest.Gen(n)
 	for i := range out {
 		out[i].Requested = mask

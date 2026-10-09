@@ -13,8 +13,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/varijkapil13/saral/internal/app"
 	appmatch "github.com/varijkapil13/saral/internal/app/match"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -236,7 +236,7 @@ func (m *fieldPickerModel) fetch() tea.Cmd {
 		return nil
 	}
 	m.stop()
-	search := app.NewSearch(m.deps.Jira)
+	search := appquery.NewSearch(m.deps.Jira)
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel, m.loading, m.problem = cancel, true, ""
 	return kernel.Reply(func() tea.Msg {

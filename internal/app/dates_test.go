@@ -954,7 +954,7 @@ func TestResolve_CollapsesTwoPassesThatWantTheSameSprintAtOnce(t *testing.T) {
 	// legitimately begin a second read once this one had finished.
 	var joined atomic.Int64
 	wanted := sprintFlightKey(42)
-	d.flight.joined = func(key string) {
+	d.flight.Joined = func(key string) {
 		if key == wanted {
 			joined.Add(1)
 		}

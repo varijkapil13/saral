@@ -79,15 +79,16 @@ port's types.
 | `sprint` | create, start, complete with a destination, progress | `ui/sprint` |
 | `release` | versions, facets, the release flow, bulk fixVersion | `ui/release` |
 | `move` | the bulk-move plan and task progress | `ui/move` |
-| `search` | the search runner, saved queries, list paging, refresh and polling, the local index, palette frecency | `ui/list`, `ui/search`, `ui/palette`, root `search.go`, `index.go` |
+| `search` | saved queries, list paging, refresh and polling, the local index, palette frecency, the filter value lookups, JQL building | `ui/list`, `ui/search`, `ui/palette`, `ui/filter`, root `index.go` |
 | `timeline` | date resolution | `ui/timeline`, root `dates.go` |
 | `plan` | plans and local plans | `ui/plan` |
 | `connect` | the onboarding probe, capabilities, profile and session switch, settings field mapping | `ui/onboarding`, `ui/settings`, the kernel's caps probe |
 
 The **shared kernel** is a closed list, `sharedKernel` in `internal/arch/contexts_test.go`: `cache`
 (the disk cache, its kinds, TTLs and codec, and the only package here that imports `internal/store`),
-`match` (the fuzzy pattern), `term` (the filter-term model, out of `ui/filter`) and `issueref` (issue
-key and URL parsing). Adding to it is a decision with a reason, not a convenience.
+`match` (the fuzzy pattern), `term` (the filter-term model, out of `ui/filter`), `issueref` (issue
+key and URL parsing) and `query` (the coalescing search runner and projections every context reads
+with, out of root `search.go`). Adding to it is a decision with a reason, not a convenience.
 
 The rules, the first three enforced by `internal/arch/contexts_test.go`:
 
@@ -254,7 +255,7 @@ ids it already holds instead of disappearing.
 
 `Client` is what an adapter grows into. It is **not** what a caller takes. A view that runs a search
 needs a search, and an adapter that cannot yet do the other forty-one should not have to pretend —
-the reasoning `internal/app.Counter` was already written with, generalised.
+the reasoning `appquery.Counter` was already written with, generalised.
 
 So `pkg/jira/roles.go` declares one interface per job, and callers take those:
 
@@ -981,9 +982,9 @@ lock on `.ui.toml.lock`. The write itself goes through a temporary file and a re
 symlink first so a `config.toml` kept in a dotfiles repository stays a link, and syncs the directory
 after the rename.
 
-The queries are held by `app.SavedQueries` and validated by its rules rather than a second copy of
-them, so a file and a keypress cannot disagree about what a saved query is. The file refuses the two
-things a keyboard cannot express: two queries under one name, and two on one key.
+The queries are held by `appsearch.SavedQueries` and validated by its rules rather than a second copy
+of them, so a file and a keypress cannot disagree about what a saved query is. The file refuses the
+two things a keyboard cannot express: two queries under one name, and two on one key.
 
 ### What is not in the profile
 

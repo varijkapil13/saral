@@ -1,6 +1,6 @@
 //go:build !race
 
-package app
+package search
 
 import (
 	"testing"

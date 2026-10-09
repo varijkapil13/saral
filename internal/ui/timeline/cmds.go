@@ -8,6 +8,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -53,14 +54,14 @@ type failedMsg struct {
 // and labels join it for the same reason board.plan.projection and backlog's
 // own read carry reporter and labels: term.Terms matches against this
 // read's own issues, and none of the four is otherwise asked for.
-func projection(fields app.DateFields) app.Projection {
+func projection(fields app.DateFields) appquery.Projection {
 	return fields.Projection().With(
 		"summary", "issuetype", "status", "parent", "subtasks",
 		"assignee", "reporter", "priority", "labels",
 	)
 }
 
-func load(ctx context.Context, search *app.Search, sprints app.SprintDates, cache appcache.Cache,
+func load(ctx context.Context, search *appquery.Search, sprints app.SprintDates, cache appcache.Cache,
 	cfg cascadeConfig, jql string, gen int,
 ) tea.Cmd {
 	return func() tea.Msg {
@@ -69,7 +70,7 @@ func load(ctx context.Context, search *app.Search, sprints app.SprintDates, cach
 			return failedMsg{gen: gen, err: err}
 		}
 		fields := app.ResolveDateFields(catalogue, cfg.start, cfg.end)
-		res, err := search.Run(ctx, app.Request{JQL: jql, Projection: projection(fields), MaxResults: pageSize})
+		res, err := search.Run(ctx, appquery.Request{JQL: jql, Projection: projection(fields), MaxResults: pageSize})
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}

@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -70,15 +70,15 @@ type failedMsg struct {
 // candidates reads the projects behind the account's own recent issues, which is
 // the only way to offer a target: /project/search is not on the port, so nothing
 // here can enumerate projects and a page of issues is what is left.
-func candidates(ctx context.Context, client app.SearchClient, gen int) tea.Cmd {
+func candidates(ctx context.Context, client appquery.SearchClient, gen int) tea.Cmd {
 	return func() tea.Msg {
-		search := app.NewSearch(client)
-		projection := app.Projection{Name: "move target", IDs: []string{"project"}}
+		search := appquery.NewSearch(client)
+		projection := appquery.Projection{Name: "move target", IDs: []string{"project"}}
 		// The account's own work first, then anything this token can see at all:
 		// a session whose user has nothing assigned would otherwise be offered
 		// nothing and have to type a key from memory.
 		for _, jql := range []string{"assignee = currentUser() ORDER BY updated DESC", "ORDER BY updated DESC"} {
-			result, err := search.Run(ctx, app.Request{
+			result, err := search.Run(ctx, appquery.Request{
 				JQL:        jql,
 				Projection: projection,
 				MaxResults: candidatesLimit,

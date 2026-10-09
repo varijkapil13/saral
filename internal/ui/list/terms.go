@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -94,7 +95,7 @@ func termQuery(project string, terms appterm.Terms) (jql, title string) {
 	if len(terms) == 0 {
 		return everyIssue.at(project)
 	}
-	jql = strings.TrimSpace(scoped(project, terms.Clause()) + " " + everyIssue.order)
+	jql = appsearch.CannedSearch{Where: terms.Clause(), Order: everyIssue.query.Order}.At(project)
 	title = terms.Words()
 	if p := strings.TrimSpace(project); p != "" {
 		title += " in " + p

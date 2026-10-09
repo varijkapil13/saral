@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -97,7 +97,7 @@ func TestPlan_OnlyABoardWithAnEstimationFieldEstimates(t *testing.T) {
 			if slices.Contains(asked, jira.FieldsAll) || slices.Contains(asked, jira.FieldsNavigable) {
 				t.Errorf("the projection asks for a wildcard: %v", asked)
 			}
-			if len(asked) <= len(app.ListProjection().IDs) && tc.want {
+			if len(asked) <= len(appquery.ListProjection().IDs) && tc.want {
 				t.Errorf("a board that estimates asks for %v, which is no wider than a list row's fields", asked)
 			}
 		})

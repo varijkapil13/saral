@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -18,26 +17,6 @@ import (
 type IssueEditor interface {
 	jira.IssueReader
 	jira.IssueWriter
-}
-
-// ReadIssue reads through the issue endpoint because search's index trails a
-// write by seconds, and the read after a save has to see the save.
-func (s *Search) ReadIssue(ctx context.Context, reader jira.IssueReader, key string, p Projection) (jira.Issue, FieldLabels, error) {
-	if reader == nil {
-		return jira.Issue{}, FieldLabels{}, errNoClient
-	}
-	resolved, err := s.Resolve(ctx, p)
-	if err != nil {
-		return jira.Issue{}, FieldLabels{}, err
-	}
-	if len(resolved.IDs) == 0 {
-		return jira.Issue{}, FieldLabels{}, errors.New("app: the " + projectionName(p) + " field set resolved to no field on this site, so there is nothing to ask for")
-	}
-	iss, err := reader.IssueFields(ctx, key, resolved.IDs)
-	if err != nil {
-		return jira.Issue{}, FieldLabels{}, err
-	}
-	return iss, resolved.Labels, nil
 }
 
 // EditBase is what a pending edit was made against: Jira Cloud answers a plain

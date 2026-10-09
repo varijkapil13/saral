@@ -126,7 +126,7 @@ func (m *Model) zoneOf(at int) string {
 		return ""
 	}
 	v := &m.all[m.shown[at]]
-	return "value:" + v.term.Facet.Label() + ":" + v.term.ID
+	return "value:" + v.Term.Facet.Label() + ":" + v.Term.ID
 }
 
 func (m *Model) row(at int) string {
@@ -147,8 +147,8 @@ func (m *Model) row(at int) string {
 	}
 	v := &m.all[m.shown[at]]
 	k := rowKey{
-		id: v.term.ID, name: v.term.Label, note: v.note, lay: m.lay,
-		selected: sel, inForce: m.terms.Has(v.term), gen: m.styles.gen,
+		id: v.Term.ID, name: v.Term.Label, note: v.Note, lay: m.lay,
+		selected: sel, inForce: m.terms.Has(v.Term), gen: m.styles.gen,
 	}
 	if s, ok := m.memo.Get(k); ok {
 		return s

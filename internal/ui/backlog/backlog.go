@@ -13,9 +13,9 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
 	appboard "github.com/varijkapil13/saral/internal/app/board"
 	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/form"
@@ -120,7 +120,7 @@ func (mv *move) chunk(at int) []string {
 // Model is the board's backlog.
 type Model struct {
 	deps   kernel.Deps
-	search *app.Search
+	search *appquery.Search
 	site   site
 	mover  jira.SprintManager
 	cache  appcache.Cache
@@ -300,7 +300,7 @@ func New(d kernel.Deps) kernel.View {
 	m.find = newFindInput()
 	m.sort = loadSort(ViewID)
 	if d.Jira != nil {
-		m.search = app.NewSearch(d.Jira)
+		m.search = appquery.NewSearch(d.Jira)
 		m.site = d.Jira
 		m.mover = d.Jira
 	}

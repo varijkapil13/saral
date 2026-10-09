@@ -209,9 +209,9 @@ func TestPalette_AHabitThatStoppedFallsBehindOneThatDidNot(t *testing.T) {
 	freq := memoryTable()
 	lastMonth := clockAt.Add(-30 * 24 * time.Hour)
 	for range 4 {
-		freq.ran("issue.create", lastMonth)
+		freq.Ran("issue.create", lastMonth)
 	}
-	freq.ran("issues.mine", clockAt.Add(-time.Hour))
+	freq.Ran("issues.mine", clockAt.Add(-time.Hour))
 
 	p := fly(t, paletteDeps(), sample(), freq, 120, 24)
 	got := p.titles()

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -267,21 +268,21 @@ func ResolveDateFields(catalogue []jira.Field, configuredStart, configuredEnd []
 
 	ids := make([]string, 0, len(out.starts)+len(out.ends)+8)
 	for _, ref := range out.starts {
-		ids = appendUnique(ids, ref.ID)
+		ids = appquery.AppendUnique(ids, ref.ID)
 	}
 	for _, ref := range out.ends {
-		ids = appendUnique(ids, ref.ID)
+		ids = appquery.AppendUnique(ids, ref.ID)
 	}
 	for _, ref := range []jira.FieldRef{out.targetStart, out.targetEnd, out.startDate, out.sprint} {
-		ids = appendUnique(ids, ref.ID)
+		ids = appquery.AppendUnique(ids, ref.ID)
 	}
 	// A profile can name one of these: end = "Due date" is the likeliest rule 1.
 	for _, id := range []string{dueDateFieldID, createdFieldID, fixVersionsFieldID} {
-		ids = appendUnique(ids, id)
+		ids = appquery.AppendUnique(ids, id)
 	}
 	out.dated = slices.Clone(ids)
 	for _, id := range []string{parentFieldID, subtasksFieldID} {
-		ids = appendUnique(ids, id)
+		ids = appquery.AppendUnique(ids, id)
 	}
 	out.ids = ids
 	return out
@@ -321,8 +322,8 @@ func (f DateFields) IDs() []string { return slices.Clone(f.ids) }
 
 // Projection is the narrow field set a timeline fetches with. Asking for these
 // and nothing else is the difference between six values a row and sixty.
-func (f DateFields) Projection() Projection {
-	return Projection{Name: "timeline", IDs: f.IDs()}
+func (f DateFields) Projection() appquery.Projection {
+	return appquery.Projection{Name: "timeline", IDs: f.IDs()}
 }
 
 // Problems are the names that did not resolve to one field on this site, in the
@@ -386,7 +387,7 @@ type Dates struct {
 	reason  string
 	now     func() time.Time
 
-	flight flights
+	flight appquery.Flights
 }
 
 // DatesOption configures the cascade at construction.
@@ -568,7 +569,7 @@ func (d *Dates) readSprints(ctx context.Context, ids []int64, run *pass) error {
 		return nil
 	}
 	for _, id := range ids {
-		sprint, err := coalesce(ctx, &d.flight, sprintFlightKey(id), func(ctx context.Context) (jira.Sprint, error) {
+		sprint, err := appquery.Coalesce(ctx, &d.flight, sprintFlightKey(id), func(ctx context.Context) (jira.Sprint, error) {
 			return d.sprints.Sprint(ctx, id)
 		})
 		if err != nil {

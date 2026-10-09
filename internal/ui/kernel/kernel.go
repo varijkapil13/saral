@@ -16,8 +16,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
 	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -1004,7 +1004,7 @@ func (m Model) queryView() (ViewSpec, bool) {
 // would dispatch a key the kernel no longer agrees about.
 func (m Model) bindQuery(msg BindQueryMsg) (tea.Model, tea.Cmd) {
 	replaced, taken := m.deps.Saved.BySlot(msg.Slot)
-	saved, err := m.deps.Saved.Add(app.SavedQuery{Name: msg.Name, JQL: msg.JQL, Slot: msg.Slot})
+	saved, err := m.deps.Saved.Add(appsearch.SavedQuery{Name: msg.Name, JQL: msg.JQL, Slot: msg.Slot})
 	if err != nil {
 		m.status, m.statusLevel = err.Error(), LevelWarn
 		return m, nil
@@ -1032,7 +1032,7 @@ func (m Model) bindQuery(msg BindQueryMsg) (tea.Model, tea.Cmd) {
 
 // persistQueries writes the set back where it came from. The key already works
 // when this runs, so a failure is reported without taking the binding away.
-func (m Model) persistQueries(saved app.SavedQueries) tea.Cmd {
+func (m Model) persistQueries(saved appsearch.SavedQueries) tea.Cmd {
 	save := m.deps.SaveQueries
 	if save == nil {
 		return nil

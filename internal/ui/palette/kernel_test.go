@@ -121,11 +121,7 @@ func TestSession_OpensACachedIssueOverTheViewThePaletteWasOpenedFrom(t *testing.
 func resetShared(t *testing.T) {
 	t.Helper()
 	for _, freq := range []*table{sharedTable(), sharedProjectTable()} {
-		freq.mu.Lock()
-		freq.uses = make(map[string]use, 8)
-		freq.dirty, freq.saving, freq.stopped, freq.warned = false, false, false, false
-		freq.failure = nil
-		freq.mu.Unlock()
+		freq.Reset()
 	}
 }
 

@@ -129,7 +129,7 @@ pinned = ["customfield_13401", "duedate", "customfield_13402"]
   way the existing single-select options picker already is: a fuzzy filter over rows, `enter` toggles
   membership without closing the picker — the one piece of bc75989's shape actually needed here — and
   `esc` writes the accumulated list to the profile in one save rather than one per toggle. The site's
-  field catalogue comes from `SchemaReader.Fields`, wrapped in the picker's own `app.Search` the way
+  field catalogue comes from `SchemaReader.Fields`, wrapped in the picker's own `appquery.Search` the way
   every other view already caches it.
 - Pinning from the issue itself was not in this packet, on the grounds that the sidebar had no
   per-field cursor and giving it one was a bigger change than the list was worth. P8 gave it one for a

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -14,13 +15,13 @@ func TestPoller_IsOffUnlessTheRunAsksForIt(t *testing.T) {
 	t.Parallel()
 
 	dr := openAll(t, testDeps(newFake(10)), 120, 20)
-	if dr.m.poll != 0 {
-		t.Fatalf("a list built with nobody asking polls every %s", dr.m.poll)
+	if dr.m.poller.Every() != 0 {
+		t.Fatalf("a list built with nobody asking polls every %s", dr.m.poller.Every())
 	}
 	if cmd := dr.m.pollTick(); cmd != nil {
 		t.Error("a poller nobody asked for scheduled itself")
 	}
-	if dr.m.pollArmed {
+	if dr.m.poller.Armed() {
 		t.Error("a poller nobody asked for is armed")
 	}
 }
@@ -35,8 +36,8 @@ func TestSetPollInterval_ReachesTheNextListBuilt(t *testing.T) {
 	if !ok {
 		t.Fatal("New did not return a *Model")
 	}
-	if m.poll != 45*time.Second {
-		t.Errorf("the list polls every %s, want the 45s the run asked for", m.poll)
+	if m.poller.Every() != 45*time.Second {
+		t.Errorf("the list polls every %s, want the 45s the run asked for", m.poller.Every())
 	}
 }
 
@@ -44,26 +45,26 @@ func TestPoller_OnlyRunsForTheViewWithTheKeyboard(t *testing.T) {
 	t.Parallel()
 
 	dr := openAll(t, testDeps(newFake(10)), 120, 20)
-	dr.m.poll = time.Minute
+	dr.m.poller = appsearch.NewPoller(time.Minute)
 
 	if cmd := dr.m.pollTick(); cmd == nil {
 		t.Fatal("a focused list with polling on scheduled nothing")
 	}
-	dr.m.pollArmed = false
+	dr.m.poller = appsearch.NewPoller(time.Minute)
 	dr.m.focused = false
 	if cmd := dr.m.pollTick(); cmd != nil {
 		t.Error("a list nobody is looking at scheduled a poll")
 	}
 }
 
-// A tick is the poller's own answer and not a widget's: pollArmed is cleared by
+// A tick is the poller's own answer and not a widget's: the poller is disarmed by
 // the tick arriving and by nothing else, so one delivered to whatever the
 // palette put on top would stop the poller for the rest of the session.
 func TestPoller_ATickIsAddressedToTheListThatArmedIt(t *testing.T) {
 	t.Parallel()
 
 	dr := openAll(t, testDeps(newFake(10)), 120, 20)
-	dr.m.poll = time.Millisecond
+	dr.m.poller = appsearch.NewPoller(time.Millisecond)
 
 	cmd := dr.m.pollTick()
 	if cmd == nil {
@@ -85,7 +86,7 @@ func TestPoller_SchedulesOneTickAtATime(t *testing.T) {
 	t.Parallel()
 
 	dr := openAll(t, testDeps(newFake(10)), 120, 20)
-	dr.m.poll = time.Minute
+	dr.m.poller = appsearch.NewPoller(time.Minute)
 
 	if cmd := dr.m.pollTick(); cmd == nil {
 		t.Fatal("the first tick was not scheduled")
@@ -109,7 +110,8 @@ func TestPoller_ReReadsTheRowsAndLeavesThePlaceAlone(t *testing.T) {
 	}
 
 	m := dr.m
-	m.poll, m.pollArmed = time.Minute, true
+	m.poller = appsearch.NewPoller(time.Minute)
+	m.poller.Arm(true)
 	msg := firstMsg(t, m.polled(pollMsg{gen: m.gen}))
 	patched, ok := msg.(patchedMsg)
 	if !ok {
@@ -122,7 +124,7 @@ func TestPoller_ReReadsTheRowsAndLeavesThePlaceAlone(t *testing.T) {
 		t.Errorf("a poll moved to %s at %d/%d, want %s at %d/%d",
 			m.selectedKey(), m.cursor, m.top, under, cursor, top)
 	}
-	if !m.pollArmed {
+	if !m.poller.Armed() {
 		t.Error("the poll that just landed did not line up the next one")
 	}
 }
@@ -132,12 +134,12 @@ func TestPoller_StopsForGoodOnceJiraSaysItIsBeingAskedTooOften(t *testing.T) {
 
 	f := newFake(20)
 	dr := openAll(t, testDeps(f), 120, 20)
-	dr.m.poll = time.Minute
+	dr.m.poller = appsearch.NewPoller(time.Minute)
 	before := countCalls(f, "Search")
 
 	dr.send(failedMsg{gen: dr.m.gen, err: &jira.RateLimitError{RetryAfter: 30 * time.Second}})
 
-	if !dr.m.pollPaused {
+	if !dr.m.poller.Paused() {
 		t.Fatal("a rate limit left the poller running, which is what spends the rest of the budget")
 	}
 	if cmd := dr.m.pollTick(); cmd != nil {
@@ -156,7 +158,7 @@ func TestPoller_WaitsRatherThanMovingRowsUnderAHalfFinishedGesture(t *testing.T)
 
 	f := newFake(20)
 	dr := openAll(t, testDeps(f), 120, 20)
-	dr.m.poll = time.Minute
+	dr.m.poller = appsearch.NewPoller(time.Minute)
 
 	for _, tc := range []struct {
 		name  string
@@ -166,7 +168,7 @@ func TestPoller_WaitsRatherThanMovingRowsUnderAHalfFinishedGesture(t *testing.T)
 		{name: "a number key being picked", start: func() { dr.key("ctrl+s") }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dr.m.pollArmed = false
+			dr.m.poller = appsearch.NewPoller(time.Minute)
 			tc.start()
 			before := countCalls(f, "Search")
 
@@ -176,7 +178,7 @@ func TestPoller_WaitsRatherThanMovingRowsUnderAHalfFinishedGesture(t *testing.T)
 			if got := countCalls(f, "Search"); got != before {
 				t.Errorf("the rows were re-read under the gesture: %d more searches", got-before)
 			}
-			if !dr.m.pollArmed {
+			if !dr.m.poller.Armed() {
 				t.Error("the next tick was not lined up")
 			}
 			dr.key("esc")
@@ -189,7 +191,7 @@ func TestPoller_DropsATickLeftOverFromASearchTheUserHasChanged(t *testing.T) {
 
 	f := newFake(20)
 	dr := openAll(t, testDeps(f), 120, 20)
-	dr.m.poll, dr.m.pollArmed = time.Minute, false
+	dr.m.poller = appsearch.NewPoller(time.Minute)
 	before := countCalls(f, "Search")
 
 	if cmd := dr.m.polled(pollMsg{gen: dr.m.gen - 1}); cmd == nil {

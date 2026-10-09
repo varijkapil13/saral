@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/varijkapil13/saral/internal/app"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
@@ -63,11 +63,11 @@ type createFailedMsg struct {
 }
 
 // loadTypes reads the issue types in use in one project.
-func loadTypes(ctx context.Context, search *app.Search, project string, gen int) tea.Cmd {
+func loadTypes(ctx context.Context, search *appquery.Search, project string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		result, err := search.Run(ctx, app.Request{
+		result, err := search.Run(ctx, appquery.Request{
 			JQL:        "project = " + quote(project) + " ORDER BY created DESC",
-			Projection: app.Projection{Name: "issue type picker", IDs: []string{"issuetype"}},
+			Projection: appquery.Projection{Name: "issue type picker", IDs: []string{"issuetype"}},
 			MaxResults: typeSample,
 		})
 		if err != nil {

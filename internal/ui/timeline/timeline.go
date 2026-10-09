@@ -14,6 +14,7 @@ import (
 
 	"github.com/varijkapil13/saral/internal/app"
 	appcache "github.com/varijkapil13/saral/internal/app/cache"
+	appquery "github.com/varijkapil13/saral/internal/app/query"
 	appterm "github.com/varijkapil13/saral/internal/app/term"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/issue"
@@ -80,7 +81,7 @@ type cascadeConfig struct {
 // Model is the timeline.
 type Model struct {
 	deps      kernel.Deps
-	search    *app.Search
+	search    *appquery.Search
 	cache     appcache.Cache
 	inChart   map[string]action
 	pendingGo bool
@@ -199,7 +200,7 @@ func New(d kernel.Deps) kernel.View {
 	}
 	m.deps.Theme = themeOf(d)
 	if d.Jira != nil {
-		m.search = app.NewSearch(d.Jira)
+		m.search = appquery.NewSearch(d.Jira)
 	}
 	m.zones = widget.NewZoner(d.Zones)
 	m.clicks = widget.NewClicks(d.Now)

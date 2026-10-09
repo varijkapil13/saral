@@ -10,35 +10,6 @@ import (
 	"github.com/varijkapil13/saral/pkg/jira"
 )
 
-func TestReadIssue_ReadsThroughTheIssueEndpointWithTheProjection(t *testing.T) {
-	t.Parallel()
-	f := testFake(3)
-	s := NewSearch(f)
-	iss, labels, err := s.ReadIssue(t.Context(), f, "PROJ-2", DetailProjection())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if iss.Key != "PROJ-2" || !iss.Requested.Has("summary") || !iss.Requested.Has("description") {
-		t.Fatalf("read %s with mask %v", iss.Key, iss.Requested.IDs())
-	}
-	if callsTo(f, "Search") != 0 || callsTo(f, "IssueFields") != 1 {
-		t.Errorf("calls %v, want one IssueFields and no Search", f.Calls())
-	}
-	if labels.Len() == 0 {
-		t.Error("the custom fields' names did not come back with the read")
-	}
-}
-
-func TestReadIssue_AnIssueTheSiteLacksIsNotFound(t *testing.T) {
-	t.Parallel()
-	f := testFake(1)
-	_, _, err := NewSearch(f).ReadIssue(t.Context(), f, "PROJ-99", DetailProjection())
-	var nf *jira.NotFoundError
-	if !errors.As(err, &nf) {
-		t.Fatalf("err = %v, want a NotFoundError", err)
-	}
-}
-
 func TestFingerprint_ChangesOnlyWithTheValue(t *testing.T) {
 	t.Parallel()
 	base := jira.Issue{

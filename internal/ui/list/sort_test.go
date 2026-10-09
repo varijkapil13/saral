@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	appsearch "github.com/varijkapil13/saral/internal/app/search"
 	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/filter"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
@@ -50,12 +51,12 @@ func TestSort_ChoosingTheFieldAlreadyChosenTogglesDirection(t *testing.T) {
 
 	dr := openAll(t, testDeps(newFake(12)), 120, 24)
 	dr.key("s", "l", "l", "enter") // status, ascending
-	if dr.m.sort.desc {
+	if dr.m.sort.Desc {
 		t.Fatal("status did not open ascending")
 	}
 
 	dr.key("s", "enter") // status again: the cursor opens back on it
-	if !dr.m.sort.desc {
+	if !dr.m.sort.Desc {
 		t.Fatal("choosing the same field again did not flip the direction")
 	}
 	if !strings.Contains(dr.m.jql, "ORDER BY status DESC") {
@@ -63,7 +64,7 @@ func TestSort_ChoosingTheFieldAlreadyChosenTogglesDirection(t *testing.T) {
 	}
 
 	dr.key("s", "enter") // and back to ascending
-	if dr.m.sort.desc {
+	if dr.m.sort.Desc {
 		t.Fatal("a third choice did not flip the direction back")
 	}
 }
@@ -126,7 +127,7 @@ func TestSort_SurvivesARestart(t *testing.T) {
 	if !ok {
 		t.Fatal("New did not return a *Model")
 	}
-	if reopened.sort.field != "assignee" {
+	if reopened.sort.Field != "assignee" {
 		t.Fatalf("a freshly built view opened with sort %+v, want assignee", reopened.sort)
 	}
 	if !strings.Contains(reopened.jql, "ORDER BY assignee ASC") {
@@ -149,7 +150,7 @@ func TestSort_CancellingLeavesTheOrderAsItWas(t *testing.T) {
 	if dr.m.sorting {
 		t.Error("esc left the picker open")
 	}
-	if dr.m.sort.field != "summary" {
+	if dr.m.sort.Field != "summary" {
 		t.Errorf("cancelling changed the order to %+v", dr.m.sort)
 	}
 	if dr.m.jql != jqlBefore {
@@ -199,7 +200,7 @@ func TestSort_ClickingTheHeaderLabelReopensThePicker(t *testing.T) {
 	if !dr.m.sorting {
 		t.Error("clicking the sort label did not reopen the picker")
 	}
-	if dr.m.sortCursor != sortFieldIndex("summary") {
+	if dr.m.sortCursor != appsearch.SortFieldIndex("summary") {
 		t.Errorf("the picker opened on cursor %d, want it on the field already chosen", dr.m.sortCursor)
 	}
 }
