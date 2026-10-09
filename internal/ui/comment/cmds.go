@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appcomment "github.com/varijkapil13/saral/internal/app/comment"
 	"github.com/varijkapil13/saral/pkg/adf"
 	"github.com/varijkapil13/saral/pkg/jira"
 )
@@ -45,7 +46,7 @@ type failedMsg struct {
 
 func load(ctx context.Context, client jira.CommentReader, key string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		page, err := client.Comments(ctx, key)
+		page, err := appcomment.Load(ctx, client, key)
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
@@ -55,7 +56,7 @@ func load(ctx context.Context, client jira.CommentReader, key string, gen int) t
 
 func more(ctx context.Context, page jira.Page[jira.Comment], gen int) tea.Cmd {
 	return func() tea.Msg {
-		next, err := page.Next(ctx)
+		next, err := appcomment.More(ctx, page)
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
@@ -65,7 +66,7 @@ func more(ctx context.Context, page jira.Page[jira.Comment], gen int) tea.Cmd {
 
 func add(ctx context.Context, client jira.Commenter, key string, body adf.Doc, gen int) tea.Cmd {
 	return func() tea.Msg {
-		stored, err := client.AddComment(ctx, key, body)
+		stored, err := appcomment.Add(ctx, client, key, body)
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
@@ -75,7 +76,7 @@ func add(ctx context.Context, client jira.Commenter, key string, body adf.Doc, g
 
 func edit(ctx context.Context, client jira.Commenter, key, id string, body adf.Doc, gen int) tea.Cmd {
 	return func() tea.Msg {
-		stored, err := client.EditComment(ctx, key, id, body)
+		stored, err := appcomment.Edit(ctx, client, key, id, body)
 		if err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
@@ -85,7 +86,7 @@ func edit(ctx context.Context, client jira.Commenter, key, id string, body adf.D
 
 func remove(ctx context.Context, client jira.Commenter, key, id string, gen int) tea.Cmd {
 	return func() tea.Msg {
-		if err := client.DeleteComment(ctx, key, id); err != nil {
+		if err := appcomment.Delete(ctx, client, key, id); err != nil {
 			return failedMsg{gen: gen, err: err}
 		}
 		return deletedMsg{gen: gen, id: id}

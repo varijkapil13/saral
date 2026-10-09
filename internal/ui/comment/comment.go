@@ -4,8 +4,6 @@ package comment
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -15,6 +13,8 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 
+	appcomment "github.com/varijkapil13/saral/internal/app/comment"
+	"github.com/varijkapil13/saral/internal/config"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/mention"
 	"github.com/varijkapil13/saral/internal/ui/widget"
@@ -38,16 +38,6 @@ const blockCacheLimit = 256
 // own ceiling; a comment longer than this is not something a terminal editor is
 // the right place for.
 const editorLines = 10000
-
-// editorOptions is how a document is rendered for somebody to edit, and how the
-// edited markdown is read back. The two must be the same value or reconciling
-// the edit against the original matches nothing: a block that renders one way
-// and parses another reads as a block the author rewrote.
-//
-// TableWidth is deliberately zero. A width-bounded render truncates a table's
-// cells with an ellipsis, and an edit anywhere in that table would write the
-// truncation back.
-var editorOptions = adf.Options{}
 
 // zones are the click targets this view marks. Each is prefixed per instance so
 // that two of these views on one screen cannot answer for each other.
@@ -101,7 +91,7 @@ type Model struct {
 	confirm map[string]action
 	styles  *styles
 	blocks  *blocks
-	drafts  *drafts
+	drafts  *appcomment.Drafts
 
 	issue    string
 	comments []jira.Comment
@@ -232,11 +222,20 @@ func tickAfter(d time.Duration, fn func() tea.Msg) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return fn() })
 }
 
-// bodyBase is the fingerprint an edit's draft is checked against.
-func bodyBase(d adf.Doc) string {
-	raw, _ := adf.Marshal(d)
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:12])
+// openDrafts finds the drafts directory. A session that names its own drafts
+// directory has nothing to move out of the cache directory earlier builds used.
+func openDrafts(d kernel.Deps) *appcomment.Drafts {
+	dir, err := d.DraftRoot()
+	if err != nil {
+		dir = ""
+	}
+	legacy := ""
+	if d.DraftsDir == "" {
+		if cache, err := config.CacheDir(); err == nil {
+			legacy = cache
+		}
+	}
+	return appcomment.OpenDrafts(dir, legacy)
 }
 
 func newEditor() textarea.Model {
@@ -518,8 +517,8 @@ func (m *Model) selected() *jira.Comment {
 	return &m.comments[m.cursor]
 }
 
-func (m *Model) draftKey() draftKey {
-	return draftKey{site: m.deps.Site, issue: m.issue, comment: m.editing}
+func (m *Model) draftKey() appcomment.DraftKey {
+	return appcomment.DraftKey{Site: m.deps.Site, Issue: m.issue, Comment: m.editing}
 }
 
 // openEditor puts the editor in front of the user, seeded with whatever is
@@ -533,24 +532,11 @@ func (m *Model) openEditor(id string, c jira.Comment) tea.Cmd {
 	m.original = c.Body
 	m.sending = false
 
-	seeded := adf.MarkdownWith(c.Body, editorOptions)
-	restored := m.drafts.read(m.draftKey())
-	text := seeded
-	current := ""
-	if id != "" {
-		current = bodyBase(c.Body)
-	}
-	m.draftBase, m.stale = current, false
-	if restored != "" {
-		text = restored
-		if id != "" && restored != seeded {
-			m.draftBase = m.drafts.readBase(m.draftKey())
-			m.stale = m.draftBase != current
-		}
-	}
+	opened := m.drafts.Open(m.draftKey(), c.Body)
+	m.draftBase, m.stale = opened.Base, opened.Stale
 	m.mention.Close()
-	m.draft = text
-	m.editor.SetValue(text)
+	m.draft = opened.Text
+	m.editor.SetValue(opened.Text)
 	m.editor.MoveToEnd()
 	m.relayout()
 	_ = m.editor.Focus()
@@ -558,10 +544,10 @@ func (m *Model) openEditor(id string, c jira.Comment) tea.Cmd {
 	switch {
 	case m.stale:
 		return kernel.Warn(staleNote)
-	case restored != "" && restored != seeded:
+	case opened.Restored:
 		return kernel.Warn("this is the draft you left, not what the site holds")
 	case id != "":
-		if lost := oneWay(c.Body); len(lost) > 0 {
+		if lost := appcomment.OneWay(c.Body); len(lost) > 0 {
 			return kernel.Warn("the " + list(lost) + " in this comment survive only in the parts you leave alone")
 		}
 	}
@@ -597,12 +583,7 @@ func (m *Model) keepDraft(text string) tea.Cmd {
 		return nil
 	}
 	m.draft = text
-	var err error
-	if strings.TrimSpace(text) == "" {
-		m.drafts.discard(m.draftKey())
-	} else {
-		err = m.drafts.write(m.draftKey(), text, m.draftBase)
-	}
+	err := m.drafts.Keep(m.draftKey(), text, m.draftBase)
 	if err == nil || m.draftFailed {
 		return nil
 	}
@@ -612,12 +593,6 @@ func (m *Model) keepDraft(text string) tea.Cmd {
 }
 
 // send turns the markdown back into a document and writes it.
-//
-// A new comment has no original to reconcile against, so it is parsed on its
-// own. An edit goes through ParseMarkdownInto, which reuses the original node
-// for every block the author did not touch — the only way an account id behind
-// a mention, a lozenge's colour or a node type this client has never heard of
-// survives being edited.
 func (m *Model) send() tea.Cmd {
 	if m.deps.Jira == nil || m.sending {
 		return nil
@@ -628,7 +603,7 @@ func (m *Model) send() tea.Cmd {
 	}
 	if m.stale {
 		m.stale = false
-		m.draftBase = bodyBase(m.original)
+		m.draftBase = appcomment.Fingerprint(m.original)
 		m.draft = ""
 		return join(m.keepDraft(text), kernel.Warn(staleSendNote))
 	}
@@ -637,9 +612,9 @@ func (m *Model) send() tea.Cmd {
 		err  error
 	)
 	if m.editing == "" {
-		body, err = adf.ParseMarkdown(text)
+		body, err = appcomment.Compose(text)
 	} else {
-		body, err = adf.ParseMarkdownInto(m.original, text, editorOptions)
+		body, err = appcomment.Revise(m.original, text)
 	}
 	if err != nil {
 		return kernel.Fail(unreadable(err))
@@ -667,7 +642,7 @@ func (m *Model) saved(msg savedMsg) tea.Cmd {
 		return nil
 	}
 	m.sending = false
-	m.drafts.discard(m.draftKey())
+	m.drafts.Discard(m.draftKey())
 	m.draft = ""
 	m.mode, m.editing = browsing, ""
 	m.editor.Blur()

@@ -35,41 +35,6 @@ func TestVisibilityLabel_SaysWhoCanReadARestrictedComment(t *testing.T) {
 	}
 }
 
-func TestOneWay_NamesOnlyTheConstructsTheDocumentActuallyHolds(t *testing.T) {
-	t.Parallel()
-
-	plain := adf.NewDoc(adf.NewNode("paragraph", adf.NewText("nothing special here")))
-	if got := oneWay(plain); len(got) != 0 {
-		t.Errorf("a paragraph of prose was reported as losing %v", got)
-	}
-
-	rich := adf.NewDoc(
-		adf.NewNode("paragraph",
-			adf.NewNode("mention").WithAttrs(adf.Attrs{"text": "@Someone"}),
-			adf.NewNode("status").WithAttrs(adf.Attrs{"text": "DONE", "color": "green"}),
-			adf.NewNode("status").WithAttrs(adf.Attrs{"text": "OPEN", "color": "blue"}),
-		),
-		adf.NewNode("table", adf.NewNode("tableRow", adf.NewNode("tableCell",
-			adf.NewNode("paragraph", adf.NewText("one")), adf.NewNode("paragraph", adf.NewText("two"))))),
-	)
-	got := oneWay(rich)
-	want := map[string]bool{"mention": false, "status": false, "table": false}
-	for _, name := range got {
-		if _, ours := want[name]; !ours {
-			t.Errorf("%q is not in this document", name)
-		}
-		want[name] = true
-	}
-	for name, found := range want {
-		if !found {
-			t.Errorf("%q is in the document and was not named", name)
-		}
-	}
-	if len(got) != len(want) {
-		t.Errorf("got %v, which names something twice", got)
-	}
-}
-
 func TestList_ReadsAsASentence(t *testing.T) {
 	t.Parallel()
 
@@ -176,16 +141,5 @@ func TestWindow_SaysWhereALineWasCut(t *testing.T) {
 	}
 	if got := window("short", 0, 10, "~"); got != "short     " {
 		t.Errorf("a line that fits came back as %q, want it padded to the box", got)
-	}
-}
-
-// The editor is seeded and read back with one value, and it must be the one
-// that does not truncate: a bounded render puts an ellipsis inside a table cell
-// and an edit anywhere in that table would write the truncation back.
-func TestEditorOptions_BoundNothingByWidth(t *testing.T) {
-	t.Parallel()
-
-	if editorOptions != (adf.Options{}) {
-		t.Errorf("the editor renders with %+v, want the zero options", editorOptions)
 	}
 }

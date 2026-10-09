@@ -1980,7 +1980,7 @@ its types, and that is fine. A packet that retires a root file deletes it from `
   children sort. Empty for `ui/issue`: `AddWorklog|CreateIssue|CreateMeta|DeleteLink|EditMeta|Fields|FindPeople|Issue|IssueFields|IssueLinkTypes|LinkIssues|Me|Priorities|Search|Transition|Transitions|Unwatch|Watch|Watchers|Worklogs`;
   for `ui/form`: `CreateIssue|CreateMeta|FindPeople|Me`.
 
-- [ ] **P13.5 — `comment`** · after P13.2 · **owns** `internal/app/comment/**`, `internal/ui/{comment,mention}/**`
+- [x] **P13.5 — `comment`** · after P13.2 · **owns** `internal/app/comment/**`, `internal/ui/{comment,mention}/**`
   Comment create, edit and delete, and drafts. Empty for `ui/comment`:
   `AddComment|Comments|DeleteComment|EditComment`; for `ui/mention`: `FindPeople`.
 
