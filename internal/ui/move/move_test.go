@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appmove "github.com/varijkapil13/saral/internal/app/move"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/pkg/jira"
 	"github.com/varijkapil13/saral/pkg/jira/jiratest"
@@ -112,26 +113,26 @@ func TestMove_MapsEverySourceStatusAndNotOnlyTheOnesThatChange(t *testing.T) {
 		t.Errorf("%d of the %d source statuses reached the request: %v", len(in.StatusMap), len(dr.m.remaps), in.StatusMap)
 	}
 	for i := range dr.m.remaps {
-		from := dr.m.remaps[i].from.ID
+		from := dr.m.remaps[i].From.ID
 		if !slices.ContainsFunc(in.StatusMap, func(mp jira.StatusMapping) bool { return mp.FromStatusID == from }) {
 			t.Errorf("%s is not in the map: %v", from, in.StatusMap)
 		}
 	}
 }
 
-func sourceByName(rows []remap, name string) (int, bool) {
+func sourceByName(rows []appmove.Remap, name string) (int, bool) {
 	for i := range rows {
-		if rows[i].from.Name == name {
+		if rows[i].From.Name == name {
 			return i, true
 		}
 	}
 	return 0, false
 }
 
-func names(rows []remap) []string {
+func names(rows []appmove.Remap) []string {
 	out := make([]string, 0, len(rows))
 	for i := range rows {
-		out = append(out, rows[i].from.Name)
+		out = append(out, rows[i].From.Name)
 	}
 	return out
 }
@@ -147,7 +148,7 @@ func TestMove_TheConfirmScreenNamesTheWholeMappingAndSubmitsNothingByItself(t *t
 		"PROJ-1", "PROJ-2", "PROJ-3")
 	for i := range dr.m.remaps {
 		to, _ := dr.m.landing(i)
-		mustContain(t, frame, dr.m.remaps[i].from.Name+" -> "+to.Name)
+		mustContain(t, frame, dr.m.remaps[i].From.Name+" -> "+to.Name)
 	}
 	if n := countCalls(f, "BulkMove"); n != 0 {
 		t.Errorf("reaching the confirm screen submitted %d moves; nothing may go before the answer", n)
@@ -352,10 +353,10 @@ func TestMove_ARateLimitIsAPauseAndNotTheEndOfTheMove(t *testing.T) {
 	w := &immediate{}
 	dr := newDriver(t, testDeps(f), 100, 24, WithIssues(iss), withWaiter(w.wait))
 	dr.walkTo("OTHER")
-	dr.running()
+	first := dr.running()
 
-	before := len(w.asked())
-	cmd := dr.once(failedMsg{gen: dr.m.gen, at: stepRunning, err: &jira.RateLimitError{RetryAfter: 3 * time.Second}})
+	f.FailNext(&jira.RateLimitError{RetryAfter: 3 * time.Second})
+	cmd := dr.once(answer(first))
 
 	if dr.m.step != stepRunning {
 		t.Fatalf("a rate limit ended the move: step %d", dr.m.step)
@@ -366,6 +367,7 @@ func TestMove_ARateLimitIsAPauseAndNotTheEndOfTheMove(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("a rate limit stopped the poll instead of pausing it")
 	}
+	before := len(w.asked())
 	_ = answer(cmd)
 	waits := w.asked()
 	if len(waits) <= before {
@@ -436,8 +438,8 @@ func TestMove_TheCapabilityAnswerArrivingLaterIsTakenAndDrawn(t *testing.T) {
 func TestMove_RefusesMoreIssuesThanOneMoveTakesRatherThanSendingTheFirstThousand(t *testing.T) {
 	t.Parallel()
 	f := newFake(2, jiratest.WithIssues(jiratest.GenFor("OTHER", 2)))
-	iss := make([]jira.Issue, 0, maxKeys+1)
-	for i := range maxKeys + 1 {
+	iss := make([]jira.Issue, 0, appmove.MaxKeys+1)
+	for i := range appmove.MaxKeys + 1 {
 		iss = append(iss, jira.Issue{
 			Key:     "PROJ-" + strconv.Itoa(i+1),
 			Project: jira.ProjectRef{Key: "PROJ"},
@@ -644,7 +646,7 @@ func TestMove_WillNotSubmitAHalfAnsweredGroupOfMandatoryFields(t *testing.T) {
 
 	dr.key("shift+tab")
 	dr.key("right")
-	if dr.m.fields[0].retains() {
+	if dr.m.fields[0].Retains() {
 		t.Fatal("the right key set no value")
 	}
 	dr.key("enter")
@@ -654,53 +656,13 @@ func TestMove_WillNotSubmitAHalfAnsweredGroupOfMandatoryFields(t *testing.T) {
 	mustContain(t, dr.view(), "Kostenstelle", "stops it being kept from the source")
 
 	dr.key("left")
-	if !dr.m.fields[0].retains() {
+	if !dr.m.fields[0].Retains() {
 		t.Fatal("a value cannot be put back to being kept from the source")
 	}
 	dr.key("enter")
 	if dr.m.step != stepConfirm {
 		t.Errorf("putting the value back left the wizard on step %d", dr.m.step)
 	}
-}
-
-func TestMove_MandatoryFieldsAreWhateverTheTargetSaysAtRuntime(t *testing.T) {
-	t.Parallel()
-	ref := func(id, name string) jira.FieldRef { return jira.FieldRef{ID: id, Name: name} }
-	schema := jira.Schema{
-		Fields: []jira.FieldMeta{
-			{Field: ref("summary", "Summary"), Name: "Summary", Required: true},
-			{Field: ref("project", "Project"), Name: "Project", Required: true},
-			{Field: ref("issuetype", "Issue Type"), Name: "Issue Type", Required: true},
-			{Field: ref("status", "Status"), Name: "Status", Required: true},
-			{Field: ref("customfield_1", "Erfassungsart"), Name: "Erfassungsart", Required: true,
-				AllowedValues: []jira.Option{{ID: "1", Label: "Eins"}, {ID: "2", Label: "Zwei"}}},
-			{Field: ref("customfield_2", "Kostenstelle"), Name: "Kostenstelle", Required: true, HasDefault: true},
-			{Field: ref("customfield_3", "Notiz"), Name: "Notiz"},
-		},
-	}
-	got := mandatory(schema)
-	if len(got) != 2 {
-		t.Fatalf("the target insists on %d fields a move has to reckon with, want 2: %v", len(got), fieldNames(got))
-	}
-	if got[0].meta.Field.ID != "customfield_1" || got[1].meta.Field.ID != "customfield_2" {
-		t.Errorf("the fields left over are %v", fieldNames(got))
-	}
-	for i := range got {
-		if !got[i].retains() {
-			t.Errorf("%s starts out being written rather than kept from the source", got[i].meta.Field.ID)
-		}
-	}
-	if written(got) {
-		t.Error("a group nobody has touched reports that something is being written")
-	}
-}
-
-func fieldNames(fields []pending) []string {
-	out := make([]string, 0, len(fields))
-	for i := range fields {
-		out = append(out, fields[i].meta.Field.ID)
-	}
-	return out
 }
 
 func TestMove_DrawsOnlyTheRowsThatFit(t *testing.T) {

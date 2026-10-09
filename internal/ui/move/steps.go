@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	appmove "github.com/varijkapil13/saral/internal/app/move"
 	"github.com/varijkapil13/saral/internal/ui/kernel"
 	"github.com/varijkapil13/saral/internal/ui/widget"
 	"github.com/varijkapil13/saral/pkg/jira"
@@ -141,7 +142,7 @@ func (m *Model) chooseType() tea.Cmd {
 		return kernel.Warn(m.warned)
 	}
 	m.typeAt = m.cursor
-	m.remaps = defaultRemap(sourceStatuses(m.issues), m.targetStatuses())
+	m.remaps = appmove.DefaultRemap(appmove.SourceStatuses(m.issues), m.targetStatuses())
 	m.step, m.cursor, m.top = stepStatus, 0, 0
 	m.schema, m.schemaErr, m.fields, m.warned = false, nil, nil, ""
 	m.resetDrops()
@@ -173,16 +174,14 @@ func (m *Model) leaveStatuses() tea.Cmd {
 }
 
 func (m *Model) unmapped() (string, bool) {
-	targets := m.targetStatuses()
-	if len(targets) == 0 {
+	row, blocked := appmove.Unmapped(m.remaps, m.targetStatuses())
+	switch {
+	case !blocked:
+		return "", false
+	case row < 0:
 		return m.targetType().Name + " in " + m.target + " reaches no status this move could land on", true
 	}
-	for i := range m.remaps {
-		if m.remaps[i].to < 0 || m.remaps[i].to >= len(targets) {
-			return m.remaps[i].from.Name + " has nothing to become in " + m.target, true
-		}
-	}
-	return "", false
+	return m.remaps[row].From.Name + " has nothing to become in " + m.target, true
 }
 
 func (m *Model) leaveFields() tea.Cmd {
@@ -259,19 +258,16 @@ func (m *Model) cycle(by int) {
 		if m.cursor < 0 || m.cursor >= len(m.remaps) || len(targets) == 0 {
 			return
 		}
-		row := &m.remaps[m.cursor]
-		row.to = (max(row.to, 0) + by + len(targets)) % len(targets)
+		m.remaps[m.cursor].Cycle(by, len(targets))
 	case stepFields:
 		if m.cursor < 0 || m.cursor >= len(m.fields) {
 			return
 		}
 		field := &m.fields[m.cursor]
-		if !field.fillable() {
+		if !field.Fillable() {
 			return
 		}
-		// The values run from -1, which keeps what the source issue holds, so a
-		// field can always be put back to being left alone.
-		field.chosen = (field.chosen+by+2+len(field.options))%(len(field.options)+1) - 1
+		field.Cycle(by)
 	case stepTarget, stepTyping, stepType, stepConfirm, stepRunning, stepDone:
 		return
 	}
@@ -336,7 +332,7 @@ func (m *Model) targetType() jira.IssueType {
 // project, looked up by type id because the same project answers differently per
 // type.
 func (m *Model) targetStatuses() []jira.Status {
-	return statusesFor(m.vocab, m.targetType().ID)
+	return appmove.StatusesFor(m.vocab, m.targetType().ID)
 }
 
 func (m *Model) landing(at int) (jira.Status, bool) {
@@ -344,7 +340,7 @@ func (m *Model) landing(at int) (jira.Status, bool) {
 	if at < 0 || at >= len(m.remaps) {
 		return jira.Status{}, false
 	}
-	to := m.remaps[at].to
+	to := m.remaps[at].To
 	if to < 0 || to >= len(targets) {
 		return jira.Status{}, false
 	}
